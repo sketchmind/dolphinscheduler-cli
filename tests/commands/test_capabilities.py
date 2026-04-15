@@ -1,0 +1,123 @@
+import json
+from pathlib import Path
+
+from typer.testing import CliRunner
+
+from dsctl.app import app
+from dsctl.services.template import parameter_syntax_index_data
+
+runner = CliRunner()
+
+EXPECTED_VERSION_METADATA = [
+    {
+        "server_version": "3.3.2",
+        "contract_version": "3.4.1",
+        "family": "workflow-3.3-plus",
+        "support_level": "full",
+        "tested": False,
+    },
+    {
+        "server_version": "3.4.0",
+        "contract_version": "3.4.1",
+        "family": "workflow-3.3-plus",
+        "support_level": "full",
+        "tested": False,
+    },
+    {
+        "server_version": "3.4.1",
+        "contract_version": "3.4.1",
+        "family": "workflow-3.3-plus",
+        "support_level": "full",
+        "tested": True,
+    },
+]
+EXPECTED_DS_CAPABILITIES = {
+    "current_version": "3.4.1",
+    "selected_version": "3.4.1",
+    "contract_version": "3.4.1",
+    "family": "workflow-3.3-plus",
+    "support_level": "full",
+    "tested": True,
+    "supported_versions": ["3.3.2", "3.4.0", "3.4.1"],
+    "versions": EXPECTED_VERSION_METADATA,
+}
+
+
+def test_capabilities_command_returns_surface_discovery() -> None:
+    result = runner.invoke(app, ["capabilities"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "capabilities"
+    assert payload["data"]["ds"] == EXPECTED_DS_CAPABILITIES
+    assert payload["data"]["resources"]["top_level"] == [
+        "version",
+        "context",
+        "doctor",
+        "schema",
+        "capabilities",
+    ]
+    assert payload["data"]["resources"]["groups"]["use"]["commands"] == [
+        "project",
+        "workflow",
+    ]
+    assert payload["data"]["resources"]["groups"]["enum"]["commands"] == ["list"]
+    assert payload["data"]["resources"]["groups"]["task-type"]["commands"] == ["list"]
+    assert payload["data"]["resources"]["groups"]["template"]["commands"] == [
+        "workflow",
+        "params",
+        "task",
+    ]
+    assert payload["data"]["resources"]["groups"]["monitor"]["commands"] == [
+        "health",
+        "server",
+        "database",
+    ]
+    assert payload["data"]["resources"]["groups"]["datasource"]["commands"] == [
+        "list",
+        "get",
+        "create",
+        "update",
+        "delete",
+        "test",
+    ]
+    assert payload["data"]["errors"] == {
+        "structured": True,
+        "suggestion": True,
+        "source": True,
+        "source_kind": "remote",
+        "source_system": "dolphinscheduler",
+        "source_layers": ["result", "http"],
+    }
+    assert payload["data"]["output"] == {
+        "standard_envelope": True,
+        "resolved_metadata": True,
+        "warnings": True,
+        "warning_details_alignment": True,
+        "structured_errors": True,
+    }
+    assert payload["data"]["self_description"] == {
+        "schema": True,
+        "template": True,
+        "capabilities": True,
+    }
+    assert payload["data"]["authoring"]["parameter_syntax"] == (
+        parameter_syntax_index_data()
+    )
+    assert payload["data"]["enums"]["discovery"] is True
+    assert "priority" in payload["data"]["enums"]["names"]
+
+
+def test_capabilities_command_honors_env_file_ds_version() -> None:
+    with runner.isolated_filesystem():
+        Path("cluster.env").write_text("DS_VERSION=3.3.2\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["--env-file", "cluster.env", "capabilities"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["data"]["ds"]["current_version"] == "3.3.2"
+    assert payload["data"]["ds"]["selected_version"] == "3.3.2"
+    assert payload["data"]["ds"]["contract_version"] == "3.4.1"
+    assert payload["data"]["ds"]["tested"] is False
+    assert "priority" in payload["data"]["enums"]["names"]

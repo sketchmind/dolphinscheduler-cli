@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Lint
+        run: python -m ruff check src tests tools
+
+      - name: Format Check
+        run: python -m ruff format --check src tests tools
+
+      - name: Project Layout Check
+        run: python tools/check_project_layout.py
+
+      - name: Explicit Object Audit
+        run: python tools/check_explicit_object.py
+
+      - name: Architecture Boundary Check
+        run: lint-imports
+
+      - name: Generated Code Freshness
+        run: python tools/check_generated_freshness.py
+
+      - name: Error Translation Governance
+        run: python tools/check_error_translation_governance.py
+
+      - name: Type Check
+        run: python -m mypy src tests tools
+
+      - name: Codespell
+        run: codespell --toml pyproject.toml
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Generate Package Sample
+        run: python tools/generate_ds_contract.py --package-output build/ds_contract/package_sample
+
+      - name: Generated Package Type Check
+        run: python -m mypy build/ds_contract/package_sample/generated/versions/ds_3_4_1 --follow-imports=silent
+
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Check distributions
+        run: python -m twine check dist/*
+
+      - name: Check package contents
+        run: python tools/check_package_contents.py dist/*
+
+      - name: Install wheel smoke test
+        run: |
+          python -m venv .package-venv
+          .package-venv/bin/python -m pip install --upgrade pip
+          .package-venv/bin/python -m pip install dist/*.whl
+          .package-venv/bin/dsctl version
+          .package-venv/bin/dsctl schema
+          .package-venv/bin/dsctl capabilities

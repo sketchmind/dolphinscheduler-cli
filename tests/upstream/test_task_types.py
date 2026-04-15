@@ -1,0 +1,98 @@
+from dsctl.upstream.task_types import (
+    upstream_default_task_types,
+    upstream_default_task_types_by_category,
+)
+
+
+def test_upstream_default_task_types_match_ds_3_4_1_categories() -> None:
+    assert upstream_default_task_types_by_category() == {
+        "Universal": (
+            "SHELL",
+            "JAVA",
+            "PYTHON",
+            "PROCEDURE",
+            "SQL",
+            "SPARK",
+            "FLINK",
+            "GRPC",
+            "HTTP",
+            "MR",
+            "DINKY",
+            "FLINK_STREAM",
+            "HIVECLI",
+            "REMOTESHELL",
+        ),
+        "Cloud": (
+            "EMR",
+            "K8S",
+            "DMS",
+            "DATA_FACTORY",
+            "ALIYUN_SERVERLESS_SPARK",
+        ),
+        "Logic": (
+            "SUB_WORKFLOW",
+            "DEPENDENT",
+            "CONDITIONS",
+            "SWITCH",
+        ),
+        "DataIntegration": (
+            "SEATUNNEL",
+            "DATAX",
+            "SQOOP",
+        ),
+        "MachineLearning": (
+            "JUPYTER",
+            "MLFLOW",
+            "OPENMLDB",
+            "DVC",
+            "SAGEMAKER",
+            "KUBEFLOW",
+        ),
+        "Other": (
+            "ZEPPELIN",
+            "CHUNJUN",
+            "DATASYNC",
+            "LINKIS",
+        ),
+    }
+
+
+def test_upstream_default_task_types_flatten_in_upstream_order() -> None:
+    assert upstream_default_task_types() == (
+        "SHELL",
+        "JAVA",
+        "PYTHON",
+        "PROCEDURE",
+        "SQL",
+        "SPARK",
+        "FLINK",
+        "GRPC",
+        "HTTP",
+        "MR",
+        "DINKY",
+        "FLINK_STREAM",
+        "HIVECLI",
+        "REMOTESHELL",
+        "EMR",
+        "K8S",
+        "DMS",
+        "DATA_FACTORY",
+        "ALIYUN_SERVERLESS_SPARK",
+        "SUB_WORKFLOW",
+        "DEPENDENT",
+        "CONDITIONS",
+        "SWITCH",
+        "SEATUNNEL",
+        "DATAX",
+        "SQOOP",
+        "JUPYTER",
+        "MLFLOW",
+        "OPENMLDB",
+        "DVC",
+        "SAGEMAKER",
+        "KUBEFLOW",
+        "ZEPPELIN",
+        "CHUNJUN",
+        "DATASYNC",
+        "LINKIS",
+    )

@@ -1,0 +1,152 @@
+# Reviewed debt for explicit `object` usage pending cleanup.
+# Each line is path|context|snippet.
+src/dsctl/errors.py|ApiHttpError.__init__(details)|Mapping[str, object] | None
+src/dsctl/errors.py|ApiHttpError.__init__.error_details|dict[str, object]
+src/dsctl/errors.py|ApiResultError.__init__(details)|Mapping[str, object] | None
+src/dsctl/errors.py|ApiResultError.__init__.error_details|dict[str, object]
+src/dsctl/errors.py|ConfirmationRequiredError.__init__(details)|Mapping[str, object] | None
+src/dsctl/errors.py|DsctlError.__init__(details)|Mapping[str, object] | None
+src/dsctl/errors.py|NotFoundError.__init__(details)|Mapping[str, object] | None
+src/dsctl/errors.py|ResolutionError.__init__(details)|Mapping[str, object] | None
+src/dsctl/errors.py|_candidate_values(details)|Mapping[str, object]
+src/dsctl/errors.py|_has_name_selector(details)|Mapping[str, object]
+src/dsctl/errors.py|_has_numeric_selector(details)|Mapping[str, object]
+src/dsctl/errors.py|_has_selector_value(details)|Mapping[str, object]
+src/dsctl/errors.py|_is_json_value(value)|object
+src/dsctl/errors.py|_json_object(value)|Mapping[str, object] | Mapping[str, JsonValue]
+src/dsctl/errors.py|_json_object_or_empty(value)|Mapping[str, object] | None
+src/dsctl/errors.py|_normalized_candidate_values(values)|list[object]
+src/dsctl/errors.py|_not_found_suggestion(details)|Mapping[str, object] | None
+src/dsctl/errors.py|_resolution_suggestion(details)|Mapping[str, object] | None
+src/dsctl/errors.py|_resource_resolution_hint(details)|Mapping[str, object]
+src/dsctl/models/common.py|is_yaml_object(value)|object
+src/dsctl/models/common.py|is_yaml_value(value)|object
+src/dsctl/models/workflow_patch.py|_workflow_patch_types_namespace:return|dict[str, object]
+src/dsctl/output.py|CommandResult.warning_details|Sequence[Mapping[str, object]]
+src/dsctl/output.py|_require_warning_details(value)|Sequence[Mapping[str, object]]
+src/dsctl/output.py|dry_run_result(warning_details)|Sequence[Mapping[str, object]] | None
+src/dsctl/services/_resolver_kernel.py|collect_resolution_page_items(safety_details)|Mapping[str, object]
+src/dsctl/services/_resolver_kernel.py|require_single_match(ambiguous_details)|Mapping[str, object]
+src/dsctl/services/_resolver_kernel.py|require_single_match(not_found_details)|Mapping[str, object]
+src/dsctl/services/_resolver_kernel.py|resolve_direct(not_found_details)|Mapping[str, object]
+src/dsctl/services/_resolver_models.py|enum_value(value)|object
+src/dsctl/services/_resolver_models.py|resolved_datasource_payload(datasource_payload)|dict[str, object] | Mapping[str, object]
+src/dsctl/services/_schedule_support.py|_schedule_confirmation_payload(schedule_payload)|dict[str, object]
+src/dsctl/services/_schedule_support.py|_schedule_confirmation_payload:return|dict[str, object]
+src/dsctl/services/_schedule_support.py|require_high_frequency_confirmation(schedule_payload)|dict[str, object]
+src/dsctl/services/_schedule_support.py|schedule_confirmation_data(schedule_payload)|dict[str, object]
+src/dsctl/services/_schema_groups_context.py|project_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_context.py|project_parameter_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_context.py|project_preference_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_context.py|project_worker_group_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_context.py|use_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_design.py|schedule_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_design.py|task_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_design.py|template_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_design.py|workflow_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|access_token_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|alert_group_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|alert_plugin_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|cluster_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|datasource_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|env_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|namespace_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|queue_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|resource_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|tenant_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|user_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_governance.py|worker_group_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_meta.py|enum_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_meta.py|lint_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_meta.py|task_type_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_runtime.py|audit_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_runtime.py|monitor_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_runtime.py|task_instance_group:return|dict[str, object]
+src/dsctl/services/_schema_groups_runtime.py|workflow_instance_group:return|dict[str, object]
+src/dsctl/services/_schema_primitives.py|argument(choices)|Sequence[object] | None
+src/dsctl/services/_schema_primitives.py|argument.data|dict[str, object]
+src/dsctl/services/_schema_primitives.py|argument:return|dict[str, object]
+src/dsctl/services/_schema_primitives.py|command(arguments)|list[dict[str, object]] | None
+src/dsctl/services/_schema_primitives.py|command(options)|list[dict[str, object]] | None
+src/dsctl/services/_schema_primitives.py|command:return|dict[str, object]
+src/dsctl/services/_schema_primitives.py|confirm_risk_option:return|dict[str, object]
+src/dsctl/services/_schema_primitives.py|group(commands)|list[dict[str, object]]
+src/dsctl/services/_schema_primitives.py|group(group_action)|dict[str, object] | None
+src/dsctl/services/_schema_primitives.py|group.data|dict[str, object]
+src/dsctl/services/_schema_primitives.py|group:return|dict[str, object]
+src/dsctl/services/_schema_primitives.py|option(choices)|Sequence[object] | None
+src/dsctl/services/_schema_primitives.py|option(default)|object | None
+src/dsctl/services/_schema_primitives.py|option.data|dict[str, object]
+src/dsctl/services/_schema_primitives.py|option:return|dict[str, object]
+src/dsctl/services/_schema_primitives.py|project_option:return|dict[str, object]
+src/dsctl/services/_schema_primitives.py|use_target_options:return|list[dict[str, object]]
+src/dsctl/services/_schema_primitives.py|workflow_option:return|dict[str, object]
+src/dsctl/services/_surface_metadata.py|error_capabilities_data:return|dict[str, object]
+src/dsctl/services/_surface_metadata.py|error_schema_data:return|dict[str, object]
+src/dsctl/services/_surface_metadata.py|monitor_capabilities_data:return|dict[str, object]
+src/dsctl/services/_surface_metadata.py|output_capabilities_data:return|dict[str, object]
+src/dsctl/services/_surface_metadata.py|output_schema_data:return|dict[str, object]
+src/dsctl/services/_surface_metadata.py|resources_capabilities_data:return|dict[str, object]
+src/dsctl/services/_surface_metadata.py|selection_capabilities_data:return|dict[str, object]
+src/dsctl/services/_surface_metadata.py|selection_schema_data:return|dict[str, object]
+src/dsctl/services/_workflow_compile.py|_json_text(value)|object
+src/dsctl/services/_workflow_compile.py|_resolve_local_task_name_ref(value)|object
+src/dsctl/services/_workflow_patch.py|_rewrite_conditions_task_params_refs.rewritten|dict[str, object]
+src/dsctl/services/_workflow_patch.py|_rewrite_conditions_task_params_refs.rewritten_condition_result|dict[str, object]
+src/dsctl/services/_workflow_patch.py|_rewrite_switch_task_params_refs.rewritten|dict[str, object]
+src/dsctl/services/_workflow_patch.py|_rewrite_switch_task_params_refs.rewritten_branch|dict[str, object]
+src/dsctl/services/_workflow_patch.py|_rewrite_switch_task_params_refs.rewritten_depend_task_list|list[dict[str, object]]
+src/dsctl/services/_workflow_patch.py|_rewrite_switch_task_params_refs.rewritten_switch_result|dict[str, object]
+src/dsctl/services/_workflow_patch.py|_task_dump:return|dict[str, object]
+src/dsctl/services/_workflow_render.py|_yaml_task_name_ref(value)|object
+src/dsctl/services/_workflow_render.py|_yaml_task_params_document(payload)|object
+src/dsctl/services/access_token.py|_translate_access_token_api_error.details|dict[str, object]
+src/dsctl/services/alert_plugin.py|_translate_alert_plugin_api_error.details|dict[str, object]
+src/dsctl/services/alert_plugin.py|_translate_ui_plugin_api_error.details|dict[str, object]
+src/dsctl/services/capabilities.py|_capabilities_data:return|dict[str, object]
+src/dsctl/services/capabilities.py|schema_capabilities_data:return|dict[str, object]
+src/dsctl/services/cluster.py|_translate_cluster_api_error.details|dict[str, object]
+src/dsctl/services/confirmation.py|build_confirmation_token(payload)|object
+src/dsctl/services/confirmation.py|require_confirmation(details)|object
+src/dsctl/services/confirmation.py|require_confirmation(payload)|object
+src/dsctl/services/datasource.py|_create_datasource_result(payload)|dict[str, object]
+src/dsctl/services/datasource.py|_load_datasource_payload_or_error:return|dict[str, object]
+src/dsctl/services/datasource.py|_normalized_update_payload(payload)|Mapping[str, object]
+src/dsctl/services/datasource.py|_normalized_update_payload:return|tuple[dict[str, object], list[str], list[DataSourceWarningDetail]]
+src/dsctl/services/datasource.py|_payload_json(payload)|Mapping[str, object]
+src/dsctl/services/datasource.py|_payload_name(payload)|Mapping[str, object]
+src/dsctl/services/datasource.py|_require_datasource_name(payload)|Mapping[str, object]
+src/dsctl/services/datasource.py|_require_datasource_type(payload)|Mapping[str, object]
+src/dsctl/services/datasource.py|_update_datasource_result(payload)|dict[str, object]
+src/dsctl/services/doctor.py|DoctorCheckData.details|Mapping[str, object]
+src/dsctl/services/doctor.py|_doctor_check(details)|Mapping[str, object]
+src/dsctl/services/doctor.py|_error_details.details|dict[str, object]
+src/dsctl/services/doctor.py|_error_details:return|dict[str, object]
+src/dsctl/services/enums.py|enum_capabilities_data:return|dict[str, object]
+src/dsctl/services/project_parameter.py|_translate_project_parameter_api_error.details|dict[str, object]
+src/dsctl/services/project_preference.py|_translate_project_preference_api_error.details|dict[str, object]
+src/dsctl/services/project_worker_group.py|_retained_worker_group_warning:return|tuple[str, dict[str, object]] | None
+src/dsctl/services/project_worker_group.py|_translate_project_worker_group_api_error.details|dict[str, object]
+src/dsctl/services/runtime.py|HealthcheckClient.healthcheck:return|Mapping[str, object]
+src/dsctl/services/schedule.py|_schedule_create_confirmation_payload:return|dict[str, object]
+src/dsctl/services/schedule.py|_schedule_explain_data(schedule_payload)|dict[str, object]
+src/dsctl/services/schedule.py|_schedule_update_confirmation_payload:return|dict[str, object]
+src/dsctl/services/schema.py|_command_groups:return|dict[str, dict[str, object]]
+src/dsctl/services/schema.py|_schema_data:return|dict[str, object]
+src/dsctl/services/schema.py|_static_group_builder(factory)|Callable[[], dict[str, object]]
+src/dsctl/services/schema.py|_static_group_builder.build:return|dict[str, object]
+src/dsctl/services/task.py|_assign_task_update_value(document)|dict[str, object]
+src/dsctl/services/task.py|_assign_task_update_value(value)|object
+src/dsctl/services/task.py|_assign_task_update_value.nested_mapping|dict[str, object]
+src/dsctl/services/task.py|_json_text(value)|object
+src/dsctl/services/task.py|_parse_task_update_set.document|dict[str, object]
+src/dsctl/services/task.py|_parse_task_update_value:return|object
+src/dsctl/services/task_instance.py|_task_instance_action_error.details|dict[str, object]
+src/dsctl/services/workflow.py|_workflow_schedule_create_confirmation_payload:return|dict[str, object]
+src/dsctl/upstream/adapters/ds_3_4_1.py|_DS341DataSourceOperations.get:return|Mapping[str, object]
+src/dsctl/upstream/adapters/ds_3_4_1.py|_enum_member_value(value)|object
+src/dsctl/upstream/adapters/ds_3_4_1.py|_is_http_form_scalar(value)|object
+src/dsctl/upstream/adapters/ds_3_4_1.py|_json_mapping(value)|object
+src/dsctl/upstream/adapters/ds_3_4_1.py|_json_mapping:return|Mapping[str, object]
+src/dsctl/upstream/enums.py|_is_generated_enum_type(candidate)|object
+src/dsctl/upstream/protocol.py|DataSourceOperations.get:return|Mapping[str, object]

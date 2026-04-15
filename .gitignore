@@ -1,0 +1,111 @@
+# Python bytecode, native extensions, and interpreter artifacts.
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.dylib
+*.dll
+.Python
+
+# Python packaging and build outputs.
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+develop-eggs/
+sdist/
+wheels/
+share/python-wheels/
+*.egg-info/
+*.egg
+*.manifest
+*.spec
+MANIFEST
+pip-wheel-metadata/
+.installed.cfg
+
+# Virtual environments and local Python version managers.
+.venv/
+venv/
+env/
+ENV/
+.envrc
+.python-version
+.pdm-python
+
+# Installer, resolver, and package-manager caches.
+pip-log.txt
+pip-delete-this-directory.txt
+.pip-cache/
+.uv-cache/
+.pdm-build/
+
+# Test, coverage, lint, format, and type-check caches.
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.hypothesis/
+.nox/
+.tox/
+.cache/
+dmypy.json
+dmypy.json.lock
+
+# Test and CI reports generated locally.
+junit.xml
+test-results/
+coverage-reports/
+
+# Documentation build outputs.
+site/
+docs/_build/
+
+# Jupyter and interactive Python checkpoints.
+.ipynb_checkpoints/
+
+# Logs and local process output.
+*.log
+*.pid
+*.seed
+*.stackdump
+
+# Editor, IDE, and OS metadata.
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local environment files, runtime profiles, and credentials.
+.env
+.env.*
+!.env.example
+!.env.*.example
+/config/*.env
+!/config/*.env.example
+/context
+/.dsctl-context.yaml
+*.local
+*.local.*
+
+# Local assistant, agent, and workspace settings.
+/.claude/
+/.codex/
+/AGENTS.md
+/CLAUDE.md
+
+# Local upstream source checkouts and generated scratch output.
+/references/

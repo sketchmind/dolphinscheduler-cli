@@ -1,0 +1,16 @@
+# Reviewed allowlist for intentional explicit `object` usage.
+# Each line is path|context|snippet.
+src/dsctl/client.py|_require_json_value(value)|object
+src/dsctl/output.py|require_json_object(value)|object
+src/dsctl/output.py|require_json_value(value)|object
+src/dsctl/services/_schema_groups_governance.py|task_group_group:return|dict[str, object]
+src/dsctl/support/json_types.py|is_json_value(value)|object
+src/dsctl/support/json_types.py|require_json_object(value)|object
+src/dsctl/upstream/adapters/ds_3_4_1.py|_is_http_query_scalar(value)|object
+src/dsctl/upstream/adapters/ds_3_4_1.py|_is_json_value(value)|object
+src/dsctl/upstream/adapters/ds_3_4_1.py|_json_value_or_none(value)|object
+src/dsctl/upstream/adapters/ds_3_4_1.py|_multipart_files_or_none(value)|object
+src/dsctl/upstream/adapters/ds_3_4_1.py|_query_params_or_none(value)|object
+src/dsctl/upstream/adapters/ds_3_4_1.py|_request_data_or_none(value)|object
+src/dsctl/upstream/registry.py|VersionSupport.adapter|UpstreamAdapter[object]
+src/dsctl/upstream/registry.py|get_adapter:return|UpstreamAdapter[object]

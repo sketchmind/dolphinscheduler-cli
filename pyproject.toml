@@ -1,0 +1,347 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dolphinscheduler-cli"
+version = "0.1.0"
+description = "Generated-first REST-only CLI for Apache DolphinScheduler"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  {name = "dolphinscheduler-cli contributors"},
+]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = [
+  "apache-dolphinscheduler",
+  "dolphinscheduler",
+  "workflow",
+  "scheduler",
+  "cli",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: System :: Systems Administration",
+]
+dependencies = [
+  "httpx>=0.27,<1",
+  "pydantic>=2.8,<3",
+  "PyYAML>=6,<7",
+  "typer>=0.12,<1",
+]
+
+[project.urls]
+Homepage = "https://github.com/sketchmind/dolphinscheduler-cli"
+Repository = "https://github.com/sketchmind/dolphinscheduler-cli"
+Issues = "https://github.com/sketchmind/dolphinscheduler-cli/issues"
+Changelog = "https://github.com/sketchmind/dolphinscheduler-cli/blob/main/CHANGELOG.md"
+
+[project.scripts]
+dsctl = "dsctl.app:main"
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2,<2",
+  "codespell>=2.4,<3",
+  "import-linter>=2.1,<3",
+  "javalang>=0.13,<1",
+  "pre-commit>=4,<5",
+  "pytest>=8,<9",
+  "ruff>=0.8,<1",
+  "mypy>=1.11,<2",
+  "twine>=6,<7",
+  "types-PyYAML>=6.0.12,<7",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+dsctl = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = ["--strict-config", "--strict-markers", "--tb=short", "-ra"]
+xfail_strict = true
+filterwarnings = ["error"]
+markers = [
+  "live: test talks to a real DolphinScheduler cluster",
+  "live_admin: test requires admin bootstrap credentials or admin-only mutation rights",
+  "live_developer: test runs through a non-admin ETL-style user identity",
+  "destructive: test creates, mutates, or deletes remote cluster state",
+  "slow: test may wait on real runtime state transitions",
+  "optional_capability: test requires cluster capabilities that may not exist in every environment",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src", "tests", "tools"]
+format.docstring-code-format = true
+exclude = [
+  ".eggs",
+  ".git",
+  ".mypy_cache",
+  ".venv",
+  ".vscode",
+  "__pycache__",
+  "build",
+  "dist",
+  "src/dsctl/generated/versions",
+]
+
+[tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
+select = [
+  # --- Core ---
+  "F",          # Pyflakes — unused imports/vars, syntax errors
+  "E", "W",     # pycodestyle — PEP 8 style
+  "C90",        # mccabe — function complexity
+  "I",          # isort — import ordering
+  "N",          # pep8-naming — naming conventions
+  "UP",         # pyupgrade — modernize syntax for target Python version
+  # --- Documentation ---
+  "D",          # pydocstyle — docstring presence and format
+  "ANN",        # flake8-annotations — type annotation completeness
+  "ERA",        # eradicate — commented-out code (zero tolerance)
+  # --- Security ---
+  "S",          # flake8-bandit — security vulnerabilities
+  # --- Bug prevention ---
+  "B",          # flake8-bugbear — common bug patterns
+  "A",          # flake8-builtins — shadowing builtins
+  "FBT",        # flake8-boolean-trap — boolean positional args
+  "PIE",        # flake8-pie — unnecessary code
+  "PGH",        # pygrep-hooks — blanket type: ignore, noqa, etc.
+  "PL",         # Pylint — selected high-value rules
+  "FURB",       # refurb — modern Python idioms
+  "RUF",        # Ruff-specific rules
+  # --- Code quality ---
+  "C4",         # flake8-comprehensions — comprehension optimization
+  "SIM",        # flake8-simplify — simplifiable code
+  "RET",        # flake8-return — return consistency
+  "PERF",       # Perflint — performance anti-patterns
+  "ARG",        # flake8-unused-arguments — unused function args
+  # --- Exception & logging ---
+  "TRY",        # tryceratops — exception anti-patterns
+  "EM",         # flake8-errmsg — exception message quality
+  "LOG",        # flake8-logging — logging best practices
+  "G",          # flake8-logging-format — lazy logging format
+  # --- Imports ---
+  "ICN",        # flake8-import-conventions — import alias conventions
+  "TID",        # flake8-tidy-imports — tidy imports
+  "TCH",        # flake8-type-checking — TYPE_CHECKING optimization
+  # --- Testing ---
+  "PT",         # flake8-pytest-style — pytest best practices
+  # --- Stdlib ---
+  "PTH",        # flake8-use-pathlib — prefer pathlib over os.path
+  "DTZ",        # flake8-datetimez — timezone-aware datetime
+  "T10",        # flake8-debugger — leftover debugger statements
+  "T20",        # flake8-print — leftover print statements
+  # --- TODO/FIXME ---
+  "TD",         # flake8-todos — TODO format enforcement
+  "FIX",        # flake8-fixme — flag residual FIXME/TODO/XXX
+]
+ignore = [
+  # --- Formatter conflict (ruff format handles these) ---
+  "W191",       # tab indentation
+  "E111",       # indentation not a multiple of N
+  "E114",       # indentation not a multiple of N (comment)
+  "E117",       # over-indented
+  "D206",       # docstring indent
+  "D300",       # triple-quote style
+  "COM812",     # trailing comma (formatter manages)
+  "COM819",     # trailing comma prohibited
+  # --- Docstring convention conflicts ---
+  "D203",       # conflicts with D211 (no-blank-line-before-class)
+  "D213",       # conflicts with D212 (summary on first line)
+  # --- Pragmatic exceptions ---
+  "D100",       # module-level docstring (too noisy for internal modules)
+  "D104",       # __init__.py docstring
+  "FBT003",     # boolean positional value in function call (too strict)
+  "TRY003",     # long exception messages (pragmatic for CLI)
+  "TD003",      # TODO missing issue link (adopt later)
+  "FIX002",     # TODO comments allowed (tracked by TD rules)
+  "PLR09",      # too-many-xxx (complexity limits — use per-file overrides)
+  "PLR2004",    # magic-value-comparison (too noisy in tests)
+  # --- CJK content ---
+  "RUF002",     # ambiguous unicode (CJK punctuation false positives)
+  "RUF003",     # ambiguous unicode in comments
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.pylint]
+max-args = 7
+max-branches = 12
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+  "TID252",     # relative imports OK in tests
+  "S101",       # assert is fine in tests
+  "S105",       # token-like fixture strings are common in tests
+  "S106",       # token-like keyword arguments are common in tests
+  "ANN",        # test functions don't need full annotations
+  "D",          # test docstrings optional
+  "ARG",        # unused fixture args are normal
+  "PLR2004",    # magic values in assertions
+  "PT011",      # broad pytest.raises OK in unit tests
+  "T20",        # print OK in tests
+]
+"tests/live/*.py" = [
+  "S603",       # black-box CLI subprocess execution is intentional here
+  "S607",       # command resolution goes through the current Python runtime
+]
+"tools/*" = [
+  "T20",        # print OK in scripts
+  "D",          # scripts don't need full docstrings
+  "ANN",        # scripts don't need full annotations
+]
+"tools/check_explicit_object.py" = [
+  "C901",       # pending refactor; keep complexity gate active elsewhere
+]
+"tools/ds_codegen/*.py" = [
+  "C901",       # generated-contract tooling is tracked separately
+]
+"tools/ds_codegen/**/*.py" = [
+  "C901",       # generated-contract tooling is tracked separately
+]
+".github/*" = ["TID252"]
+"src/dsctl/cli_surface.py" = [
+  "S105",       # resource slugs containing "token" are not secrets
+]
+
+[tool.mypy]
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+strict = true                       # enables ALL strict flags at once
+extra_checks = true                 # additional strictness beyond --strict
+warn_unreachable = true             # dead code after NoReturn / assert False
+show_error_codes = true
+pretty = true
+
+# Generated contracts are validated by freshness checks and dedicated type checks.
+[[tool.mypy.overrides]]
+module = ["dsctl.generated.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["javalang"]
+ignore_missing_imports = true
+
+# Pydantic's mypy plugin still trips `explicit-any` on BaseModel declarations in
+# a few schema/config modules. Keep the exception narrowly scoped to those
+# modules instead of weakening the project-wide rule.
+[[tool.mypy.overrides]]
+module = ["dsctl.config"]
+disallow_any_explicit = false
+
+[tool.importlinter]
+root_packages = ["dsctl"]
+# Contracts reference future packages that don't exist yet.
+# import-linter skips contracts whose source modules are absent,
+# so contracts activate automatically as packages are created.
+
+# Layer 1 → 2 → 3 → 4: no upward imports allowed.
+[[tool.importlinter.contracts]]
+name = "Layer dependency direction"
+type = "layers"
+layers = [
+  "dsctl.commands",
+  "dsctl.services",
+  "dsctl.upstream",
+  "dsctl.generated",
+]
+exhaustive = false
+
+# JsonValue is a boundary type — keep it in transport/error layers only.
+[[tool.importlinter.contracts]]
+name = "JsonValue stays at boundary"
+type = "forbidden"
+source_modules = [
+  "dsctl.commands",
+  "dsctl.services",
+  "dsctl.models",
+]
+forbidden_modules = [
+  "dsctl.support.json_types",
+]
+allow_indirect_imports = true
+
+# Commands must go through services, never touch generated code directly.
+[[tool.importlinter.contracts]]
+name = "Commands never import generated"
+type = "forbidden"
+source_modules = ["dsctl.commands"]
+forbidden_modules = ["dsctl.generated"]
+allow_indirect_imports = true
+
+# Services must consume generated DS contracts through the upstream bridge.
+[[tool.importlinter.contracts]]
+name = "Services never import generated"
+type = "forbidden"
+source_modules = ["dsctl.services"]
+forbidden_modules = ["dsctl.generated"]
+allow_indirect_imports = true
+
+# Services never import CLI surface.
+[[tool.importlinter.contracts]]
+name = "Services never import commands"
+type = "forbidden"
+source_modules = ["dsctl.services"]
+forbidden_modules = ["dsctl.commands"]
+
+# Models are a leaf — no business logic or CLI imports.
+[[tool.importlinter.contracts]]
+name = "Models are a leaf"
+type = "forbidden"
+source_modules = ["dsctl.models"]
+forbidden_modules = [
+  "dsctl.commands",
+  "dsctl.services",
+  "dsctl.upstream",
+  "dsctl.generated",
+  "dsctl.client",
+]
+
+[tool.codespell]
+skip = [
+  "./.git",
+  "./.mypy_cache",
+  "./.venv",
+  "__pycache__",
+  "./build",
+  "./dist",
+  "./src/dsctl/generated/versions",
+  "*.svg",
+  "./references/claude-code",
+  "./references/dolphinscheduler",
+]

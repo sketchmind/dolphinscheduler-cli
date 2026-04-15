@@ -1,0 +1,1 @@
+"""Upstream adapter tests."""
