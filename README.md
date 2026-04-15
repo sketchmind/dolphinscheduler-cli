@@ -14,19 +14,26 @@ status changes explicitly.
 
 ## Install
 
-From a source checkout:
+From PyPI:
+
+```bash
+python -m pip install dolphinscheduler-cli
+dsctl version
+```
+
+For isolated CLI usage:
+
+```bash
+pipx install dolphinscheduler-cli
+dsctl version
+```
+
+For local development, install from a source checkout:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .[dev]
-dsctl version
-```
-
-After a packaged release is available:
-
-```bash
-python -m pip install dolphinscheduler-cli
 dsctl version
 ```
 

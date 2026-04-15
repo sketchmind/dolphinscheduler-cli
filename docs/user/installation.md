@@ -4,11 +4,43 @@
 
 `dolphinscheduler-cli` currently requires Python 3.11 or newer.
 
-The first public release should keep the advertised support range aligned with
-CI. Do not widen `requires-python` until the test matrix covers the added
-Python versions.
+The published package is tested on Python 3.11, 3.12, and 3.13.
+
+## Install From PyPI
+
+Install the latest released package from PyPI:
+
+```bash
+python -m pip install dolphinscheduler-cli
+dsctl version
+```
+
+Package page: <https://pypi.org/project/dolphinscheduler-cli/>
+
+Upgrade an existing install:
+
+```bash
+python -m pip install --upgrade dolphinscheduler-cli
+dsctl version
+```
+
+For isolated CLI usage, `pipx` is usually cleaner than installing into a shared
+Python environment:
+
+```bash
+pipx install dolphinscheduler-cli
+dsctl version
+```
+
+Upgrade a `pipx` install:
+
+```bash
+pipx upgrade dolphinscheduler-cli
+```
 
 ## Install From Source
+
+Use source installs for local development or unreleased changes.
 
 From an existing source checkout:
 
@@ -20,21 +52,31 @@ python -m pip install -e .[dev]
 dsctl version
 ```
 
-## Install From PyPI
+## Configure A Cluster
 
-After the package is published:
-
-```bash
-python -m pip install dolphinscheduler-cli
-dsctl version
-```
-
-For isolated CLI usage, `pipx` is usually a cleaner installation method:
+`dsctl version` does not require a live DolphinScheduler connection. Commands
+that talk to DolphinScheduler need a DS API URL and token:
 
 ```bash
-pipx install dolphinscheduler-cli
-dsctl version
+export DS_API_URL="https://dolphinscheduler.example.com/dolphinscheduler"
+export DS_API_TOKEN="..."
+export DS_VERSION="3.4.1"
+dsctl doctor
 ```
+
+You can also use a dotenv-style file:
+
+```bash
+cat > dsctl.env <<'EOF'
+DS_API_URL=https://dolphinscheduler.example.com/dolphinscheduler
+DS_API_TOKEN=...
+DS_VERSION=3.4.1
+EOF
+
+dsctl --env-file dsctl.env doctor
+```
+
+See [Configuration](configuration.md) for the full profile format.
 
 ## Verify The Install
 
