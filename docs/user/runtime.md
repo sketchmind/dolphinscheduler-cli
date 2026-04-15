@@ -40,23 +40,24 @@ Use `--dry-run` to inspect the request without sending it.
 Inspect progress:
 
 ```bash
-dsctl workflow-instance digest 901
-dsctl workflow-instance watch 901
+dsctl workflow-instance digest <workflow_instance_id>
+dsctl workflow-instance watch <workflow_instance_id>
 ```
 
 Inspect task logs:
 
 ```bash
-dsctl task-instance log 3001 --workflow-instance 901
+dsctl task-instance list --workflow-instance <workflow_instance_id>
+dsctl task-instance log <task_instance_id>
 ```
 
 Control runtime state:
 
 ```bash
-dsctl workflow-instance stop 901
-dsctl workflow-instance rerun 901
-dsctl workflow-instance recover-failed 901
-dsctl task-instance force-success 3001 --workflow-instance 901
+dsctl workflow-instance stop <workflow_instance_id>
+dsctl workflow-instance rerun <workflow_instance_id>
+dsctl workflow-instance recover-failed <workflow_instance_id>
+dsctl task-instance force-success <task_instance_id> --workflow-instance <workflow_instance_id>
 ```
 
 High-impact mutations may require an explicit confirmation token.

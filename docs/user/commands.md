@@ -42,9 +42,10 @@ dsctl workflow create --file workflow.yaml --project etl-prod
 ```bash
 dsctl workflow run daily-etl --project etl-prod
 dsctl workflow run-task daily-etl --task load --project etl-prod
-dsctl workflow-instance digest 901
-dsctl workflow-instance watch 901
-dsctl task-instance log 3001 --workflow-instance 901
+dsctl workflow-instance digest <workflow_instance_id>
+dsctl workflow-instance watch <workflow_instance_id>
+dsctl task-instance list --workflow-instance <workflow_instance_id>
+dsctl task-instance log <task_instance_id>
 ```
 
 ## Output Contract

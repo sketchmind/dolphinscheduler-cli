@@ -78,8 +78,8 @@ dsctl audit list --model-type Workflow --operation-type Create
 dsctl resource view /tenant/resources/demo.sql
 dsctl workflow get daily-etl --project etl-prod
 dsctl task get extract --project etl-prod --workflow daily-etl
-dsctl workflow-instance get 901
-dsctl task-instance get 3001 --workflow-instance 901
+dsctl workflow-instance get <workflow_instance_id>
+dsctl task-instance get <task_instance_id> --workflow-instance <workflow_instance_id>
 ```
 
 ## Global Option
@@ -3855,6 +3855,8 @@ Fetches the tail of one task-instance log.
 Selection rules:
 
 - task-instance resources are id-first
+- `--workflow-instance` is not required because the DS logger API reads log
+  chunks by task-instance id
 - `--tail` means “keep the last N lines” and is implemented by chunking the DS
   logger API until exhaustion
 

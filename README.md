@@ -59,8 +59,9 @@ dsctl use project etl-prod
 dsctl workflow list
 dsctl workflow get daily-etl
 dsctl workflow run daily-etl --project etl-prod
-dsctl workflow-instance digest 901
-dsctl task-instance log 3001 --workflow-instance 901
+dsctl workflow-instance digest <workflow_instance_id>
+dsctl task-instance list --workflow-instance <workflow_instance_id>
+dsctl task-instance log <task_instance_id>
 ```
 
 ## Command Surface
