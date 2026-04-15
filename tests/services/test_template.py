@@ -1,4 +1,5 @@
 import json
+from typing import cast
 
 import pytest
 import yaml
@@ -7,6 +8,7 @@ from dsctl.errors import UserInputError
 from dsctl.models import WorkflowSpec, supported_typed_task_types
 from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services.template import (
+    ParameterSyntaxIndexData,
     generic_task_template_types,
     parameter_syntax_data,
     parameter_syntax_result,
@@ -60,8 +62,9 @@ def test_parameter_syntax_result_describes_dynamic_parameter_shape() -> None:
 
     assert isinstance(data, dict)
     assert data == parameter_syntax_data()
-    assert data["default_topic"] == "overview"
-    assert "time" in [item["topic"] for item in data["topics"]]
+    index_data = cast("ParameterSyntaxIndexData", data)
+    assert index_data["default_topic"] == "overview"
+    assert "time" in [item["topic"] for item in index_data["topics"]]
     template_variants = result.resolved["template_variants"]
     assert isinstance(template_variants, list)
     assert "SHELL" in template_variants
