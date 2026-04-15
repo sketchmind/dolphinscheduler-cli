@@ -49,6 +49,7 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.import_linter_cache/
 .pyre/
 .pytype/
 .hypothesis/
