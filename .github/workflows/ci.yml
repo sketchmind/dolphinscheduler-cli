@@ -47,7 +47,6 @@ jobs:
         run: lint-imports
 
       - name: Checkout DolphinScheduler Source
-        if: matrix.python-version == '3.11'
         run: |
           mkdir -p references
           git clone --depth 1 --branch 3.4.1 https://github.com/apache/dolphinscheduler.git references/dolphinscheduler
