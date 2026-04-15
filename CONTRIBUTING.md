@@ -15,6 +15,25 @@ pre-commit install
 
 Use Python 3.11 unless the CI matrix and `pyproject.toml` are widened together.
 
+## Branching Model
+
+`dev` is the daily integration branch. Feature and fix branches should start
+from `dev`, and normal pull requests should target `dev`.
+
+`main` is the stable release branch. Do not merge day-to-day development
+directly into `main`; use a release or hotfix branch.
+
+Use `release/<version>` branches for release preparation. Cut them from `dev`,
+make only release-focused changes such as version, changelog, documentation, and
+small blocking fixes, then merge into `main`.
+
+Use `hotfix/<version>` branches for urgent patches. Cut them from `main`, merge
+the fix back into `main`, publish the patch release, then merge `main` back into
+`dev`.
+
+Release tags are created from `main` only. GitHub Releases from those tags
+trigger the formal PyPI publish workflow.
+
 ## Documentation Map
 
 - User docs live under `docs/user/`.

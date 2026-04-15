@@ -82,7 +82,11 @@ jobs:
     needs: build
     if: >-
       github.event_name == 'release' ||
-      (github.event_name == 'workflow_dispatch' && inputs.repository == 'pypi')
+      (
+        github.event_name == 'workflow_dispatch' &&
+        inputs.repository == 'pypi' &&
+        github.ref == 'refs/heads/main'
+      )
     runs-on: ubuntu-latest
     environment:
       name: pypi

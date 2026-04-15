@@ -2,6 +2,32 @@
 
 This checklist keeps GitHub and PyPI publication explicit and reproducible.
 
+## Branch Flow
+
+Daily work lands on `dev`. Keep `dev` green because it is the integration point
+for the next release.
+
+`main` is the stable release branch. It should receive only release-ready
+changes from `release/*` branches or urgent fixes from `hotfix/*` branches.
+
+Prepare a normal release with this flow:
+
+1. Cut `release/<version>` from `dev`.
+2. Update the version, changelog, release notes, and final documentation.
+3. Run the local gate, package checks, and live gate when a cluster is available.
+4. Merge the release branch into `main`.
+5. Tag the release on `main`.
+6. Create the GitHub Release to publish to PyPI.
+7. Merge `main` back into `dev`.
+
+Prepare an urgent patch with this flow:
+
+1. Cut `hotfix/<version>` from `main`.
+2. Apply the minimal fix and targeted tests.
+3. Merge the hotfix into `main`.
+4. Tag and publish the patch release from `main`.
+5. Merge `main` back into `dev`.
+
 ## Pre-Release Decisions
 
 - Confirm the public package name.
@@ -107,5 +133,6 @@ Recommended release trigger:
 6. Verify `pipx install dolphinscheduler-cli` exposes `dsctl`.
 
 The `Publish` workflow can also be started manually with `repository=pypi`.
-Prefer the GitHub Release path for normal public releases so the published PyPI
-version has a matching source tag and release page.
+Manual PyPI publishing is restricted to the `main` branch. Prefer the GitHub
+Release path for normal public releases so the published PyPI version has a
+matching source tag and release page.
