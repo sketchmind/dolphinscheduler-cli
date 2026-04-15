@@ -46,7 +46,14 @@ jobs:
       - name: Architecture Boundary Check
         run: lint-imports
 
+      - name: Checkout DolphinScheduler Source
+        if: matrix.python-version == '3.11'
+        run: |
+          mkdir -p references
+          git clone --depth 1 --branch 3.4.1 https://github.com/apache/dolphinscheduler.git references/dolphinscheduler
+
       - name: Generated Code Freshness
+        if: matrix.python-version == '3.11'
         run: python tools/check_generated_freshness.py
 
       - name: Error Translation Governance
@@ -59,12 +66,14 @@ jobs:
         run: codespell --toml pyproject.toml
 
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -m "not live" -q
 
       - name: Generate Package Sample
+        if: matrix.python-version == '3.11'
         run: python tools/generate_ds_contract.py --package-output build/ds_contract/package_sample
 
       - name: Generated Package Type Check
+        if: matrix.python-version == '3.11'
         run: python -m mypy build/ds_contract/package_sample/generated/versions/ds_3_4_1 --follow-imports=silent
 
   package:
