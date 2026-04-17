@@ -5,6 +5,10 @@ The stable CLI surface is documented in the
 machine-readable behavior contract for command names, output envelopes, error
 shape, warnings, and dry-run behavior.
 
+Use `dsctl schema` for exact command arguments, options, choices, and selector
+rules. Use `dsctl capabilities` for lightweight feature discovery; it is not an
+argument schema.
+
 ## Discovery
 
 ```bash
@@ -45,6 +49,7 @@ dsctl workflow run-task daily-etl --task load --project etl-prod
 dsctl workflow-instance digest <workflow_instance_id>
 dsctl workflow-instance watch <workflow_instance_id>
 dsctl task-instance list --workflow-instance <workflow_instance_id>
+dsctl task-instance list --project etl-prod --workflow daily-etl --state FAILURE
 dsctl task-instance log <task_instance_id>
 ```
 

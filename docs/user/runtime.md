@@ -40,16 +40,31 @@ Use `--dry-run` to inspect the request without sending it.
 Inspect progress:
 
 ```bash
+dsctl workflow-instance list --project etl-prod --start "2026-04-11 00:00:00" --end "2026-04-11 23:59:59"
 dsctl workflow-instance digest <workflow_instance_id>
 dsctl workflow-instance watch <workflow_instance_id>
 ```
+
+`workflow-instance list` is the primary runtime query surface. Use
+`--project` for project-scoped filters such as `--search` and `--executor`.
+Without `--project`, global filters are limited to `--workflow`, `--host`,
+`--start`, `--end`, and `--state`.
 
 Inspect task logs:
 
 ```bash
 dsctl task-instance list --workflow-instance <workflow_instance_id>
+dsctl task-instance list --project etl-prod --state FAILURE --start "2026-04-11 00:00:00" --end "2026-04-11 23:59:59"
 dsctl task-instance log <task_instance_id>
 ```
+
+`task-instance list` uses the project-scoped DS task-instance paging query. Use
+`--workflow-instance` for the common per-workflow inspection path, or use
+`--project` plus filters such as `--task`, `--executor`, `--host`, `--state`,
+`--start`, and `--end` for runtime triage across workflow instances. Use
+`--workflow` to narrow that project-scoped query by workflow definition. Use
+`--search` only for the upstream free-text `searchVal` filter; use `--task`
+for an exact task instance name filter.
 
 Control runtime state:
 

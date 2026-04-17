@@ -68,6 +68,7 @@ dsctl workflow get daily-etl
 dsctl workflow run daily-etl --project etl-prod
 dsctl workflow-instance digest <workflow_instance_id>
 dsctl task-instance list --workflow-instance <workflow_instance_id>
+dsctl task-instance list --project etl-prod --state FAILURE
 dsctl task-instance log <task_instance_id>
 ```
 

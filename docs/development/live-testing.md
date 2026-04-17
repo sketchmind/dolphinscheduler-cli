@@ -403,11 +403,10 @@ live additions.
 - `resource view` is not reliable through the DS view endpoint because the
   upstream controller misuses the `limit` parameter. The adapter now reads the
   download endpoint and applies the line window client-side.
-- `workflow-instance` task inspection in DS 3.4.1 is backed by
-  `GET /projects/{projectCode}/workflow-instances/{id}/tasks`, and the useful
-  payload lives under the DS `dataList` envelope as
-  `{ "taskList": [...], "workflowInstanceState": ... }`. Do not assume a page
-  envelope on this path.
+- `task-instance list` in DS 3.4.1 is backed by the project-scoped
+  `GET /projects/{projectCode}/task-instances` paging query. The CLI narrows
+  the common per-run inspection path by sending `workflowInstanceId`, and it
+  uses the same path for broader project-scoped runtime triage filters.
 - `workflow describe` returns one root sentinel relation with
   `preTaskCode=0`. That row is part of the DS DAG encoding and should not be
   confused with a user-authored dependency edge.
