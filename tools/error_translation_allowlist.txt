@@ -10,10 +10,6 @@ page_hook|project|_list_projects_result
 # Remaining page-hook failures are generic DS paging/controller errors rather
 # than stable task-instance domain semantics.
 page_hook|task_instance|_list_task_instances_result
-# Workflow-instance list is a thin runtime paging surface over DS-native
-# filters, so list-time upstream failures stay raw until upstream exposes
-# stable resource-specific semantics.
-page_hook|workflow_instance|_list_workflow_instances_result
 # These alert-group codes are generic create/list/update/delete upstream
 # failures, not stable domain errors such as conflict or invalid state.
 raw_matrix|alert_group|_translate_alert_group_api_error|CREATE_ALERT_GROUP_ERROR,LIST_PAGING_ALERT_GROUP_ERROR,UPDATE_ALERT_GROUP_ERROR,DELETE_ALERT_GROUP_ERROR

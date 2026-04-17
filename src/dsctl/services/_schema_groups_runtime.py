@@ -159,14 +159,51 @@ def workflow_instance_group() -> dict[str, object]:
                     option(
                         "project",
                         value_type="string",
-                        description="Filter by project name.",
-                        selector="opaque_name",
+                        description=(
+                            "Project name or code for project-scoped filters."
+                        ),
+                        selector="name_or_code",
                     ),
                     option(
                         "workflow",
                         value_type="string",
-                        description="Filter by workflow name.",
+                        description=(
+                            "Workflow name filter. With --project, name or code "
+                            "is resolved inside that project."
+                        ),
                         selector="opaque_name",
+                    ),
+                    option(
+                        "search",
+                        value_type="string",
+                        description=(
+                            "Filter workflow instances by upstream searchVal; "
+                            "requires --project."
+                        ),
+                    ),
+                    option(
+                        "executor",
+                        value_type="string",
+                        description="Filter by executor user name; requires --project.",
+                    ),
+                    option(
+                        "host",
+                        value_type="string",
+                        description="Filter by workflow instance host.",
+                    ),
+                    option(
+                        "start",
+                        value_type="string",
+                        description=(
+                            "Start datetime in DS format 'YYYY-MM-DD HH:MM:SS'."
+                        ),
+                    ),
+                    option(
+                        "end",
+                        value_type="string",
+                        description=(
+                            "End datetime in DS format 'YYYY-MM-DD HH:MM:SS'."
+                        ),
                     ),
                     option(
                         "state",
@@ -367,16 +404,39 @@ def task_instance_group() -> dict[str, object]:
             command(
                 "list",
                 action="task-instance.list",
-                summary="List task instances inside one workflow instance.",
+                summary="List task instances with project-scoped runtime filters.",
                 options=[
                     option(
                         "workflow-instance",
                         value_type="integer",
                         description=(
-                            "Workflow instance id used to scope the "
+                            "Workflow instance id used to narrow the "
                             "task-instance query."
                         ),
-                        required=True,
+                    ),
+                    option(
+                        "project",
+                        value_type="string",
+                        description=(
+                            "Project name or code for the project-scoped query. "
+                            "Required via flag or context when --workflow-instance "
+                            "is omitted."
+                        ),
+                        selector="name_or_code",
+                    ),
+                    option(
+                        "workflow",
+                        value_type="string",
+                        description=(
+                            "Workflow definition name or code to filter within "
+                            "the project."
+                        ),
+                        selector="name_or_code",
+                    ),
+                    option(
+                        "workflow-instance-name",
+                        value_type="string",
+                        description="Filter by workflow instance name.",
                     ),
                     option(
                         "page-no",
@@ -399,12 +459,57 @@ def task_instance_group() -> dict[str, object]:
                     option(
                         "search",
                         value_type="string",
-                        description="Filter task instances by upstream searchVal.",
+                        description=(
+                            "Free-text upstream searchVal filter. Use --task for "
+                            "an exact task instance name filter."
+                        ),
+                    ),
+                    option(
+                        "task",
+                        value_type="string",
+                        description="Filter by exact task instance name.",
+                    ),
+                    option(
+                        "task-code",
+                        value_type="integer",
+                        description="Filter by task definition code.",
+                    ),
+                    option(
+                        "executor",
+                        value_type="string",
+                        description="Filter by executor user name.",
                     ),
                     option(
                         "state",
                         value_type="string",
                         description="Filter by DS task execution status name.",
+                    ),
+                    option(
+                        "host",
+                        value_type="string",
+                        description="Filter by worker host.",
+                    ),
+                    option(
+                        "start",
+                        value_type="string",
+                        description=(
+                            "Task start-time lower bound in DS format "
+                            "'YYYY-MM-DD HH:MM:SS'."
+                        ),
+                    ),
+                    option(
+                        "end",
+                        value_type="string",
+                        description=(
+                            "Task start-time upper bound in DS format "
+                            "'YYYY-MM-DD HH:MM:SS'."
+                        ),
+                    ),
+                    option(
+                        "execute-type",
+                        value_type="string",
+                        description="Filter by DS task execute type.",
+                        choices=["BATCH", "STREAM"],
                     ),
                 ],
             ),

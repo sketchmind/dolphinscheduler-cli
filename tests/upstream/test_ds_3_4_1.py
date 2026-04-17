@@ -3484,6 +3484,79 @@ def test_adapter_runtime_methods_bridge_executor_and_v2_instance_endpoints() -> 
     ]
 
 
+def test_adapter_workflow_instance_list_can_use_project_scoped_endpoint() -> None:
+    profile = make_profile()
+    requests_seen: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_seen.append((request.method, request.url.path))
+        if (
+            request.method == "GET"
+            and request.url.path == "/dolphinscheduler/projects/7/workflow-instances"
+        ):
+            assert request.url.params["workflowDefinitionCode"] == "101"
+            assert request.url.params["searchVal"] == "daily"
+            assert request.url.params["executorName"] == "alice"
+            assert request.url.params["stateType"] == "SUCCESS"
+            assert request.url.params["host"] == "master"
+            assert request.url.params["startDate"] == "2026-04-11 10:00:00"
+            assert request.url.params["endDate"] == "2026-04-11 11:00:00"
+            assert request.url.params["pageNo"] == "1"
+            assert request.url.params["pageSize"] == "50"
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "msg": "success",
+                    "data": {
+                        "totalList": [
+                            {
+                                "id": 902,
+                                "workflowDefinitionCode": 101,
+                                "projectCode": 7,
+                                "state": "SUCCESS",
+                                "runTimes": 1,
+                                "name": "daily-sync-902",
+                                "executorId": 11,
+                            }
+                        ],
+                        "total": 1,
+                        "totalPage": 1,
+                        "pageSize": 50,
+                        "currentPage": 1,
+                    },
+                },
+            )
+        message = f"Unexpected request: {request.method} {request.url}"
+        raise AssertionError(message)
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = adapter.bind(profile, http_client=http_client)
+        page = session.workflow_instances.list(
+            page_no=1,
+            page_size=50,
+            project_code=7,
+            workflow_code=101,
+            search="daily",
+            executor="alice",
+            host="master",
+            start_time="2026-04-11 10:00:00",
+            end_time="2026-04-11 11:00:00",
+            state="SUCCESS",
+        )
+
+    assert page.total == 1
+    assert page.totalList is not None
+    assert page.totalList[0].id == 902
+    assert requests_seen == [("GET", "/dolphinscheduler/projects/7/workflow-instances")]
+
+
 def test_adapter_workflow_instance_relation_methods_use_project_scoped_endpoints() -> (
     None
 ):
@@ -3772,18 +3845,29 @@ def test_adapter_task_instance_methods_bridge_v2_and_logger_endpoints() -> None:
         requests_seen.append((request.method, request.url.path))
         if (
             request.method == "GET"
-            and request.url.path
-            == "/dolphinscheduler/projects/7/workflow-instances/901/tasks"
+            and request.url.path == "/dolphinscheduler/projects/7/task-instances"
         ):
-            assert not request.url.params
+            assert request.url.params["workflowInstanceId"] == "901"
+            assert request.url.params["workflowInstanceName"] == "daily-sync-901"
+            assert request.url.params["workflowDefinitionName"] == "daily-sync"
+            assert request.url.params["searchVal"] == "extract"
+            assert request.url.params["taskName"] == "extract"
+            assert request.url.params["taskCode"] == "201"
+            assert request.url.params["executorName"] == "alice"
+            assert request.url.params["stateType"] == "RUNNING_EXECUTION"
+            assert request.url.params["host"] == "worker-1"
+            assert request.url.params["startDate"] == "2026-04-11 10:00:00"
+            assert request.url.params["endDate"] == "2026-04-11 11:00:00"
+            assert request.url.params["taskExecuteType"] == "BATCH"
+            assert request.url.params["pageNo"] == "1"
+            assert request.url.params["pageSize"] == "20"
             return httpx.Response(
                 200,
                 json={
                     "code": 0,
                     "msg": "success",
-                    "dataList": {
-                        "workflowInstanceState": "RUNNING_EXECUTION",
-                        "taskList": [
+                    "data": {
+                        "totalList": [
                             {
                                 "id": 3001,
                                 "name": "extract",
@@ -3794,17 +3878,11 @@ def test_adapter_task_instance_methods_bridge_v2_and_logger_endpoints() -> None:
                                 "taskDefinitionVersion": 1,
                                 "state": "RUNNING_EXECUTION",
                             },
-                            {
-                                "id": 3002,
-                                "name": "load",
-                                "taskType": "SHELL",
-                                "workflowInstanceId": 901,
-                                "projectCode": 7,
-                                "taskCode": 202,
-                                "taskDefinitionVersion": 1,
-                                "state": "SUCCESS",
-                            },
                         ],
+                        "total": 1,
+                        "totalPage": 1,
+                        "pageSize": 20,
+                        "currentPage": 1,
                     },
                 },
             )
@@ -3879,11 +3957,20 @@ def test_adapter_task_instance_methods_bridge_v2_and_logger_endpoints() -> None:
         session = adapter.bind(profile, http_client=http_client)
         page = session.task_instances.list(
             workflow_instance_id=901,
+            workflow_instance_name="daily-sync-901",
+            workflow_definition_name="daily-sync",
             project_code=7,
             page_no=1,
             page_size=20,
             search="extract",
+            task_name="extract",
+            task_code=201,
+            executor="alice",
             state="RUNNING_EXECUTION",
+            host="worker-1",
+            start_time="2026-04-11 10:00:00",
+            end_time="2026-04-11 11:00:00",
+            task_execute_type="BATCH",
         )
         task_instance = session.task_instances.get(
             project_code=7,
@@ -3914,7 +4001,7 @@ def test_adapter_task_instance_methods_bridge_v2_and_logger_endpoints() -> None:
     assert log.lineNum == 2
     assert log.message == "line-1\nline-2"
     assert requests_seen == [
-        ("GET", "/dolphinscheduler/projects/7/workflow-instances/901/tasks"),
+        ("GET", "/dolphinscheduler/projects/7/task-instances"),
         ("POST", "/dolphinscheduler/v2/projects/7/task-instances/3001"),
         ("GET", "/dolphinscheduler/log/detail"),
         ("POST", "/dolphinscheduler/projects/7/task-instances/3001/force-success"),

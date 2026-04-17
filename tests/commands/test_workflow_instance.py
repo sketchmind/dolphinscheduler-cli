@@ -85,6 +85,7 @@ def patch_workflow_instance_service(monkeypatch: pytest.MonkeyPatch) -> None:
                 state_value=FakeEnumValue("RUNNING_EXECUTION"),
                 run_times_value=1,
                 name="daily-sync-901",
+                host="master-1",
                 executor_id_value=11,
                 executor_name_value="alice",
                 worker_group_value="default",
@@ -98,6 +99,7 @@ def patch_workflow_instance_service(monkeypatch: pytest.MonkeyPatch) -> None:
                 state_value=FakeEnumValue("SUCCESS"),
                 run_times_value=1,
                 name="child-workflow-903",
+                host="master-2",
                 executor_id_value=12,
                 executor_name_value="bob",
                 worker_group_value="default",
@@ -164,6 +166,35 @@ def test_workflow_instance_list_command_supports_all_pages() -> None:
     assert payload["resolved"]["all"] is True
     assert payload["data"]["total"] == 2
     assert len(payload["data"]["totalList"]) == 2
+
+
+def test_workflow_instance_list_command_accepts_project_scoped_filters() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "workflow-instance",
+            "list",
+            "--project",
+            "etl-prod",
+            "--search",
+            "daily",
+            "--executor",
+            "alice",
+            "--host",
+            "master",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "workflow-instance.list"
+    assert payload["resolved"]["project"] == "etl-prod"
+    assert payload["resolved"]["project_code"] == 7
+    assert payload["resolved"]["search"] == "daily"
+    assert payload["resolved"]["executor"] == "alice"
+    assert payload["resolved"]["host"] == "master"
+    assert payload["data"]["total"] == 1
+    assert payload["data"]["totalList"][0]["id"] == 901
 
 
 def test_workflow_instance_list_command_reports_supported_state_names() -> None:

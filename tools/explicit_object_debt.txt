@@ -144,7 +144,6 @@ src/dsctl/services/task.py|_parse_task_update_value:return|object
 src/dsctl/services/task_instance.py|_task_instance_action_error.details|dict[str, object]
 src/dsctl/services/workflow.py|_workflow_schedule_create_confirmation_payload:return|dict[str, object]
 src/dsctl/upstream/adapters/ds_3_4_1.py|_DS341DataSourceOperations.get:return|Mapping[str, object]
-src/dsctl/upstream/adapters/ds_3_4_1.py|_enum_member_value(value)|object
 src/dsctl/upstream/adapters/ds_3_4_1.py|_is_http_form_scalar(value)|object
 src/dsctl/upstream/adapters/ds_3_4_1.py|_json_mapping(value)|object
 src/dsctl/upstream/adapters/ds_3_4_1.py|_json_mapping:return|Mapping[str, object]

@@ -1,5 +1,6 @@
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from tests.fakes import (
     FakeTaskInstance,
     FakeTaskInstanceAdapter,
     FakeWorkflow,
+    FakeWorkflowAdapter,
     FakeWorkflowInstance,
     FakeWorkflowInstanceAdapter,
     FakeWorkflowTaskRelation,
@@ -36,6 +38,7 @@ def _install_workflow_instance_service_fakes(
     *,
     project_adapter: FakeProjectAdapter,
     workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    workflow_adapter: FakeWorkflowAdapter | None = None,
     task_adapter: FakeTaskAdapter | None = None,
     task_instance_adapter: FakeTaskInstanceAdapter | None = None,
 ) -> None:
@@ -45,6 +48,7 @@ def _install_workflow_instance_service_fakes(
         lambda env_file=None: fake_service_runtime(
             project_adapter,
             profile=make_profile(),
+            workflow_adapter=workflow_adapter,
             workflow_instance_adapter=workflow_instance_adapter,
             task_adapter=task_adapter,
             task_instance_adapter=task_instance_adapter,
@@ -186,6 +190,118 @@ def test_list_workflow_instances_result_returns_ds_page(
     assert data["total"] == 1
     assert _mapping(items[0])["id"] == 901
     assert result.resolved["state"] == "RUNNING_EXECUTION"
+
+
+def test_list_workflow_instances_result_supports_project_scoped_filters(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    timed_adapter = FakeWorkflowInstanceAdapter(
+        workflow_instances=[
+            replace(
+                fake_workflow_instance_adapter.workflow_instances[0],
+                start_time_value="2026-04-11 10:00:00",
+            ),
+            replace(
+                fake_workflow_instance_adapter.workflow_instances[1],
+                start_time_value="2026-04-11 11:00:00",
+            ),
+            replace(
+                fake_workflow_instance_adapter.workflow_instances[2],
+                start_time_value="2026-04-11 12:00:00",
+            ),
+        ],
+    )
+    workflow_adapter = FakeWorkflowAdapter(
+        workflows=[
+            FakeWorkflow(
+                code=101,
+                name="daily-sync",
+                version=1,
+                project_code_value=7,
+            )
+        ],
+        dags={},
+    )
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=workflow_adapter,
+        workflow_instance_adapter=timed_adapter,
+    )
+
+    result = workflow_instance_service.list_workflow_instances_result(
+        project="etl-prod",
+        workflow="daily-sync",
+        search="daily-sync",
+        executor="alice",
+        host="master-1",
+        start="2026-04-11 10:30:00",
+        end="2026-04-11 11:30:00",
+    )
+    data = _mapping(result.data)
+    items = _sequence(data["totalList"])
+
+    assert data["total"] == 1
+    assert _mapping(items[0])["id"] == 902
+    assert result.resolved["project"] == "etl-prod"
+    assert result.resolved["project_code"] == 7
+    assert result.resolved["workflow"] == "daily-sync"
+    assert result.resolved["workflow_code"] == 101
+    assert result.resolved["start"] == "2026-04-11 10:30:00"
+    assert result.resolved["end"] == "2026-04-11 11:30:00"
+
+
+def test_list_workflow_instances_result_rejects_project_scoped_filters_without_project(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(UserInputError, match="filters require --project") as exc_info:
+        workflow_instance_service.list_workflow_instances_result(search="daily")
+
+    assert exc_info.value.details == {"filters": ["search"]}
+    assert exc_info.value.suggestion == (
+        "Pass --project PROJECT with --search or --executor, or use --workflow, "
+        "--state, --host, --start, and --end for global workflow-instance "
+        "filtering."
+    )
+
+
+def test_list_workflow_instances_result_translates_controller_fallback_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    def broken_list(**kwargs: object) -> object:
+        del kwargs
+        raise ApiResultError(
+            result_code=10113,
+            result_message="query workflow instance list paging error:null",
+        )
+
+    monkeypatch.setattr(fake_workflow_instance_adapter, "list", broken_list)
+
+    with pytest.raises(UserInputError, match="rejected") as exc_info:
+        workflow_instance_service.list_workflow_instances_result(
+            workflow="daily-sync",
+        )
+
+    assert exc_info.value.details == {"filters": {"workflow": "daily-sync"}}
+    assert exc_info.value.__cause__ is not None
 
 
 def test_list_workflow_instances_result_reports_supported_state_names(

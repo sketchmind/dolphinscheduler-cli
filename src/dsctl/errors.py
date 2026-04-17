@@ -128,6 +128,12 @@ class InvalidStateError(DsctlError):
     error_type = "invalid_state"
 
 
+class TaskNotDispatchedError(DsctlError):
+    """Raised when DS has not dispatched a task instance and no log exists yet."""
+
+    error_type = "task_not_dispatched"
+
+
 class ConfirmationRequiredError(DsctlError):
     """Raised when a risky mutation requires one explicit confirmation token."""
 

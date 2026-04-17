@@ -53,14 +53,52 @@ def list_command(
         str | None,
         typer.Option(
             "--project",
-            help="Filter by project name.",
+            help="Project name or code for project-scoped filters.",
         ),
     ] = None,
     workflow: Annotated[
         str | None,
         typer.Option(
             "--workflow",
-            help="Filter by workflow name.",
+            help=(
+                "Workflow name filter. With --project, name or code is resolved "
+                "inside that project."
+            ),
+        ),
+    ] = None,
+    search: Annotated[
+        str | None,
+        typer.Option(
+            "--search",
+            help="Filter workflow instances by upstream searchVal; requires --project.",
+        ),
+    ] = None,
+    executor: Annotated[
+        str | None,
+        typer.Option(
+            "--executor",
+            help="Filter by executor user name; requires --project.",
+        ),
+    ] = None,
+    host: Annotated[
+        str | None,
+        typer.Option(
+            "--host",
+            help="Filter by workflow instance host.",
+        ),
+    ] = None,
+    start: Annotated[
+        str | None,
+        typer.Option(
+            "--start",
+            help="Filter by start time lower bound, e.g. '2026-04-11 10:00:00'.",
+        ),
+    ] = None,
+    end: Annotated[
+        str | None,
+        typer.Option(
+            "--end",
+            help="Filter by start time upper bound, e.g. '2026-04-11 11:00:00'.",
         ),
     ] = None,
     state: Annotated[
@@ -82,6 +120,11 @@ def list_command(
             all_pages=all_pages,
             project=project,
             workflow=workflow,
+            search=search,
+            executor=executor,
+            host=host,
+            start=start,
+            end=end,
             state=state,
             env_file=env_file,
         ),

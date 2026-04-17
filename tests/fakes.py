@@ -5205,12 +5205,72 @@ class FakeWorkflowInstanceAdapter:
         *,
         page_no: int,
         page_size: int,
+        project_code: int | None = None,
+        workflow_code: int | None = None,
         project_name: str | None = None,
         workflow_name: str | None = None,
+        search: str | None = None,
+        executor: str | None = None,
+        host: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
         state: str | None = None,
     ) -> FakeWorkflowInstancePage:
-        del project_name, workflow_name
+        del project_name
         filtered = list(self.workflow_instances)
+        if project_code is not None:
+            filtered = [
+                workflow_instance
+                for workflow_instance in filtered
+                if workflow_instance.projectCode == project_code
+            ]
+        if workflow_code is not None:
+            filtered = [
+                workflow_instance
+                for workflow_instance in filtered
+                if workflow_instance.workflowDefinitionCode == workflow_code
+            ]
+        if workflow_name is not None:
+            filtered = [
+                workflow_instance
+                for workflow_instance in filtered
+                if workflow_instance.name is not None
+                and workflow_name.lower() in workflow_instance.name.lower()
+            ]
+        if search is not None:
+            filtered = [
+                workflow_instance
+                for workflow_instance in filtered
+                if workflow_instance.name is not None
+                and search.lower() in workflow_instance.name.lower()
+            ]
+        if executor is not None:
+            filtered = [
+                workflow_instance
+                for workflow_instance in filtered
+                if workflow_instance.executorName == executor
+            ]
+        if host is not None:
+            filtered = [
+                workflow_instance
+                for workflow_instance in filtered
+                if workflow_instance.host is not None
+                and host.lower() in workflow_instance.host.lower()
+            ]
+        if start_time is not None:
+            filtered = [
+                workflow_instance
+                for workflow_instance in filtered
+                if workflow_instance.startTime is not None
+                and workflow_instance.startTime >= start_time
+            ]
+        if end_time is not None:
+            filtered = [
+                workflow_instance
+                for workflow_instance in filtered
+                if workflow_instance.startTime is not None
+                and workflow_instance.startTime <= end_time
+            ]
         if state is not None:
             filtered = [
                 workflow_instance
@@ -5606,33 +5666,42 @@ class FakeTaskInstanceAdapter:
     def list(
         self,
         *,
-        workflow_instance_id: int,
         project_code: int,
         page_no: int,
         page_size: int,
+        workflow_instance_id: int | None = None,
+        workflow_instance_name: str | None = None,
+        workflow_definition_name: str | None = None,
         search: str | None = None,
+        task_name: str | None = None,
+        task_code: int | None = None,
+        executor: str | None = None,
         state: str | None = None,
+        host: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        task_execute_type: str | None = None,
     ) -> FakeTaskInstancePage:
         filtered = [
             task_instance
             for task_instance in self.task_instances
-            if task_instance.workflowInstanceId == workflow_instance_id
-            and task_instance.projectCode == project_code
+            if _matches_task_instance_query(
+                task_instance,
+                project_code=project_code,
+                workflow_instance_id=workflow_instance_id,
+                workflow_instance_name=workflow_instance_name,
+                workflow_definition_name=workflow_definition_name,
+                search=search,
+                task_name=task_name,
+                task_code=task_code,
+                executor=executor,
+                state=state,
+                host=host,
+                start_time=start_time,
+                end_time=end_time,
+                task_execute_type=task_execute_type,
+            )
         ]
-        if search is not None:
-            filtered = [
-                task_instance
-                for task_instance in filtered
-                if task_instance.name is not None
-                and search.lower() in task_instance.name.lower()
-            ]
-        if state is not None:
-            filtered = [
-                task_instance
-                for task_instance in filtered
-                if task_instance.state is not None
-                and task_instance.state.value == state
-            ]
         start = (page_no - 1) * page_size
         stop = start + page_size
         total = len(filtered)
@@ -5747,6 +5816,61 @@ class FakeTaskInstanceAdapter:
             result_code=10008,
             result_message=f"task instance id {task_instance_id} not found",
         )
+
+
+def _matches_task_instance_query(
+    task_instance: FakeTaskInstance,
+    *,
+    project_code: int,
+    workflow_instance_id: int | None,
+    workflow_instance_name: str | None,
+    workflow_definition_name: str | None,
+    search: str | None,
+    task_name: str | None,
+    task_code: int | None,
+    executor: str | None,
+    state: str | None,
+    host: str | None,
+    start_time: str | None,
+    end_time: str | None,
+    task_execute_type: str | None,
+) -> bool:
+    start_value = task_instance.startTime
+    state_value = None if task_instance.state is None else task_instance.state.value
+    execute_type_value = (
+        None
+        if task_instance.taskExecuteType is None
+        else task_instance.taskExecuteType.value
+    )
+    return all(
+        (
+            task_instance.projectCode == project_code,
+            workflow_instance_id is None
+            or task_instance.workflowInstanceId == workflow_instance_id,
+            workflow_instance_name is None
+            or task_instance.workflowInstanceName == workflow_instance_name,
+            workflow_definition_name is None
+            or task_instance.processDefinitionName == workflow_definition_name,
+            search is None
+            or (
+                task_instance.name is not None
+                and search.lower() in task_instance.name.lower()
+            ),
+            task_name is None or task_instance.name == task_name,
+            task_code is None or task_instance.taskCode == task_code,
+            executor is None or task_instance.executorName == executor,
+            state is None or state_value == state,
+            host is None
+            or (
+                task_instance.host is not None
+                and host.lower() in task_instance.host.lower()
+            ),
+            start_time is None
+            or (start_value is not None and start_value >= start_time),
+            end_time is None or (start_value is not None and start_value <= end_time),
+            task_execute_type is None or execute_type_value == task_execute_type,
+        )
+    )
 
 
 @dataclass

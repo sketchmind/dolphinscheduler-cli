@@ -129,6 +129,9 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.task_group import (
     StartTaskGroupParams,
     UpdateTaskGroupParams,
 )
+from dsctl.generated.versions.ds_3_4_1.api.operations.task_instance import (
+    QueryTaskListPagingParams,
+)
 from dsctl.generated.versions.ds_3_4_1.api.operations.tenant import (
     CreateTenantParams,
     QueryTenantListPagingParams,
@@ -160,6 +163,7 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.workflow_definition import
 from dsctl.generated.versions.ds_3_4_1.api.operations.workflow_instance import (
     QueryParentInstanceBySubIdParams,
     QuerySubWorkflowInstanceByTaskIdParams,
+    QueryWorkflowInstanceListParams,
     UpdateWorkflowInstanceParams,
 )
 from dsctl.generated.versions.ds_3_4_1.api.operations.workflow_lineage import (
@@ -187,6 +191,9 @@ from dsctl.generated.versions.ds_3_4_1.common.enums.release_state import Release
 from dsctl.generated.versions.ds_3_4_1.common.enums.run_mode import RunMode
 from dsctl.generated.versions.ds_3_4_1.common.enums.task_depend_type import (
     TaskDependType,
+)
+from dsctl.generated.versions.ds_3_4_1.common.enums.task_execute_type import (
+    TaskExecuteType,
 )
 from dsctl.generated.versions.ds_3_4_1.common.enums.warning_type import WarningType
 from dsctl.generated.versions.ds_3_4_1.common.enums.workflow_execution_type_enum import (  # noqa: E501
@@ -293,9 +300,6 @@ if TYPE_CHECKING:
     from dsctl.generated.versions.ds_3_4_1.dao.entities.task_group import TaskGroup
     from dsctl.generated.versions.ds_3_4_1.dao.entities.task_instance import (
         TaskInstance,
-    )
-    from dsctl.generated.versions.ds_3_4_1.dao.entities.task_instance_dependent_details import (  # noqa: E501
-        TaskInstanceDependentDetailsAbstractTaskInstanceContext,
     )
     from dsctl.generated.versions.ds_3_4_1.dao.entities.user import User
     from dsctl.generated.versions.ds_3_4_1.dao.entities.work_flow_lineage import (
@@ -2191,16 +2195,47 @@ class _DS341WorkflowInstanceOperations:
         *,
         page_no: int,
         page_size: int,
+        project_code: int | None = None,
+        workflow_code: int | None = None,
         project_name: str | None = None,
         workflow_name: str | None = None,
+        search: str | None = None,
+        executor: str | None = None,
+        host: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
         state: str | None = None,
     ) -> PageInfoWorkflowInstance:
+        if project_code is not None:
+            return self.client.workflow_instance.query_workflow_instance_list(
+                project_code,
+                QueryWorkflowInstanceListParams(
+                    workflowDefinitionCode=workflow_code,
+                    searchVal=search,
+                    executorName=executor,
+                    stateType=_workflow_execution_state(state),
+                    host=host,
+                    startDate=start_time,
+                    endDate=end_time,
+                    pageNo=page_no,
+                    pageSize=page_size,
+                ),
+            )
+        if workflow_code is not None or search is not None or executor is not None:
+            message = (
+                "Project-scoped workflow-instance filters require project_code "
+                "in the DS 3.4.1 adapter."
+            )
+            raise ValueError(message)
         return self.client.workflow_instance_v2.query_workflow_instance_list_paging(
             workflow_instance_contracts.WorkflowInstanceQueryRequest(
                 pageNo=page_no,
                 pageSize=page_size,
                 projectName=project_name,
                 workflowName=workflow_name,
+                host=host,
+                startDate=start_time,
+                endDate=end_time,
                 state=_workflow_execution_state_code(state),
             )
         )
@@ -2304,28 +2339,40 @@ class _DS341TaskInstanceOperations:
     def list(
         self,
         *,
-        workflow_instance_id: int,
         project_code: int,
         page_no: int,
         page_size: int,
+        workflow_instance_id: int | None = None,
+        workflow_instance_name: str | None = None,
+        workflow_definition_name: str | None = None,
         search: str | None = None,
+        task_name: str | None = None,
+        task_code: int | None = None,
+        executor: str | None = None,
         state: str | None = None,
+        host: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        task_execute_type: str | None = None,
     ) -> TaskInstancePageRecord:
-        task_list = (
-            self.client.workflow_instance.query_task_list_by_workflow_instance_id(
-                project_code,
-                workflow_instance_id,
-            )
-        )
-        items = _filtered_task_instance_items(
-            task_list.taskList or [],
-            search=search,
-            state=state,
-        )
-        return _TaskInstanceListPage.from_items(
-            items,
-            page_no=page_no,
-            page_size=page_size,
+        return self.client.task_instance.query_task_list_paging(
+            project_code,
+            QueryTaskListPagingParams(
+                workflowInstanceId=workflow_instance_id,
+                workflowInstanceName=workflow_instance_name,
+                workflowDefinitionName=workflow_definition_name,
+                searchVal=search,
+                taskName=task_name,
+                taskCode=task_code,
+                executorName=executor,
+                stateType=_task_execution_state(state),
+                host=host,
+                startDate=start_time,
+                endDate=end_time,
+                taskExecuteType=_task_execute_type(task_execute_type),
+                pageNo=page_no,
+                pageSize=page_size,
+            ),
         )
 
     def get(
@@ -2531,6 +2578,14 @@ def _workflow_execution_state_code(value: str | None) -> int | None:
     return workflow_execution_status_enums.WorkflowExecutionStatus[value].code
 
 
+def _workflow_execution_state(
+    value: str | None,
+) -> workflow_execution_status_enums.WorkflowExecutionStatus | None:
+    if value is None:
+        return None
+    return workflow_execution_status_enums.WorkflowExecutionStatus[value]
+
+
 def _task_execution_state(
     value: str | None,
 ) -> task_execution_status_enums.TaskExecutionStatus | None:
@@ -2539,83 +2594,10 @@ def _task_execution_state(
     return task_execution_status_enums.TaskExecutionStatus[value]
 
 
-@dataclass(frozen=True)
-class _TaskInstanceListPage:
-    """Client-side page wrapper for workflow-instance task lists."""
-
-    total_list_value: list[TaskInstanceDependentDetailsAbstractTaskInstanceContext]
-    total: int
-    total_page_value: int
-    page_size_value: int
-    current_page_value: int
-
-    @classmethod
-    def from_items(
-        cls,
-        items: Sequence[TaskInstanceDependentDetailsAbstractTaskInstanceContext],
-        *,
-        page_no: int,
-        page_size: int,
-    ) -> _TaskInstanceListPage:
-        total = len(items)
-        total_pages = 0 if total == 0 else ((total - 1) // page_size) + 1
-        start = (page_no - 1) * page_size
-        stop = start + page_size
-        return cls(
-            total_list_value=list(items[start:stop]),
-            total=total,
-            total_page_value=total_pages,
-            page_size_value=page_size,
-            current_page_value=page_no,
-        )
-
-    @property
-    def totalList(  # noqa: N802
-        self,
-    ) -> list[TaskInstanceDependentDetailsAbstractTaskInstanceContext] | None:
-        return self.total_list_value
-
-    @property
-    def totalPage(self) -> int | None:  # noqa: N802
-        return self.total_page_value
-
-    @property
-    def pageSize(self) -> int | None:  # noqa: N802
-        return self.page_size_value
-
-    @property
-    def currentPage(self) -> int | None:  # noqa: N802
-        return self.current_page_value
-
-    @property
-    def pageNo(self) -> int | None:  # noqa: N802
-        return self.current_page_value
-
-
-def _filtered_task_instance_items(
-    items: Sequence[TaskInstanceDependentDetailsAbstractTaskInstanceContext],
-    *,
-    search: str | None,
-    state: str | None,
-) -> list[TaskInstanceDependentDetailsAbstractTaskInstanceContext]:
-    filtered: list[TaskInstanceDependentDetailsAbstractTaskInstanceContext] = []
-    normalized_search = None if search is None else search.lower()
-    for item in items:
-        if normalized_search is not None:
-            name = item.name
-            if name is None or normalized_search not in name.lower():
-                continue
-        if state is not None and _enum_member_value(item.state) != state:
-            continue
-        filtered.append(item)
-    return filtered
-
-
-def _enum_member_value(value: object) -> str | None:
-    member_value = getattr(value, "value", None)
-    if isinstance(member_value, str):
-        return member_value
-    return None
+def _task_execute_type(value: str | None) -> TaskExecuteType | None:
+    if value is None:
+        return None
+    return TaskExecuteType[value]
 
 
 def _task_depend_type(scope: str) -> TaskDependType:

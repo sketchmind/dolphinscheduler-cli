@@ -63,7 +63,12 @@ def patch_task_instance_service(monkeypatch: pytest.MonkeyPatch) -> None:
                 project_code_value=7,
                 task_code_value=201,
                 task_definition_version_value=1,
+                process_definition_name_value="daily-sync",
                 state_value=FakeEnumValue("RUNNING_EXECUTION"),
+                start_time_value="2026-04-11 10:00:00",
+                host="worker-1",
+                executor_name_value="alice",
+                task_execute_type_value=FakeEnumValue("BATCH"),
             ),
             FakeTaskInstance(
                 id=3002,
@@ -74,7 +79,12 @@ def patch_task_instance_service(monkeypatch: pytest.MonkeyPatch) -> None:
                 project_code_value=7,
                 task_code_value=202,
                 task_definition_version_value=1,
+                process_definition_name_value="daily-sync",
                 state_value=FakeEnumValue("FAILURE"),
+                start_time_value="2026-04-11 10:05:00",
+                host="worker-1",
+                executor_name_value="bob",
+                task_execute_type_value=FakeEnumValue("BATCH"),
             ),
             FakeTaskInstance(
                 id=3003,
@@ -85,7 +95,11 @@ def patch_task_instance_service(monkeypatch: pytest.MonkeyPatch) -> None:
                 project_code_value=7,
                 task_code_value=203,
                 task_definition_version_value=1,
+                process_definition_name_value="daily-sync",
                 state_value=FakeEnumValue("SUCCESS"),
+                start_time_value="2026-04-11 10:10:00",
+                executor_name_value="alice",
+                task_execute_type_value=FakeEnumValue("BATCH"),
             ),
         ],
         log_messages_by_task_instance_id={3001: ["line-1", "line-2", "line-3"]},
@@ -132,6 +146,50 @@ def test_task_instance_list_command_supports_all_pages() -> None:
     assert payload["resolved"]["all"] is True
     assert payload["data"]["total"] == 2
     assert len(payload["data"]["totalList"]) == 2
+
+
+def test_task_instance_list_command_supports_project_filters() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "task-instance",
+            "list",
+            "--project",
+            "etl-prod",
+            "--host",
+            "worker-1",
+            "--executor",
+            "bob",
+            "--start",
+            "2026-04-11 10:00:00",
+            "--end",
+            "2026-04-11 10:10:00",
+            "--execute-type",
+            "BATCH",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "task-instance.list"
+    assert payload["resolved"]["project"]["code"] == 7
+    assert payload["resolved"]["host"] == "worker-1"
+    assert payload["data"]["total"] == 1
+    assert payload["data"]["totalList"][0]["id"] == 3002
+
+
+def test_task_instance_list_command_requires_project_without_workflow_instance() -> (
+    None
+):
+    result = runner.invoke(app, ["task-instance", "list"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "task-instance.list"
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["suggestion"] == (
+        "Pass --project NAME or run `dsctl use project NAME`."
+    )
 
 
 def test_task_instance_get_command_returns_one_instance() -> None:

@@ -32,12 +32,39 @@ def list_command(
     ctx: typer.Context,
     *,
     workflow_instance: Annotated[
-        int,
+        int | None,
         typer.Option(
             "--workflow-instance",
-            help="Workflow instance id used to scope the task-instance query.",
+            help=(
+                "Workflow instance id used to narrow the project-scoped "
+                "task-instance query."
+            ),
         ),
-    ],
+    ] = None,
+    project: Annotated[
+        str | None,
+        typer.Option(
+            "--project",
+            help=(
+                "Project name or code for the project-scoped query. Required via "
+                "flag or context when --workflow-instance is omitted."
+            ),
+        ),
+    ] = None,
+    workflow: Annotated[
+        str | None,
+        typer.Option(
+            "--workflow",
+            help="Workflow definition name or code to filter within the project.",
+        ),
+    ] = None,
+    workflow_instance_name: Annotated[
+        str | None,
+        typer.Option(
+            "--workflow-instance-name",
+            help="Filter by workflow instance name.",
+        ),
+    ] = None,
     page_no: Annotated[
         int,
         typer.Option("--page-no", help="Remote page number."),
@@ -57,7 +84,31 @@ def list_command(
         str | None,
         typer.Option(
             "--search",
-            help="Filter task instances by upstream searchVal.",
+            help=(
+                "Free-text upstream searchVal filter. Use --task for an exact "
+                "task instance name filter."
+            ),
+        ),
+    ] = None,
+    task: Annotated[
+        str | None,
+        typer.Option(
+            "--task",
+            help="Filter by exact task instance name.",
+        ),
+    ] = None,
+    task_code: Annotated[
+        int | None,
+        typer.Option(
+            "--task-code",
+            help="Filter by task definition code.",
+        ),
+    ] = None,
+    executor: Annotated[
+        str | None,
+        typer.Option(
+            "--executor",
+            help="Filter by executor user name.",
         ),
     ] = None,
     state: Annotated[
@@ -67,19 +118,57 @@ def list_command(
             help="Filter by DS task execution status name.",
         ),
     ] = None,
+    host: Annotated[
+        str | None,
+        typer.Option(
+            "--host",
+            help="Filter by worker host.",
+        ),
+    ] = None,
+    start: Annotated[
+        str | None,
+        typer.Option(
+            "--start",
+            help="Task start-time lower bound, e.g. '2026-04-11 10:00:00'.",
+        ),
+    ] = None,
+    end: Annotated[
+        str | None,
+        typer.Option(
+            "--end",
+            help="Task start-time upper bound, e.g. '2026-04-11 11:00:00'.",
+        ),
+    ] = None,
+    execute_type: Annotated[
+        str | None,
+        typer.Option(
+            "--execute-type",
+            help="Filter by DS task execute type: BATCH or STREAM.",
+        ),
+    ] = None,
 ) -> None:
-    """List task instances inside one workflow instance."""
+    """List task instances with project-scoped runtime filters."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "task-instance.list",
         lambda: list_task_instances_result(
             workflow_instance=workflow_instance,
+            project=project,
+            workflow=workflow,
+            workflow_instance_name=workflow_instance_name,
             page_no=page_no,
             page_size=page_size,
             all_pages=all_pages,
             search=search,
+            task=task,
+            task_code=task_code,
+            executor=executor,
             state=state,
+            host=host,
+            start=start,
+            end=end,
+            execute_type=execute_type,
             env_file=env_file,
         ),
     )

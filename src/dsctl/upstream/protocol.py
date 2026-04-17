@@ -2928,8 +2928,15 @@ class WorkflowInstanceOperations(Protocol):
         *,
         page_no: int,
         page_size: int,
+        project_code: int | None = None,
+        workflow_code: int | None = None,
         project_name: str | None = None,
         workflow_name: str | None = None,
+        search: str | None = None,
+        executor: str | None = None,
+        host: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
         state: str | None = None,
     ) -> WorkflowInstancePageRecord:
         """Return one page of workflow instances."""
@@ -3162,14 +3169,23 @@ class TaskInstanceOperations(Protocol):
     def list(
         self,
         *,
-        workflow_instance_id: int,
         project_code: int,
         page_no: int,
         page_size: int,
+        workflow_instance_id: int | None = None,
+        workflow_instance_name: str | None = None,
+        workflow_definition_name: str | None = None,
         search: str | None = None,
+        task_name: str | None = None,
+        task_code: int | None = None,
+        executor: str | None = None,
         state: str | None = None,
+        host: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        task_execute_type: str | None = None,
     ) -> TaskInstancePageRecord:
-        """Return one page of task instances inside one workflow instance."""
+        """Return one project-scoped page of task instances."""
 
     def get(
         self,

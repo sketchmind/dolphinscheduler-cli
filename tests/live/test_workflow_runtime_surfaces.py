@@ -916,6 +916,55 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             label="extract task-instance id",
         )
 
+        project_task_instance_list_result = wait_for_result(
+            live_repo_root,
+            [
+                "task-instance",
+                "list",
+                "--project",
+                project_name,
+                "--workflow",
+                workflow_name,
+                "--task",
+                "extract",
+                "--state",
+                "SUCCESS",
+                "--execute-type",
+                "BATCH",
+                "--start",
+                "2020-01-01 00:00:00",
+                "--end",
+                "2099-01-01 00:00:00",
+                "--page-size",
+                "20",
+            ],
+            env_file=live_etl_env_file,
+            timeout_seconds=20.0,
+            interval_seconds=2.0,
+            accept=lambda result: _task_instance_list_has_rows(
+                result,
+                count=1,
+            ),
+        )
+        project_task_instance_list_payload = require_ok_payload(
+            project_task_instance_list_result,
+            expected_action="task-instance.list",
+            label="project-scoped task-instance list",
+        )
+        project_task_instance_list_data = require_mapping(
+            project_task_instance_list_payload["data"],
+            label="project-scoped task-instance list data",
+        )
+        project_task_instance_rows = require_list(
+            project_task_instance_list_data["totalList"],
+            label="project-scoped task-instance rows",
+        )
+        assert any(
+            require_mapping(item, label="project-scoped task-instance row").get("id")
+            == extract_task_instance_id
+            for item in project_task_instance_rows
+        )
+
         task_instance_watch_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
