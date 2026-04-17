@@ -252,6 +252,8 @@ Current guarantees:
 ## `dsctl schema`
 
 Returns the stable machine-readable command schema for the current CLI surface.
+This is the authoritative self-description for command invocation: arguments,
+options, choices, selectors, defaults, and supported composite keys.
 
 Current `data` fields:
 
@@ -286,6 +288,9 @@ Current guarantees:
 
 Returns stable version and surface capability discovery for the current CLI and
 selected DS version.
+This payload is intentionally lighter than `dsctl schema`: it answers what
+resource families and feature groups exist, not how to invoke every command.
+Agents that need to construct commands should read `dsctl schema`.
 
 Current `data` fields:
 
@@ -322,6 +327,10 @@ Current guarantees:
 - exposes untemplated upstream task types for authoring gap analysis
 - keeps live runtime task-type discovery out of the static capability payload;
   use `dsctl task-type list` for cluster/user-visible DS task types
+- does not describe command arguments or options; use `dsctl schema` for that
+- exposes `data.self_description.command_invocation_source="schema"` and
+  `data.self_description.capabilities_scope="feature_discovery"` so tools can
+  distinguish feature discovery from command invocation metadata
 - is intended as the lightweight companion to `dsctl schema`
 
 ## `dsctl use`
@@ -3504,14 +3513,30 @@ Options:
 - `--all`
 - `--project TEXT`
 - `--workflow TEXT`
+- `--search TEXT`
+- `--executor TEXT`
+- `--host TEXT`
+- `--start TEXT`
+- `--end TEXT`
 - `--state TEXT`
 
 Selection rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
-- `--project` and `--workflow` are filter strings forwarded to the DS v2 list
-  API
+- without `--project`, the CLI uses the DS v2 workflow-instance list API and
+  supports global `--workflow`, `--host`, `--start`, `--end`, and `--state`
+  filters
+- with `--project`, the CLI resolves the project code and uses the
+  project-scoped DS workflow-instance list API; `--workflow` is then resolved
+  as a workflow definition name or code inside that project
+- `--search` filters workflow-instance names through upstream `searchVal` and
+  requires `--project`
+- `--executor` filters by exact executor user name and requires `--project`
+- `--host` filters by upstream host substring
+- `--start` and `--end` filter workflow-instance `start_time` using DS datetime
+  format `YYYY-MM-DD HH:MM:SS`; both are optional, and when both are present
+  `--end` must be greater than or equal to `--start`
 - `--state` accepts DS workflow execution status names such as
   `RUNNING_EXECUTION` and `SUCCESS`
 - with `--all`, the CLI fetches remaining pages up to the standard safety limit
@@ -3740,28 +3765,49 @@ Rules:
   `warning_details[]` item uses code
   `workflow_instance_action_state_after_request` with
   `action="execute-task"` and `expect_non_final=true`
-  succeeds and adds a warning describing the current state
 
 ## `dsctl task-instance list`
 
-Lists task instances inside one workflow instance.
+Lists task instances through the project-scoped DS task-instance paging query.
 
 Options:
 
 - `--workflow-instance ID`
+- `--project TEXT`
+- `--workflow TEXT`
+- `--workflow-instance-name TEXT`
 - `--page-no N`
 - `--page-size N`
 - `--all`
 - `--search TEXT`
+- `--task TEXT`
+- `--task-code N`
+- `--executor TEXT`
 - `--state TEXT`
+- `--host TEXT`
+- `--start TEXT`
+- `--end TEXT`
+- `--execute-type TEXT`
 
 Selection rules:
 
 - task-instance resources are id-first
-- `--workflow-instance` is required because the DS 3.4.1 task-instance list API
-  remains project-scoped under the hood
+- `--workflow-instance` narrows the project-scoped query to one workflow
+  instance; when it is omitted, pass `--project` or set project context
+- when `--workflow-instance` is present, the CLI resolves the owning project
+  from the workflow instance; an explicit `--project` must match that project
+- `--workflow` is resolved as a workflow definition name or code inside the
+  selected project, then sent to DS as the workflow definition name filter
+- `--workflow-instance-name` filters by the upstream workflow-instance name
 - `--state` accepts DS task execution status names such as
   `RUNNING_EXECUTION` and `SUCCESS`
+- `--execute-type` accepts DS task execute type names such as `BATCH` and
+  `STREAM`
+- `--search` is the upstream free-text `searchVal` filter; use `--task` for an
+  exact task instance name filter
+- `--start` and `--end` filter task start time using DS datetime format
+  `YYYY-MM-DD HH:MM:SS`; both are optional, and when both are present `--end`
+  must be greater than or equal to `--start`
 - with `--all`, the CLI fetches remaining pages up to the standard safety limit
   and materializes one DS-style page payload
 
@@ -3859,6 +3905,8 @@ Selection rules:
   chunks by task-instance id
 - `--tail` means “keep the last N lines” and is implemented by chunking the DS
   logger API until exhaustion
+- DS result code `10103` for an empty task log path is translated to stable
+  error type `task_not_dispatched`
 
 The `data` payload is a JSON object:
 

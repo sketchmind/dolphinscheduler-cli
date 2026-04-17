@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.cli_surface import (
     AUDIT_RESOURCE,
@@ -64,6 +64,16 @@ TOP_LEVEL_COMMAND_SUMMARIES: dict[str, str] = {
     "schema": "Return the stable machine-readable schema for the current CLI surface.",
     "capabilities": "Return stable version and surface capability discovery.",
 }
+
+
+class SelfDescriptionData(TypedDict):
+    """Machine-readable self-description capabilities emitted by the CLI."""
+
+    schema: bool
+    template: bool
+    capabilities: bool
+    command_invocation_source: str
+    capabilities_scope: str
 
 
 def selection_schema_data() -> dict[str, object]:
@@ -154,12 +164,14 @@ def output_capabilities_data() -> dict[str, object]:
     }
 
 
-def self_description_data() -> dict[str, bool]:
+def self_description_data() -> SelfDescriptionData:
     """Return stable self-description capability flags."""
     return {
         "schema": True,
         "template": True,
         "capabilities": True,
+        "command_invocation_source": "schema",
+        "capabilities_scope": "feature_discovery",
     }
 
 

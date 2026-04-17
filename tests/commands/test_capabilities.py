@@ -100,6 +100,8 @@ def test_capabilities_command_returns_surface_discovery() -> None:
         "schema": True,
         "template": True,
         "capabilities": True,
+        "command_invocation_source": "schema",
+        "capabilities_scope": "feature_discovery",
     }
     assert payload["data"]["authoring"]["parameter_syntax"] == (
         parameter_syntax_index_data()

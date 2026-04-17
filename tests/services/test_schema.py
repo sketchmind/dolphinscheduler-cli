@@ -661,6 +661,8 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "schema": True,
             "template": True,
             "capabilities": True,
+            "command_invocation_source": "schema",
+            "capabilities_scope": "feature_discovery",
         },
         "templates": {
             "workflow": {"with_schedule_option": True},

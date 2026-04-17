@@ -60,6 +60,8 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "schema": True,
         "template": True,
         "capabilities": True,
+        "command_invocation_source": "schema",
+        "capabilities_scope": "feature_discovery",
     }
     assert payload["data"]["errors"] == {
         "fields": ["type", "message", "details", "source", "suggestion"],

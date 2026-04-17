@@ -96,6 +96,8 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "schema": True,
         "template": True,
         "capabilities": True,
+        "command_invocation_source": "schema",
+        "capabilities_scope": "feature_discovery",
     }
     assert data["resources"]["top_level"] == [
         "version",
