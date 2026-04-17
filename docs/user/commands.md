@@ -9,6 +9,20 @@ Use `dsctl schema` for exact command arguments, options, choices, and selector
 rules. Use `dsctl capabilities` for lightweight feature discovery; it is not an
 argument schema.
 
+For agent or scripted discovery, prefer scoped self-description calls when the
+full payload is unnecessary:
+
+```bash
+dsctl capabilities --summary
+dsctl capabilities --section runtime
+dsctl schema --group task-instance
+dsctl schema --command task-instance.list
+```
+
+`schema --group` values are the command group names exposed by
+`dsctl capabilities --summary` at `data.resources.groups` and by full schema
+`data.commands[].name`.
+
 ## Discovery
 
 ```bash
@@ -16,7 +30,9 @@ dsctl version
 dsctl context
 dsctl doctor
 dsctl schema
+dsctl schema --command task-instance.list
 dsctl capabilities
+dsctl capabilities --summary
 dsctl enum list WorkflowExecutionStatus
 ```
 

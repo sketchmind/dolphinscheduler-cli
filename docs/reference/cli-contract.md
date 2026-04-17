@@ -255,6 +255,26 @@ Returns the stable machine-readable command schema for the current CLI surface.
 This is the authoritative self-description for command invocation: arguments,
 options, choices, selectors, defaults, and supported composite keys.
 
+Options:
+
+- `--group GROUP`
+- `--command ACTION`
+
+Selection rules:
+
+- omit both options to return the full schema, including `capabilities`
+- `--group` returns one command-group schema by stable group name such as
+  `task-instance`
+- `--group` values come from `dsctl capabilities --summary`
+  `data.resources.groups` keys, or from full schema `data.commands[].name`
+- `--command` returns one command schema by stable action such as
+  `task-instance.list` or `version`
+- `--group` and `--command` are mutually exclusive
+- scoped schema payloads keep the standard schema header and `commands` tree
+  shape but omit `capabilities`; use `dsctl capabilities` for feature
+  discovery
+- scoped schema `resolved.schema.view` is `group` or `command`
+
 Current `data` fields:
 
 - `schema_version`
@@ -280,6 +300,8 @@ Current guarantees:
   tighter contract for composite inputs
 - includes task template type and variant discovery under
   `capabilities.templates.task`
+- `--group` and `--command` are additive scoped views over the same command
+  tree, not a different schema mode
 - `schema_version` changes for breaking schema changes; additive fields may
   appear within the same version
 - is tested against the actual registered command tree
@@ -291,6 +313,23 @@ selected DS version.
 This payload is intentionally lighter than `dsctl schema`: it answers what
 resource families and feature groups exist, not how to invoke every command.
 Agents that need to construct commands should read `dsctl schema`.
+
+Options:
+
+- `--summary`
+- `--section SECTION`
+
+Selection rules:
+
+- omit both options to return full capability discovery
+- `--summary` returns lightweight capability discovery with `cli`, `ds`,
+  `self_description`, `resources`, `planes`, `runtime`, `schedule`, `monitor`,
+  `enums`, and a summarized `authoring` section
+- `--section` returns one top-level section plus the standard `cli`, `ds`, and
+  `self_description` header
+- valid sections are `selection`, `output`, `errors`, `resources`, `planes`,
+  `authoring`, `schedule`, `monitor`, `enums`, and `runtime`
+- `--summary` and `--section` are mutually exclusive
 
 Current `data` fields:
 
@@ -331,6 +370,8 @@ Current guarantees:
 - exposes `data.self_description.command_invocation_source="schema"` and
   `data.self_description.capabilities_scope="feature_discovery"` so tools can
   distinguish feature discovery from command invocation metadata
+- `--summary` and `--section` are additive scoped views over the same feature
+  discovery data, not output-format modes
 - is intended as the lightweight companion to `dsctl schema`
 
 ## `dsctl use`

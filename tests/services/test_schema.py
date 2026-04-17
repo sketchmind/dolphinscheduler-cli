@@ -1,3 +1,6 @@
+import pytest
+
+from dsctl.errors import UserInputError
 from dsctl.models import supported_typed_task_types
 from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 from dsctl.services.schema import get_schema_result
@@ -171,6 +174,22 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "task",
         "task-instance",
     ]
+    schema_command = _find_command(commands, "schema")
+    schema_options = _require_list(schema_command["options"])
+    assert _find_option(schema_options, "group")["description"] == (
+        "Return schema for one command group. Values come from "
+        "`dsctl capabilities --summary` data.resources.groups keys or full "
+        "schema data.commands[].name."
+    )
+    assert _find_option(schema_options, "command")["description"] == (
+        "Return schema for one stable command action."
+    )
+    capabilities_command = _find_command(commands, "capabilities")
+    capabilities_options = _require_list(capabilities_command["options"])
+    assert _find_option(capabilities_options, "summary")["default"] is False
+    section_choices = _find_option(capabilities_options, "section")["choices"]
+    assert isinstance(section_choices, list)
+    assert "runtime" in section_choices
 
     template_group = _find_group(commands, "template")
     params_command = _find_command(template_group["commands"], "params")
@@ -709,6 +728,98 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "task-instance": True,
         },
     }
+
+
+def test_schema_result_can_return_one_group() -> None:
+    result = get_schema_result(group="task-instance")
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert "capabilities" not in data
+    assert result.resolved == {
+        "schema": {
+            "view": "group",
+            "group": "task-instance",
+        }
+    }
+    commands = _require_list(data["commands"])
+    assert len(commands) == 1
+    task_instance_group = _require_dict(commands[0])
+    assert task_instance_group["kind"] == "group"
+    assert task_instance_group["name"] == "task-instance"
+    task_instance_list = _find_command(task_instance_group["commands"], "list")
+    assert task_instance_list["action"] == "task-instance.list"
+
+
+def test_schema_result_can_return_one_command() -> None:
+    result = get_schema_result(command_action="task-instance.list")
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert "capabilities" not in data
+    assert result.resolved == {
+        "schema": {
+            "view": "command",
+            "command": "task-instance.list",
+        }
+    }
+    commands = _require_list(data["commands"])
+    assert len(commands) == 1
+    task_instance_group = _require_dict(commands[0])
+    task_instance_commands = _require_list(task_instance_group["commands"])
+    assert len(task_instance_commands) == 1
+    task_instance_list = _require_dict(task_instance_commands[0])
+    assert task_instance_list["action"] == "task-instance.list"
+
+
+def test_schema_result_can_return_one_top_level_command() -> None:
+    result = get_schema_result(command_action="version")
+    data = result.data
+
+    assert isinstance(data, dict)
+    commands = _require_list(data["commands"])
+    assert len(commands) == 1
+    version_command = _require_dict(commands[0])
+    assert version_command["kind"] == "command"
+    assert version_command["action"] == "version"
+
+
+def test_schema_result_can_return_group_action_command() -> None:
+    result = get_schema_result(command_action="use.clear")
+    data = result.data
+
+    assert isinstance(data, dict)
+    commands = _require_list(data["commands"])
+    assert len(commands) == 1
+    use_group = _require_dict(commands[0])
+    assert use_group["name"] == "use"
+    assert _require_dict(use_group["group_action"])["action"] == "use.clear"
+    assert _require_list(use_group["commands"]) == []
+
+
+def test_schema_result_rejects_conflicting_scope_options() -> None:
+    with pytest.raises(UserInputError, match="mutually exclusive"):
+        get_schema_result(group="workflow", command_action="workflow.run")
+
+
+def test_schema_result_rejects_unknown_group() -> None:
+    with pytest.raises(UserInputError, match="Unknown schema group") as exc_info:
+        get_schema_result(group="missing")
+
+    assert exc_info.value.details["group"] == "missing"
+    available_groups = exc_info.value.details["available_groups"]
+    assert isinstance(available_groups, list)
+    assert "task-instance" in available_groups
+
+
+def test_schema_result_rejects_unknown_command() -> None:
+    with pytest.raises(UserInputError, match="Unknown schema command") as exc_info:
+        get_schema_result(command_action="missing.command")
+
+    assert exc_info.value.details["command"] == "missing.command"
+    available_commands = exc_info.value.details["available_commands"]
+    assert isinstance(available_commands, list)
+    assert "task-instance.list" in available_commands
 
 
 def test_schema_result_describes_group_level_use_clear_action() -> None:

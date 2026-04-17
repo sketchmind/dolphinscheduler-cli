@@ -123,3 +123,54 @@ def test_capabilities_command_honors_env_file_ds_version() -> None:
     assert payload["data"]["ds"]["contract_version"] == "3.4.1"
     assert payload["data"]["ds"]["tested"] is False
     assert "priority" in payload["data"]["enums"]["names"]
+
+
+def test_capabilities_command_returns_summary() -> None:
+    result = runner.invoke(app, ["capabilities", "--summary"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "capabilities"
+    assert payload["resolved"] == {"capabilities": {"view": "summary"}}
+    assert "resources" in payload["data"]
+    assert "runtime" in payload["data"]
+    assert "authoring" in payload["data"]
+    assert "parameter_syntax" not in payload["data"]["authoring"]
+
+
+def test_capabilities_command_returns_section() -> None:
+    result = runner.invoke(app, ["capabilities", "--section", "runtime"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "capabilities"
+    assert payload["resolved"] == {
+        "capabilities": {
+            "view": "section",
+            "section": "runtime",
+        }
+    }
+    assert set(payload["data"]) == {"cli", "ds", "self_description", "runtime"}
+    assert payload["data"]["runtime"]["task-instance"]["commands"] == [
+        "list",
+        "get",
+        "watch",
+        "sub-workflow",
+        "log",
+        "force-success",
+        "savepoint",
+        "stop",
+    ]
+
+
+def test_capabilities_command_rejects_conflicting_scope_options() -> None:
+    result = runner.invoke(
+        app,
+        ["capabilities", "--summary", "--section", "runtime"],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "capabilities"
+    assert payload["error"]["type"] == "user_input_error"
+    assert "mutually exclusive" in payload["error"]["message"]

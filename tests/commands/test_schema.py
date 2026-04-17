@@ -119,3 +119,54 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "database": True,
         "server_types": ["master", "worker", "alert-server"],
     }
+
+
+def test_schema_command_returns_group_scope() -> None:
+    result = runner.invoke(app, ["schema", "--group", "task-instance"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "schema"
+    assert payload["resolved"] == {
+        "schema": {
+            "view": "group",
+            "group": "task-instance",
+        }
+    }
+    assert "capabilities" not in payload["data"]
+    commands = payload["data"]["commands"]
+    assert len(commands) == 1
+    assert commands[0]["name"] == "task-instance"
+
+
+def test_schema_command_returns_command_scope() -> None:
+    result = runner.invoke(app, ["schema", "--command", "task-instance.list"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "schema"
+    assert payload["resolved"] == {
+        "schema": {
+            "view": "command",
+            "command": "task-instance.list",
+        }
+    }
+    commands = payload["data"]["commands"]
+    assert len(commands) == 1
+    assert commands[0]["name"] == "task-instance"
+    assert [item["action"] for item in commands[0]["commands"]] == [
+        "task-instance.list"
+    ]
+
+
+def test_schema_command_rejects_conflicting_scope_options() -> None:
+    result = runner.invoke(
+        app,
+        ["schema", "--group", "workflow", "--command", "workflow.run"],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "schema"
+    assert payload["error"]["type"] == "user_input_error"
+    assert "mutually exclusive" in payload["error"]["message"]
