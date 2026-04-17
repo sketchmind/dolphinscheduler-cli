@@ -2,7 +2,7 @@ from typing import Annotated
 
 import typer
 
-from dsctl.cli_runtime import emit_result
+from dsctl.cli_runtime import emit_result, get_app_state
 from dsctl.services.schema import get_schema_result
 
 
@@ -12,6 +12,7 @@ def register_schema_commands(app: typer.Typer) -> None:
 
 
 def schema_command(
+    ctx: typer.Context,
     group: Annotated[
         str | None,
         typer.Option(
@@ -28,7 +29,13 @@ def schema_command(
     ] = None,
 ) -> None:
     """Print the stable machine-readable CLI schema."""
+    state = get_app_state(ctx)
+    env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "schema",
-        lambda: get_schema_result(group=group, command_action=command),
+        lambda: get_schema_result(
+            env_file=env_file,
+            group=group,
+            command_action=command,
+        ),
     )

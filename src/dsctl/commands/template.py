@@ -85,7 +85,7 @@ def task_command(
 ) -> None:
     """Emit one task YAML template."""
     if list_types:
-        emit_result("template.task_types", task_template_types_result)
+        emit_result("template.task", task_template_types_result)
         return
     emit_result(
         "template.task",

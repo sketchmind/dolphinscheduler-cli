@@ -154,6 +154,7 @@ def test_task_template_types_result_lists_supported_types() -> None:
     data = result.data
 
     assert isinstance(data, dict)
+    assert result.resolved == {"mode": "list"}
     assert data["count"] == len(upstream_default_task_types())
     assert data["task_types"] == list(upstream_default_task_types())
     assert data["typed_task_types"] == list(typed_task_template_types())

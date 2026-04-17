@@ -38,6 +38,7 @@ LOCAL_PAGINATION_CONSTANT_PATTERN = re.compile(
 )
 SERVICES_DIR = Path(__file__).resolve().parents[2] / "src" / "dsctl" / "services"
 REPO_ROOT = Path(__file__).resolve().parents[2]
+COMMANDS_DIR = REPO_ROOT / "src" / "dsctl" / "commands"
 NAME_FIRST_RESOURCE_RESOLVERS = {
     "project": "project",
     "env": "environment",
@@ -201,6 +202,23 @@ def test_paginated_schema_commands_expose_standard_all_option() -> None:
     assert malformed == []
 
 
+def test_literal_emit_result_actions_are_declared_in_schema() -> None:
+    data = get_schema_result().data
+    assert isinstance(data, dict)
+    commands = data["commands"]
+    assert isinstance(commands, list)
+    declared_actions = _iter_schema_action_names(commands)
+    emitted_actions = _literal_emit_result_actions()
+
+    missing = [
+        f"{action} ({path.relative_to(REPO_ROOT)}:{line_number})"
+        for action, path, line_number in emitted_actions
+        if action not in declared_actions
+    ]
+
+    assert missing == []
+
+
 def test_name_first_resources_have_resolver_functions() -> None:
     assert set(NAME_FIRST_RESOURCE_RESOLVERS) == set(NAME_FIRST_RESOURCES)
     available = {
@@ -309,6 +327,43 @@ def _iter_schema_commands(nodes: list[object]) -> list[CommandNode]:
             )
         )
     return commands
+
+
+def _iter_schema_action_names(nodes: list[object]) -> set[str]:
+    actions: set[str] = set()
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        action = node.get("action")
+        if isinstance(action, str):
+            actions.add(action)
+        group_action = node.get("group_action")
+        if isinstance(group_action, dict):
+            group_action_name = group_action.get("action")
+            if isinstance(group_action_name, str):
+                actions.add(group_action_name)
+        nested = node.get("commands")
+        if isinstance(nested, list):
+            actions.update(_iter_schema_action_names(nested))
+    return actions
+
+
+def _literal_emit_result_actions() -> list[tuple[str, Path, int]]:
+    emitted_actions: list[tuple[str, Path, int]] = []
+    for path in COMMANDS_DIR.glob("*.py"):
+        module = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(module):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "emit_result"
+                and node.args
+            ):
+                continue
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                emitted_actions.append((first_arg.value, path, node.lineno))
+    return emitted_actions
 
 
 SurfacePath = tuple[str, ...]

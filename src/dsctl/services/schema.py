@@ -37,6 +37,7 @@ from dsctl.cli_surface import (
     WORKFLOW_INSTANCE_RESOURCE,
     WORKFLOW_RESOURCE,
 )
+from dsctl.config import load_selected_ds_version
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult, require_json_object
 from dsctl.services._schema_groups_context import (
@@ -137,6 +138,7 @@ SCOPED_SCHEMA_HEADER_KEYS = (
 
 def get_schema_result(
     *,
+    env_file: str | None = None,
     group: str | None = None,
     command_action: str | None = None,
 ) -> CommandResult:
@@ -147,7 +149,11 @@ def get_schema_result(
             message,
             suggestion="Pass either --group GROUP or --command ACTION, not both.",
         )
-    data = require_json_object(_schema_data(), label="schema data")
+    selected_ds_version = load_selected_ds_version(env_file)
+    data = require_json_object(
+        _schema_data(ds_version=selected_ds_version),
+        label="schema data",
+    )
     if group is not None:
         normalized_group = group.strip()
         scoped_data = _schema_group_data(data, normalized_group)
@@ -175,7 +181,7 @@ def get_schema_result(
     return CommandResult(data=data)
 
 
-def _schema_data() -> dict[str, object]:
+def _schema_data(*, ds_version: str) -> dict[str, object]:
     task_types = list(supported_task_template_types())
     command_groups = _command_groups(task_types)
     return {
@@ -201,7 +207,7 @@ def _schema_data() -> dict[str, object]:
         "output": output_schema_data(),
         "errors": error_schema_data(),
         "confirmation": confirmation_schema_data(),
-        "capabilities": schema_capabilities_data(),
+        "capabilities": schema_capabilities_data(ds_version=ds_version),
         "commands": [
             *(_top_level_command_schema(name) for name in TOP_LEVEL_COMMANDS),
             *(command_groups[name] for name in COMMAND_GROUPS),

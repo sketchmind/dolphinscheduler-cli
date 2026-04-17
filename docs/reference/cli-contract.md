@@ -292,6 +292,8 @@ Current `data` fields:
 Current guarantees:
 
 - describes only the current stable surface
+- uses `DS_VERSION` and `--env-file` when rendering embedded capability
+  metadata, matching `dsctl capabilities`
 - includes selector semantics for name-first, path-first, and id-first resources
 - includes the standard success/error envelope contract
 - includes the stable structured error envelope and `error.source` contract
@@ -2976,6 +2978,7 @@ Returns one task YAML template inside `data.yaml`.
 
 Options:
 
+- `--list`
 - `--variant VARIANT`
 
 Current stable task template coverage includes every DS 3.4.1 upstream default
@@ -2999,6 +3002,8 @@ The remaining upstream default task types return generic templates with raw
 Rules:
 
 - task type matching is case-insensitive
+- `--list` keeps the stable action `template.task` and returns
+  `resolved.mode=list`
 - the normalized type is returned as `resolved.task_type`
 - `resolved.task_category` reports the upstream DS category
 - `resolved.template_kind` is `typed` or `generic`

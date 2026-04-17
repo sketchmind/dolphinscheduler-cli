@@ -679,7 +679,8 @@ def task_template_types_result() -> CommandResult:
                 task_templates=task_template_metadata(),
             ),
             label="task template types data",
-        )
+        ),
+        resolved={"mode": "list"},
     )
 
 

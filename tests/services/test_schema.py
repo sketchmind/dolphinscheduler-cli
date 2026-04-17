@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from dsctl.errors import UserInputError
@@ -728,6 +730,23 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "task-instance": True,
         },
     }
+
+
+def test_schema_result_honors_env_file_ds_version(tmp_path: Path) -> None:
+    env_file = tmp_path / "cluster.env"
+    env_file.write_text("DS_VERSION=3.3.2\n", encoding="utf-8")
+
+    result = get_schema_result(env_file=str(env_file))
+    data = result.data
+
+    assert isinstance(data, dict)
+    capabilities = data["capabilities"]
+    assert isinstance(capabilities, dict)
+    ds_capabilities = capabilities["ds"]
+    assert isinstance(ds_capabilities, dict)
+    assert ds_capabilities["selected_version"] == "3.3.2"
+    assert ds_capabilities["current_version"] == "3.3.2"
+    assert ds_capabilities["tested"] is False
 
 
 def test_schema_result_can_return_one_group() -> None:

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -119,6 +120,19 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "database": True,
         "server_types": ["master", "worker", "alert-server"],
     }
+
+
+def test_schema_command_honors_env_file_ds_version() -> None:
+    with runner.isolated_filesystem():
+        Path("cluster.env").write_text("DS_VERSION=3.3.2\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["--env-file", "cluster.env", "schema"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["data"]["capabilities"]["ds"]["selected_version"] == "3.3.2"
+    assert payload["data"]["capabilities"]["ds"]["current_version"] == "3.3.2"
+    assert payload["data"]["capabilities"]["ds"]["tested"] is False
 
 
 def test_schema_command_returns_group_scope() -> None:

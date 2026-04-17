@@ -136,7 +136,8 @@ def test_template_task_command_can_list_supported_types() -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["action"] == "template.task_types"
+    assert payload["action"] == "template.task"
+    assert payload["resolved"] == {"mode": "list"}
     assert payload["data"]["count"] == len(upstream_default_task_types())
     assert payload["data"]["task_types"] == list(upstream_default_task_types())
     assert payload["data"]["typed_task_types"] == list(supported_typed_task_types())

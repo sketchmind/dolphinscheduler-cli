@@ -134,9 +134,13 @@ def get_capabilities_result(
     )
 
 
-def schema_capabilities_data() -> dict[str, object]:
+def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, object]:
     """Return the schema-scoped capabilities subset."""
-    support = get_default_version_support()
+    support = (
+        get_default_version_support()
+        if ds_version is None
+        else get_version_support(ds_version)
+    )
     task_types = list(supported_task_template_types())
     typed_task_specs = list(supported_typed_task_types())
     generic_task_templates = list(generic_task_template_types())
