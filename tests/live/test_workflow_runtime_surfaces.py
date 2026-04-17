@@ -923,8 +923,6 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                 "list",
                 "--project",
                 project_name,
-                "--workflow",
-                workflow_name,
                 "--task",
                 "extract",
                 "--state",

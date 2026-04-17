@@ -55,7 +55,11 @@ def list_command(
         str | None,
         typer.Option(
             "--workflow",
-            help="Workflow definition name or code to filter within the project.",
+            help=(
+                "Reserved compatibility option. DS 3.4.1 task-instance list "
+                "does not reliably filter by workflow definition."
+            ),
+            hidden=True,
         ),
     ] = None,
     workflow_instance_name: Annotated[

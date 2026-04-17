@@ -768,6 +768,10 @@ def test_schema_result_can_return_one_group() -> None:
     assert task_instance_group["name"] == "task-instance"
     task_instance_list = _find_command(task_instance_group["commands"], "list")
     assert task_instance_list["action"] == "task-instance.list"
+    task_instance_options = _require_list(task_instance_list["options"])
+    assert "workflow" not in {
+        _require_dict(item)["name"] for item in task_instance_options
+    }
 
 
 def test_schema_result_can_return_one_command() -> None:

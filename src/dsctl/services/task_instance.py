@@ -96,6 +96,43 @@ def _workflow_instance_get_command(workflow_instance_id: int) -> str:
     return f"dsctl workflow-instance get {workflow_instance_id}"
 
 
+def _unsupported_task_instance_workflow_filter(
+    *,
+    workflow: str,
+    workflow_instance_id: int | None,
+) -> UserInputError:
+    if workflow_instance_id is not None:
+        message = "`task-instance list` does not accept --workflow"
+        suggestion = (
+            "Drop --workflow; --workflow-instance already scopes the "
+            "task-instance query to one workflow run."
+        )
+    else:
+        message = (
+            "`task-instance list` cannot reliably filter by workflow definition "
+            "in DolphinScheduler 3.4.1"
+        )
+        suggestion = (
+            "Run `dsctl workflow-instance list --project <project> --workflow "
+            f"{workflow}` to find workflow instance ids, then run `dsctl "
+            "task-instance list --workflow-instance <workflow_instance_id>`."
+        )
+    return UserInputError(
+        message,
+        details={
+            "resource": TASK_INSTANCE_RESOURCE,
+            "workflow": workflow,
+            "workflow_instance_id": workflow_instance_id,
+            "upstream_filter": "workflowDefinitionName",
+            "reason": (
+                "DS 3.4.1 ignores workflowDefinitionName for regular BATCH "
+                "task-instance paging queries."
+            ),
+        },
+        suggestion=suggestion,
+    )
+
+
 class WorkflowInstanceSelectionData(TypedDict):
     """Resolved workflow-instance selector emitted in JSON envelopes."""
 
@@ -157,6 +194,11 @@ def list_task_instances_result(
     normalized_page_size = require_positive_int(page_size, label="page_size")
     normalized_project = optional_text(project)
     normalized_workflow = optional_text(workflow)
+    if normalized_workflow is not None:
+        raise _unsupported_task_instance_workflow_filter(
+            workflow=normalized_workflow,
+            workflow_instance_id=normalized_workflow_instance,
+        )
     normalized_workflow_instance_name = optional_text(workflow_instance_name)
     normalized_search = optional_text(search)
     normalized_task = optional_text(task)

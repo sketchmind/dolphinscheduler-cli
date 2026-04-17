@@ -59,12 +59,14 @@ dsctl task-instance log <task_instance_id>
 ```
 
 `task-instance list` uses the project-scoped DS task-instance paging query. Use
-`--workflow-instance` for the common per-workflow inspection path, or use
-`--project` plus filters such as `--task`, `--executor`, `--host`, `--state`,
-`--start`, and `--end` for runtime triage across workflow instances. Use
-`--workflow` to narrow that project-scoped query by workflow definition. Use
-`--search` only for the upstream free-text `searchVal` filter; use `--task`
-for an exact task instance name filter.
+`--workflow-instance` for the common per-run inspection path, or use `--project`
+plus filters such as `--task`, `--executor`, `--host`, `--state`, `--start`,
+and `--end` for runtime triage across workflow instances. To inspect task
+instances for one workflow definition, first run
+`dsctl workflow-instance list --project etl-prod --workflow daily-etl`, then
+pass the returned instance id to `task-instance list --workflow-instance`. Use
+`--search` only for the upstream free-text `searchVal` filter; use `--task` for
+an exact task instance name filter.
 
 Control runtime state:
 

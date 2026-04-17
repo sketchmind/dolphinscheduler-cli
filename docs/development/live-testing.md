@@ -407,6 +407,8 @@ live additions.
   `GET /projects/{projectCode}/task-instances` paging query. The CLI narrows
   the common per-run inspection path by sending `workflowInstanceId`, and it
   uses the same path for broader project-scoped runtime triage filters.
+  Workflow-definition filtering is intentionally not exposed here because the
+  upstream BATCH query does not reliably apply `workflowDefinitionName`.
 - `workflow describe` returns one root sentinel relation with
   `preTaskCode=0`. That row is part of the DS DAG encoding and should not be
   confused with a user-authored dependency edge.

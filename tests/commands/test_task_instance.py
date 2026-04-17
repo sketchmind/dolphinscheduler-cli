@@ -192,6 +192,27 @@ def test_task_instance_list_command_requires_project_without_workflow_instance()
     )
 
 
+def test_task_instance_list_command_rejects_workflow_definition_filter() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "task-instance",
+            "list",
+            "--project",
+            "etl-prod",
+            "--workflow",
+            "daily-sync",
+        ],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "task-instance.list"
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["details"]["upstream_filter"] == "workflowDefinitionName"
+    assert "workflow-instance list" in payload["error"]["suggestion"]
+
+
 def test_task_instance_get_command_returns_one_instance() -> None:
     result = runner.invoke(
         app,

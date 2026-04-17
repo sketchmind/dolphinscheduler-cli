@@ -3820,7 +3820,6 @@ Options:
 
 - `--workflow-instance ID`
 - `--project TEXT`
-- `--workflow TEXT`
 - `--workflow-instance-name TEXT`
 - `--page-no N`
 - `--page-size N`
@@ -3842,8 +3841,11 @@ Selection rules:
   instance; when it is omitted, pass `--project` or set project context
 - when `--workflow-instance` is present, the CLI resolves the owning project
   from the workflow instance; an explicit `--project` must match that project
-- `--workflow` is resolved as a workflow definition name or code inside the
-  selected project, then sent to DS as the workflow definition name filter
+- workflow-definition filtering is not part of the stable `task-instance list`
+  contract for DS 3.4.1 because the upstream BATCH task-instance paging query
+  does not reliably apply `workflowDefinitionName`; use
+  `workflow-instance list --workflow ...` first, then pass the returned
+  workflow-instance id to `task-instance list --workflow-instance`
 - `--workflow-instance-name` filters by the upstream workflow-instance name
 - `--state` accepts DS task execution status names such as
   `RUNNING_EXECUTION` and `SUCCESS`

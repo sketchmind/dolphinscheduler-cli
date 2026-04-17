@@ -425,15 +425,6 @@ def task_instance_group() -> dict[str, object]:
                         selector="name_or_code",
                     ),
                     option(
-                        "workflow",
-                        value_type="string",
-                        description=(
-                            "Workflow definition name or code to filter within "
-                            "the project."
-                        ),
-                        selector="name_or_code",
-                    ),
-                    option(
                         "workflow-instance-name",
                         value_type="string",
                         description="Filter by workflow instance name.",

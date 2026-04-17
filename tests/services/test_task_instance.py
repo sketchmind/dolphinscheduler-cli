@@ -247,6 +247,28 @@ def test_list_task_instances_result_requires_project_without_workflow_instance(
         task_instance_service.list_task_instances_result()
 
 
+def test_list_task_instances_result_rejects_workflow_definition_filter() -> None:
+    with pytest.raises(UserInputError, match="cannot reliably filter") as exc_info:
+        task_instance_service.list_task_instances_result(
+            project="etl-prod",
+            workflow="daily-sync",
+        )
+
+    assert exc_info.value.details["upstream_filter"] == "workflowDefinitionName"
+    assert "workflow-instance list" in (exc_info.value.suggestion or "")
+
+
+def test_list_task_instances_result_rejects_redundant_workflow_with_instance() -> None:
+    with pytest.raises(UserInputError, match="does not accept --workflow") as exc_info:
+        task_instance_service.list_task_instances_result(
+            workflow_instance=901,
+            workflow="daily-sync",
+        )
+
+    assert exc_info.value.details["workflow_instance_id"] == 901
+    assert "--workflow-instance already scopes" in (exc_info.value.suggestion or "")
+
+
 def test_get_task_instance_result_returns_one_payload(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
