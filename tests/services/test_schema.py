@@ -141,6 +141,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
         },
         "warning_details_aligned": True,
         "data_shape_metadata": True,
+        "json_column_projection": True,
     }
 
     commands = data["commands"]
@@ -681,6 +682,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "default_format": "json",
             "data_shape_metadata": True,
             "display_columns": True,
+            "json_column_projection": True,
             "resolved_metadata": True,
             "warnings": True,
             "warning_details_alignment": True,
@@ -851,6 +853,32 @@ def test_schema_result_can_return_one_command() -> None:
         "column_discovery": "runtime_row_keys",
     }
 
+    workflow_instance_get_result = get_schema_result(
+        command_action="workflow-instance.get"
+    )
+    workflow_instance_get_data = _require_dict(workflow_instance_get_result.data)
+    workflow_instance_get_group = _require_dict(
+        _require_list(workflow_instance_get_data["commands"])[0]
+    )
+    workflow_instance_get_command = _require_dict(
+        _require_list(workflow_instance_get_group["commands"])[0]
+    )
+    assert workflow_instance_get_command["data_shape"] == {
+        "kind": "object",
+        "row_path": "data",
+        "default_columns": [
+            "id",
+            "name",
+            "state",
+            "scheduleTime",
+            "startTime",
+            "endTime",
+            "duration",
+            "host",
+        ],
+        "column_discovery": "runtime_row_keys",
+    }
+
 
 def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
     workflow_result = get_schema_result(command_action="workflow.list")
@@ -872,6 +900,23 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
         "kind": "summary",
         "row_path": "data.taskTypes",
         "default_columns": ["taskType", "taskCategory", "isCollection"],
+        "column_discovery": "runtime_row_keys",
+    }
+
+    digest_result = get_schema_result(command_action="workflow-instance.digest")
+    digest_data = _require_dict(digest_result.data)
+    digest_group = _require_dict(_require_list(digest_data["commands"])[0])
+    digest_command = _require_dict(_require_list(digest_group["commands"])[0])
+    assert digest_command["data_shape"] == {
+        "kind": "object",
+        "row_path": "data",
+        "default_columns": [
+            "taskCount",
+            "progress",
+            "taskStateCounts",
+            "runningTasks",
+            "failedTasks",
+        ],
         "column_discovery": "runtime_row_keys",
     }
 

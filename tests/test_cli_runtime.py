@@ -107,6 +107,68 @@ def test_emit_result_columns_wildcard_renders_all_row_fields(
         set_app_state(AppState(env_file=None))
 
 
+def test_emit_result_projects_json_columns_for_page_rows(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    set_app_state(
+        AppState(
+            env_file=None,
+            render_options=RenderOptions(columns=("id", "name")),
+        )
+    )
+
+    def builder() -> CommandResult:
+        return CommandResult(
+            data={
+                "totalList": [
+                    {"id": 7, "name": "extract", "state": "SUCCESS"},
+                    {"id": 8, "name": "load", "host": "worker-1"},
+                ],
+                "total": 2,
+            }
+        )
+
+    try:
+        emit_result("task-instance.list", builder)
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["data"] == {
+            "total": 2,
+            "totalList": [
+                {"id": 7, "name": "extract"},
+                {"id": 8, "name": "load"},
+            ],
+        }
+    finally:
+        set_app_state(AppState(env_file=None))
+
+
+def test_emit_result_projects_json_columns_for_object_data(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    set_app_state(
+        AppState(
+            env_file=None,
+            render_options=RenderOptions(columns=("cli", "ds")),
+        )
+    )
+
+    def builder() -> CommandResult:
+        return CommandResult(
+            data={
+                "cli": "0.1.0",
+                "ds": "3.4.1",
+                "family": "workflow-3.3-plus",
+            }
+        )
+
+    try:
+        emit_result("version", builder)
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["data"] == {"cli": "0.1.0", "ds": "3.4.1"}
+    finally:
+        set_app_state(AppState(env_file=None))
+
+
 def test_emit_result_rejects_mixed_columns_wildcard(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

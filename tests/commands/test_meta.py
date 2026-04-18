@@ -3,7 +3,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from dsctl.app import app
+from dsctl.app import _misplaced_root_option, app
 
 runner = CliRunner()
 
@@ -36,15 +36,21 @@ def test_version_command_can_render_tsv_columns() -> None:
     assert result.stdout == ("cli\tds\tfamily\n0.1.0\t3.4.1\tworkflow-3.3-plus\n")
 
 
-def test_columns_require_row_oriented_format() -> None:
+def test_version_command_can_project_json_columns() -> None:
     result = runner.invoke(app, ["--columns", "cli,ds", "version"])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["error"]["type"] == "user_input_error"
-    assert payload["error"]["message"] == (
-        "--columns requires --output-format table or --output-format tsv"
+    assert payload["ok"] is True
+    assert payload["data"] == {"cli": "0.1.0", "ds": "3.4.1"}
+
+
+def test_misplaced_root_option_detection() -> None:
+    assert (
+        _misplaced_root_option(["worker-group", "list", "--output-format", "table"])
+        == "--output-format"
     )
+    assert _misplaced_root_option(["--output-format", "table", "version"]) is None
 
 
 def test_version_command_honors_env_file_ds_version() -> None:

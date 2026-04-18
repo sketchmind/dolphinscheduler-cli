@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from typing import Annotated, cast
 
@@ -12,6 +13,13 @@ from dsctl.output_formats import (
     RenderOptions,
     parse_columns,
 )
+
+_ROOT_OPTIONS_WITH_VALUES = frozenset({"--env-file", "--output-format", "--columns"})
+_ROOT_OPTION_EXAMPLES = {
+    "--env-file": "dsctl --env-file cluster.env <command> ...",
+    "--output-format": "dsctl --output-format table <command> ...",
+    "--columns": "dsctl --columns id,name,state <command> ...",
+}
 
 app = typer.Typer(
     add_completion=False,
@@ -44,7 +52,7 @@ def main_callback(
         typer.Option(
             "--output-format",
             help=(
-                "Render the standard envelope as json, or render row-oriented "
+                "Render the standard envelope as json, or render row/object "
                 "views as table/tsv."
             ),
         ),
@@ -54,8 +62,8 @@ def main_callback(
         typer.Option(
             "--columns",
             help=(
-                "Comma-separated display columns for --output-format table or "
-                "--output-format tsv."
+                "Comma-separated row/object fields to render or project. In json "
+                "mode this narrows the standard envelope data payload."
             ),
         ),
     ] = None,
@@ -83,7 +91,54 @@ def main_callback(
 
 def main() -> None:
     """Run the Typer application."""
+    misplaced = _misplaced_root_option(sys.argv[1:])
+    if misplaced is not None:
+        _show_misplaced_root_option_error(misplaced)
+        raise SystemExit(2)
     app()
 
 
 register_all_commands(app)
+
+
+def _misplaced_root_option(args: list[str]) -> str | None:
+    """Return a root-only option that appears after the command path."""
+    seen_command = False
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--":
+            return None
+
+        option = _root_option_name(arg)
+        if option is not None:
+            if seen_command:
+                return option
+            index += 1 if "=" in arg else 2
+            continue
+
+        if arg.startswith("-"):
+            index += 1
+            continue
+
+        seen_command = True
+        index += 1
+    return None
+
+
+def _root_option_name(token: str) -> str | None:
+    for option in _ROOT_OPTIONS_WITH_VALUES:
+        if token == option or token.startswith(f"{option}="):
+            return option
+    return None
+
+
+def _show_misplaced_root_option_error(option: str) -> None:
+    example = _ROOT_OPTION_EXAMPLES[option]
+    typer.echo(
+        (
+            f"{option} is a global dsctl option. Put it before the command "
+            f"group, for example: {example}"
+        ),
+        err=True,
+    )

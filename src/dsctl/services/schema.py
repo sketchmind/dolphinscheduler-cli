@@ -215,7 +215,8 @@ def _schema_data(*, ds_version: str) -> dict[str, object]:
                 value_type="string",
                 description=(
                     "Render output as json, table, or tsv. json keeps the full "
-                    "standard envelope."
+                    "standard envelope unless --columns is used for explicit "
+                    "data projection."
                 ),
                 default="json",
                 choices=["json", "table", "tsv"],
@@ -225,8 +226,8 @@ def _schema_data(*, ds_version: str) -> dict[str, object]:
                 "columns",
                 value_type="string",
                 description=(
-                    "Comma-separated display columns for --output-format table or "
-                    "--output-format tsv."
+                    "Comma-separated row/object fields to render or project. "
+                    "In json mode this narrows the standard envelope data payload."
                 ),
                 value_name="CSV",
             ),

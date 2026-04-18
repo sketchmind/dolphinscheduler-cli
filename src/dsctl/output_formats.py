@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Literal, TypeAlias, TypeGuard, cast
 
 from dsctl.errors import UserInputError
 from dsctl.services._data_shapes import DataShape, data_shape_for_action
@@ -39,16 +40,8 @@ def parse_columns(value: str | None) -> tuple[str, ...]:
 
 def validate_render_options(options: RenderOptions) -> RenderOptions:
     """Reject ambiguous global display settings before running a command."""
-    if options.columns and options.output_format == "json":
-        message = "--columns requires --output-format table or --output-format tsv"
-        raise UserInputError(
-            message,
-            details={
-                "format": options.output_format,
-                "columns": list(options.columns),
-            },
-            suggestion="Retry with `--output-format table` or `--output-format tsv`.",
-        )
+    if options.columns and "*" in options.columns:
+        _validate_wildcard_columns(options.columns)
     return options
 
 
@@ -60,6 +53,12 @@ def render_payload(
 ) -> str:
     """Render one standard output envelope using the requested format."""
     if options.output_format == "json":
+        if options.columns and payload.get("ok"):
+            payload = _project_json_payload(
+                payload,
+                action=action,
+                columns=options.columns,
+            )
         return _render_json(payload)
     if not payload.get("ok"):
         return _render_error_payload(payload, output_format=options.output_format)
@@ -144,6 +143,126 @@ def _render_error_payload(payload: JsonObject, *, output_format: OutputFormat) -
     return _render_rows(rows, columns=("field", "value"), output_format=output_format)
 
 
+def _project_json_payload(
+    payload: JsonObject,
+    *,
+    action: str,
+    columns: tuple[str, ...],
+) -> JsonObject:
+    """Return a copy of a success envelope with row/object data projected."""
+    projected = deepcopy(payload)
+    shape = data_shape_for_action(action)
+    if shape is not None and shape.row_path is not None:
+        value = _value_at_path(projected, shape.row_path)
+        replacement = _project_json_value(value, columns=columns, action=action)
+        if _replace_value_at_path(projected, shape.row_path, replacement):
+            return projected
+        raise _projection_not_supported_error(action=action, columns=columns)
+
+    data = projected.get("data")
+    if isinstance(data, Mapping):
+        total_list = data.get("totalList")
+        if _is_sequence_like(total_list):
+            replacement = _project_json_value(
+                total_list,
+                columns=columns,
+                action=action,
+            )
+            data_copy = dict(data)
+            data_copy["totalList"] = replacement
+            projected["data"] = data_copy
+            return projected
+        projected["data"] = _project_json_value(
+            data,
+            columns=columns,
+            action=action,
+        )
+        return projected
+
+    projected["data"] = _project_json_value(data, columns=columns, action=action)
+    return projected
+
+
+def _project_json_value(
+    value: JsonValue | None,
+    *,
+    columns: tuple[str, ...],
+    action: str,
+) -> JsonValue:
+    if isinstance(value, Mapping):
+        row = _mapping_to_json_object(value)
+        resolved = _resolve_columns(
+            (row,),
+            requested=columns,
+            defaults=(),
+            action=action,
+        )
+        return _project_row(row, resolved)
+
+    if _is_sequence_like(value):
+        rows = _json_rows_for_projection(value, action=action, columns=columns)
+        resolved = _resolve_columns(rows, requested=columns, defaults=(), action=action)
+        return [_project_row(row, resolved) for row in rows]
+
+    raise _projection_not_supported_error(action=action, columns=columns)
+
+
+def _json_rows_for_projection(
+    value: JsonValue | None,
+    *,
+    action: str,
+    columns: tuple[str, ...],
+) -> tuple[JsonObject, ...]:
+    if not _is_sequence_like(value):
+        raise _projection_not_supported_error(action=action, columns=columns)
+    rows: list[JsonObject] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            raise _projection_not_supported_error(action=action, columns=columns)
+        rows.append(_mapping_to_json_object(item))
+    return tuple(rows)
+
+
+def _project_row(row: JsonObject, columns: tuple[str, ...]) -> JsonObject:
+    return {column: row[column] for column in columns if column in row}
+
+
+def _replace_value_at_path(root: JsonObject, path: str, value: JsonValue) -> bool:
+    current: JsonValue = root
+    parts = path.split(".")
+    for part in parts[:-1]:
+        if not isinstance(current, dict):
+            return False
+        current = current.get(part)
+    if not isinstance(current, dict):
+        return False
+    current[parts[-1]] = value
+    return True
+
+
+def _is_sequence_like(value: JsonValue | None) -> TypeGuard[Sequence[JsonValue]]:
+    return isinstance(value, Sequence) and not isinstance(
+        value,
+        (str, bytes, bytearray),
+    )
+
+
+def _projection_not_supported_error(
+    *,
+    action: str,
+    columns: tuple[str, ...],
+) -> UserInputError:
+    message = f"--columns can only project object or row-oriented output for {action}"
+    return UserInputError(
+        message,
+        details={"action": action, "columns": list(columns)},
+        suggestion=(
+            f"Run `dsctl schema --command {action}` and inspect data_shape, "
+            "or omit --columns for this command."
+        ),
+    )
+
+
 def _extract_rows(
     data: JsonValue | None,
     *,
@@ -151,6 +270,8 @@ def _extract_rows(
 ) -> tuple[JsonObject, ...] | None:
     if shape is not None and shape.row_path is not None:
         value = _value_at_path({"data": data}, shape.row_path)
+        if shape.kind == "object" and isinstance(value, Mapping):
+            return (_mapping_to_json_object(value),)
         rows = _coerce_rows(value)
         if rows is not None:
             return rows

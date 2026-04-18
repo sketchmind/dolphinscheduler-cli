@@ -116,9 +116,11 @@ Controls display rendering. The default is `json`.
 
 Rules:
 
-- `json` returns the full standard JSON envelope and remains the stable machine
-  contract
-- `table` renders row-oriented data as a plain text table for terminal scanning
+- `json` returns the standard JSON envelope and remains the stable machine
+  contract; when `--columns` is present, only the command data payload at the
+  canonical row/object path is projected
+- `table` renders row/object-oriented data as a plain text table for terminal
+  scanning
 - `tsv` renders the same row model as tab-separated text for shell pipelines
 - row-oriented formats use each command's `data_shape` metadata when present
   and fall back to runtime shape inference for simple list payloads
@@ -130,7 +132,9 @@ dsctl --output-format table workflow-instance list --project etl-prod
 
 ### `--columns CSV`
 
-Selects display columns for `--output-format table` or `--output-format tsv`.
+Selects top-level row/object fields. For `json`, this narrows the standard
+envelope data payload at the command's canonical row/object path. For `table`
+and `tsv`, it selects rendered display columns.
 
 Rules:
 
@@ -140,12 +144,13 @@ Rules:
   not expand it as a filesystem glob
 - unknown columns are a `user_input_error` when rows are available to validate
   against
-- `--columns` does not apply to `--output-format json`; retry with
-  `--output-format table` or `--output-format tsv`
+- errors are never projected; failed commands keep the full structured error
+  payload
 
 Example:
 
 ```bash
+dsctl --columns id,name,state workflow-instance list --project etl-prod
 dsctl --output-format tsv --columns id,name,state,host task-instance list --workflow-instance 901
 dsctl --output-format tsv --columns '*' task-instance list --workflow-instance 901
 ```
@@ -153,8 +158,10 @@ dsctl --output-format tsv --columns '*' task-instance list --workflow-instance 9
 ## Output Envelope
 
 Every stable command returns the standard JSON envelope from `src/dsctl/output.py`.
-This statement applies to the default `--output-format json` mode. Row-oriented
-display formats are an alternate rendering layer over the same command result.
+This statement applies to the default `--output-format json` mode. Explicit
+`--columns` projection keeps the envelope and narrows only the command `data`
+payload. Row-oriented display formats are an alternate rendering layer over the
+same command result.
 
 Success shape:
 
@@ -233,13 +240,13 @@ Field rules:
 - every dry-run result includes one standard warning detail with code
   `dry_run_no_request_sent`
 - command schema entries may include `data_shape` metadata with a stable
-  low-entropy row model for display renderers and AI agents
+  low-entropy row/object model for renderers, JSON projection, and AI agents
 
 Current `data_shape` fields:
 
 - `kind`: one of `page`, `collection`, `object`, or `summary`
 - `row_path`: dot-path from the standard JSON envelope to the canonical row
-  collection, such as `data.totalList`
+  collection or object, such as `data.totalList` or `data`
 - `default_columns`: suggested compact display columns
 - `column_discovery`: currently `runtime_row_keys`, meaning full column
   discovery comes from the JSON row payload
@@ -362,8 +369,11 @@ Current guarantees:
 - `schema_version` changes for breaking schema changes; additive fields may
   appear within the same version
 - is tested against the actual registered command tree
-- command entries that expose row-oriented output include `data_shape`; this is
-  the authoritative row model for `--output-format table|tsv`
+- command entries that expose row/object-oriented output include `data_shape`;
+  this is the authoritative model for `--columns` and
+  `--output-format table|tsv`
+- schema and capabilities output metadata expose `json_column_projection` when
+  JSON `--columns` projection is supported
 
 ## `dsctl capabilities`
 

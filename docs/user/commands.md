@@ -91,10 +91,12 @@ For scan-friendly terminal output, pass a global output renderer before the
 command group:
 
 ```bash
+dsctl --columns id,name,state workflow-instance list --project etl-prod
 dsctl --output-format table workflow-instance list --project etl-prod
 dsctl --output-format tsv --columns id,name,state task-instance list --workflow-instance <workflow_instance_id>
 dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <workflow_instance_id>
 ```
 
 Use `dsctl schema --command <ACTION>` and inspect `data_shape` to discover the
-canonical row path and default display columns for row-oriented commands.
+canonical row/object path and default display columns for row-oriented
+commands.

@@ -95,6 +95,7 @@ def test_capabilities_command_returns_surface_discovery() -> None:
         "default_format": "json",
         "data_shape_metadata": True,
         "display_columns": True,
+        "json_column_projection": True,
         "resolved_metadata": True,
         "warnings": True,
         "warning_details_alignment": True,

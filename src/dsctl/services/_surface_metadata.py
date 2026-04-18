@@ -155,6 +155,7 @@ def output_schema_data() -> dict[str, object]:
         },
         "warning_details_aligned": True,
         "data_shape_metadata": True,
+        "json_column_projection": True,
     }
 
 
@@ -166,6 +167,7 @@ def output_capabilities_data() -> dict[str, object]:
         "default_format": "json",
         "data_shape_metadata": True,
         "display_columns": True,
+        "json_column_projection": True,
         "resolved_metadata": True,
         "warnings": True,
         "warning_details_alignment": True,

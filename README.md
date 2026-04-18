@@ -70,6 +70,7 @@ dsctl workflow-instance digest <workflow_instance_id>
 dsctl task-instance list --workflow-instance <workflow_instance_id>
 dsctl task-instance list --project etl-prod --state FAILURE
 dsctl task-instance log <task_instance_id>
+dsctl --columns id,name,state workflow-instance list --project etl-prod
 dsctl --output-format table workflow-instance list --project etl-prod
 dsctl --output-format tsv --columns id,name,state task-instance list --workflow-instance <workflow_instance_id>
 dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <workflow_instance_id>

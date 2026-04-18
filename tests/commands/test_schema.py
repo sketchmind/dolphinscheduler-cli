@@ -119,6 +119,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         },
         "warning_details_aligned": True,
         "data_shape_metadata": True,
+        "json_column_projection": True,
     }
     assert payload["data"]["capabilities"]["monitor"] == {
         "health": True,

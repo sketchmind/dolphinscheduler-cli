@@ -98,6 +98,35 @@ COLLECTION_DEFAULTS: dict[str, tuple[str, ...]] = {
     "workflow.list": ("code", "name", "version"),
 }
 
+OBJECT_DEFAULTS: dict[str, tuple[str, ...]] = {
+    **{
+        action.removesuffix(".list") + ".get": columns
+        for action, columns in PAGE_LIST_DEFAULTS.items()
+    },
+    **{
+        action.removesuffix(".list") + ".get": columns
+        for action, columns in COLLECTION_DEFAULTS.items()
+        if action.endswith(".list")
+    },
+    "project-preference.get": (),
+    "workflow.lineage.get": (),
+    "workflow.describe": ("workflow", "tasks", "relations"),
+    "workflow.digest": (
+        "taskCount",
+        "relationCount",
+        "taskTypeCounts",
+        "rootTasks",
+        "leafTasks",
+    ),
+    "workflow-instance.digest": (
+        "taskCount",
+        "progress",
+        "taskStateCounts",
+        "runningTasks",
+        "failedTasks",
+    ),
+}
+
 NESTED_ROW_SHAPES: dict[str, DataShape] = {
     "doctor": DataShape(
         kind="summary",
@@ -137,6 +166,14 @@ DATA_SHAPES: dict[str, DataShape] = {
             default_columns=columns,
         )
         for action, columns in COLLECTION_DEFAULTS.items()
+    },
+    **{
+        action: DataShape(
+            kind="object",
+            row_path="data",
+            default_columns=columns,
+        )
+        for action, columns in OBJECT_DEFAULTS.items()
     },
     **NESTED_ROW_SHAPES,
 }
