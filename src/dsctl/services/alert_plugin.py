@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, TypeAlias, TypedDict
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
 
 from dsctl.cli_surface import ALERT_PLUGIN_RESOURCE
 from dsctl.errors import (
@@ -16,6 +17,7 @@ from dsctl.errors import (
 from dsctl.output import CommandResult, require_json_object
 from dsctl.services._serialization import (
     AlertPluginData,
+    StructuredDataValue,
     optional_text,
     serialize_alert_plugin_list_item,
     serialize_plugin_define,
@@ -46,6 +48,8 @@ if TYPE_CHECKING:
 
 
 QUERY_PLUGINS_ERROR = 110003
+QUERY_PLUGINS_RESULT_IS_NULL = 110002
+QUERY_PLUGIN_DETAIL_RESULT_IS_NULL = 110004
 UPDATE_ALERT_PLUGIN_INSTANCE_ERROR = 110005
 DELETE_ALERT_PLUGIN_INSTANCE_ERROR = 110006
 GET_ALERT_PLUGIN_INSTANCE_ERROR = 110007
@@ -82,6 +86,28 @@ class PluginDefineSelectionData(TypedDict):
     id: int
     pluginName: str
     pluginType: str | None
+
+
+class PluginDefineListItemData(TypedDict):
+    """Alert-plugin definition list item emitted by `definition list`."""
+
+    id: int
+    pluginName: str
+    pluginType: str | None
+    createTime: str | None
+    updateTime: str | None
+
+
+class PluginDefinitionListData(TypedDict):
+    """Alert-plugin definition discovery payload."""
+
+    definitions: list[PluginDefineListItemData]
+    count: int
+    schemaCommand: str
+
+
+PluginParamItem: TypeAlias = dict[str, StructuredDataValue]
+PluginParamFieldData: TypeAlias = dict[str, StructuredDataValue]
 
 
 def list_alert_plugins_result(
@@ -133,34 +159,48 @@ def get_alert_plugin_schema_result(
     )
 
 
+def list_alert_plugin_definitions_result(
+    *,
+    env_file: str | None = None,
+) -> CommandResult:
+    """List alert-plugin definitions supported by the current DS runtime."""
+    return run_with_service_runtime(
+        env_file,
+        _list_alert_plugin_definitions_result,
+    )
+
+
 def create_alert_plugin_result(
     *,
     name: str,
     plugin: str,
     params_json: str | None = None,
     file: Path | None = None,
+    params: list[str] | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
-    """Create one alert-plugin instance from DS-native UI param-list JSON."""
+    """Create one alert-plugin instance from UI params or inline key/value fields."""
     normalized_name = require_non_empty_text(name, label="alert-plugin name")
     normalized_plugin = require_non_empty_text(plugin, label="alert plugin")
+    inline_params = _inline_param_items(params)
+    _validate_plugin_param_sources(
+        params_json=params_json,
+        file=file,
+        inline_params=inline_params,
+        required=True,
+    )
     plugin_instance_params = _plugin_instance_params_input(
         params_json=params_json,
         file=file,
-        required=True,
+        required=False,
     )
-    if plugin_instance_params is None:
-        message = "Alert-plugin params require exactly one input source"
-        raise UserInputError(
-            message,
-            suggestion="Pass exactly one of --params-json or --file.",
-        )
     return run_with_service_runtime(
         env_file,
         _create_alert_plugin_result,
         name=normalized_name,
         plugin=normalized_plugin,
         plugin_instance_params=plugin_instance_params,
+        inline_params=inline_params,
     )
 
 
@@ -170,15 +210,23 @@ def update_alert_plugin_result(
     name: str | None = None,
     params_json: str | None = None,
     file: Path | None = None,
+    params: list[str] | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
     """Update one alert-plugin instance while preserving omitted fields."""
-    if name is None and params_json is None and file is None:
+    inline_params = _inline_param_items(params)
+    if name is None and params_json is None and file is None and not inline_params:
         message = "Alert-plugin update requires at least one field change"
         raise UserInputError(
             message,
-            suggestion="Pass --name or one of --params-json/--file.",
+            suggestion="Pass --name, --param, --params-json, or --file.",
         )
+    _validate_plugin_param_sources(
+        params_json=params_json,
+        file=file,
+        inline_params=inline_params,
+        required=False,
+    )
 
     normalized_name = (
         require_non_empty_text(name, label="alert-plugin name")
@@ -196,6 +244,7 @@ def update_alert_plugin_result(
         alert_plugin=alert_plugin,
         name=normalized_name,
         plugin_instance_params=plugin_instance_params,
+        inline_params=inline_params,
     )
 
 
@@ -300,7 +349,7 @@ def _get_alert_plugin_schema_result(
     plugin_define = _resolve_plugin_define(runtime, plugin=plugin)
     return CommandResult(
         data=require_json_object(
-            serialize_plugin_define(plugin_define),
+            _serialize_plugin_define_schema(plugin_define),
             label="alert-plugin schema data",
         ),
         resolved={
@@ -312,14 +361,48 @@ def _get_alert_plugin_schema_result(
     )
 
 
+def _list_alert_plugin_definitions_result(runtime: ServiceRuntime) -> CommandResult:
+    try:
+        plugin_defines = runtime.upstream.ui_plugins.list(plugin_type=ALERT_PLUGIN_TYPE)
+    except ApiResultError as error:
+        raise _translate_ui_plugin_api_error(error) from error
+    definitions = [
+        _serialize_plugin_define_list_item(plugin_define)
+        for plugin_define in plugin_defines
+    ]
+    return CommandResult(
+        data=require_json_object(
+            PluginDefinitionListData(
+                definitions=definitions,
+                count=len(definitions),
+                schemaCommand="alert-plugin schema PLUGIN",
+            ),
+            label="alert-plugin definition list data",
+        ),
+        resolved={
+            "pluginDefinitions": {
+                "pluginType": ALERT_PLUGIN_TYPE,
+                "source": "ui-plugins/query-by-type",
+            }
+        },
+    )
+
+
 def _create_alert_plugin_result(
     runtime: ServiceRuntime,
     *,
     name: str,
     plugin: str,
-    plugin_instance_params: str,
+    plugin_instance_params: str | None,
+    inline_params: Sequence[str],
 ) -> CommandResult:
     plugin_define = _resolve_plugin_define(runtime, plugin=plugin)
+    if plugin_instance_params is None:
+        plugin_instance_params = _plugin_instance_params_from_inline(
+            plugin_define,
+            inline_params=inline_params,
+            existing_params=None,
+        )
     try:
         created_alert_plugin = runtime.upstream.alert_plugins.create(
             plugin_define_id=_plugin_define_id(plugin_define),
@@ -367,6 +450,7 @@ def _update_alert_plugin_result(
     alert_plugin: str,
     name: str | None,
     plugin_instance_params: str | None,
+    inline_params: Sequence[str],
 ) -> CommandResult:
     resolved_alert_plugin = resolve_alert_plugin(
         alert_plugin,
@@ -377,11 +461,21 @@ def _update_alert_plugin_result(
         alert_plugin_id=resolved_alert_plugin.id,
     )
     next_name = current_alert_plugin.instanceName if name is None else name
-    next_params = (
-        current_alert_plugin.pluginInstanceParams
-        if plugin_instance_params is None
-        else plugin_instance_params
-    )
+    next_params: str | None
+    if plugin_instance_params is not None:
+        next_params = plugin_instance_params
+    elif inline_params:
+        plugin_define = _resolve_plugin_define(
+            runtime,
+            plugin=str(current_alert_plugin.pluginDefineId),
+        )
+        next_params = _plugin_instance_params_from_inline(
+            plugin_define,
+            inline_params=inline_params,
+            existing_params=current_alert_plugin.pluginInstanceParams,
+        )
+    else:
+        next_params = current_alert_plugin.pluginInstanceParams
     if next_name is None or next_params is None:
         message = "Alert-plugin payload was missing required fields"
         raise ApiTransportError(
@@ -529,6 +623,14 @@ def _resolve_plugin_define(
         if plugin_define.pluginName == plugin
     ]
     if not matches:
+        normalized_plugin = plugin.casefold()
+        matches = [
+            plugin_define
+            for plugin_define in plugin_defines
+            if plugin_define.pluginName is not None
+            and plugin_define.pluginName.casefold() == normalized_plugin
+        ]
+    if not matches:
         message = f"Alert plugin {plugin!r} was not found"
         raise NotFoundError(
             message,
@@ -544,7 +646,17 @@ def _resolve_plugin_define(
                 "ids": [_plugin_define_id(plugin_define) for plugin_define in matches],
             },
         )
-    return matches[0]
+    plugin_define_id = _plugin_define_id(matches[0])
+    try:
+        detailed_plugin_define = runtime.upstream.ui_plugins.get(
+            plugin_id=plugin_define_id
+        )
+    except ApiResultError as error:
+        raise _translate_ui_plugin_api_error(
+            error,
+            plugin_id=plugin_define_id,
+        ) from error
+    return _require_alert_plugin_define_type(detailed_plugin_define)
 
 
 def _require_alert_plugin_list_item(
@@ -654,6 +766,66 @@ def _plugin_define_name(plugin_define: PluginDefineRecord) -> str:
     return plugin_name
 
 
+def _serialize_plugin_define_schema(
+    plugin_define: PluginDefineRecord,
+) -> dict[str, StructuredDataValue]:
+    data = cast(
+        "dict[str, StructuredDataValue]",
+        dict(serialize_plugin_define(plugin_define)),
+    )
+    data["pluginParamFields"] = _plugin_param_field_summaries(
+        _plugin_param_template(plugin_define)
+    )
+    return data
+
+
+def _serialize_plugin_define_list_item(
+    plugin_define: PluginDefineRecord,
+) -> PluginDefineListItemData:
+    return {
+        "id": _plugin_define_id(plugin_define),
+        "pluginName": _plugin_define_name(plugin_define),
+        "pluginType": plugin_define.pluginType,
+        "createTime": plugin_define.createTime,
+        "updateTime": plugin_define.updateTime,
+    }
+
+
+def _inline_param_items(params: list[str] | None) -> list[str]:
+    if params is None:
+        return []
+    return [item for item in params if item is not None]
+
+
+def _validate_plugin_param_sources(
+    *,
+    params_json: str | None,
+    file: Path | None,
+    inline_params: Sequence[str],
+    required: bool,
+) -> None:
+    source_count = 0
+    if params_json is not None:
+        source_count += 1
+    if file is not None:
+        source_count += 1
+    if inline_params:
+        source_count += 1
+
+    if required and source_count != 1:
+        message = "Alert-plugin params require exactly one input source"
+        raise UserInputError(
+            message,
+            suggestion="Pass exactly one of --param, --params-json, or --file.",
+        )
+    if not required and source_count > 1:
+        message = "Alert-plugin params require at most one input source"
+        raise UserInputError(
+            message,
+            suggestion="Pass only one of --param, --params-json, or --file.",
+        )
+
+
 def _plugin_instance_params_input(
     *,
     params_json: str | None,
@@ -712,10 +884,245 @@ def _plugin_instance_params_input(
     return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
 
 
+def _plugin_instance_params_from_inline(
+    plugin_define: PluginDefineRecord,
+    *,
+    inline_params: Sequence[str],
+    existing_params: str | None,
+) -> str:
+    template = _plugin_param_template(plugin_define)
+    if not template:
+        message = "Alert-plugin definition does not expose configurable params"
+        raise UserInputError(
+            message,
+            suggestion=(
+                "Use --params-json or --file only when the upstream plugin "
+                "requires raw params."
+            ),
+        )
+
+    existing_values = _plugin_param_values(existing_params)
+    inline_values = _canonical_inline_param_values(
+        inline_params,
+        template=template,
+        plugin_define=plugin_define,
+    )
+    merged_params: list[PluginParamItem] = []
+    missing_required_fields: list[str] = []
+
+    for item in template:
+        copied = dict(item)
+        field = _plugin_param_field(copied)
+        if field in existing_values:
+            copied["value"] = existing_values[field]
+        if field in inline_values:
+            copied["value"] = inline_values[field]
+        if _plugin_param_required(copied) and not _has_plugin_param_value(
+            copied.get("value")
+        ):
+            missing_required_fields.append(field)
+        merged_params.append(copied)
+
+    if missing_required_fields:
+        message = "Alert-plugin params are missing required fields"
+        raise UserInputError(
+            message,
+            details={
+                "resource": ALERT_PLUGIN_RESOURCE,
+                "plugin": _plugin_define_name(plugin_define),
+                "missing": missing_required_fields,
+            },
+            suggestion=(
+                "Pass required fields with repeated --param KEY=VALUE options, "
+                "or submit the full DS UI params with --params-json/--file."
+            ),
+        )
+
+    return json.dumps(merged_params, ensure_ascii=False, separators=(",", ":"))
+
+
+def _plugin_param_template(
+    plugin_define: PluginDefineRecord,
+) -> list[PluginParamItem]:
+    plugin_params = plugin_define.pluginParams
+    if plugin_params is None:
+        return []
+    return _parse_plugin_param_array(
+        plugin_params,
+        label="alert-plugin definition params",
+        plugin_define=plugin_define,
+    )
+
+
+def _plugin_param_values(existing_params: str | None) -> dict[str, StructuredDataValue]:
+    if existing_params is None:
+        return {}
+    values: dict[str, StructuredDataValue] = {}
+    for item in _parse_plugin_param_array(
+        existing_params,
+        label="current alert-plugin params",
+        plugin_define=None,
+    ):
+        field = _plugin_param_field(item)
+        if "value" in item:
+            values[field] = item["value"]
+    return values
+
+
+def _parse_plugin_param_array(
+    value: str,
+    *,
+    label: str,
+    plugin_define: PluginDefineRecord | None,
+) -> list[PluginParamItem]:
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as error:
+        message = f"{label} must be valid JSON"
+        raise ApiTransportError(
+            message,
+            details=_plugin_param_error_details(plugin_define),
+        ) from error
+    if not isinstance(parsed, list) or any(
+        not isinstance(item, Mapping) for item in parsed
+    ):
+        message = f"{label} must be a JSON array of objects"
+        raise ApiTransportError(
+            message,
+            details=_plugin_param_error_details(plugin_define),
+        )
+    return [dict(item) for item in parsed]
+
+
+def _canonical_inline_param_values(
+    inline_params: Sequence[str],
+    *,
+    template: Sequence[Mapping[str, StructuredDataValue]],
+    plugin_define: PluginDefineRecord,
+) -> dict[str, str]:
+    fields = [_plugin_param_field(item) for item in template]
+    exact_fields = {field: field for field in fields}
+    lower_fields: dict[str, list[str]] = {}
+    for field in fields:
+        lower_fields.setdefault(field.casefold(), []).append(field)
+
+    values: dict[str, str] = {}
+    for item in inline_params:
+        raw_key, separator, raw_value = item.partition("=")
+        key = raw_key.strip()
+        if not separator or not key:
+            message = f"Invalid --param value {item!r}; expected KEY=VALUE"
+            raise UserInputError(
+                message,
+                suggestion=(
+                    "Pass alert-plugin params as `--param WebHook=https://...`; "
+                    "repeat the option for multiple fields."
+                ),
+            )
+        canonical_key = exact_fields.get(key)
+        if canonical_key is None:
+            case_matches = lower_fields.get(key.casefold(), [])
+            if len(case_matches) == 1:
+                canonical_key = case_matches[0]
+            elif len(case_matches) > 1:
+                message = f"Alert-plugin param field {key!r} is ambiguous"
+                raise ConflictError(
+                    message,
+                    details={
+                        "resource": ALERT_PLUGIN_RESOURCE,
+                        "plugin": _plugin_define_name(plugin_define),
+                        "matches": case_matches,
+                    },
+                )
+        if canonical_key is None:
+            message = f"Alert-plugin param field {key!r} is not supported"
+            raise UserInputError(
+                message,
+                details={
+                    "resource": ALERT_PLUGIN_RESOURCE,
+                    "plugin": _plugin_define_name(plugin_define),
+                    "supportedFields": fields,
+                },
+                suggestion=(
+                    "Run `dsctl alert-plugin schema "
+                    f"{_plugin_define_name(plugin_define)}` to inspect supported "
+                    "fields."
+                ),
+            )
+        if canonical_key in values:
+            message = (
+                f"Alert-plugin param field {canonical_key!r} was specified more "
+                "than once"
+            )
+            raise UserInputError(
+                message,
+                suggestion="Pass each alert-plugin param field only once.",
+            )
+        values[canonical_key] = raw_value
+    return values
+
+
+def _plugin_param_field_summaries(
+    params: Sequence[Mapping[str, StructuredDataValue]],
+) -> list[PluginParamFieldData]:
+    return [
+        {
+            "field": _plugin_param_field(item),
+            "name": item.get("name"),
+            "title": item.get("title"),
+            "type": item.get("type"),
+            "required": _plugin_param_required(item),
+            "defaultValue": item.get("value"),
+            "options": item.get("options"),
+        }
+        for item in params
+    ]
+
+
+def _plugin_param_field(item: Mapping[str, StructuredDataValue]) -> str:
+    field = item.get("field")
+    if not isinstance(field, str) or not field:
+        message = "Alert-plugin param schema item was missing field"
+        raise ApiTransportError(message, details={"resource": ALERT_PLUGIN_RESOURCE})
+    return field
+
+
+def _plugin_param_required(item: Mapping[str, StructuredDataValue]) -> bool:
+    validate = item.get("validate")
+    if not isinstance(validate, Sequence) or isinstance(validate, (str, bytes)):
+        return False
+    for rule in validate:
+        if not isinstance(rule, Mapping):
+            continue
+        required = rule.get("required")
+        if required is True:
+            return True
+        if isinstance(required, str) and required.casefold() == "true":
+            return True
+    return False
+
+
+def _has_plugin_param_value(value: StructuredDataValue) -> bool:
+    if value is None:
+        return False
+    return not (isinstance(value, str) and value == "")
+
+
+def _plugin_param_error_details(
+    plugin_define: PluginDefineRecord | None,
+) -> dict[str, StructuredDataValue]:
+    details: dict[str, StructuredDataValue] = {"resource": ALERT_PLUGIN_RESOURCE}
+    if plugin_define is not None:
+        details["plugin"] = _plugin_define_name(plugin_define)
+        details["pluginDefineId"] = _plugin_define_id(plugin_define)
+    return details
+
+
 def _require_alert_plugin_define_type(
     plugin_define: PluginDefineRecord,
 ) -> PluginDefineRecord:
-    if plugin_define.pluginType == ALERT_PLUGIN_TYPE:
+    plugin_type = plugin_define.pluginType
+    if plugin_type is not None and plugin_type.casefold() == "alert":
         return plugin_define
     message = "Resolved plugin is not an alert plugin definition"
     raise UserInputError(
@@ -796,13 +1203,19 @@ def _translate_ui_plugin_api_error(
     details: dict[str, object] = {"resource": ALERT_PLUGIN_RESOURCE}
     if plugin_id is not None:
         details["plugin_id"] = plugin_id
-        return NotFoundError(
-            f"Alert plugin id {plugin_id} was not found",
-            details=details,
-        )
+        if error.result_code == QUERY_PLUGIN_DETAIL_RESULT_IS_NULL:
+            return NotFoundError(
+                f"Alert plugin id {plugin_id} was not found",
+                details=details,
+            )
     if error.result_code == QUERY_PLUGINS_ERROR:
         return ConflictError(
             "Alert-plugin schema discovery was rejected by the upstream API",
+            details=details,
+        )
+    if error.result_code == QUERY_PLUGINS_RESULT_IS_NULL:
+        return NotFoundError(
+            "No alert plugin definitions were returned by the upstream API",
             details=details,
         )
     return error

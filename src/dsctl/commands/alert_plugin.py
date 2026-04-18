@@ -9,6 +9,7 @@ from dsctl.services.alert_plugin import (
     delete_alert_plugin_result,
     get_alert_plugin_result,
     get_alert_plugin_schema_result,
+    list_alert_plugin_definitions_result,
     list_alert_plugins_result,
     send_test_alert_plugin_result,
     update_alert_plugin_result,
@@ -18,10 +19,15 @@ alert_plugin_app = typer.Typer(
     help="Manage DolphinScheduler alert plugin instances.",
     no_args_is_help=True,
 )
+alert_plugin_definition_app = typer.Typer(
+    help="Discover supported DolphinScheduler alert plugin definitions.",
+    no_args_is_help=True,
+)
 
 
 def register_alert_plugin_commands(app: typer.Typer) -> None:
     """Register the `alert-plugin` command group."""
+    alert_plugin_app.add_typer(alert_plugin_definition_app, name="definition")
     app.add_typer(alert_plugin_app, name="alert-plugin")
 
 
@@ -109,6 +115,17 @@ def schema_command(
     )
 
 
+@alert_plugin_definition_app.command("list")
+def list_definition_command(ctx: typer.Context) -> None:
+    """List supported alert-plugin definitions, not configured instances."""
+    state = get_app_state(ctx)
+    env_file = None if state.env_file is None else str(state.env_file)
+    emit_result(
+        "alert-plugin.definition.list",
+        lambda: list_alert_plugin_definitions_result(env_file=env_file),
+    )
+
+
 @alert_plugin_app.command("create")
 def create_command(
     ctx: typer.Context,
@@ -146,6 +163,15 @@ def create_command(
             resolve_path=True,
         ),
     ] = None,
+    params: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--param",
+            help=(
+                "Alert-plugin UI param in KEY=VALUE form. Repeat for multiple fields."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Create one alert-plugin instance."""
     state = get_app_state(ctx)
@@ -157,6 +183,7 @@ def create_command(
             plugin=plugin,
             params_json=params_json,
             file=file,
+            params=params,
             env_file=env_file,
         ),
     )
@@ -196,6 +223,16 @@ def update_command(
             resolve_path=True,
         ),
     ] = None,
+    params: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--param",
+            help=(
+                "Replacement alert-plugin UI param in KEY=VALUE form. Repeat "
+                "for multiple fields; omitted fields keep current values."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Update one alert-plugin instance."""
     state = get_app_state(ctx)
@@ -207,6 +244,7 @@ def update_command(
             name=name,
             params_json=params_json,
             file=file,
+            params=params,
             env_file=env_file,
         ),
     )

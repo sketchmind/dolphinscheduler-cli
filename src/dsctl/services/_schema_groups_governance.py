@@ -1391,6 +1391,16 @@ def alert_plugin_group() -> dict[str, object]:
                         description="DS-native alert-plugin UI params JSON array.",
                     ),
                     option(
+                        "param",
+                        value_type="string",
+                        description=(
+                            "Alert-plugin UI param in KEY=VALUE form. Repeat for "
+                            "multiple fields."
+                        ),
+                        value_name="KEY=VALUE",
+                        multiple=True,
+                    ),
+                    option(
                         "file",
                         value_type="path",
                         description=(
@@ -1424,6 +1434,17 @@ def alert_plugin_group() -> dict[str, object]:
                         description=(
                             "Replacement DS-native alert-plugin UI params JSON array."
                         ),
+                    ),
+                    option(
+                        "param",
+                        value_type="string",
+                        description=(
+                            "Replacement alert-plugin UI param in KEY=VALUE form. "
+                            "Repeat for multiple fields; omitted fields keep "
+                            "current values."
+                        ),
+                        value_name="KEY=VALUE",
+                        multiple=True,
                     ),
                     option(
                         "file",
@@ -1467,6 +1488,23 @@ def alert_plugin_group() -> dict[str, object]:
                         value_type="string",
                         description="Alert-plugin instance name or numeric id.",
                         selector="name_or_id",
+                    )
+                ],
+            ),
+            group(
+                "definition",
+                summary=(
+                    "Discover supported alert-plugin definitions, not configured "
+                    "alert-plugin instances."
+                ),
+                commands=[
+                    command(
+                        "list",
+                        action="alert-plugin.definition.list",
+                        summary=(
+                            "List alert-plugin definitions supported by the "
+                            "current DolphinScheduler runtime."
+                        ),
                     )
                 ],
             ),

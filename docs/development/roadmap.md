@@ -331,7 +331,7 @@ for production use.
 - [x] `queue` — CRUD
 - [x] `worker-group` — CRUD
 - [x] `task-group` — lifecycle plus task-group queue list/force-start/priority
-- [x] `alert-plugin` — list/get/schema/create/update/delete/test
+- [x] `alert-plugin` — list/get/definition list/schema/create/update/delete/test
 - [x] `alert-group` — CRUD
 - [x] `tenant` — CRUD
 - [x] `env` — environment CRUD

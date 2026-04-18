@@ -111,6 +111,15 @@ def test_alert_plugin_schema_command_returns_plugin_definition() -> None:
     assert payload["data"]["pluginName"] == "Slack"
 
 
+def test_alert_plugin_definition_list_command_returns_supported_definitions() -> None:
+    result = runner.invoke(app, ["alert-plugin", "definition", "list"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "alert-plugin.definition.list"
+    assert payload["data"]["definitions"][0]["pluginName"] == "Slack"
+
+
 def test_alert_plugin_create_command_reads_params_from_file(
     tmp_path: Path,
 ) -> None:
@@ -135,6 +144,28 @@ def test_alert_plugin_create_command_reads_params_from_file(
     payload = json.loads(result.stdout)
     assert payload["action"] == "alert-plugin.create"
     assert payload["data"]["instanceName"] == "slack-nightly"
+
+
+def test_alert_plugin_create_command_accepts_inline_params() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "alert-plugin",
+            "create",
+            "--name",
+            "slack-nightly",
+            "--plugin",
+            "slack",
+            "--param",
+            "url=https://hooks.example.test/nightly",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    params = json.loads(payload["data"]["pluginInstanceParams"])
+    assert payload["action"] == "alert-plugin.create"
+    assert params[0]["value"] == "https://hooks.example.test/nightly"
 
 
 def test_alert_plugin_update_command_returns_updated_payload() -> None:

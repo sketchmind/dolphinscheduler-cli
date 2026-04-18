@@ -28,6 +28,7 @@ Current stable commands:
 - `dsctl task-group list|get|create|update|close|start`
 - `dsctl task-group queue list|force-start|set-priority`
 - `dsctl alert-plugin list|get|schema|create|update|delete|test`
+- `dsctl alert-plugin definition list`
 - `dsctl alert-group list|get|create|update|delete`
 - `dsctl tenant list|get|create|update|delete`
 - `dsctl user list|get|create|update|delete`
@@ -1766,6 +1767,33 @@ the stable identity, then returns the current alert-plugin payload.
 - `pluginDefineId`
 - `alertPluginName`
 
+## `dsctl alert-plugin definition list`
+
+Lists the alert-plugin definitions supported by the current DolphinScheduler
+runtime. This command returns plugin definitions such as `Feishu`, `Email`, or
+`Slack`; it does not return configured alert-plugin instances.
+
+Current definition list payload fields:
+
+- `definitions`
+- `count`
+- `schemaCommand`
+
+Current definition row fields:
+
+- `id`
+- `pluginName`
+- `pluginType`
+- `createTime`
+- `updateTime`
+
+Rules:
+
+- use this command to discover valid `--plugin` values for
+  `alert-plugin create`
+- use `alert-plugin schema PLUGIN` to fetch the full parameter schema for one
+  returned definition
+
 ## `dsctl alert-plugin schema PLUGIN`
 
 Accepts an alert UI plugin definition name or a numeric plugin-definition id,
@@ -1777,14 +1805,21 @@ Current plugin definition fields:
 - `pluginName`
 - `pluginType`
 - `pluginParams`
+- `pluginParamFields`
 - `createTime`
 - `updateTime`
 
 Rules:
 
-- `PLUGIN` must resolve to an `ALERT` UI plugin definition
+- `PLUGIN` must resolve to an alert UI plugin definition; plugin-definition
+  names are matched exactly first, then case-insensitively when unique
+- name resolution fetches the plugin-detail endpoint after locating the id
+  because the upstream list endpoint returns only definition summaries
 - `pluginParams` is the DS-native UI param-list schema used by create/update
   and test-send flows
+- `pluginParamFields` is a compact derived summary of the same schema for
+  field discovery; it includes `field`, `type`, `required`, `defaultValue`,
+  and options when present
 
 ## `dsctl alert-plugin create`
 
@@ -1794,15 +1829,20 @@ Options:
 
 - `--name TEXT` required
 - `--plugin TEXT` required
+- `--param KEY=VALUE`
 - `--params-json JSON`
 - `--file PATH`
 
 Rules:
 
 - `--plugin` accepts an alert UI plugin definition name or numeric id
-- pass exactly one of `--params-json` or `--file`
-- the params payload must be a DS-native JSON array of UI param objects, not a
-  plain key/value JSON object
+- pass exactly one of `--param`, `--params-json`, or `--file`
+- `--param` may be repeated; it overlays fields from the upstream plugin
+  schema and then submits DS-native UI params to DolphinScheduler
+- field names from `--param` are matched exactly first, then
+  case-insensitively when unique
+- `--params-json` and `--file` accept a DS-native JSON array of UI param
+  objects, not a plain key/value JSON object
 - use `dsctl alert-plugin schema PLUGIN` to fetch the upstream param template,
   fill each item's `value`, then submit it unchanged
 
@@ -1815,6 +1855,7 @@ Updates one resolved alert-plugin instance while preserving omitted fields.
 Options:
 
 - `--name TEXT`
+- `--param KEY=VALUE`
 - `--params-json JSON`
 - `--file PATH`
 
@@ -1823,9 +1864,11 @@ Rules:
 - `ALERT_PLUGIN` may be an alert-plugin instance name or numeric id
 - at least one field change is required
 - omitted params preserve the current upstream `pluginInstanceParams`
-- when params are provided, pass exactly one of `--params-json` or `--file`
-- the params payload format is the same DS-native JSON array accepted by
-  `create`
+- when params are provided, pass exactly one of `--param`, `--params-json`, or
+  `--file`
+- `--param` overlays the current upstream UI params; omitted fields keep their
+  current values
+- `--params-json` and `--file` replace the full DS-native UI params array
 
 ## `dsctl alert-plugin delete ALERT_PLUGIN --force`
 

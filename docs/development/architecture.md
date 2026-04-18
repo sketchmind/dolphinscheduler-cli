@@ -42,6 +42,7 @@ The current stable CLI surface is:
 - `dsctl task-group list|get|create|update|close|start`
 - `dsctl task-group queue list|force-start|set-priority`
 - `dsctl alert-plugin list|get|schema|create|update|delete|test`
+- `dsctl alert-plugin definition list`
 - `dsctl alert-group list|get|create|update|delete`
 - `dsctl tenant list|get|create|update|delete`
 - `dsctl user list|get|create|update|delete`

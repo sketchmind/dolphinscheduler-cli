@@ -316,7 +316,7 @@ future.
 | resource | `resource list|view|upload|create|mkdir|download|delete` | `etl-developer` | Yes | file and directory lifecycle with content round-trip |
 | queue | `queue list|get|create|update|delete` | `admin-bootstrap` or delegated governance user | Yes | CRUD round-trip plus permission boundary |
 | worker-group | `worker-group list|get|create|update|delete` | `admin-bootstrap` or delegated governance user | Yes | CRUD round-trip plus selector correctness |
-| alert-plugin | `alert-plugin list|get|schema|create|update|delete|test` | `admin-bootstrap` or delegated governance user | Yes | schema/read paths plus create/update/delete and plugin test where installed |
+| alert-plugin | `alert-plugin list|get|definition list|schema|create|update|delete|test` | `admin-bootstrap` or delegated governance user | Yes | definition/schema/read paths plus create/update/delete and plugin test where installed |
 | alert-group | `alert-group list|get|create|update|delete` | delegated governance user | Yes | CRUD round-trip and referenceable group payload shape |
 | tenant | `tenant list|get|create|update|delete` | `admin-bootstrap` | Yes | CRUD round-trip plus non-admin denial case |
 | user | `user list|get|create|update|delete|grant project|datasource|namespace|revoke project|datasource|namespace` | `admin-bootstrap` | Yes | CRUD plus grant/revoke effect and non-admin denial case |
@@ -436,9 +436,9 @@ live additions.
 - schedule create also needs the workflow definition to be `ONLINE`, and the
   current cluster requires explicit `tenantCode` plus a valid nonzero
   `environmentCode`.
-- `alert-plugin schema Script` exposes only the DS plugin definition metadata,
-  not a rich parameter form. The live suite should treat that as the upstream
-  contract unless source confirms otherwise.
+- `alert-plugin definition list` discovers supported plugin definitions, while
+  `alert-plugin schema PLUGIN` fetches the full DS UI parameter form for one
+  definition when the upstream detail endpoint exposes it.
 - `alert-plugin test` against the current Script plugin returns DS result code
   `110014` when no executable script backend is configured. This is a valid
   cluster capability failure, not a transport error.

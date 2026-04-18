@@ -355,6 +355,29 @@ def test_admin_alert_plugin_and_group_lifecycle_round_trip(
     current_group_name = group_name
     alert_plugin_id: int | None = None
 
+    definition_list_payload = require_ok_payload(
+        run_dsctl(
+            live_repo_root,
+            ["alert-plugin", "definition", "list"],
+            env_file=live_admin_env_file,
+        ),
+        expected_action="alert-plugin.definition.list",
+        label="alert-plugin definition list",
+    )
+    definition_list_data = require_mapping(
+        definition_list_payload["data"],
+        label="alert-plugin definition list data",
+    )
+    definition_rows = require_list(
+        definition_list_data["definitions"],
+        label="alert-plugin definition rows",
+    )
+    assert any(
+        require_mapping(row, label="alert-plugin definition row").get("pluginName")
+        == "Script"
+        for row in definition_rows
+    )
+
     schema_payload = require_ok_payload(
         run_dsctl(
             live_repo_root,

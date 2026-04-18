@@ -286,25 +286,9 @@ def _find_schema_group(schema_data: JsonObject, group_name: str) -> JsonObject:
 
 def _find_schema_command(schema_data: JsonObject, command_action: str) -> JsonObject:
     for item in _schema_command_nodes(schema_data):
-        if item.get("kind") == "command" and item.get("action") == command_action:
-            return item
-        if item.get("kind") != "group":
-            continue
-        group_action = item.get("group_action")
-        if (
-            isinstance(group_action, dict)
-            and group_action.get("action") == command_action
-        ):
-            return _schema_group_with_single_action(
-                item,
-                group_action=require_json_object(
-                    group_action,
-                    label="schema group action",
-                ),
-            )
-        for child in _schema_group_commands(item):
-            if child.get("action") == command_action:
-                return _schema_group_with_single_action(item, command=child)
+        matched = _match_schema_command_node(item, command_action)
+        if matched is not None:
+            return matched
     message = f"Unknown schema command: {command_action}"
     raise UserInputError(
         message,
@@ -314,6 +298,30 @@ def _find_schema_command(schema_data: JsonObject, command_action: str) -> JsonOb
         },
         suggestion=("Run `dsctl schema` or pass one action value from command.action."),
     )
+
+
+def _match_schema_command_node(
+    node: JsonObject,
+    command_action: str,
+) -> JsonObject | None:
+    if node.get("kind") == "command" and node.get("action") == command_action:
+        return node
+    if node.get("kind") != "group":
+        return None
+    group_action = node.get("group_action")
+    if isinstance(group_action, dict) and group_action.get("action") == command_action:
+        return _schema_group_with_single_action(
+            node,
+            group_action=require_json_object(
+                group_action,
+                label="schema group action",
+            ),
+        )
+    for child in _schema_group_commands(node):
+        matched_child = _match_schema_command_node(child, command_action)
+        if matched_child is not None:
+            return _schema_group_with_single_action(node, command=matched_child)
+    return None
 
 
 def _schema_group_with_single_action(
@@ -456,18 +464,22 @@ def _top_level_command_schema(name: str) -> JsonObject:
 def _available_schema_command_actions(schema_data: JsonObject) -> list[str]:
     actions: list[str] = []
     for item in _schema_command_nodes(schema_data):
-        action = item.get("action")
-        if isinstance(action, str):
-            actions.append(action)
-        group_action = item.get("group_action")
-        if isinstance(group_action, dict):
-            action = group_action.get("action")
-            if isinstance(action, str):
-                actions.append(action)
-        for child in _schema_group_commands(item):
-            action = child.get("action")
-            if isinstance(action, str):
-                actions.append(action)
+        actions.extend(_schema_command_actions(item))
+    return actions
+
+
+def _schema_command_actions(node: JsonObject) -> list[str]:
+    actions: list[str] = []
+    action = node.get("action")
+    if isinstance(action, str):
+        actions.append(action)
+    group_action = node.get("group_action")
+    if isinstance(group_action, dict):
+        group_action_name = group_action.get("action")
+        if isinstance(group_action_name, str):
+            actions.append(group_action_name)
+    for child in _schema_group_commands(node):
+        actions.extend(_schema_command_actions(child))
     return actions
 
 

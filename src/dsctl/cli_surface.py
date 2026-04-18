@@ -173,6 +173,10 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
         _surface_command("update"),
         _surface_command("delete"),
         _surface_command("test"),
+        _surface_command(
+            "definition",
+            _surface_command("list"),
+        ),
     ),
     ALERT_GROUP_RESOURCE: (
         _surface_command("list"),

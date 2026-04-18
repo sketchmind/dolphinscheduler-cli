@@ -128,6 +128,11 @@ OBJECT_DEFAULTS: dict[str, tuple[str, ...]] = {
 }
 
 NESTED_ROW_SHAPES: dict[str, DataShape] = {
+    "alert-plugin.definition.list": DataShape(
+        kind="summary",
+        row_path="data.definitions",
+        default_columns=("id", "pluginName", "pluginType"),
+    ),
     "doctor": DataShape(
         kind="summary",
         row_path="data.checks",

@@ -1155,10 +1155,12 @@ class FakeUiPluginAdapter:
     plugin_defines: list[FakePluginDefine]
 
     def list(self, *, plugin_type: str) -> Sequence[FakePluginDefine]:
+        normalized_plugin_type = plugin_type.casefold()
         return [
             plugin_define
             for plugin_define in self.plugin_defines
-            if plugin_define.pluginType == plugin_type
+            if plugin_define.pluginType is not None
+            and plugin_define.pluginType.casefold() == normalized_plugin_type
         ]
 
     def get(self, *, plugin_id: int) -> FakePluginDefine:
@@ -1166,7 +1168,7 @@ class FakeUiPluginAdapter:
             if plugin_define.id == plugin_id:
                 return plugin_define
         raise ApiResultError(
-            result_code=110003,
+            result_code=110004,
             result_message=f"alert plugin define id {plugin_id} not found",
         )
 

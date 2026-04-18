@@ -190,6 +190,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
         "test",
+        "definition",
     ]
     assert data["resources"]["groups"]["alert-group"]["commands"] == [
         "list",

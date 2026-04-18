@@ -453,7 +453,17 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
         "test",
+        "definition",
     ]
+    alert_plugin_definition_group = _find_group(
+        alert_plugin_group["commands"],
+        "definition",
+    )
+    alert_plugin_definition_command_names = [
+        _require_dict(item)["name"]
+        for item in _require_list(alert_plugin_definition_group["commands"])
+    ]
+    assert alert_plugin_definition_command_names == ["list"]
 
     alert_group_group = _find_group(commands, "alert-group")
     alert_group_command_names = [
@@ -900,6 +910,26 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
         "kind": "summary",
         "row_path": "data.taskTypes",
         "default_columns": ["taskType", "taskCategory", "isCollection"],
+        "column_discovery": "runtime_row_keys",
+    }
+
+    alert_definition_result = get_schema_result(
+        command_action="alert-plugin.definition.list"
+    )
+    alert_definition_data = _require_dict(alert_definition_result.data)
+    alert_definition_group = _require_dict(
+        _require_list(alert_definition_data["commands"])[0]
+    )
+    alert_definition_subgroup = _require_dict(
+        _require_list(alert_definition_group["commands"])[0]
+    )
+    alert_definition_command = _require_dict(
+        _require_list(alert_definition_subgroup["commands"])[0]
+    )
+    assert alert_definition_command["data_shape"] == {
+        "kind": "summary",
+        "row_path": "data.definitions",
+        "default_columns": ["id", "pluginName", "pluginType"],
         "column_discovery": "runtime_row_keys",
     }
 
