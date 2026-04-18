@@ -91,6 +91,10 @@ def test_capabilities_command_returns_surface_discovery() -> None:
     }
     assert payload["data"]["output"] == {
         "standard_envelope": True,
+        "formats": ["json", "table", "tsv"],
+        "default_format": "json",
+        "data_shape_metadata": True,
+        "display_columns": True,
         "resolved_metadata": True,
         "warnings": True,
         "warning_details_alignment": True,

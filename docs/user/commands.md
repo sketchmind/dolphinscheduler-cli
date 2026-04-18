@@ -71,7 +71,7 @@ dsctl task-instance log <task_instance_id>
 
 ## Output Contract
 
-All stable commands return the standard JSON envelope:
+All stable commands return the standard JSON envelope by default:
 
 ```json
 {
@@ -86,3 +86,15 @@ All stable commands return the standard JSON envelope:
 
 Errors use a stable `error.type` and include structured details when the CLI can
 derive them without guessing.
+
+For scan-friendly terminal output, pass a global output renderer before the
+command group:
+
+```bash
+dsctl --output-format table workflow-instance list --project etl-prod
+dsctl --output-format tsv --columns id,name,state task-instance list --workflow-instance <workflow_instance_id>
+dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <workflow_instance_id>
+```
+
+Use `dsctl schema --command <ACTION>` and inspect `data_shape` to discover the
+canonical row path and default display columns for row-oriented commands.

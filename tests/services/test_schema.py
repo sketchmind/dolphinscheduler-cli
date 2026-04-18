@@ -114,6 +114,10 @@ def test_schema_result_describes_current_stable_surface() -> None:
         ],
     }
     assert data["output"] == {
+        "formats": ["json", "table", "tsv"],
+        "default_format": "json",
+        "format_option": "--output-format",
+        "columns_option": "--columns",
         "success_fields": [
             "ok",
             "action",
@@ -136,6 +140,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "error": False,
         },
         "warning_details_aligned": True,
+        "data_shape_metadata": True,
     }
 
     commands = data["commands"]
@@ -186,6 +191,13 @@ def test_schema_result_describes_current_stable_surface() -> None:
     assert _find_option(schema_options, "command")["description"] == (
         "Return schema for one stable command action."
     )
+    global_options = _require_list(data["global_options"])
+    assert _find_option(global_options, "output-format")["choices"] == [
+        "json",
+        "table",
+        "tsv",
+    ]
+    assert _find_option(global_options, "columns")["value_name"] == "CSV"
     capabilities_command = _find_command(commands, "capabilities")
     capabilities_options = _require_list(capabilities_command["options"])
     assert _find_option(capabilities_options, "summary")["default"] is False
@@ -665,6 +677,10 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "ds": EXPECTED_DS_CAPABILITIES,
         "output": {
             "standard_envelope": True,
+            "formats": ["json", "table", "tsv"],
+            "default_format": "json",
+            "data_shape_metadata": True,
+            "display_columns": True,
             "resolved_metadata": True,
             "warnings": True,
             "warning_details_alignment": True,
@@ -793,6 +809,71 @@ def test_schema_result_can_return_one_command() -> None:
     assert len(task_instance_commands) == 1
     task_instance_list = _require_dict(task_instance_commands[0])
     assert task_instance_list["action"] == "task-instance.list"
+    assert task_instance_list["data_shape"] == {
+        "kind": "page",
+        "row_path": "data.totalList",
+        "default_columns": [
+            "id",
+            "name",
+            "state",
+            "taskType",
+            "startTime",
+            "endTime",
+            "duration",
+            "host",
+        ],
+        "column_discovery": "runtime_row_keys",
+    }
+
+    workflow_instance_result = get_schema_result(
+        command_action="workflow-instance.list"
+    )
+    workflow_instance_data = _require_dict(workflow_instance_result.data)
+    workflow_instance_group = _require_dict(
+        _require_list(workflow_instance_data["commands"])[0]
+    )
+    workflow_instance_command = _require_dict(
+        _require_list(workflow_instance_group["commands"])[0]
+    )
+    assert workflow_instance_command["data_shape"] == {
+        "kind": "page",
+        "row_path": "data.totalList",
+        "default_columns": [
+            "id",
+            "name",
+            "state",
+            "scheduleTime",
+            "startTime",
+            "endTime",
+            "duration",
+            "host",
+        ],
+        "column_discovery": "runtime_row_keys",
+    }
+
+
+def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
+    workflow_result = get_schema_result(command_action="workflow.list")
+    workflow_data = _require_dict(workflow_result.data)
+    workflow_group = _require_dict(_require_list(workflow_data["commands"])[0])
+    workflow_command = _require_dict(_require_list(workflow_group["commands"])[0])
+    assert workflow_command["data_shape"] == {
+        "kind": "collection",
+        "row_path": "data",
+        "default_columns": ["code", "name", "version"],
+        "column_discovery": "runtime_row_keys",
+    }
+
+    task_type_result = get_schema_result(command_action="task-type.list")
+    task_type_data = _require_dict(task_type_result.data)
+    task_type_group = _require_dict(_require_list(task_type_data["commands"])[0])
+    task_type_command = _require_dict(_require_list(task_type_group["commands"])[0])
+    assert task_type_command["data_shape"] == {
+        "kind": "summary",
+        "row_path": "data.taskTypes",
+        "default_columns": ["taskType", "taskCategory", "isCollection"],
+        "column_discovery": "runtime_row_keys",
+    }
 
 
 def test_schema_result_can_return_one_top_level_command() -> None:

@@ -8,6 +8,8 @@ is not described here, treat it as roadmap work rather than contract.
 Current stable commands:
 
 - global option `--env-file PATH`
+- global option `--output-format {json,table,tsv}`
+- global option `--columns CSV`
 - `dsctl version`
 - `dsctl context`
 - `dsctl doctor`
@@ -108,9 +110,51 @@ Example:
 dsctl --env-file cluster.env context
 ```
 
+### `--output-format {json,table,tsv}`
+
+Controls display rendering. The default is `json`.
+
+Rules:
+
+- `json` returns the full standard JSON envelope and remains the stable machine
+  contract
+- `table` renders row-oriented data as a plain text table for terminal scanning
+- `tsv` renders the same row model as tab-separated text for shell pipelines
+- row-oriented formats use each command's `data_shape` metadata when present
+  and fall back to runtime shape inference for simple list payloads
+- global options are passed before the command group, for example:
+
+```bash
+dsctl --output-format table workflow-instance list --project etl-prod
+```
+
+### `--columns CSV`
+
+Selects display columns for `--output-format table` or `--output-format tsv`.
+
+Rules:
+
+- comma-separated values keep the requested order
+- only top-level row/object fields are selected
+- `--columns '*'` selects all top-level row fields; quote `*` so the shell does
+  not expand it as a filesystem glob
+- unknown columns are a `user_input_error` when rows are available to validate
+  against
+- `--columns` does not apply to `--output-format json`; retry with
+  `--output-format table` or `--output-format tsv`
+
+Example:
+
+```bash
+dsctl --output-format tsv --columns id,name,state,host task-instance list --workflow-instance 901
+dsctl --output-format tsv --columns '*' task-instance list --workflow-instance 901
+```
+
 ## Output Envelope
 
 Every stable command returns the standard JSON envelope from `src/dsctl/output.py`.
+This statement applies to the default `--output-format json` mode. Row-oriented
+display formats are an alternate rendering layer over the same command result.
 
 Success shape:
 
@@ -188,6 +232,17 @@ Field rules:
 - all stable warnings emitted by the CLI include aligned `warning_details`
 - every dry-run result includes one standard warning detail with code
   `dry_run_no_request_sent`
+- command schema entries may include `data_shape` metadata with a stable
+  low-entropy row model for display renderers and AI agents
+
+Current `data_shape` fields:
+
+- `kind`: one of `page`, `collection`, `object`, or `summary`
+- `row_path`: dot-path from the standard JSON envelope to the canonical row
+  collection, such as `data.totalList`
+- `default_columns`: suggested compact display columns
+- `column_discovery`: currently `runtime_row_keys`, meaning full column
+  discovery comes from the JSON row payload
 
 ## `dsctl version`
 
@@ -307,6 +362,8 @@ Current guarantees:
 - `schema_version` changes for breaking schema changes; additive fields may
   appear within the same version
 - is tested against the actual registered command tree
+- command entries that expose row-oriented output include `data_shape`; this is
+  the authoritative row model for `--output-format table|tsv`
 
 ## `dsctl capabilities`
 

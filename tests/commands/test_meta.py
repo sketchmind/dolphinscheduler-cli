@@ -26,6 +26,27 @@ def test_version_command_reports_cli_and_ds_versions() -> None:
     }
 
 
+def test_version_command_can_render_tsv_columns() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "tsv", "--columns", "cli,ds,family", "version"],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout == ("cli\tds\tfamily\n0.1.0\t3.4.1\tworkflow-3.3-plus\n")
+
+
+def test_columns_require_row_oriented_format() -> None:
+    result = runner.invoke(app, ["--columns", "cli,ds", "version"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["message"] == (
+        "--columns requires --output-format table or --output-format tsv"
+    )
+
+
 def test_version_command_honors_env_file_ds_version() -> None:
     with runner.isolated_filesystem():
         Path("cluster.env").write_text("DS_VERSION=3.3.2\n", encoding="utf-8")

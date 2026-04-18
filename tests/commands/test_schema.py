@@ -92,6 +92,10 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         },
     }
     assert payload["data"]["output"] == {
+        "formats": ["json", "table", "tsv"],
+        "default_format": "json",
+        "format_option": "--output-format",
+        "columns_option": "--columns",
         "success_fields": [
             "ok",
             "action",
@@ -114,6 +118,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
             "error": False,
         },
         "warning_details_aligned": True,
+        "data_shape_metadata": True,
     }
     assert payload["data"]["capabilities"]["monitor"] == {
         "health": True,

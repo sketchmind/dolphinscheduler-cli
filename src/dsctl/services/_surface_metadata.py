@@ -143,6 +143,10 @@ def error_capabilities_data() -> dict[str, object]:
 def output_schema_data() -> dict[str, object]:
     """Return the schema-scoped standard output envelope contract."""
     return {
+        "formats": ["json", "table", "tsv"],
+        "default_format": "json",
+        "format_option": "--output-format",
+        "columns_option": "--columns",
         "success_fields": list(OUTPUT_SUCCESS_FIELDS),
         "error_fields": list(OUTPUT_ERROR_FIELDS),
         "ok_values": {
@@ -150,6 +154,7 @@ def output_schema_data() -> dict[str, object]:
             "error": False,
         },
         "warning_details_aligned": True,
+        "data_shape_metadata": True,
     }
 
 
@@ -157,6 +162,10 @@ def output_capabilities_data() -> dict[str, object]:
     """Return the capabilities-scoped standard output support flags."""
     return {
         "standard_envelope": True,
+        "formats": ["json", "table", "tsv"],
+        "default_format": "json",
+        "data_shape_metadata": True,
+        "display_columns": True,
         "resolved_metadata": True,
         "warnings": True,
         "warning_details_alignment": True,

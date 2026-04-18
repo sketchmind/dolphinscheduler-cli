@@ -40,6 +40,7 @@ from dsctl.cli_surface import (
 from dsctl.config import load_selected_ds_version
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult, require_json_object
+from dsctl.services._data_shapes import data_shape_schema_for_action
 from dsctl.services._schema_groups_context import (
     project_group as _project_group,
 )
@@ -184,6 +185,13 @@ def get_schema_result(
 def _schema_data(*, ds_version: str) -> dict[str, object]:
     task_types = list(supported_task_template_types())
     command_groups = _command_groups(task_types)
+    commands = [
+        require_json_object(command_data, label="schema command data")
+        for command_data in (
+            *(_top_level_command_schema(name) for name in TOP_LEVEL_COMMANDS),
+            *(command_groups[name] for name in COMMAND_GROUPS),
+        )
+    ]
     return {
         "schema_version": 1,
         "cli": {
@@ -201,17 +209,34 @@ def _schema_data(*, ds_version: str) -> dict[str, object]:
                     "environment."
                 ),
                 value_name="PATH",
-            )
+            ),
+            _option(
+                "output-format",
+                value_type="string",
+                description=(
+                    "Render output as json, table, or tsv. json keeps the full "
+                    "standard envelope."
+                ),
+                default="json",
+                choices=["json", "table", "tsv"],
+                value_name="FORMAT",
+            ),
+            _option(
+                "columns",
+                value_type="string",
+                description=(
+                    "Comma-separated display columns for --output-format table or "
+                    "--output-format tsv."
+                ),
+                value_name="CSV",
+            ),
         ],
         "selection": selection_schema_data(),
         "output": output_schema_data(),
         "errors": error_schema_data(),
         "confirmation": confirmation_schema_data(),
         "capabilities": schema_capabilities_data(ds_version=ds_version),
-        "commands": [
-            *(_top_level_command_schema(name) for name in TOP_LEVEL_COMMANDS),
-            *(command_groups[name] for name in COMMAND_GROUPS),
-        ],
+        "commands": _annotate_command_data_shapes(commands),
     }
 
 
@@ -320,6 +345,51 @@ def _schema_group_commands(group_data: JsonObject) -> list[JsonObject]:
     return [
         require_json_object(item, label="schema group command") for item in commands
     ]
+
+
+def _annotate_command_data_shapes(
+    commands: list[JsonObject],
+) -> list[JsonObject]:
+    return [
+        _annotate_command_node_data_shape(command_node) for command_node in commands
+    ]
+
+
+def _annotate_command_node_data_shape(command_node: JsonObject) -> JsonObject:
+    annotated = dict(command_node)
+    action = annotated.get("action")
+    if isinstance(action, str):
+        shape = data_shape_schema_for_action(action)
+        if shape is not None:
+            annotated["data_shape"] = require_json_object(
+                shape,
+                label="schema data shape",
+            )
+    group_action = annotated.get("group_action")
+    if isinstance(group_action, dict):
+        group_action_data = require_json_object(
+            group_action,
+            label="schema group action",
+        )
+        group_action_name = group_action_data.get("action")
+        if isinstance(group_action_name, str):
+            shape = data_shape_schema_for_action(group_action_name)
+            if shape is not None:
+                group_action_copy = dict(group_action_data)
+                group_action_copy["data_shape"] = require_json_object(
+                    shape,
+                    label="schema data shape",
+                )
+                annotated["group_action"] = group_action_copy
+    commands_value = annotated.get("commands")
+    if isinstance(commands_value, list):
+        annotated["commands"] = [
+            _annotate_command_node_data_shape(
+                require_json_object(item, label="schema nested command")
+            )
+            for item in commands_value
+        ]
+    return annotated
 
 
 def _top_level_command_schema(name: str) -> JsonObject:
