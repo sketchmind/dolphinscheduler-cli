@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated
 
 import typer
 
@@ -8,7 +8,6 @@ from dsctl.cli_runtime import AppState, set_app_state
 from dsctl.commands.registry import register_all_commands
 from dsctl.errors import UserInputError
 from dsctl.output_formats import (
-    OUTPUT_FORMAT_CHOICES,
     OutputFormat,
     RenderOptions,
     parse_columns,
@@ -69,11 +68,7 @@ def main_callback(
     ] = None,
 ) -> None:
     """Initialize shared command state."""
-    normalized_format = output_format.lower()
-    if normalized_format not in OUTPUT_FORMAT_CHOICES:
-        message = f"Unsupported output format: {output_format}"
-        raise typer.BadParameter(message)
-    format_choice: OutputFormat = cast("OutputFormat", normalized_format)
+    format_choice = _parse_output_format(output_format)
     try:
         parsed_columns = parse_columns(columns)
     except UserInputError as exc:
@@ -99,6 +94,19 @@ def main() -> None:
 
 
 register_all_commands(app)
+
+
+def _parse_output_format(value: str) -> OutputFormat:
+    """Parse one Typer string option into the stable output-format literal."""
+    normalized = value.lower()
+    if normalized == "json":
+        return "json"
+    if normalized == "table":
+        return "table"
+    if normalized == "tsv":
+        return "tsv"
+    message = f"Unsupported output format: {value}"
+    raise typer.BadParameter(message)
 
 
 def _misplaced_root_option(args: list[str]) -> str | None:
