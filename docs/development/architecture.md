@@ -29,6 +29,7 @@ The current stable CLI surface is:
 - `dsctl doctor`
 - `dsctl schema`
 - `dsctl capabilities`
+- `dsctl enum names`
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
 - `dsctl task-type list`

@@ -11,6 +11,11 @@ def enum_group() -> dict[str, object]:
         summary="Discover generated DolphinScheduler enums.",
         commands=[
             command(
+                "names",
+                action="enum.names",
+                summary="List supported generated enum discovery names.",
+            ),
+            command(
                 "list",
                 action="enum.list",
                 summary="List the members of one supported generated enum.",
@@ -20,9 +25,10 @@ def enum_group() -> dict[str, object]:
                         value_type="string",
                         description="Stable enum discovery name.",
                         choices=supported_enum_choices(),
+                        discovery_command="dsctl enum names",
                     )
                 ],
-            )
+            ),
         ],
     )
 

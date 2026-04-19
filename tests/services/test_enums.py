@@ -3,7 +3,11 @@ from pathlib import Path
 import pytest
 
 from dsctl.errors import UserInputError
-from dsctl.services.enums import list_enum_result, supported_enum_choices
+from dsctl.services.enums import (
+    list_enum_names_result,
+    list_enum_result,
+    supported_enum_choices,
+)
 
 
 def _mapping(value: object) -> dict[str, object]:
@@ -57,6 +61,21 @@ def test_list_enum_result_returns_generated_enum_members() -> None:
             },
         ],
     }
+
+
+def test_list_enum_names_result_returns_supported_enum_names() -> None:
+    result = list_enum_names_result()
+    data = result.data
+
+    assert isinstance(data, list)
+
+    assert result.resolved == {
+        "enum": {
+            "ds_version": "3.4.1",
+            "count": len(data),
+        }
+    }
+    assert {"name": "priority", "list_command": "dsctl enum list priority"} in data
 
 
 def test_list_enum_result_resolves_class_name_alias() -> None:

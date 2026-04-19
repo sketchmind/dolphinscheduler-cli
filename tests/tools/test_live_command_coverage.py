@@ -10,6 +10,7 @@ LIVE_DIR = REPO_ROOT / "tests/live"
 LOCAL_ONLY_COMMANDS = {
     "capabilities",
     "context",
+    "enum names",
     "enum list",
     "lint workflow",
     "schema",

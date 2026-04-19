@@ -142,13 +142,28 @@ def get_schema_result(
     env_file: str | None = None,
     group: str | None = None,
     command_action: str | None = None,
+    list_groups: bool = False,
+    list_commands: bool = False,
 ) -> CommandResult:
     """Return the stable machine-readable CLI schema for the current surface."""
-    if group is not None and command_action is not None:
-        message = "--group and --command are mutually exclusive"
+    scope_count = sum(
+        (
+            group is not None,
+            command_action is not None,
+            list_groups,
+            list_commands,
+        )
+    )
+    if scope_count > 1:
+        message = (
+            "--group, --command, --list-groups, and --list-commands are "
+            "mutually exclusive"
+        )
         raise UserInputError(
             message,
-            suggestion="Pass either --group GROUP or --command ACTION, not both.",
+            suggestion=(
+                "Pass only one schema scope option, or omit them for the full schema."
+            ),
         )
     selected_ds_version = load_selected_ds_version(env_file)
     data = require_json_object(
@@ -164,6 +179,26 @@ def get_schema_result(
                 "schema": {
                     "view": "group",
                     "group": normalized_group,
+                }
+            },
+        )
+    if list_groups:
+        return CommandResult(
+            data=_schema_group_discovery_rows(data),
+            resolved={
+                "schema": {
+                    "view": "groups",
+                    "next": "dsctl schema --group GROUP",
+                }
+            },
+        )
+    if list_commands:
+        return CommandResult(
+            data=_schema_command_discovery_rows(data),
+            resolved={
+                "schema": {
+                    "view": "commands",
+                    "next": "dsctl schema --command ACTION",
                 }
             },
         )
@@ -265,6 +300,83 @@ def _schema_header(schema_data: JsonObject) -> JsonObject:
     return {key: schema_data[key] for key in SCOPED_SCHEMA_HEADER_KEYS}
 
 
+def _schema_group_discovery_rows(schema_data: JsonObject) -> list[JsonObject]:
+    rows: list[JsonObject] = []
+    for item in _schema_command_nodes(schema_data):
+        if item.get("kind") != "group":
+            continue
+        name = item.get("name")
+        if not isinstance(name, str):
+            continue
+        rows.append(
+            {
+                "name": name,
+                "summary": str(item.get("summary", "")),
+                "command_count": len(_schema_group_commands(item)),
+                "schema_command": f"dsctl schema --group {name}",
+            }
+        )
+    return rows
+
+
+def _schema_command_discovery_rows(schema_data: JsonObject) -> list[JsonObject]:
+    rows: list[JsonObject] = []
+    for item in _schema_command_nodes(schema_data):
+        rows.extend(_schema_command_discovery_rows_from_node(item, group_name=None))
+    return rows
+
+
+def _schema_command_discovery_rows_from_node(
+    node: JsonObject,
+    *,
+    group_name: str | None,
+) -> list[JsonObject]:
+    if node.get("kind") == "command":
+        action = node.get("action")
+        if not isinstance(action, str):
+            return []
+        return [
+            {
+                "action": action,
+                "group": group_name,
+                "name": str(node.get("name", "")),
+                "summary": str(node.get("summary", "")),
+                "schema_command": f"dsctl schema --command {action}",
+            }
+        ]
+    if node.get("kind") != "group":
+        return []
+
+    current_group_name = group_name
+    node_name = node.get("name")
+    if current_group_name is None and isinstance(node_name, str):
+        current_group_name = node_name
+
+    rows: list[JsonObject] = []
+    group_action = node.get("group_action")
+    if isinstance(group_action, dict):
+        action_data = require_json_object(group_action, label="schema group action")
+        action = action_data.get("action")
+        if isinstance(action, str):
+            rows.append(
+                {
+                    "action": action,
+                    "group": current_group_name,
+                    "name": str(node.get("name", "")),
+                    "summary": str(action_data.get("summary", "")),
+                    "schema_command": f"dsctl schema --command {action}",
+                }
+            )
+    for child in _schema_group_commands(node):
+        rows.extend(
+            _schema_command_discovery_rows_from_node(
+                child,
+                group_name=current_group_name,
+            )
+        )
+    return rows
+
+
 def _find_schema_group(schema_data: JsonObject, group_name: str) -> JsonObject:
     for item in _schema_command_nodes(schema_data):
         if item.get("kind") == "group" and item.get("name") == group_name:
@@ -278,9 +390,7 @@ def _find_schema_group(schema_data: JsonObject, group_name: str) -> JsonObject:
     raise UserInputError(
         message,
         details={"group": group_name, "available_groups": available_groups},
-        suggestion=(
-            "Run `dsctl schema` or pass one group name from data.commands[].name."
-        ),
+        suggestion="Run `dsctl schema --list-groups` to choose a group name.",
     )
 
 
@@ -296,7 +406,7 @@ def _find_schema_command(schema_data: JsonObject, command_action: str) -> JsonOb
             "command": command_action,
             "available_commands": _available_schema_command_actions(schema_data),
         },
-        suggestion=("Run `dsctl schema` or pass one action value from command.action."),
+        suggestion="Run `dsctl schema --list-commands` to choose a command action.",
     )
 
 
@@ -413,16 +523,31 @@ def _top_level_command_schema(name: str) -> JsonObject:
                         "group",
                         value_type="string",
                         description=(
-                            "Return schema for one command group. Values come "
-                            "from `dsctl capabilities --summary` "
-                            "data.resources.groups keys or full schema "
-                            "data.commands[].name."
+                            "Return schema for one command group. Discover "
+                            "values with `dsctl schema --list-groups`."
                         ),
+                        discovery_command="dsctl schema --list-groups",
                     ),
                     _option(
                         "command",
                         value_type="string",
-                        description="Return schema for one stable command action.",
+                        description=(
+                            "Return schema for one stable command action. "
+                            "Discover values with `dsctl schema --list-commands`."
+                        ),
+                        discovery_command="dsctl schema --list-commands",
+                    ),
+                    _option(
+                        "list-groups",
+                        value_type="boolean",
+                        description="List valid values for --group.",
+                        default=False,
+                    ),
+                    _option(
+                        "list-commands",
+                        value_type="boolean",
+                        description="List valid values for --command.",
+                        default=False,
                     ),
                 ],
             ),

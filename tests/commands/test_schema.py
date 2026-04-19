@@ -186,6 +186,39 @@ def test_schema_command_returns_command_scope() -> None:
     ]
 
 
+def test_schema_command_can_list_group_and_command_values() -> None:
+    groups_result = runner.invoke(app, ["schema", "--list-groups"])
+
+    assert groups_result.exit_code == 0
+    groups_payload = json.loads(groups_result.stdout)
+    assert groups_payload["resolved"]["schema"]["view"] == "groups"
+    assert groups_payload["data"][0]["schema_command"] == "dsctl schema --group use"
+
+    commands_result = runner.invoke(app, ["schema", "--list-commands"])
+
+    assert commands_result.exit_code == 0
+    commands_payload = json.loads(commands_result.stdout)
+    assert commands_payload["resolved"]["schema"]["view"] == "commands"
+    assert commands_payload["data"][0]["group"] is None
+    assert any(
+        item["action"] == "datasource.create"
+        and item["schema_command"] == "dsctl schema --command datasource.create"
+        for item in commands_payload["data"]
+    )
+
+
+def test_schema_command_list_values_render_as_table_rows() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "schema", "--list-groups"],
+    )
+
+    assert result.exit_code == 0
+    assert "name" in result.stdout
+    assert "schema_command" in result.stdout
+    assert "dsctl schema --group use" in result.stdout
+
+
 def test_schema_command_datasource_create_uses_payload_reference() -> None:
     result = runner.invoke(app, ["schema", "--command", "datasource.create"])
 

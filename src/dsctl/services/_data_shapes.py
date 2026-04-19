@@ -85,6 +85,7 @@ PAGE_LIST_DEFAULTS: dict[str, tuple[str, ...]] = {
 COLLECTION_DEFAULTS: dict[str, tuple[str, ...]] = {
     "audit.model-types": ("name",),
     "audit.operation-types": ("name",),
+    "enum.names": ("name", "list_command"),
     "monitor.database": ("dbType", "state", "threadsConnections", "date"),
     "monitor.server": ("id", "host", "port", "lastHeartbeatTime"),
     "namespace.available": ("id", "namespace", "clusterName"),

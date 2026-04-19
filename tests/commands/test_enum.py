@@ -7,6 +7,27 @@ from dsctl.app import app
 runner = CliRunner()
 
 
+def test_enum_names_command_returns_supported_enum_names() -> None:
+    result = runner.invoke(app, ["enum", "names"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "enum.names"
+    assert "view" not in payload["resolved"]["enum"]
+    assert {"name": "priority", "list_command": "dsctl enum list priority"} in (
+        payload["data"]
+    )
+
+
+def test_enum_names_command_can_render_table_rows() -> None:
+    result = runner.invoke(app, ["--output-format", "table", "enum", "names"])
+
+    assert result.exit_code == 0
+    assert "name" in result.stdout
+    assert "list_command" in result.stdout
+    assert "dsctl enum list priority" in result.stdout
+
+
 def test_enum_list_command_returns_enum_members() -> None:
     result = runner.invoke(app, ["enum", "list", "priority"])
 
@@ -35,6 +56,5 @@ def test_enum_list_command_rejects_unknown_enum() -> None:
     assert payload["action"] == "enum.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Run `capabilities` and inspect `data.enums.names` to choose a "
-        "supported enum name."
+        "Run `dsctl enum names` to choose a supported enum name."
     )

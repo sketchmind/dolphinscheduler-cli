@@ -15,13 +15,16 @@ full payload is unnecessary:
 ```bash
 dsctl capabilities --summary
 dsctl capabilities --section runtime
+dsctl schema --list-groups
+dsctl schema --list-commands
 dsctl schema --group task-instance
 dsctl schema --command task-instance.list
+dsctl enum names
 ```
 
-`schema --group` values are the command group names exposed by
-`dsctl capabilities --summary` at `data.resources.groups` and by full schema
-`data.commands[].name`.
+`schema --group` values come from `dsctl schema --list-groups`.
+`schema --command` values come from `dsctl schema --list-commands`.
+`enum list ENUM` values come from `dsctl enum names`.
 
 ## Discovery
 
@@ -30,9 +33,12 @@ dsctl version
 dsctl context
 dsctl doctor
 dsctl schema
+dsctl schema --list-groups
+dsctl schema --list-commands
 dsctl schema --command task-instance.list
 dsctl capabilities
 dsctl capabilities --summary
+dsctl enum names
 dsctl enum list WorkflowExecutionStatus
 ```
 
@@ -42,6 +48,7 @@ dsctl enum list WorkflowExecutionStatus
 dsctl project list
 dsctl env list
 dsctl datasource list
+dsctl schema --command datasource.create
 dsctl template datasource --type MYSQL
 dsctl resource list /
 dsctl worker-group list

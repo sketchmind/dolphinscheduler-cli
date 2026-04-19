@@ -230,7 +230,7 @@ def test_list_alert_plugin_definitions_result_returns_supported_definitions(
     }
     data = _mapping(result.data)
     assert data["count"] == 1
-    assert data["schemaCommand"] == "alert-plugin schema PLUGIN"
+    assert data["schema_command"] == "alert-plugin schema PLUGIN"
     assert data["definitions"] == [
         {
             "id": 3,

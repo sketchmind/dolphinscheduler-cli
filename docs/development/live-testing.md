@@ -291,7 +291,7 @@ future.
 | --- | --- | --- | --- |
 | meta | `version`, `context` | No | local metadata and merged local context |
 | schema | `schema`, `capabilities` | No | static CLI self-description |
-| enum | `enum list` | No | generated enum metadata |
+| enum | `enum names`, `enum list` | No | generated enum metadata |
 | use | `use project|workflow|--clear` | No | local context persistence |
 | lint | `lint workflow FILE` | No | local validation only |
 | template | `template workflow|params|datasource|task` | No | local template rendering |

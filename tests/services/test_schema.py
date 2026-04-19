@@ -189,13 +189,21 @@ def test_schema_result_describes_current_stable_surface() -> None:
     schema_command = _find_command(commands, "schema")
     schema_options = _require_list(schema_command["options"])
     assert _find_option(schema_options, "group")["description"] == (
-        "Return schema for one command group. Values come from "
-        "`dsctl capabilities --summary` data.resources.groups keys or full "
-        "schema data.commands[].name."
+        "Return schema for one command group. Discover values with "
+        "`dsctl schema --list-groups`."
+    )
+    assert _find_option(schema_options, "group")["discovery_command"] == (
+        "dsctl schema --list-groups"
     )
     assert _find_option(schema_options, "command")["description"] == (
-        "Return schema for one stable command action."
+        "Return schema for one stable command action. Discover values with "
+        "`dsctl schema --list-commands`."
     )
+    assert _find_option(schema_options, "command")["discovery_command"] == (
+        "dsctl schema --list-commands"
+    )
+    assert _find_option(schema_options, "list-groups")["default"] is False
+    assert _find_option(schema_options, "list-commands")["default"] is False
     global_options = _require_list(data["global_options"])
     assert _find_option(global_options, "output-format")["choices"] == [
         "json",
@@ -250,11 +258,11 @@ def test_schema_result_describes_current_stable_surface() -> None:
     enum_command_names = [
         _require_dict(item)["name"] for item in _require_list(enum_group["commands"])
     ]
-    assert enum_command_names == ["list"]
+    assert enum_command_names == ["names", "list"]
     enum_list = _find_command(enum_group["commands"], "list")
-    enum_arguments = _require_list(enum_list["arguments"])
-    first_enum_argument = _require_dict(enum_arguments[0])
-    enum_choices = _require_list(first_enum_argument["choices"])
+    enum_argument = _require_dict(_require_list(enum_list["arguments"])[0])
+    assert enum_argument["discovery_command"] == "dsctl enum names"
+    enum_choices = _require_list(enum_argument["choices"])
     assert "priority" in enum_choices
     assert "resource-type" in enum_choices
 
@@ -957,6 +965,59 @@ def test_schema_result_can_return_one_command() -> None:
     }
 
 
+def test_schema_result_can_list_group_and_command_discovery_rows() -> None:
+    groups_result = get_schema_result(list_groups=True)
+    groups_data = _require_list(groups_result.data)
+    first_group = _require_dict(groups_data[0])
+
+    assert groups_result.resolved == {
+        "schema": {
+            "view": "groups",
+            "next": "dsctl schema --group GROUP",
+        }
+    }
+    assert first_group == {
+        "name": "use",
+        "summary": "Set or clear persisted CLI context.",
+        "command_count": 2,
+        "schema_command": "dsctl schema --group use",
+    }
+
+    commands_result = get_schema_result(list_commands=True)
+    commands_data = _require_list(commands_result.data)
+    version_command = next(
+        _require_dict(item)
+        for item in commands_data
+        if _require_dict(item)["action"] == "version"
+    )
+    datasource_create = next(
+        _require_dict(item)
+        for item in commands_data
+        if _require_dict(item)["action"] == "datasource.create"
+    )
+
+    assert commands_result.resolved == {
+        "schema": {
+            "view": "commands",
+            "next": "dsctl schema --command ACTION",
+        }
+    }
+    assert version_command == {
+        "action": "version",
+        "group": None,
+        "name": "version",
+        "summary": "Return CLI and supported DolphinScheduler version metadata.",
+        "schema_command": "dsctl schema --command version",
+    }
+    assert datasource_create == {
+        "action": "datasource.create",
+        "group": "datasource",
+        "name": "create",
+        "summary": "Create one datasource from a JSON payload file.",
+        "schema_command": "dsctl schema --command datasource.create",
+    }
+
+
 def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
     workflow_result = get_schema_result(command_action="workflow.list")
     workflow_data = _require_dict(workflow_result.data)
@@ -1047,6 +1108,9 @@ def test_schema_result_rejects_conflicting_scope_options() -> None:
     with pytest.raises(UserInputError, match="mutually exclusive"):
         get_schema_result(group="workflow", command_action="workflow.run")
 
+    with pytest.raises(UserInputError, match="mutually exclusive"):
+        get_schema_result(group="workflow", list_groups=True)
+
 
 def test_schema_result_rejects_unknown_group() -> None:
     with pytest.raises(UserInputError, match="Unknown schema group") as exc_info:
@@ -1056,6 +1120,9 @@ def test_schema_result_rejects_unknown_group() -> None:
     available_groups = exc_info.value.details["available_groups"]
     assert isinstance(available_groups, list)
     assert "task-instance" in available_groups
+    assert exc_info.value.suggestion == (
+        "Run `dsctl schema --list-groups` to choose a group name."
+    )
 
 
 def test_schema_result_rejects_unknown_command() -> None:
@@ -1066,6 +1133,9 @@ def test_schema_result_rejects_unknown_command() -> None:
     available_commands = exc_info.value.details["available_commands"]
     assert isinstance(available_commands, list)
     assert "task-instance.list" in available_commands
+    assert exc_info.value.suggestion == (
+        "Run `dsctl schema --list-commands` to choose a command action."
+    )
 
 
 def test_schema_result_describes_group_level_use_clear_action() -> None:

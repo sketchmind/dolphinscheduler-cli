@@ -15,6 +15,7 @@ Current stable commands:
 - `dsctl doctor`
 - `dsctl schema`
 - `dsctl capabilities`
+- `dsctl enum names`
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
 - `dsctl task-type list`
@@ -331,21 +332,31 @@ Options:
 
 - `--group GROUP`
 - `--command ACTION`
+- `--list-groups`
+- `--list-commands`
 
 Selection rules:
 
-- omit both options to return the full schema, including `capabilities`
+- omit all scope options to return the full schema, including `capabilities`
 - `--group` returns one command-group schema by stable group name such as
   `task-instance`
-- `--group` values come from `dsctl capabilities --summary`
-  `data.resources.groups` keys, or from full schema `data.commands[].name`
+- `--group` values come from `dsctl schema --list-groups`
 - `--command` returns one command schema by stable action such as
   `task-instance.list` or `version`
-- `--group` and `--command` are mutually exclusive
+- `--command` values come from `dsctl schema --list-commands`
+- `--list-groups` returns compact rows with `name`, `summary`,
+  `command_count`, and `schema_command`
+- `--list-commands` returns compact rows with `action`, `group`, `name`,
+  `summary`, and `schema_command`
+- `--list-commands` uses `group: null` for root-level commands such as
+  `version`
+- `--group`, `--command`, `--list-groups`, and `--list-commands` are mutually
+  exclusive
 - scoped schema payloads keep the standard schema header and `commands` tree
   shape but omit `capabilities`; use `dsctl capabilities` for feature
   discovery
-- scoped schema `resolved.schema.view` is `group` or `command`
+- scoped schema `resolved.schema.view` is `group`, `command`, `groups`, or
+  `commands`
 
 Current `data` fields:
 
@@ -370,12 +381,16 @@ Current guarantees:
 - includes the standard success/error envelope contract
 - includes the stable structured error envelope and `error.source` contract
 - command arguments and options may include additive metadata such as
-  `choices`, `examples`, and `supported_keys` when the CLI can expose a
-  tighter contract for composite inputs
+  `choices`, `examples`, `supported_keys`, and `discovery_command` when the
+  CLI can expose a tighter contract for composite inputs
+- command entries that accept file payloads may include compact `payload`
+  metadata; when present, `payload.template_command` is the preferred
+  progressive-discovery command for a concrete payload template
 - includes task template type and variant discovery under
   `capabilities.templates.task`
-- `--group` and `--command` are additive scoped views over the same command
-  tree, not a different schema mode
+- `--group`, `--command`, `--list-groups`, and `--list-commands` are additive
+  scoped or discovery views over the same command tree, not a different schema
+  mode
 - `schema_version` changes for breaking schema changes; additive fields may
   appear within the same version
 - is tested against the actual registered command tree
@@ -515,14 +530,31 @@ Current `data` fields:
 - `checks`
 - `diagnostics`
 
+## `dsctl enum names`
+
+Returns compact discovery rows for generated enum names supported by the
+current selected DS contract.
+
+Rules:
+
+- this command is local-only and does not require DS connectivity
+- each row includes the stable enum discovery name and the corresponding
+  `dsctl enum list` command
+- schema entries that require an enum discovery name should point to this
+  command with `discovery_command`
+
+Successful output returns a list of rows with:
+
+- `name`
+- `list_command`
+
 ## `dsctl enum list ENUM`
 
 Returns one generated enum and its members for the current supported DS version.
 
 Rules:
 
-- `ENUM` uses the stable enum discovery names exposed by `dsctl schema` and
-  `dsctl capabilities`
+- `ENUM` uses the stable enum discovery names exposed by `dsctl enum names`
 - class-name aliases such as `ReleaseState` are also accepted
 - enum member metadata is projected from generated enum attributes and kept
   under `members[].attributes`
@@ -1799,7 +1831,7 @@ Current definition list payload fields:
 
 - `definitions`
 - `count`
-- `schemaCommand`
+- `schema_command`
 
 Current definition row fields:
 

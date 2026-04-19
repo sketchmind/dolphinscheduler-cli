@@ -115,7 +115,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "project",
         "workflow",
     ]
-    assert data["resources"]["groups"]["enum"]["commands"] == ["list"]
+    assert data["resources"]["groups"]["enum"]["commands"] == ["names", "list"]
     assert data["resources"]["groups"]["lint"]["commands"] == ["workflow"]
     assert data["resources"]["groups"]["task-type"]["commands"] == ["list"]
     assert data["resources"]["groups"]["template"]["commands"] == [

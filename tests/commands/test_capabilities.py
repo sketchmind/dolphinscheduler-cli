@@ -62,7 +62,10 @@ def test_capabilities_command_returns_surface_discovery() -> None:
         "project",
         "workflow",
     ]
-    assert payload["data"]["resources"]["groups"]["enum"]["commands"] == ["list"]
+    assert payload["data"]["resources"]["groups"]["enum"]["commands"] == [
+        "names",
+        "list",
+    ]
     assert payload["data"]["resources"]["groups"]["task-type"]["commands"] == ["list"]
     assert payload["data"]["resources"]["groups"]["template"]["commands"] == [
         "workflow",

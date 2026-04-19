@@ -112,6 +112,7 @@ def argument(
     required: bool = True,
     selector: str | None = None,
     choices: Sequence[object] | None = None,
+    discovery_command: str | None = None,
 ) -> dict[str, object]:
     """Build one schema positional-argument payload."""
     data: dict[str, object] = {
@@ -125,6 +126,8 @@ def argument(
         data["selector"] = selector
     if choices is not None:
         data["choices"] = list(choices)
+    if discovery_command is not None:
+        data["discovery_command"] = discovery_command
     return data
 
 
@@ -141,6 +144,7 @@ def option(
     multiple: bool = False,
     examples: Sequence[str] | None = None,
     supported_keys: Sequence[str] | None = None,
+    discovery_command: str | None = None,
 ) -> dict[str, object]:
     """Build one schema option payload."""
     data: dict[str, object] = {
@@ -165,4 +169,6 @@ def option(
         data["examples"] = list(examples)
     if supported_keys is not None:
         data["supported_keys"] = list(supported_keys)
+    if discovery_command is not None:
+        data["discovery_command"] = discovery_command
     return data

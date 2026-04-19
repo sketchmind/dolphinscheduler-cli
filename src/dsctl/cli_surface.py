@@ -97,7 +97,7 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
         _surface_command(PROJECT_RESOURCE),
         _surface_command(WORKFLOW_RESOURCE),
     ),
-    ENUM_RESOURCE: (_surface_command("list"),),
+    ENUM_RESOURCE: (_surface_command("names"), _surface_command("list")),
     LINT_RESOURCE: (_surface_command("workflow"),),
     ENV_RESOURCE: (
         _surface_command("list"),

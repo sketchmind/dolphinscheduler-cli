@@ -103,7 +103,7 @@ class PluginDefinitionListData(TypedDict):
 
     definitions: list[PluginDefineListItemData]
     count: int
-    schemaCommand: str
+    schema_command: str
 
 
 PluginParamItem: TypeAlias = dict[str, StructuredDataValue]
@@ -375,7 +375,7 @@ def _list_alert_plugin_definitions_result(runtime: ServiceRuntime) -> CommandRes
             PluginDefinitionListData(
                 definitions=definitions,
                 count=len(definitions),
-                schemaCommand="alert-plugin schema PLUGIN",
+                schema_command="alert-plugin schema PLUGIN",
             ),
             label="alert-plugin definition list data",
         ),

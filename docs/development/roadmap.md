@@ -363,7 +363,7 @@ surface.
 - [x] `dsctl lint` for local workflow design-time checks
 - [x] `dsctl doctor` for runtime and governance diagnostics
 - [x] `dsctl schema` — JSON tool definition output for the current stable surface
-- [x] `dsctl enum list <enum>` — enum value discovery
+- [x] `dsctl enum names`, `dsctl enum list <enum>` — enum value discovery
 - [x] `dsctl task-type list` — live DS task-type discovery with favourite flags
 - [x] audit log inspection and audit filter metadata discovery
 - [x] workflow lineage inspection and dependent-task discovery
