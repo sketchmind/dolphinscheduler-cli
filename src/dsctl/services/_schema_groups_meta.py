@@ -37,10 +37,7 @@ def task_type_group() -> dict[str, object]:
     """Build the task-type command group schema."""
     return group(
         "task-type",
-        summary=(
-            "List live DS task-type catalog for the configured cluster and "
-            "current user."
-        ),
+        summary="Discover DS task types and local task authoring contracts.",
         commands=[
             command(
                 "list",
@@ -49,7 +46,38 @@ def task_type_group() -> dict[str, object]:
                     "List live DS task types, categories, favourite flags, and "
                     "CLI authoring coverage."
                 ),
-            )
+            ),
+            command(
+                "get",
+                action="task-type.get",
+                summary="Summarize the local authoring contract for one task type.",
+                arguments=[
+                    argument(
+                        "task_type",
+                        value_type="string",
+                        description="Task type to inspect.",
+                        discovery_command="dsctl template task",
+                    )
+                ],
+            ),
+            command(
+                "schema",
+                action="task-type.schema",
+                summary=(
+                    "Print the full local authoring schema for one task type, "
+                    "including fields, state rules, choices, and compile mapping."
+                ),
+                arguments=[
+                    argument(
+                        "task_type",
+                        value_type="string",
+                        description=(
+                            "Task type whose authoring schema should be printed."
+                        ),
+                        discovery_command="dsctl template task",
+                    )
+                ],
+            ),
         ],
     )
 

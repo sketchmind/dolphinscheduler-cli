@@ -120,7 +120,11 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     ]
     assert data["resources"]["groups"]["enum"]["commands"] == ["names", "list"]
     assert data["resources"]["groups"]["lint"]["commands"] == ["workflow"]
-    assert data["resources"]["groups"]["task-type"]["commands"] == ["list"]
+    assert data["resources"]["groups"]["task-type"]["commands"] == [
+        "list",
+        "get",
+        "schema",
+    ]
     assert data["resources"]["groups"]["template"]["commands"] == [
         "workflow",
         "params",
@@ -308,6 +312,8 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "environment_config_template": True,
         "cluster_config_template": True,
         "datasource_payload_templates": True,
+        "task_authoring_schema": True,
+        "task_authoring_schema_command_pattern": "dsctl task-type schema TYPE",
         "datasource_template_types": EXPECTED_DATASOURCE_TEMPLATE_INDEX[
             "supported_types"
         ],

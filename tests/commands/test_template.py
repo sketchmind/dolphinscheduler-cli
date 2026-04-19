@@ -17,6 +17,12 @@ def test_template_workflow_command_returns_yaml_document() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "template.workflow"
     assert payload["resolved"]["with_schedule"] is False
+    assert payload["data"]["artifact"] == {
+        "kind": "workflow-template",
+        "format": "yaml",
+        "raw_command": "dsctl template workflow --raw",
+        "target_command": "dsctl workflow create --file FILE",
+    }
     assert "workflow:" in payload["data"]["yaml"]
     assert "tasks:" in payload["data"]["yaml"]
     assert payload["data"]["lines"][0]["line"].startswith("# Workflow YAML")
@@ -30,7 +36,23 @@ def test_template_workflow_command_can_include_schedule_block() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "template.workflow"
     assert payload["resolved"]["with_schedule"] is True
+    assert (
+        payload["data"]["artifact"]["raw_command"]
+        == "dsctl template workflow --with-schedule --raw"
+    )
     assert "schedule:" in payload["data"]["yaml"]
+
+
+def test_template_workflow_command_can_emit_raw_yaml() -> None:
+    result = runner.invoke(app, ["template", "workflow", "--raw"])
+
+    assert result.exit_code == 0
+    assert result.stdout.startswith(
+        "# Workflow YAML template for `dsctl workflow create --file ...`\n"
+    )
+    assert '"ok": true' not in result.stdout
+    assert "workflow:" in result.stdout
+    assert "tasks:" in result.stdout
 
 
 def test_template_params_command_returns_parameter_syntax() -> None:
@@ -191,7 +213,7 @@ def test_template_task_command_normalizes_task_type() -> None:
     assert payload["action"] == "template.task"
     assert payload["resolved"]["task_type"] == "SHELL"
     assert payload["resolved"]["variant"] == "minimal"
-    assert payload["resolved"]["available_variants"] == [
+    assert payload["data"]["template"]["variants"] == [
         "minimal",
         "params",
         "resource",
@@ -247,32 +269,35 @@ def test_template_task_command_rejects_unknown_task_type() -> None:
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "Unsupported task template type 'UNKNOWN'."
     assert payload["error"]["details"]["task_type"] == "UNKNOWN"
-    assert payload["error"]["details"]["discovery_command"] == (
-        "dsctl template task --list"
-    )
+    assert payload["error"]["details"]["discovery_command"] == ("dsctl template task")
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl template task --list` to inspect supported task types."
+        "Run `dsctl template task` to inspect supported task types."
     )
 
 
 def test_template_task_command_can_list_supported_types() -> None:
-    result = runner.invoke(app, ["template", "task", "--list"])
+    result = runner.invoke(app, ["template", "task"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "template.task"
-    assert payload["resolved"] == {"mode": "list"}
+    assert payload["resolved"] == {"mode": "index"}
     assert payload["data"]["count"] == len(upstream_default_task_types())
     assert payload["data"]["task_types"] == list(upstream_default_task_types())
     assert payload["data"]["typed_task_types"] == list(supported_typed_task_types())
     assert "SPARK" in payload["data"]["generic_task_types"]
     assert "Logic" in payload["data"]["task_types_by_category"]
     assert payload["data"]["rows"][0]["task_type"] == "SHELL"
-    assert payload["data"]["task_templates"]["SHELL"]["variants"] == [
-        "minimal",
-        "params",
-        "resource",
-    ]
+    assert payload["data"]["rows"][0]["variants"] == ["minimal", "params", "resource"]
+    assert payload["data"]["rows"][0]["next_command"] == "dsctl task-type get SHELL"
+    assert "task_templates" not in payload["data"]
+
+
+def test_template_task_command_rejects_legacy_list_option() -> None:
+    result = runner.invoke(app, ["template", "task", "--list"])
+
+    assert result.exit_code == 2
+    assert "No such option: --list" in result.output
 
 
 def test_template_task_help_points_to_type_and_variant_discovery() -> None:
@@ -280,25 +305,39 @@ def test_template_task_help_points_to_type_and_variant_discovery() -> None:
 
     assert result.exit_code == 0
     help_text = normalize_cli_help(result.stdout)
-    assert "Required unless --list" in help_text
+    assert "compact" in help_text
+    assert "template catalog" in help_text
     assert "post-json" in help_text
     assert "workflow-dependency" in help_text
-    assert "dsctl template task --list" in help_text
+    assert "dsctl task-type get TYPE" in help_text
 
 
-def test_template_task_command_requires_type_without_list() -> None:
+def test_template_task_command_omits_type_for_index() -> None:
     result = runner.invoke(app, ["template", "task"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "template.task"
+    assert payload["resolved"] == {"mode": "index"}
+    assert payload["data"]["next_command"] == "dsctl task-type get SHELL"
+
+
+def test_template_task_command_can_emit_raw_yaml() -> None:
+    result = runner.invoke(app, ["template", "task", "SHELL", "--raw"])
+
+    assert result.exit_code == 0
+    assert result.stdout.startswith("# Task template for SHELL\n")
+    assert '"ok": true' not in result.stdout
+    assert "type: SHELL" in result.stdout
+
+
+def test_template_task_raw_requires_task_type() -> None:
+    result = runner.invoke(app, ["template", "task", "--raw"])
 
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
     assert payload["error"]["type"] == "user_input_error"
-    assert payload["error"]["message"] == "TASK_TYPE is required."
-    assert payload["error"]["details"]["discovery_command"] == (
-        "dsctl template task --list"
-    )
-    assert payload["error"]["suggestion"] == (
-        "Run `dsctl template task --list` to inspect supported task types."
-    )
+    assert payload["error"]["message"] == "--raw requires TASK_TYPE."
 
 
 def test_template_table_outputs_use_row_shapes() -> None:
@@ -308,7 +347,7 @@ def test_template_table_outputs_use_row_shapes() -> None:
         (["template", "cluster"], "name"),
         (["template", "datasource"], "type"),
         (["template", "datasource", "--type", "MYSQL"], "name"),
-        (["template", "task", "--list"], "task_type"),
+        (["template", "task"], "task_type"),
         (["template", "task", "SHELL"], "line_no | line"),
     ]
     for args, expected_header in cases:

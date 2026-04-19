@@ -273,7 +273,11 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
         _surface_command(DATASOURCE_RESOURCE),
         _surface_command(TASK_RESOURCE),
     ),
-    TASK_TYPE_RESOURCE: (_surface_command("list"),),
+    TASK_TYPE_RESOURCE: (
+        _surface_command("list"),
+        _surface_command("get"),
+        _surface_command("schema"),
+    ),
     WORKFLOW_RESOURCE: (
         _surface_command("list"),
         _surface_command("get"),

@@ -714,8 +714,20 @@ def task_instance_group() -> dict[str, object]:
                             "upstream logger API."
                         ),
                         default=200,
-                    )
+                    ),
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the log text, without the JSON envelope."
+                        ),
+                        default=False,
+                    ),
                 ],
+                payload={
+                    "raw_option": "--raw",
+                    "raw_field": "data.text",
+                },
             ),
             command(
                 "force-success",

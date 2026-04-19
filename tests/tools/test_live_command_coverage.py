@@ -20,6 +20,8 @@ LOCAL_ONLY_COMMANDS = {
     "template params",
     "template task",
     "template workflow",
+    "task-type get",
+    "task-type schema",
     "use project",
     "use workflow",
     "version",

@@ -10,9 +10,11 @@ Use the command output as the first source of truth when generating YAML:
 dsctl capabilities
 dsctl schema
 dsctl task-type list
+dsctl template task
+dsctl task-type get SQL
+dsctl task-type schema SQL
 dsctl template params
-dsctl template task --list
-dsctl template task SHELL --variant resource
+dsctl template task SHELL --variant resource --raw
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --dry-run
 ```
@@ -20,11 +22,16 @@ dsctl workflow create --file workflow.yaml --dry-run
 ## Discovery Flow
 
 Use `dsctl task-type list` when you need the live DS task-type catalog for the
-configured cluster and current user. Use `dsctl template task --list` when you
-need the local YAML template catalog and per-task template variants.
+configured cluster and current user. Use `dsctl template task` when you need
+the compact local template catalog. Then use `dsctl task-type get TYPE` for the
+per-type authoring summary and `dsctl task-type schema TYPE` for full fields,
+state rules, choices, discovery commands, related commands, and compile
+mappings.
 
-`dsctl template workflow` returns a minimal full workflow. It is intentionally
-small so generated files do not include unrelated optional fields.
+`dsctl template workflow` returns a minimal full workflow inside the standard
+JSON envelope. Use `dsctl template workflow --raw > workflow.yaml` when you want
+only the YAML file content. The template is intentionally small so generated
+files do not include unrelated optional fields.
 
 `dsctl template params` returns a compact parameter-topic index. Expand only the
 topic needed for the current authoring task:
@@ -37,19 +44,18 @@ dsctl template params --topic context
 dsctl template params --topic output
 ```
 
-`dsctl template task --list` returns machine-readable task template metadata:
+`dsctl template task` returns compact machine-readable task-template rows:
 
-- `task_templates.TYPE.kind`
-- `task_templates.TYPE.category`
-- `task_templates.TYPE.default_variant`
-- `task_templates.TYPE.variants`
-- `task_templates.TYPE.variant_summaries`
-- `task_templates.TYPE.payload_modes`
-- `task_templates.TYPE.parameter_fields`
-- `task_templates.TYPE.resource_fields`
+- `rows[].task_type`
+- `rows[].kind`
+- `rows[].category`
+- `rows[].default_variant`
+- `rows[].variants`
+- `rows[].next_command`
 
 `dsctl template task TYPE --variant VARIANT` returns a task-level YAML fragment
-for one concrete authoring scenario. Copy the fragment under `tasks:` in a
+for one concrete authoring scenario. Add `--raw` when you want only the YAML
+fragment without the JSON envelope. Copy the fragment under `tasks:` in a
 workflow YAML file, then run `dsctl lint workflow` and `workflow create
 --dry-run`.
 
@@ -142,6 +148,12 @@ year; uppercase `YYYY` is week-based year. `dsctl lint workflow` and
 `$[yyyyww]` so callers can choose calendar-year, week-year, or
 `year_week(...)` deliberately.
 
+For SQL tasks, `sqlType: 0` means query SQL that returns rows; `sqlType: 1`
+means non-query SQL such as DDL or DML. Run `dsctl task-type schema SQL` to see
+the `sqlType` state rules. SQL task payloads keep `localParams`, `varPool`,
+`preStatements`, and `postStatements` as lists so copied templates stay
+compatible with DS SQL task execution.
+
 Use task template parameter variants for concrete examples:
 
 ```bash
@@ -152,6 +164,7 @@ dsctl template task PYTHON --variant params
 dsctl template task SQL --variant params
 dsctl template task HTTP --variant params
 dsctl template task SWITCH --variant params
+dsctl task-type schema SQL
 ```
 
 ## Typed Task Templates

@@ -137,7 +137,7 @@ dsctl workflow create --file workflow.yaml --dry-run
 dsctl workflow create --file workflow.yaml --confirm-risk TOKEN
 
 # Template discovery
-dsctl template workflow       # → full YAML template with comments
+dsctl template workflow --raw # → full YAML template with comments
 dsctl template task SHELL     # → SHELL task template
 
 # The created workflow appears in DS UI and can be triggered.
@@ -366,6 +366,8 @@ surface.
 - [x] `dsctl schema` — JSON tool definition output for the current stable surface
 - [x] `dsctl enum names`, `dsctl enum list <enum>` — enum value discovery
 - [x] `dsctl task-type list` — live DS task-type discovery with favourite flags
+- [x] `dsctl task-type get|schema` — local task authoring summaries, field
+      contracts, state rules, choices, and compile mappings
 - [x] audit log inspection and audit filter metadata discovery
 - [x] workflow lineage inspection and dependent-task discovery
 - [ ] `--non-interactive` mode (never prompt stdin)

@@ -63,7 +63,11 @@ dsctl user list
 ## Workflow Authoring
 
 ```bash
-dsctl template workflow > workflow.yaml
+dsctl template task
+dsctl task-type get SQL
+dsctl task-type schema SQL
+dsctl template task SQL --variant pre-post-statements --raw
+dsctl template workflow --raw > workflow.yaml
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --project etl-prod --dry-run
 dsctl workflow create --file workflow.yaml --project etl-prod
@@ -78,7 +82,7 @@ dsctl workflow-instance digest <workflow_instance_id>
 dsctl workflow-instance watch <workflow_instance_id>
 dsctl task-instance list --workflow-instance <workflow_instance_id>
 dsctl task-instance list --project etl-prod --state FAILURE
-dsctl task-instance log <task_instance_id>
+dsctl task-instance log <task_instance_id> --raw
 ```
 
 ## Output Contract

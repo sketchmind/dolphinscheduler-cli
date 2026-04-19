@@ -70,7 +70,7 @@ dsctl workflow run daily-etl --project etl-prod
 dsctl workflow-instance digest <workflow_instance_id>
 dsctl task-instance list --workflow-instance <workflow_instance_id>
 dsctl task-instance list --project etl-prod --state FAILURE
-dsctl task-instance log <task_instance_id>
+dsctl task-instance log <task_instance_id> --raw
 dsctl --columns id,name,state workflow-instance list --project etl-prod
 dsctl --output-format table workflow-instance list --project etl-prod
 dsctl --output-format tsv --columns id,name,state task-instance list --workflow-instance <workflow_instance_id>
@@ -89,7 +89,7 @@ Stable user-facing commands today:
 - `dsctl enum names`
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
-- `dsctl task-type list`
+- `dsctl task-type list|get|schema`
 - `dsctl environment list|get|create|update|delete`
 - `dsctl cluster list|get|create|update|delete`
 - `dsctl datasource list|get|create|update|delete|test`

@@ -509,8 +509,23 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                             "template."
                         ),
                         default=False,
-                    )
+                    ),
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the workflow YAML template, without the "
+                            "JSON envelope."
+                        ),
+                        default=False,
+                    ),
                 ],
+                payload={
+                    "format": "yaml",
+                    "raw_option": "--raw",
+                    "template_command": "dsctl template workflow --raw",
+                    "target_command": "dsctl workflow create --file FILE",
+                },
             ),
             command(
                 "params",
@@ -561,27 +576,24 @@ def template_group(task_types: list[str]) -> dict[str, object]:
             command(
                 "task",
                 action="template.task",
-                summary="Emit one task YAML template or list supported task types.",
+                summary=(
+                    "Emit the compact task template catalog, or one task YAML "
+                    "fragment when TASK_TYPE is provided."
+                ),
                 arguments=[
                     argument(
                         "task_type",
                         value_type="string",
-                        description="Task type to template. Required unless --list.",
+                        description=(
+                            "Task type to template. Omit for the compact template "
+                            "catalog."
+                        ),
                         required=False,
                         choices=task_types,
-                        discovery_command="dsctl template task --list",
+                        discovery_command="dsctl template task",
                     )
                 ],
                 options=[
-                    option(
-                        "list",
-                        value_type="boolean",
-                        description=(
-                            "List supported stable task template types instead "
-                            "of emitting YAML."
-                        ),
-                        default=False,
-                    ),
                     option(
                         "variant",
                         value_type="string",
@@ -591,13 +603,28 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                             "minimal, params, resource, post-json, "
                             "pre-post-statements, branching, condition-routing, "
                             "workflow-dependency, child-workflow, and datasource; "
-                            "inspect per-type values with `dsctl template task "
-                            "--list`."
+                            "inspect per-type values with `dsctl task-type get TYPE`."
                         ),
                         choices=supported_task_template_variants(),
-                        discovery_command="dsctl template task --list",
+                        discovery_command="dsctl task-type get TYPE",
+                    ),
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the YAML task fragment, without the JSON "
+                            "envelope."
+                        ),
+                        default=False,
                     ),
                 ],
+                payload={
+                    "format": "yaml",
+                    "raw_option": "--raw",
+                    "template_command_pattern": "dsctl template task TYPE --raw",
+                    "schema_command_pattern": "dsctl task-type schema TYPE",
+                    "paste_into": "workflow YAML tasks[]",
+                },
             ),
         ],
     )

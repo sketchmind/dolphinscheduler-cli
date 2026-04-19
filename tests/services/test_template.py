@@ -32,6 +32,12 @@ def test_workflow_template_result_returns_valid_yaml_document() -> None:
 
     assert isinstance(data, dict)
     assert result.resolved["with_schedule"] is False
+    assert data["artifact"] == {
+        "kind": "workflow-template",
+        "format": "yaml",
+        "raw_command": "dsctl template workflow --raw",
+        "target_command": "dsctl workflow create --file FILE",
+    }
     yaml_text = data["yaml"]
     assert isinstance(yaml_text, str)
     assert data["lines"][0]["line"].startswith("# Workflow YAML")
@@ -57,6 +63,9 @@ def test_workflow_template_result_can_include_schedule_block() -> None:
     assert isinstance(yaml_text, str)
     document = yaml.safe_load(yaml_text)
 
+    assert data["artifact"]["raw_command"] == (
+        "dsctl template workflow --with-schedule --raw"
+    )
     assert document["schedule"]["cron"] == "0 0 2 * * ?"
     assert document["schedule"]["enabled"] is False
 
@@ -275,7 +284,7 @@ def test_task_template_result_rejects_unsupported_type() -> None:
     assert exc.value.details == {
         "task_type": "SPARK_SQL",
         "available_task_types_count": len(supported_task_template_types()),
-        "discovery_command": "dsctl template task --list",
+        "discovery_command": "dsctl template task",
     }
 
 
@@ -284,7 +293,7 @@ def test_task_template_types_result_lists_supported_types() -> None:
     data = result.data
 
     assert isinstance(data, dict)
-    assert result.resolved == {"mode": "list"}
+    assert result.resolved == {"mode": "index"}
     assert data["count"] == len(upstream_default_task_types())
     assert data["task_types"] == list(upstream_default_task_types())
     assert data["typed_task_types"] == list(typed_task_template_types())
@@ -292,23 +301,11 @@ def test_task_template_types_result_lists_supported_types() -> None:
     assert "Universal" in data["task_types_by_category"]
     assert "Logic" in data["task_types_by_category"]
     assert data["rows"][0]["task_type"] == "SHELL"
-    assert data["task_templates"]["SHELL"]["variants"] == [
-        "minimal",
-        "params",
-        "resource",
-    ]
-    assert data["task_templates"]["SHELL"]["parameter_fields"] == [
-        "task_params.localParams[]",
-        "task_params.varPool[]",
-    ]
-    assert data["task_templates"]["SHELL"]["resource_fields"] == [
-        "task_params.resourceList[].resourceName"
-    ]
-    assert data["task_templates"]["HTTP"]["variants"] == [
-        "minimal",
-        "params",
-        "post-json",
-    ]
+    assert data["rows"][0]["variants"] == ["minimal", "params", "resource"]
+    assert data["rows"][0]["next_command"] == "dsctl task-type get SHELL"
+    assert data["default_task_type"] == "SHELL"
+    assert data["next_command"] == "dsctl task-type get SHELL"
+    assert "task_templates" not in data
 
 
 def test_task_template_types_match_typed_task_specs() -> None:
@@ -349,7 +346,9 @@ def test_task_template_result_renders_discoverable_variants(
 
     assert isinstance(data, dict)
     assert result.resolved["variant"] == variant
-    available_variants = result.resolved["available_variants"]
+    template_meta = data["template"]
+    assert isinstance(template_meta, dict)
+    available_variants = template_meta["variants"]
     assert isinstance(available_variants, list)
     assert variant in available_variants
     assert expected_fragment in data["yaml"]
@@ -365,7 +364,7 @@ def test_task_template_result_rejects_unsupported_variant() -> None:
         "task_type": "SHELL",
         "variant": "post-json",
         "available_variants": ["minimal", "params", "resource"],
-        "discovery_command": "dsctl template task --list",
+        "discovery_command": "dsctl task-type get SHELL",
     }
 
 

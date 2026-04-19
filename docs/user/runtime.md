@@ -55,7 +55,7 @@ Inspect task logs:
 ```bash
 dsctl task-instance list --workflow-instance <workflow_instance_id>
 dsctl task-instance list --project etl-prod --state FAILURE --start "2026-04-11 00:00:00" --end "2026-04-11 23:59:59"
-dsctl task-instance log <task_instance_id>
+dsctl task-instance log <task_instance_id> --raw
 ```
 
 `task-instance list` uses the project-scoped DS task-instance paging query. Use

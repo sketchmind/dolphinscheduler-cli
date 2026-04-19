@@ -18,7 +18,7 @@ Current stable commands:
 - `dsctl enum names`
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
-- `dsctl task-type list`
+- `dsctl task-type list|get|schema`
 - `dsctl environment list|get|create|update|delete`
 - `dsctl cluster list|get|create|update|delete`
 - `dsctl datasource list|get|create|update|delete|test`
@@ -590,7 +590,7 @@ Rules:
   user's `isCollection` favourite flag
 - unlike `capabilities`, this payload depends on the configured cluster and
   authenticated user
-- unlike `template task --list`, this is not the local YAML template catalog
+- unlike `template task`, this is not the local YAML template catalog
 - `resolved.source` is always `favourite/taskTypes`
 
 `data.taskTypes` projects the DS `FavTaskDto` records and keeps DS-native field
@@ -608,6 +608,47 @@ The full stable payload also includes:
 - `data.cliCoverage.typedTaskSpecs`
 - `data.cliCoverage.genericTaskTemplateTypes`
 - `data.cliCoverage.untemplatedTaskTypes`
+
+## `dsctl task-type get TASK_TYPE`
+
+Returns the local task authoring summary for one DS task type. This command is
+local and does not call DolphinScheduler.
+
+Rules:
+
+- task type matching is case-insensitive and accepts supported local aliases
+- `resolved.task_type` is the normalized DS-native task type
+- `data.template_command` points to the default YAML fragment
+- `data.raw_template_command` points to the copyable raw YAML fragment
+- `data.schema_command` points to the full authoring contract
+- `data.required_paths[]` lists fields required by the local authoring model
+- `data.choice_sources[]` lists commands or local sources for discoverable
+  values
+- `data.rows[]` is the compact table/tsv view of next commands and variants
+- generic task types emit warning code `generic_task_template`
+
+## `dsctl task-type schema TASK_TYPE`
+
+Returns the full local authoring contract for one DS task type. This command is
+local and does not call DolphinScheduler.
+
+Rules:
+
+- `data.schema` is a JSON-Schema-style authoring contract with `x-dsctl`
+  metadata
+- `data.fields[]` is the canonical row model for table/tsv and `--columns`
+- `data.fields[].choice_source` records the command or local source for
+  discoverable values; `data.fields[].related_commands[]` records adjacent
+  inspection or creation commands when useful
+- `data.state_rules[]` describes task-type conditionals such as SQL
+  `sqlType`
+- `data.choice_sources[]` records how to discover valid external values
+  and which returned field to use, such as resource `fullName`, datasource
+  `id`, workflow `code`, or a task name in the same YAML file
+- `data.compile_mappings[]` records how authoring YAML maps to DS REST form
+  payload fields
+- the schema is for authoring workflow YAML, not for representing every raw DS
+  database column
 
 ## `dsctl project list`
 
@@ -2865,7 +2906,7 @@ Options:
 
 Rules:
 
-- use `dsctl template workflow` to start a workflow YAML file
+- use `dsctl template workflow --raw` to start a workflow YAML file
 - use `dsctl project list` to discover project names and codes for `--project`
 - project selection precedence is:
   - explicit `--project`
@@ -3222,6 +3263,17 @@ Returns the current stable workflow YAML template inside `data.yaml`.
 `data.lines[]` provides the same template as row-oriented `line_no` and `line`
 values for table and tsv output.
 
+Use `--raw` when redirecting the template to a YAML file:
+
+```bash
+dsctl template workflow --raw > workflow.yaml
+```
+
+Options:
+
+- `--with-schedule`
+- `--raw`
+
 Rules:
 
 - the template matches the stable `workflow create --file ...` YAML surface
@@ -3234,6 +3286,8 @@ Rules:
 - `dsctl template workflow --with-schedule` includes one minimal optional
   `schedule:` block and returns `resolved.with_schedule=true`
 - the optional `schedule.cron` example uses DolphinScheduler Quartz cron syntax
+- `--raw` prints only the workflow YAML; it does not print the standard success
+  envelope
 
 ## `dsctl template params`
 
@@ -3394,16 +3448,17 @@ Rules:
   value is `data.type` and `resolved.datasource_type`, while full type
   discovery lives in the default index and `dsctl enum list db-type`
 
-## `dsctl template task TASK_TYPE`
+## `dsctl template task [TASK_TYPE]`
 
-Returns one task YAML template inside `data.yaml`. `data.rows[]` provides the
-row-oriented table/tsv view: line rows for a concrete template, and compact
-task-type rows for `--list`.
+Returns a compact local task-template catalog when `TASK_TYPE` is omitted.
+Returns one task YAML template inside `data.yaml` when `TASK_TYPE` is provided.
+`data.rows[]` provides the row-oriented table/tsv view: task-type rows for the
+catalog, and line rows for a concrete template.
 
 Options:
 
-- `--list`
 - `--variant VARIANT`
+- `--raw`
 
 Current stable task template coverage includes every DS 3.4.1 upstream default
 task type.
@@ -3425,35 +3480,31 @@ The remaining upstream default task types return generic templates with raw
 
 Rules:
 
+- omitting `TASK_TYPE` keeps the stable action `template.task` and returns
+  `resolved.mode=index`
 - task type matching is case-insensitive
-- `--list` keeps the stable action `template.task` and returns
-  `resolved.mode=list`
 - the normalized type is returned as `resolved.task_type`
 - `resolved.task_category` reports the upstream DS category
 - `resolved.template_kind` is `typed` or `generic`
 - `resolved.variant` reports the selected template scenario
-- `resolved.available_variants` lists valid scenarios for the selected task type
+- `data.template.variants` lists valid scenarios for the selected task type
 - every task template includes commented optional runtime-control fields for
   `flag`, `environment_code`, `task_group_id`, `task_group_priority`,
   `timeout_notify_strategy`, `cpu_quota`, and `memory_max`
-- `dsctl template task --list` returns:
+- `--raw` prints only the YAML task fragment; it does not print the standard
+  success envelope
+- `dsctl template task` returns:
   - `data.task_types`
   - `data.typed_task_types`
   - `data.generic_task_types`
   - `data.task_types_by_category`
-  - `data.task_templates`
+  - `data.default_task_type`
+  - `data.next_command`
   - `data.rows`
-
-`data.task_templates.TYPE` exposes:
-
-- `kind`
-- `category`
-- `default_variant`
-- `variants`
-- `variant_summaries`
-- `payload_modes`
-- `parameter_fields`
-- `resource_fields`
+- `data.rows[].next_command` points to `dsctl task-type get TYPE`
+- detailed per-type fields, variants, state rules, choices, and compile
+  mappings live in `dsctl task-type get TYPE` and
+  `dsctl task-type schema TYPE`
 
 Stable typed task variants include:
 
@@ -3479,6 +3530,10 @@ the DS `Property` shape: `prop`, `direct`, `type`, and optional `value`.
 `FLOAT`, `DOUBLE`, `DATE`, `TIME`, `TIMESTAMP`, `BOOLEAN`, `LIST`, and `FILE`.
 Script-like tasks can emit output parameters through log lines matching
 `${setValue(name=value)}` or `#{setValue(name=value)}`.
+
+SQL templates and the SQL typed payload normalizer keep `localParams`,
+`varPool`, `preStatements`, and `postStatements` as non-null lists when omitted
+or empty, because DS SQL task execution expects list values for those fields.
 
 For end-to-end YAML authoring guidance, see `docs/user/workflow-authoring.md`.
 
@@ -4455,6 +4510,8 @@ Selection rules:
   chunks by task-instance id
 - `--tail` means “keep the last N lines” and is implemented by chunking the DS
   logger API until exhaustion
+- `--raw` prints only `data.text`; errors still use the standard structured
+  error envelope
 - DS result code `10103` for an empty task log path is translated to stable
   error type `task_not_dispatched`
 

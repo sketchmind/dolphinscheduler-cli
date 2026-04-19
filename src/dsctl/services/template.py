@@ -21,14 +21,15 @@ if TYPE_CHECKING:
 
 
 class TaskTemplateTypesData(TypedDict):
-    """Stable discovery payload for `dsctl template task --list`."""
+    """Stable discovery payload for `dsctl template task`."""
 
     task_types: list[str]
     count: int
     typed_task_types: list[str]
     generic_task_types: list[str]
     task_types_by_category: dict[str, list[str]]
-    task_templates: dict[str, TaskTemplateMetadata]
+    default_task_type: str
+    next_command: str
     rows: list[TaskTemplateTypeRowData]
 
 
@@ -205,7 +206,8 @@ class TaskTemplateTypeRowData(TypedDict):
     kind: str
     category: str
     default_variant: str
-    variants: str
+    variants: list[str]
+    next_command: str
 
 
 class ParameterSyntaxIndexData(TypedDict):
@@ -277,6 +279,7 @@ def parameter_syntax_index_data() -> ParameterSyntaxIndexData:
         "recommended_flow": [
             "Run `dsctl template params` first and select only the needed topic.",
             "Run `dsctl template task TYPE --variant params` for task-specific YAML.",
+            "Run `dsctl task-type schema TYPE` for full task field rules.",
             "Run `dsctl lint workflow FILE` before sending the workflow to DS.",
             "Run `dsctl workflow create --file FILE --dry-run` before mutation.",
         ],
@@ -705,6 +708,14 @@ def workflow_template_result(*, with_schedule: bool = False) -> CommandResult:
     return CommandResult(
         data=require_json_object(
             {
+                "artifact": {
+                    "kind": "workflow-template",
+                    "format": "yaml",
+                    "raw_command": _workflow_raw_command(
+                        with_schedule=with_schedule,
+                    ),
+                    "target_command": "dsctl workflow create --file FILE",
+                },
                 "yaml": yaml_text,
                 "lines": _text_lines(yaml_text),
             },
@@ -770,6 +781,13 @@ def environment_config_template_result() -> CommandResult:
         ),
         resolved={"template": "environment.config"},
     )
+
+
+def _workflow_raw_command(*, with_schedule: bool) -> str:
+    command = "dsctl template workflow"
+    if with_schedule:
+        command += " --with-schedule"
+    return f"{command} --raw"
 
 
 def cluster_config_template_result() -> CommandResult:
@@ -900,8 +918,29 @@ def task_template_result(
     return CommandResult(
         data=require_json_object(
             {
+                "artifact": {
+                    "kind": "task-fragment",
+                    "format": "yaml",
+                    "paste_into": "workflow YAML tasks[]",
+                    "raw_command": (
+                        f"dsctl template task {normalized} "
+                        f"--variant {normalized_variant} --raw"
+                    ),
+                },
                 "yaml": yaml_text,
                 "rows": _text_lines(yaml_text),
+                "template": {
+                    "task_type": normalized,
+                    "category": _task_templates.task_template_category(normalized),
+                    "kind": template_kind,
+                    "variant": normalized_variant,
+                    "variants": list(
+                        _task_templates.task_template_variants(normalized)
+                    ),
+                    "schema_command": f"dsctl task-type schema {normalized}",
+                    "summary_command": f"dsctl task-type get {normalized}",
+                    "index_command": "dsctl template task",
+                },
             },
             label="task template data",
         ),
@@ -910,9 +949,6 @@ def task_template_result(
             "task_category": _task_templates.task_template_category(normalized),
             "template_kind": template_kind,
             "variant": normalized_variant,
-            "available_variants": list(
-                _task_templates.task_template_variants(normalized)
-            ),
         },
     )
 
@@ -933,25 +969,24 @@ def task_template_types_result() -> CommandResult:
                 typed_task_types=typed_task_types,
                 generic_task_types=generic_task_types,
                 task_types_by_category=task_types_by_category,
-                task_templates=task_template_metadata(),
                 rows=_task_template_type_rows(),
             ),
             label="task template types data",
         ),
-        resolved={"mode": "list"},
+        resolved={"mode": "index"},
     )
 
 
 def _normalize_task_type(task_type: str) -> str:
     normalized = canonical_task_type(task_type)
-    suggestion = "Run `dsctl template task --list` to inspect supported task types."
+    suggestion = "Run `dsctl template task` to inspect supported task types."
     if not normalized:
         message = "TASK_TYPE is required."
         raise UserInputError(
             message,
             details={
                 "available_task_types_count": len(_SUPPORTED_TASK_TEMPLATE_TYPES),
-                "discovery_command": "dsctl template task --list",
+                "discovery_command": "dsctl template task",
             },
             suggestion=suggestion,
         )
@@ -963,7 +998,7 @@ def _normalize_task_type(task_type: str) -> str:
         details={
             "task_type": task_type,
             "available_task_types_count": len(_SUPPORTED_TASK_TEMPLATE_TYPES),
-            "discovery_command": "dsctl template task --list",
+            "discovery_command": "dsctl template task",
         },
         suggestion=suggestion,
     )
@@ -985,9 +1020,11 @@ def _normalize_task_template_variant(task_type: str, variant: str | None) -> str
             "task_type": task_type,
             "variant": variant,
             "available_variants": list(supported_variants),
-            "discovery_command": "dsctl template task --list",
+            "discovery_command": f"dsctl task-type get {task_type}",
         },
-        suggestion="Run `dsctl template task --list` to inspect supported variants.",
+        suggestion=(
+            f"Run `dsctl task-type get {task_type}` to inspect supported variants."
+        ),
     )
 
 
@@ -1162,7 +1199,6 @@ def _task_template_types_data(
     typed_task_types: list[str],
     generic_task_types: list[str],
     task_types_by_category: dict[str, list[str]],
-    task_templates: dict[str, TaskTemplateMetadata],
     rows: list[TaskTemplateTypeRowData],
 ) -> TaskTemplateTypesData:
     return {
@@ -1171,7 +1207,8 @@ def _task_template_types_data(
         "typed_task_types": typed_task_types,
         "generic_task_types": generic_task_types,
         "task_types_by_category": task_types_by_category,
-        "task_templates": task_templates,
+        "default_task_type": "SHELL",
+        "next_command": "dsctl task-type get SHELL",
         "rows": rows,
     }
 
@@ -1184,7 +1221,8 @@ def _task_template_type_rows() -> list[TaskTemplateTypeRowData]:
             kind=metadata[task_type]["kind"],
             category=metadata[task_type]["category"],
             default_variant=metadata[task_type]["default_variant"],
-            variants=",".join(metadata[task_type]["variants"]),
+            variants=metadata[task_type]["variants"],
+            next_command=f"dsctl task-type get {task_type}",
         )
         for task_type in supported_task_template_types()
     ]

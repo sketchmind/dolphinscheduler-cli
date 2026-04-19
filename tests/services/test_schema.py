@@ -227,6 +227,17 @@ def test_schema_result_describes_current_stable_surface() -> None:
     assert "runtime" in section_choices
 
     template_group = _find_group(commands, "template")
+    workflow_command = _find_command(template_group["commands"], "workflow")
+    workflow_options = _require_list(workflow_command["options"])
+    assert workflow_command["action"] == "template.workflow"
+    assert workflow_command["payload"] == {
+        "format": "yaml",
+        "raw_option": "--raw",
+        "template_command": "dsctl template workflow --raw",
+        "target_command": "dsctl workflow create --file FILE",
+    }
+    assert _find_option(workflow_options, "with-schedule")["default"] is False
+    assert _find_option(workflow_options, "raw")["default"] is False
     params_command = _find_command(template_group["commands"], "params")
     assert params_command["action"] == "template.params"
     params_options = _require_list(params_command["options"])
@@ -264,7 +275,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
     variant_option = _find_option(task_options, "variant")
     assert task_command["action"] == "template.task"
     assert first_task_argument["choices"] == EXPECTED_TEMPLATE_TASK_TYPES
-    assert first_task_argument["discovery_command"] == "dsctl template task --list"
+    assert first_task_argument["discovery_command"] == "dsctl template task"
     variant_choices = variant_option["choices"]
     assert isinstance(variant_choices, list)
     assert "resource" in variant_choices
@@ -272,8 +283,10 @@ def test_schema_result_describes_current_stable_surface() -> None:
     variant_description = _require_str(variant_option["description"])
     assert "Known variants include" in variant_description
     assert "workflow-dependency" in variant_description
-    assert "dsctl template task --list" in variant_description
-    assert variant_option["discovery_command"] == "dsctl template task --list"
+    assert "dsctl task-type get TYPE" in variant_description
+    assert variant_option["discovery_command"] == "dsctl task-type get TYPE"
+    raw_option = _find_option(task_options, "raw")
+    assert raw_option["default"] is False
     datasource_template_command = _find_command(
         template_group["commands"],
         "datasource",
@@ -309,15 +322,17 @@ def test_schema_result_describes_current_stable_surface() -> None:
         _require_dict(item)["name"]
         for item in _require_list(task_type_group["commands"])
     ]
-    assert task_type_command_names == ["list"]
+    assert task_type_command_names == ["list", "get", "schema"]
     assert task_type_group["summary"] == (
-        "List live DS task-type catalog for the configured cluster and current user."
+        "Discover DS task types and local task authoring contracts."
     )
     task_type_list = _find_command(task_type_group["commands"], "list")
     assert task_type_list["summary"] == (
         "List live DS task types, categories, favourite flags, and CLI authoring "
         "coverage."
     )
+    task_type_schema = _find_command(task_type_group["commands"], "schema")
+    assert task_type_schema["action"] == "task-type.schema"
 
     env_group = _find_group(commands, "environment")
     env_command_names = [
@@ -1137,6 +1152,14 @@ def test_schema_result_describes_current_stable_surface() -> None:
         ]
         == "dsctl workflow-instance list"
     )
+    task_instance_log = _find_command(task_instance_group["commands"], "log")
+    task_instance_log_options = _require_list(task_instance_log["options"])
+    assert _find_option(task_instance_log_options, "tail")["default"] == 200
+    assert _find_option(task_instance_log_options, "raw")["default"] is False
+    assert task_instance_log["payload"] == {
+        "raw_option": "--raw",
+        "raw_field": "data.text",
+    }
 
     capabilities = data["capabilities"]
     assert capabilities == {
@@ -1169,7 +1192,10 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "capabilities_scope": "feature_discovery",
         },
         "templates": {
-            "workflow": {"with_schedule_option": True},
+            "workflow": {
+                "with_schedule_option": True,
+                "raw_template_command": "dsctl template workflow --raw",
+            },
             "parameters": EXPECTED_PARAMETER_SYNTAX,
             "environment": {
                 "command": "dsctl template environment",
@@ -1186,6 +1212,10 @@ def test_schema_result_describes_current_stable_surface() -> None:
                 "typed_types": EXPECTED_TYPED_TASK_TYPES,
                 "generic_types": EXPECTED_GENERIC_TEMPLATE_TASK_TYPES,
                 "templates_by_type": EXPECTED_TASK_TEMPLATE_METADATA,
+                "index_command": "dsctl template task",
+                "summary_command_pattern": "dsctl task-type get TYPE",
+                "schema_command_pattern": "dsctl task-type schema TYPE",
+                "raw_template_command_pattern": "dsctl template task TYPE --raw",
             },
         },
         "authoring": {
@@ -1198,6 +1228,8 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "environment_config_template": True,
             "cluster_config_template": True,
             "datasource_payload_templates": True,
+            "task_authoring_schema": True,
+            "task_authoring_schema_command_pattern": "dsctl task-type schema TYPE",
             "datasource_template_types": datasource_template_index_data()[
                 "supported_types"
             ],
@@ -1498,6 +1530,28 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
         "kind": "summary",
         "row_path": "data.taskTypes",
         "default_columns": ["taskType", "taskCategory", "isCollection"],
+        "column_discovery": "runtime_row_keys",
+    }
+
+    task_type_schema_result = get_schema_result(command_action="task-type.schema")
+    task_type_schema_data = _require_dict(task_type_schema_result.data)
+    task_type_schema_group = _require_dict(
+        _require_list(task_type_schema_data["commands"])[0]
+    )
+    task_type_schema_command = _require_dict(
+        _require_list(task_type_schema_group["commands"])[0]
+    )
+    assert task_type_schema_command["data_shape"] == {
+        "kind": "summary",
+        "row_path": "data.fields",
+        "default_columns": [
+            "path",
+            "type",
+            "required",
+            "default",
+            "choice_source",
+            "active_when",
+        ],
         "column_discovery": "runtime_row_keys",
     }
 

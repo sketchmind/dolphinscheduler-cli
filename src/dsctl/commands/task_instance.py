@@ -2,7 +2,8 @@ from typing import Annotated
 
 import typer
 
-from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.cli_runtime import emit_raw_result, emit_result, get_app_state
+from dsctl.output import CommandResult
 from dsctl.services.task_instance import (
     DEFAULT_TASK_INSTANCE_WATCH_INTERVAL_SECONDS,
     DEFAULT_TASK_INSTANCE_WATCH_TIMEOUT_SECONDS,
@@ -316,10 +317,28 @@ def log_command(
             help="Return the last N log lines by chunking the upstream logger API.",
         ),
     ] = 200,
+    raw: Annotated[
+        bool,
+        typer.Option(
+            "--raw",
+            help="Print only the log text, without the JSON envelope.",
+        ),
+    ] = False,
 ) -> None:
     """Fetch the tail of one task-instance log."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
+    if raw:
+        emit_raw_result(
+            "task-instance.log",
+            lambda: get_task_instance_log_result(
+                task_instance,
+                tail=tail,
+                env_file=env_file,
+            ),
+            _task_log_text,
+        )
+        return
     emit_result(
         "task-instance.log",
         lambda: get_task_instance_log_result(
@@ -328,6 +347,18 @@ def log_command(
             env_file=env_file,
         ),
     )
+
+
+def _task_log_text(result: CommandResult) -> str:
+    data = result.data
+    if not isinstance(data, dict):
+        message = "task-instance log result data must be an object"
+        raise TypeError(message)
+    text = data.get("text")
+    if not isinstance(text, str):
+        message = "task-instance log result data is missing text"
+        raise TypeError(message)
+    return text
 
 
 @task_instance_app.command("force-success")

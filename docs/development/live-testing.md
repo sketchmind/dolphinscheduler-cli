@@ -302,6 +302,7 @@ future.
 | --- | --- | --- | --- | --- |
 | doctor | `doctor` | `admin-bootstrap` and `etl-developer` | Yes | healthy preflight and broken-auth or broken-config variant |
 | task-type | `task-type list` | `etl-developer` | Yes | real task-type discovery and category projection |
+| task-type | `task-type get|schema` | No profile needed | No | local authoring summary and schema contracts |
 | monitor | `monitor health`, `monitor server`, `monitor database` | `admin-bootstrap` | Yes | remote health, server, and database payloads reachable and shaped |
 | audit | `audit list`, `audit model-types`, `audit operation-types` | `admin-bootstrap` or delegated governance user | Yes | remote filter metadata plus list query with real payload shape |
 

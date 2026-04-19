@@ -32,7 +32,7 @@ The current stable CLI surface is:
 - `dsctl enum names`
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
-- `dsctl task-type list`
+- `dsctl task-type list|get|schema`
 - `dsctl environment list|get|create|update|delete`
 - `dsctl cluster list|get|create|update|delete`
 - `dsctl datasource list|get|create|update|delete|test`

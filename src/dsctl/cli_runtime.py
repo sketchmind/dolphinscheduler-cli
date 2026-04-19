@@ -68,3 +68,24 @@ def emit_result(action: str, builder: Callable[[], CommandResult]) -> None:
         typer.echo(rendered)
     finally:
         _CURRENT_APP_STATE.set(_DEFAULT_APP_STATE)
+
+
+def emit_raw_result(
+    action: str,
+    builder: Callable[[], CommandResult],
+    selector: Callable[[CommandResult], str],
+) -> None:
+    """Emit one command artifact body without the standard success envelope."""
+    render_options = _CURRENT_APP_STATE.get().render_options
+    try:
+        try:
+            result = builder()
+        except DsctlError as exc:
+            payload = error_payload(action, exc)
+            typer.echo(
+                render_payload(payload, action=action, options=render_options),
+            )
+            raise typer.Exit(code=1) from None
+        typer.echo(selector(result), nl=False)
+    finally:
+        _CURRENT_APP_STATE.set(_DEFAULT_APP_STATE)

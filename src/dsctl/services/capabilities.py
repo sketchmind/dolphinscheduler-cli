@@ -91,6 +91,7 @@ AUTHORING_SUMMARY_KEYS = (
     "workflow_dry_run",
     "cluster_config_template",
     "task_template_types",
+    "task_authoring_schema",
     "datasource_payload_templates",
     "datasource_template_types",
     "typed_task_specs",
@@ -162,6 +163,7 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
         "templates": {
             "workflow": {
                 "with_schedule_option": True,
+                "raw_template_command": "dsctl template workflow --raw",
             },
             "parameters": parameter_syntax_index_data(),
             "environment": {
@@ -179,6 +181,10 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
                 "typed_types": typed_task_specs,
                 "generic_types": generic_task_templates,
                 "templates_by_type": task_template_metadata(),
+                "index_command": "dsctl template task",
+                "summary_command_pattern": "dsctl task-type get TYPE",
+                "schema_command_pattern": "dsctl task-type schema TYPE",
+                "raw_template_command_pattern": "dsctl template task TYPE --raw",
             },
         },
         "authoring": {
@@ -191,6 +197,8 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
             "environment_config_template": True,
             "cluster_config_template": True,
             "datasource_payload_templates": True,
+            "task_authoring_schema": True,
+            "task_authoring_schema_command_pattern": "dsctl task-type schema TYPE",
             "datasource_template_types": datasource_template_index_data()[
                 "supported_types"
             ],
@@ -260,6 +268,8 @@ def _capabilities_data(support: VersionSupport) -> dict[str, object]:
             "environment_config_template": True,
             "cluster_config_template": True,
             "task_template_types": task_types,
+            "task_authoring_schema": True,
+            "task_authoring_schema_command_pattern": "dsctl task-type schema TYPE",
             "datasource_payload_templates": True,
             "datasource_template_types": datasource_template_index_data()[
                 "supported_types"

@@ -58,6 +58,10 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "typed_types": expected_typed_types,
         "generic_types": expected_generic_types,
         "templates_by_type": task_template_metadata(),
+        "index_command": "dsctl template task",
+        "summary_command_pattern": "dsctl task-type get TYPE",
+        "schema_command_pattern": "dsctl task-type schema TYPE",
+        "raw_template_command_pattern": "dsctl template task TYPE --raw",
     }
     assert payload["data"]["capabilities"]["templates"]["datasource"] == (
         datasource_template_index_data()
