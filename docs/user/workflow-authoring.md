@@ -17,6 +17,8 @@ dsctl template params
 dsctl template task SHELL --variant resource --raw
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --dry-run
+dsctl template workflow-patch --raw > patch.yaml
+dsctl workflow edit WORKFLOW --patch patch.yaml --dry-run
 ```
 
 ## Discovery Flow
@@ -32,6 +34,13 @@ mappings.
 JSON envelope. Use `dsctl template workflow --raw > workflow.yaml` when you want
 only the YAML file content. The template is intentionally small so generated
 files do not include unrelated optional fields.
+
+Use `dsctl template workflow-patch --raw > patch.yaml` before
+`workflow edit --patch`. Use
+`dsctl template workflow-instance-patch --raw > instance-patch.yaml` before
+`workflow-instance edit --patch`. These patch templates keep the active YAML
+valid and put optional task operations in comments, so agents can discover the
+shape without accidentally targeting placeholder task names.
 
 `dsctl template params` returns a compact parameter-topic index. Expand only the
 topic needed for the current authoring task:
@@ -206,6 +215,66 @@ dsctl template task REMOTESHELL --variant params
 
 Unknown or not-yet-typed DS task types still accept raw `task_params: {}`
 templates so exported workflows can round-trip while typed coverage grows.
+
+## Workflow Patch YAML
+
+`workflow edit --patch` and `workflow-instance edit --patch` consume a CLI
+delta document rooted at `patch:`. It is not a REST `PATCH` request; the CLI
+applies the delta to a live DAG snapshot, validates the merged workflow, then
+compiles the whole DS-native form payload.
+
+Use patch YAML for precise changes, especially task rename/delete flows and
+finished-instance repair. The current stable `workflow edit` input is patch
+YAML; full-file workflow definition editing is a separate authoring direction,
+not part of the current stable edit contract.
+
+Start from the matching patch template:
+
+```bash
+dsctl template workflow-patch --raw > patch.yaml
+dsctl template workflow-instance-patch --raw > instance-patch.yaml
+```
+
+```yaml
+patch:
+  workflow:
+    set:
+      description: "Updated workflow description"
+      timeout: 3600
+  tasks:
+    create:
+      - name: transform
+        type: SHELL
+        command: |
+          echo transform
+        depends_on:
+          - extract
+    update:
+      - match:
+          name: load
+        set:
+          depends_on:
+            - transform
+    rename:
+      - from: old-load
+        to: load
+    delete:
+      - obsolete
+```
+
+`tasks.create[]` uses the same task item shape as full workflow YAML. Start
+from `dsctl template task TYPE --raw` and inspect full task fields with
+`dsctl task-type schema TYPE`. `tasks.update[].match.name` matches the live
+task name before the patch is applied; `tasks.update[].set` is a partial task
+object and omitted fields keep their live values.
+
+Use `tasks.rename[]` when a task name changes and task identity should be
+preserved. The CLI does not guess rename intent from delete/create pairs.
+
+`workflow-instance edit --patch` intentionally accepts only
+`patch.workflow.set.global_params` and `patch.workflow.set.timeout`; definition
+fields such as name, description, execution type, and release state belong to
+`workflow edit`.
 
 ## Validation
 

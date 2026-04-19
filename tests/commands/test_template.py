@@ -55,6 +55,70 @@ def test_template_workflow_command_can_emit_raw_yaml() -> None:
     assert "tasks:" in result.stdout
 
 
+def test_template_workflow_patch_command_returns_patch_template() -> None:
+    result = runner.invoke(app, ["template", "workflow-patch"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "template.workflow-patch"
+    assert payload["resolved"] == {"template": "workflow.patch"}
+    assert payload["data"]["artifact"] == {
+        "kind": "workflow-patch-template",
+        "format": "yaml",
+        "raw_command": "dsctl template workflow-patch --raw",
+        "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+    }
+    assert payload["data"]["lines"][0]["line"].startswith("# Workflow patch YAML")
+    assert "patch:" in payload["data"]["yaml"]
+    assert "tasks.create" in payload["data"]["rules"][2]
+
+
+def test_template_workflow_patch_command_can_emit_raw_yaml() -> None:
+    result = runner.invoke(app, ["template", "workflow-patch", "--raw"])
+
+    assert result.exit_code == 0
+    assert result.stdout.startswith(
+        "# Workflow patch YAML template for "
+        "`dsctl workflow edit WORKFLOW --patch ...`\n"
+    )
+    assert '"ok": true' not in result.stdout
+    assert "patch:" in result.stdout
+    assert "# tasks:" in result.stdout
+
+
+def test_template_workflow_instance_patch_command_returns_patch_template() -> None:
+    result = runner.invoke(app, ["template", "workflow-instance-patch"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "template.workflow-instance-patch"
+    assert payload["resolved"] == {"template": "workflow-instance.patch"}
+    assert payload["data"]["artifact"] == {
+        "kind": "workflow-instance-patch-template",
+        "format": "yaml",
+        "raw_command": "dsctl template workflow-instance-patch --raw",
+        "target_command": "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE",
+    }
+    assert payload["data"]["lines"][0]["line"].startswith(
+        "# Workflow-instance patch YAML"
+    )
+    assert "patch:" in payload["data"]["yaml"]
+    assert "workflow-instance edit only accepts" in payload["data"]["rules"][1]
+
+
+def test_template_workflow_instance_patch_command_can_emit_raw_yaml() -> None:
+    result = runner.invoke(app, ["template", "workflow-instance-patch", "--raw"])
+
+    assert result.exit_code == 0
+    assert result.stdout.startswith(
+        "# Workflow-instance patch YAML template for:\n"
+        "# `dsctl workflow-instance edit ID --patch ...`\n"
+    )
+    assert '"ok": true' not in result.stdout
+    assert "repair_note" in result.stdout
+    assert "# tasks:" in result.stdout
+
+
 def test_template_params_command_returns_parameter_syntax() -> None:
     result = runner.invoke(app, ["template", "params"])
 

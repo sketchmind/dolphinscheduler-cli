@@ -124,7 +124,7 @@ class WorkflowInstanceParentData(TypedDict):
     parentWorkflowInstance: int
 
 
-class WorkflowInstanceUpdateResolved(TypedDict):
+class WorkflowInstanceEditResolved(TypedDict):
     """Resolved metadata emitted for one workflow-instance edit request."""
 
     workflowInstance: WorkflowInstanceSelectionData
@@ -134,7 +134,7 @@ class WorkflowInstanceUpdateResolved(TypedDict):
     syncDefine: bool
 
 
-class WorkflowInstanceUpdateNoChangeWarningDetail(TypedDict):
+class WorkflowInstanceEditNoChangeWarningDetail(TypedDict):
     """Structured warning emitted when one instance patch changes nothing."""
 
     code: str
@@ -349,7 +349,7 @@ def execute_task_in_workflow_instance_result(
     )
 
 
-def update_workflow_instance_result(
+def edit_workflow_instance_result(
     workflow_instance_id: int,
     *,
     patch: Path,
@@ -366,7 +366,7 @@ def update_workflow_instance_result(
     _validate_workflow_instance_patch_support(workflow_patch)
     return run_with_service_runtime(
         env_file,
-        _update_workflow_instance_result,
+        _edit_workflow_instance_result,
         workflow_instance_id=normalized_workflow_instance_id,
         patch_file=patch,
         patch=workflow_patch,
@@ -935,7 +935,7 @@ def _execute_task_in_workflow_instance_result(
     )
 
 
-def _update_workflow_instance_result(
+def _edit_workflow_instance_result(
     runtime: ServiceRuntime,
     *,
     workflow_instance_id: int,
@@ -950,7 +950,7 @@ def _update_workflow_instance_result(
     )
     status = _workflow_execution_status(payload.state)
     if status is None or not status.final_state:
-        message = "This workflow instance must be in a final state before update."
+        message = "This workflow instance must be in a final state before edit."
         raise InvalidStateError(
             message,
             details={
@@ -959,7 +959,7 @@ def _update_workflow_instance_result(
                 "state": enum_value(payload.state),
             },
             suggestion=_wait_for_final_state_suggestion(
-                "dsctl workflow-instance update ID --patch PATCH"
+                "dsctl workflow-instance edit ID --patch PATCH"
             ),
         )
     dag = payload.dagData
@@ -986,11 +986,11 @@ def _update_workflow_instance_result(
     compiled_payload = mutation.payload
     merged_spec = mutation.merged_spec
     diff = mutation.diff
-    form_data = _workflow_instance_update_form_data(
+    form_data = _workflow_instance_edit_form_data(
         compiled_payload,
         sync_definition=sync_definition,
     )
-    resolved = _workflow_instance_update_resolved(
+    resolved = _workflow_instance_edit_resolved(
         workflow_instance_id=workflow_instance_id,
         project=resolved_project.to_data(),
         workflow=_workflow_instance_resolved_workflow(
@@ -1006,7 +1006,7 @@ def _update_workflow_instance_result(
     has_changes = mutation.has_changes
 
     if dry_run:
-        return _workflow_instance_update_dry_run_result(
+        return _workflow_instance_edit_dry_run_result(
             project_code=project_code,
             workflow_instance_id=workflow_instance_id,
             form_data=form_data,
@@ -1017,7 +1017,7 @@ def _update_workflow_instance_result(
 
     if not has_changes:
         no_change_warning = (
-            "patch produced no persistent workflow instance change; no update "
+            "patch produced no persistent workflow instance change; no edit "
             "request was sent"
         )
         return CommandResult(
@@ -1027,18 +1027,18 @@ def _update_workflow_instance_result(
             ),
             resolved=require_json_object(
                 resolved,
-                label="workflow-instance update resolved",
+                label="workflow-instance edit resolved",
             ),
             warnings=[no_change_warning],
             warning_details=[
                 require_json_object(
-                    WorkflowInstanceUpdateNoChangeWarningDetail(
-                        code="workflow_instance_update_no_persistent_change",
+                    WorkflowInstanceEditNoChangeWarningDetail(
+                        code="workflow_instance_edit_no_persistent_change",
                         message=no_change_warning,
                         no_change=True,
                         request_sent=False,
                     ),
-                    label="workflow-instance update warning detail",
+                    label="workflow-instance edit warning detail",
                 )
             ],
         )
@@ -1055,7 +1055,7 @@ def _update_workflow_instance_result(
             timeout=compiled_payload["timeout"],
         )
     except ApiResultError as exc:
-        _raise_workflow_instance_update_error(
+        _raise_workflow_instance_edit_error(
             exc,
             workflow_instance_id=workflow_instance_id,
         )
@@ -1064,7 +1064,7 @@ def _update_workflow_instance_result(
         runtime,
         workflow_instance_id=workflow_instance_id,
     )
-    updated_resolved = _workflow_instance_update_resolved(
+    updated_resolved = _workflow_instance_edit_resolved(
         workflow_instance_id=workflow_instance_id,
         project=resolved_project.to_data(),
         workflow=_workflow_instance_resolved_workflow(
@@ -1082,7 +1082,7 @@ def _update_workflow_instance_result(
         ),
         resolved=require_json_object(
             updated_resolved,
-            label="workflow-instance update resolved",
+            label="workflow-instance edit resolved",
         ),
     )
 
@@ -1388,7 +1388,7 @@ def _validate_workflow_instance_patch_support(patch: WorkflowPatchSpec) -> None:
     if not unsupported_fields:
         return
     message = (
-        "workflow-instance update only supports workflow.set.global_params and "
+        "workflow-instance edit only supports workflow.set.global_params and "
         "workflow.set.timeout"
     )
     raise UserInputError(
@@ -1406,7 +1406,7 @@ def _validate_workflow_instance_patch_support(patch: WorkflowPatchSpec) -> None:
     )
 
 
-def _workflow_instance_update_form_data(
+def _workflow_instance_edit_form_data(
     compiled_payload: WorkflowUpdatePayload,
     *,
     sync_definition: bool,
@@ -1437,15 +1437,15 @@ def _workflow_instance_resolved_workflow(
     )
 
 
-def _workflow_instance_update_resolved(
+def _workflow_instance_edit_resolved(
     *,
     workflow_instance_id: int,
     project: ResolvedProjectData,
     workflow: JsonObject,
     patch_file: str,
     sync_definition: bool,
-) -> WorkflowInstanceUpdateResolved:
-    return WorkflowInstanceUpdateResolved(
+) -> WorkflowInstanceEditResolved:
+    return WorkflowInstanceEditResolved(
         workflowInstance=WorkflowInstanceSelectionData(id=workflow_instance_id),
         project=project,
         workflow=workflow,
@@ -1454,12 +1454,12 @@ def _workflow_instance_update_resolved(
     )
 
 
-def _workflow_instance_update_dry_run_result(
+def _workflow_instance_edit_dry_run_result(
     *,
     project_code: int,
     workflow_instance_id: int,
     form_data: JsonObject,
-    resolved: WorkflowInstanceUpdateResolved,
+    resolved: WorkflowInstanceEditResolved,
     diff: WorkflowPatchDiffData,
     no_change: bool,
 ) -> CommandResult:
@@ -1467,19 +1467,19 @@ def _workflow_instance_update_dry_run_result(
     warning_details: list[JsonObject] = []
     if no_change:
         no_change_warning = (
-            "patch produced no persistent workflow instance change; no update "
+            "patch produced no persistent workflow instance change; no edit "
             "request was sent"
         )
         warnings.append(no_change_warning)
         warning_details.append(
             require_json_object(
-                WorkflowInstanceUpdateNoChangeWarningDetail(
-                    code="workflow_instance_update_no_persistent_change",
+                WorkflowInstanceEditNoChangeWarningDetail(
+                    code="workflow_instance_edit_no_persistent_change",
                     message=no_change_warning,
                     no_change=True,
                     request_sent=False,
                 ),
-                label="workflow-instance update dry-run warning detail",
+                label="workflow-instance edit dry-run warning detail",
             )
         )
     return dry_run_result(
@@ -1487,18 +1487,18 @@ def _workflow_instance_update_dry_run_result(
         path=f"/projects/{project_code}/workflow-instances/{workflow_instance_id}",
         form_data=require_json_object(
             form_data,
-            label="workflow-instance update dry-run form data",
+            label="workflow-instance edit dry-run form data",
         ),
         resolved=require_json_object(
             resolved,
-            label="workflow-instance update dry-run resolved",
+            label="workflow-instance edit dry-run resolved",
         ),
         warnings=warnings,
         warning_details=warning_details,
         extra_data={
             "diff": require_json_object(
                 diff,
-                label="workflow-instance update dry-run diff",
+                label="workflow-instance edit dry-run diff",
             ),
             "no_change": no_change,
             "syncDefine": resolved["syncDefine"],
@@ -1506,7 +1506,7 @@ def _workflow_instance_update_dry_run_result(
     )
 
 
-def _raise_workflow_instance_update_error(
+def _raise_workflow_instance_edit_error(
     exc: ApiResultError,
     *,
     workflow_instance_id: int,
@@ -1520,7 +1520,7 @@ def _raise_workflow_instance_update_error(
                 "id": workflow_instance_id,
             },
             suggestion=(
-                "Inspect the compiled diff with `workflow-instance update --dry-run`."
+                "Inspect the compiled diff with `workflow-instance edit --dry-run`."
             ),
         ) from exc
     if exc.result_code in {
@@ -1541,7 +1541,7 @@ def _raise_workflow_instance_update_error(
                 "result_message": exc.result_message,
             },
             suggestion=(
-                "Inspect the compiled diff with `workflow-instance update --dry-run`."
+                "Inspect the compiled diff with `workflow-instance edit --dry-run`."
             ),
         ) from exc
     raise exc

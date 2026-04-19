@@ -357,7 +357,7 @@ def test_workflow_instance_digest_command_returns_runtime_summary() -> None:
     ]
 
 
-def test_workflow_instance_update_command_supports_dry_run(tmp_path: Path) -> None:
+def test_workflow_instance_edit_command_supports_dry_run(tmp_path: Path) -> None:
     patch_file = tmp_path / "workflow-instance.patch.yaml"
     patch_file.write_text(
         """
@@ -379,7 +379,7 @@ patch:
         app,
         [
             "workflow-instance",
-            "update",
+            "edit",
             "903",
             "--patch",
             str(patch_file),
@@ -389,13 +389,13 @@ patch:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["action"] == "workflow-instance.update"
+    assert payload["action"] == "workflow-instance.edit"
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["request"]["path"] == "/projects/7/workflow-instances/903"
     assert payload["resolved"]["syncDefine"] is False
 
 
-def test_workflow_instance_update_command_updates_finished_instance(
+def test_workflow_instance_edit_command_updates_finished_instance(
     tmp_path: Path,
 ) -> None:
     patch_file = tmp_path / "workflow-instance.patch.yaml"
@@ -417,7 +417,7 @@ patch:
         app,
         [
             "workflow-instance",
-            "update",
+            "edit",
             "903",
             "--patch",
             str(patch_file),
@@ -427,13 +427,13 @@ patch:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["action"] == "workflow-instance.update"
+    assert payload["action"] == "workflow-instance.edit"
     assert payload["data"]["workflowDefinitionVersion"] == 2
     assert payload["data"]["timeout"] == 45
     assert payload["resolved"]["syncDefine"] is True
 
 
-def test_workflow_instance_update_command_suggests_workflow_edit_for_definition_fields(
+def test_workflow_instance_edit_command_suggests_workflow_edit_for_definition_fields(
     tmp_path: Path,
 ) -> None:
     patch_file = tmp_path / "workflow-instance.patch.yaml"
@@ -451,7 +451,7 @@ patch:
         app,
         [
             "workflow-instance",
-            "update",
+            "edit",
             "903",
             "--patch",
             str(patch_file),

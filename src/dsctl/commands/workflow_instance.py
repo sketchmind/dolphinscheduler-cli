@@ -8,6 +8,7 @@ from dsctl.services.workflow_instance import (
     DEFAULT_WATCH_INTERVAL_SECONDS,
     DEFAULT_WATCH_TIMEOUT_SECONDS,
     digest_workflow_instance_result,
+    edit_workflow_instance_result,
     execute_task_in_workflow_instance_result,
     get_parent_workflow_instance_result,
     get_workflow_instance_result,
@@ -15,7 +16,6 @@ from dsctl.services.workflow_instance import (
     recover_failed_workflow_instance_result,
     rerun_workflow_instance_result,
     stop_workflow_instance_result,
-    update_workflow_instance_result,
     watch_workflow_instance_result,
 )
 
@@ -214,8 +214,8 @@ def digest_command(
     )
 
 
-@workflow_instance_app.command("update")
-def update_command(
+@workflow_instance_app.command("edit")
+def edit_command(
     ctx: typer.Context,
     workflow_instance: Annotated[
         int,
@@ -229,7 +229,13 @@ def update_command(
             dir_okay=False,
             exists=True,
             file_okay=True,
-            help="Path to one workflow patch YAML file.",
+            help=(
+                "Path to one workflow-instance patch YAML file. Start from "
+                "`dsctl template workflow-instance-patch --raw`; `tasks.create[]` "
+                "uses full task fragments from `dsctl template task`; "
+                "`tasks.update[].set` uses partial task fields discovered with "
+                "`dsctl task-type schema TYPE`."
+            ),
             readable=True,
             resolve_path=True,
         ),
@@ -246,8 +252,7 @@ def update_command(
         typer.Option(
             "--dry-run",
             help=(
-                "Compile the merged workflow-instance update payload without "
-                "sending it."
+                "Compile the merged workflow-instance edit payload without sending it."
             ),
         ),
     ] = False,
@@ -256,8 +261,8 @@ def update_command(
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
-        "workflow-instance.update",
-        lambda: update_workflow_instance_result(
+        "workflow-instance.edit",
+        lambda: edit_workflow_instance_result(
             workflow_instance,
             patch=patch,
             sync_definition=sync_definition,

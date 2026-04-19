@@ -238,6 +238,44 @@ def test_schema_result_describes_current_stable_surface() -> None:
     }
     assert _find_option(workflow_options, "with-schedule")["default"] is False
     assert _find_option(workflow_options, "raw")["default"] is False
+    workflow_patch_command = _find_command(
+        template_group["commands"],
+        "workflow-patch",
+    )
+    assert workflow_patch_command["action"] == "template.workflow-patch"
+    assert workflow_patch_command["payload"] == {
+        "format": "yaml",
+        "raw_option": "--raw",
+        "template_command": "dsctl template workflow-patch --raw",
+        "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+    }
+    assert workflow_patch_command["data_shape"] == {
+        "kind": "summary",
+        "row_path": "data.lines",
+        "default_columns": ["line_no", "line"],
+        "column_discovery": "runtime_row_keys",
+    }
+    workflow_instance_patch_command = _find_command(
+        template_group["commands"],
+        "workflow-instance-patch",
+    )
+    assert workflow_instance_patch_command["action"] == (
+        "template.workflow-instance-patch"
+    )
+    assert workflow_instance_patch_command["payload"] == {
+        "format": "yaml",
+        "raw_option": "--raw",
+        "template_command": "dsctl template workflow-instance-patch --raw",
+        "target_command": (
+            "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+        ),
+    }
+    assert workflow_instance_patch_command["data_shape"] == {
+        "kind": "summary",
+        "row_path": "data.lines",
+        "default_columns": ["line_no", "line"],
+        "column_discovery": "runtime_row_keys",
+    }
     params_command = _find_command(template_group["commands"], "params")
     assert params_command["action"] == "template.params"
     params_options = _require_list(params_command["options"])
@@ -1014,7 +1052,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "get",
         "parent",
         "digest",
-        "update",
+        "edit",
         "watch",
         "stop",
         "rerun",
@@ -1044,16 +1082,14 @@ def test_schema_result_describes_current_stable_surface() -> None:
         _require_dict(workflow_instance_get_args[0])["discovery_command"]
         == "dsctl workflow-instance list"
     )
-    workflow_instance_update = _find_command(
+    workflow_instance_edit = _find_command(
         workflow_instance_group["commands"],
-        "update",
+        "edit",
     )
-    workflow_instance_update_options = _require_list(
-        workflow_instance_update["options"]
-    )
-    assert _find_option(workflow_instance_update_options, "patch")["required"] is True
+    workflow_instance_edit_options = _require_list(workflow_instance_edit["options"])
+    assert _find_option(workflow_instance_edit_options, "patch")["required"] is True
     assert (
-        _find_option(workflow_instance_update_options, "sync-definition")["default"]
+        _find_option(workflow_instance_edit_options, "sync-definition")["default"]
         is False
     )
     workflow_instance_execute_task = _find_command(
@@ -1196,6 +1232,18 @@ def test_schema_result_describes_current_stable_surface() -> None:
                 "with_schedule_option": True,
                 "raw_template_command": "dsctl template workflow --raw",
             },
+            "workflow_patch": {
+                "raw_template_command": "dsctl template workflow-patch --raw",
+                "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+            },
+            "workflow_instance_patch": {
+                "raw_template_command": (
+                    "dsctl template workflow-instance-patch --raw"
+                ),
+                "target_command": (
+                    "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+                ),
+            },
             "parameters": EXPECTED_PARAMETER_SYNTAX,
             "environment": {
                 "command": "dsctl template environment",
@@ -1225,6 +1273,8 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "workflow_digest": True,
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
+            "workflow_patch_template": True,
+            "workflow_instance_patch_template": True,
             "environment_config_template": True,
             "cluster_config_template": True,
             "datasource_payload_templates": True,
@@ -1454,6 +1504,14 @@ def test_schema_result_command_rows_expose_payload_discovery() -> None:
         "kind": "payload",
         "name": "template_discovery_command",
         "value": "dsctl template datasource",
+    } in rows
+    assert {
+        "kind": "payload",
+        "name": "target_commands",
+        "value": (
+            "dsctl datasource create --file FILE, "
+            "dsctl datasource update DATASOURCE --file FILE"
+        ),
     } in rows
 
 

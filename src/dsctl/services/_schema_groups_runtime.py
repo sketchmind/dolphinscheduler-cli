@@ -283,8 +283,8 @@ def workflow_instance_group() -> dict[str, object]:
                 ],
             ),
             command(
-                "update",
-                action="workflow-instance.update",
+                "edit",
+                action="workflow-instance.edit",
                 summary="Edit one finished workflow instance from a YAML patch file.",
                 arguments=[
                     argument(
@@ -302,7 +302,14 @@ def workflow_instance_group() -> dict[str, object]:
                     option(
                         "patch",
                         value_type="path",
-                        description="Path to one workflow patch YAML file.",
+                        description=(
+                            "Path to one workflow-instance patch YAML file. "
+                            "Start from `dsctl template workflow-instance-patch "
+                            "--raw`; `tasks.create[]` uses full task fragments "
+                            "from `dsctl template task`; `tasks.update[].set` "
+                            "uses partial task fields discovered with `dsctl "
+                            "task-type schema TYPE`."
+                        ),
                         required=True,
                     ),
                     option(
@@ -318,7 +325,7 @@ def workflow_instance_group() -> dict[str, object]:
                         "dry-run",
                         value_type="boolean",
                         description=(
-                            "Compile the merged workflow-instance update payload "
+                            "Compile the merged workflow-instance edit payload "
                             "without sending it."
                         ),
                         default=False,

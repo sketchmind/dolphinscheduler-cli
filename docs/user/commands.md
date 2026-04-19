@@ -68,9 +68,11 @@ dsctl task-type get SQL
 dsctl task-type schema SQL
 dsctl template task SQL --variant pre-post-statements --raw
 dsctl template workflow --raw > workflow.yaml
+dsctl template workflow-patch --raw > patch.yaml
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --project etl-prod --dry-run
 dsctl workflow create --file workflow.yaml --project etl-prod
+dsctl workflow edit WORKFLOW --patch patch.yaml --dry-run
 ```
 
 ## Runtime

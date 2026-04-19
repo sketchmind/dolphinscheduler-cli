@@ -53,6 +53,20 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         for task_type in expected_supported_types
         if task_type not in expected_typed_types
     ]
+    assert payload["data"]["capabilities"]["templates"]["workflow"] == {
+        "with_schedule_option": True,
+        "raw_template_command": "dsctl template workflow --raw",
+    }
+    assert payload["data"]["capabilities"]["templates"]["workflow_patch"] == {
+        "raw_template_command": "dsctl template workflow-patch --raw",
+        "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+    }
+    assert payload["data"]["capabilities"]["templates"]["workflow_instance_patch"] == {
+        "raw_template_command": "dsctl template workflow-instance-patch --raw",
+        "target_command": (
+            "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+        ),
+    }
     assert payload["data"]["capabilities"]["templates"]["task"] == {
         "supported_types": expected_supported_types,
         "typed_types": expected_typed_types,

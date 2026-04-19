@@ -14,6 +14,8 @@ from dsctl.services.template import (
     supported_parameter_syntax_topics,
     task_template_result,
     task_template_types_result,
+    workflow_instance_patch_template_result,
+    workflow_patch_template_result,
     workflow_template_result,
 )
 
@@ -56,6 +58,57 @@ def workflow_command(
     emit_result(
         "template.workflow",
         lambda: workflow_template_result(with_schedule=bool(with_schedule)),
+    )
+
+
+@template_app.command("workflow-patch")
+def workflow_patch_command(
+    raw: Annotated[
+        bool | None,
+        typer.Option(
+            "--raw",
+            help=(
+                "Print only the workflow patch YAML template, without the JSON "
+                "envelope."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Emit the stable workflow edit patch YAML template."""
+    if raw:
+        emit_raw_result(
+            "template.workflow-patch",
+            workflow_patch_template_result,
+            _template_yaml,
+        )
+        return
+    emit_result("template.workflow-patch", workflow_patch_template_result)
+
+
+@template_app.command("workflow-instance-patch")
+def workflow_instance_patch_command(
+    raw: Annotated[
+        bool | None,
+        typer.Option(
+            "--raw",
+            help=(
+                "Print only the workflow-instance patch YAML template, "
+                "without the JSON envelope."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Emit the stable workflow-instance edit patch YAML template."""
+    if raw:
+        emit_raw_result(
+            "template.workflow-instance-patch",
+            workflow_instance_patch_template_result,
+            _template_yaml,
+        )
+        return
+    emit_result(
+        "template.workflow-instance-patch",
+        workflow_instance_patch_template_result,
     )
 
 

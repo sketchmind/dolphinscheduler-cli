@@ -164,6 +164,25 @@ class TextLineData(TypedDict):
     line: str
 
 
+class TextTemplateArtifactData(TypedDict):
+    """Stable metadata for one emitted text template."""
+
+    kind: str
+    format: str
+    raw_command: str
+    target_command: str
+
+
+class WorkflowPatchTemplateData(TypedDict):
+    """Stable discovery payload for workflow patch YAML templates."""
+
+    artifact: TextTemplateArtifactData
+    yaml: str
+    lines: list[TextLineData]
+    related_commands: list[str]
+    rules: list[str]
+
+
 class EnvironmentConfigTemplateData(TypedDict):
     """Stable discovery payload for `dsctl template environment`."""
 
@@ -725,6 +744,98 @@ def workflow_template_result(*, with_schedule: bool = False) -> CommandResult:
     )
 
 
+def workflow_patch_template_result() -> CommandResult:
+    """Return the stable workflow edit patch YAML template."""
+    yaml_text = _workflow_patch_template_yaml()
+    return CommandResult(
+        data=require_json_object(
+            WorkflowPatchTemplateData(
+                artifact=TextTemplateArtifactData(
+                    kind="workflow-patch-template",
+                    format="yaml",
+                    raw_command="dsctl template workflow-patch --raw",
+                    target_command="dsctl workflow edit WORKFLOW --patch FILE",
+                ),
+                yaml=yaml_text,
+                lines=_text_lines(yaml_text),
+                related_commands=[
+                    "dsctl workflow edit WORKFLOW --patch FILE --dry-run",
+                    "dsctl template task TYPE --raw",
+                    "dsctl task-type schema TYPE",
+                ],
+                rules=[
+                    "Patch YAML is rooted at `patch:`.",
+                    "workflow.set accepts definition-level metadata fields.",
+                    (
+                        "tasks.create[] uses full task fragments from "
+                        "`dsctl template task`."
+                    ),
+                    (
+                        "tasks.update[].set uses partial fields from "
+                        "`dsctl task-type schema TYPE`."
+                    ),
+                    "tasks.rename[] preserves DS task identity across a name change.",
+                    "Run --dry-run before mutating the workflow definition.",
+                ],
+            ),
+            label="workflow patch template data",
+        ),
+        resolved={"template": "workflow.patch"},
+    )
+
+
+def workflow_instance_patch_template_result() -> CommandResult:
+    """Return the stable workflow-instance edit patch YAML template."""
+    yaml_text = _workflow_instance_patch_template_yaml()
+    return CommandResult(
+        data=require_json_object(
+            WorkflowPatchTemplateData(
+                artifact=TextTemplateArtifactData(
+                    kind="workflow-instance-patch-template",
+                    format="yaml",
+                    raw_command="dsctl template workflow-instance-patch --raw",
+                    target_command=(
+                        "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+                    ),
+                ),
+                yaml=yaml_text,
+                lines=_text_lines(yaml_text),
+                related_commands=[
+                    (
+                        "dsctl workflow-instance edit WORKFLOW_INSTANCE "
+                        "--patch FILE --dry-run"
+                    ),
+                    "dsctl workflow-instance edit WORKFLOW_INSTANCE --sync-definition",
+                    "dsctl template task TYPE --raw",
+                    "dsctl task-type schema TYPE",
+                ],
+                rules=[
+                    "Patch YAML is rooted at `patch:`.",
+                    (
+                        "workflow-instance edit only accepts "
+                        "workflow.set.global_params and workflow.set.timeout."
+                    ),
+                    (
+                        "tasks.create[] uses full task fragments from "
+                        "`dsctl template task`."
+                    ),
+                    (
+                        "tasks.update[].set uses partial fields from "
+                        "`dsctl task-type schema TYPE`."
+                    ),
+                    (
+                        "Use --sync-definition only when the repaired instance "
+                        "DAG should be written back to the workflow definition."
+                    ),
+                    "Run --dry-run before mutating the workflow instance.",
+                ],
+            ),
+            label="workflow-instance patch template data",
+        ),
+        resolved={"template": "workflow-instance.patch"},
+    )
+
+
 def environment_config_template_result() -> CommandResult:
     """Return one DS environment shell/export config template."""
     lines = [
@@ -1088,6 +1199,87 @@ def _parameter_time_yaml() -> str:
             command: |
               echo "bizdate=${bizdate}"
               echo "month_start=${month_start}"
+        """
+    )
+
+
+def _workflow_patch_template_yaml() -> str:
+    return dedent(
+        """\
+        # Workflow patch YAML template for `dsctl workflow edit WORKFLOW --patch ...`
+        # Keep the root key as `patch:`. Remove unused operation blocks before use.
+        patch:
+          workflow:
+            set:
+              description: Updated workflow description
+              timeout: 3600
+
+          # Uncomment task operations as needed.
+          #
+          # tasks:
+          #   create:
+          #     - name: transform
+          #       type: SHELL
+          #       command: |
+          #         echo "transform step"
+          #       depends_on:
+          #         - extract
+          #
+          #   update:
+          #     - match:
+          #         name: load
+          #       set:
+          #         depends_on:
+          #           - transform
+          #
+          #   rename:
+          #     - from: old-load
+          #       to: load
+          #
+          #   delete:
+          #     - obsolete
+        """
+    )
+
+
+def _workflow_instance_patch_template_yaml() -> str:
+    return dedent(
+        """\
+        # Workflow-instance patch YAML template for:
+        # `dsctl workflow-instance edit ID --patch ...`
+        # Keep the root key as `patch:`. Remove unused operation blocks before use.
+        # Only workflow.set.global_params and workflow.set.timeout are accepted.
+        patch:
+          workflow:
+            set:
+              timeout: 3600
+              global_params:
+                repair_note: manual-repair
+
+          # Uncomment task operations as needed.
+          #
+          # tasks:
+          #   create:
+          #     - name: repair-step
+          #       type: SHELL
+          #       command: |
+          #         echo "repair step"
+          #       depends_on:
+          #         - failed-step
+          #
+          #   update:
+          #     - match:
+          #         name: failed-step
+          #       set:
+          #         command: |
+          #           echo "patched failed step"
+          #
+          #   rename:
+          #     - from: old-task
+          #       to: repaired-task
+          #
+          #   delete:
+          #     - obsolete-task
         """
     )
 

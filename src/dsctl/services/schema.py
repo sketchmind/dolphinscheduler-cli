@@ -538,6 +538,8 @@ def _schema_payload_rows(payload: JsonObject) -> list[JsonObject]:
         "template_json_path",
         "template_payload_path",
         "paste_into",
+        "target_command",
+        "target_commands",
         "type_discovery_command",
         "type_enum",
         "upstream_request_shape",

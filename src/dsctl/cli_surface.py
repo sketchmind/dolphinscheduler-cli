@@ -267,6 +267,8 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
     ),
     TEMPLATE_RESOURCE: (
         _surface_command(WORKFLOW_RESOURCE),
+        _surface_command("workflow-patch"),
+        _surface_command("workflow-instance-patch"),
         _surface_command("params"),
         _surface_command(ENV_RESOURCE),
         _surface_command(CLUSTER_RESOURCE),
@@ -303,7 +305,7 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
         _surface_command("get"),
         _surface_command("parent"),
         _surface_command("digest"),
-        _surface_command("update"),
+        _surface_command("edit"),
         _surface_command("watch"),
         _surface_command("stop"),
         _surface_command("rerun"),

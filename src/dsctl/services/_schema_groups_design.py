@@ -528,6 +528,54 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                 },
             ),
             command(
+                "workflow-patch",
+                action="template.workflow-patch",
+                summary="Emit the stable workflow edit patch YAML template.",
+                options=[
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the workflow patch YAML template, "
+                            "without the JSON envelope."
+                        ),
+                        default=False,
+                    ),
+                ],
+                payload={
+                    "format": "yaml",
+                    "raw_option": "--raw",
+                    "template_command": "dsctl template workflow-patch --raw",
+                    "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+                },
+            ),
+            command(
+                "workflow-instance-patch",
+                action="template.workflow-instance-patch",
+                summary="Emit the stable workflow-instance edit patch YAML template.",
+                options=[
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the workflow-instance patch YAML template, "
+                            "without the JSON envelope."
+                        ),
+                        default=False,
+                    ),
+                ],
+                payload={
+                    "format": "yaml",
+                    "raw_option": "--raw",
+                    "template_command": (
+                        "dsctl template workflow-instance-patch --raw"
+                    ),
+                    "target_command": (
+                        "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+                    ),
+                },
+            ),
+            command(
                 "params",
                 action="template.params",
                 summary="Emit DS parameter syntax metadata and examples.",
@@ -728,8 +776,9 @@ def workflow_group() -> dict[str, object]:
                         value_type="path",
                         description=(
                             "Path to one workflow YAML specification file. Start "
-                            "from `dsctl template workflow` when authoring a new "
-                            "file."
+                            "from `dsctl template workflow --raw`; add task "
+                            "fragments with `dsctl template task`, and inspect "
+                            "task fields with `dsctl task-type schema TYPE`."
                         ),
                         required=True,
                     ),
@@ -777,8 +826,13 @@ def workflow_group() -> dict[str, object]:
                         "patch",
                         value_type="path",
                         description=(
-                            "Path to one workflow patch YAML file. Use --dry-run "
-                            "to inspect the compiled diff before apply."
+                            "Path to one workflow patch YAML file. Start from "
+                            "`dsctl template workflow-patch --raw`; use "
+                            "--dry-run to inspect the compiled diff. "
+                            "`tasks.create[]` uses full task fragments from "
+                            "`dsctl template task`; `tasks.update[].set` uses "
+                            "partial task fields discovered with `dsctl "
+                            "task-type schema TYPE`."
                         ),
                         required=True,
                     ),
@@ -787,7 +841,7 @@ def workflow_group() -> dict[str, object]:
                         "dry-run",
                         value_type="boolean",
                         description=(
-                            "Compile the merged workflow update payload without "
+                            "Compile the merged workflow edit payload without "
                             "sending it."
                         ),
                         default=False,

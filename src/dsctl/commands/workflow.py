@@ -315,7 +315,9 @@ def create_command(
             file_okay=True,
             help=(
                 "Path to one workflow YAML specification file. Start from "
-                "`dsctl template workflow` when authoring a new file."
+                "`dsctl template workflow --raw`; add task fragments with "
+                "`dsctl template task`, and inspect task fields with "
+                "`dsctl task-type schema TYPE`."
             ),
             readable=True,
             resolve_path=True,
@@ -382,8 +384,12 @@ def edit_command(
             exists=True,
             file_okay=True,
             help=(
-                "Path to one workflow patch YAML file. Use --dry-run to inspect "
-                "the compiled diff before apply."
+                "Path to one workflow patch YAML file. Start from `dsctl "
+                "template workflow-patch --raw`; use --dry-run to inspect the "
+                "compiled diff. `tasks.create[]` uses full task fragments from "
+                "`dsctl template task`; "
+                "`tasks.update[].set` uses partial task fields discovered with "
+                "`dsctl task-type schema TYPE`."
             ),
             readable=True,
             resolve_path=True,
@@ -400,7 +406,7 @@ def edit_command(
         bool,
         typer.Option(
             "--dry-run",
-            help="Compile the merged workflow update payload without sending it.",
+            help="Compile the merged workflow edit payload without sending it.",
         ),
     ] = False,
 ) -> None:

@@ -1136,7 +1136,7 @@ def test_execute_task_in_workflow_instance_result_reports_scope_choices(
     )
 
 
-def test_update_workflow_instance_result_dry_run_compiles_patch(
+def test_edit_workflow_instance_result_dry_run_compiles_patch(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
@@ -1164,7 +1164,7 @@ patch:
         encoding="utf-8",
     )
 
-    result = workflow_instance_service.update_workflow_instance_result(
+    result = workflow_instance_service.edit_workflow_instance_result(
         902,
         patch=patch_file,
         dry_run=True,
@@ -1182,7 +1182,7 @@ patch:
     assert _mapping(result.resolved["workflow"])["code"] == 101
 
 
-def test_update_workflow_instance_result_updates_finished_instance(
+def test_edit_workflow_instance_result_updates_finished_instance(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
@@ -1211,7 +1211,7 @@ patch:
         encoding="utf-8",
     )
 
-    result = workflow_instance_service.update_workflow_instance_result(
+    result = workflow_instance_service.edit_workflow_instance_result(
         902,
         patch=patch_file,
         sync_definition=True,
@@ -1253,7 +1253,7 @@ patch:
     assert _mapping(result.resolved["workflow"])["version"] == 2
 
 
-def test_update_workflow_instance_result_rejects_non_final_state(
+def test_edit_workflow_instance_result_rejects_non_final_state(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
@@ -1277,19 +1277,19 @@ patch:
 
     with pytest.raises(
         InvalidStateError,
-        match="final state before update",
+        match="final state before edit",
     ) as exc_info:
-        workflow_instance_service.update_workflow_instance_result(
+        workflow_instance_service.edit_workflow_instance_result(
             901,
             patch=patch_file,
         )
     assert exc_info.value.suggestion == (
         "Wait for the workflow instance to reach a final state, then retry "
-        "`dsctl workflow-instance update ID --patch PATCH`."
+        "`dsctl workflow-instance edit ID --patch PATCH`."
     )
 
 
-def test_update_workflow_instance_result_rejects_unsupported_workflow_fields(
+def test_edit_workflow_instance_result_rejects_unsupported_workflow_fields(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
@@ -1312,7 +1312,7 @@ patch:
     )
 
     with pytest.raises(UserInputError, match="only supports") as exc_info:
-        workflow_instance_service.update_workflow_instance_result(
+        workflow_instance_service.edit_workflow_instance_result(
             902,
             patch=patch_file,
         )

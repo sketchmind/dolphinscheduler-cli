@@ -5,7 +5,7 @@ import pytest
 import yaml
 
 from dsctl.errors import UserInputError
-from dsctl.models import WorkflowSpec, supported_typed_task_types
+from dsctl.models import WorkflowPatchDocument, WorkflowSpec, supported_typed_task_types
 from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services.template import (
     ParameterSyntaxIndexData,
@@ -21,6 +21,8 @@ from dsctl.services.template import (
     task_template_result,
     task_template_types_result,
     typed_task_template_types,
+    workflow_instance_patch_template_result,
+    workflow_patch_template_result,
     workflow_template_result,
 )
 from dsctl.upstream import upstream_default_task_types
@@ -68,6 +70,57 @@ def test_workflow_template_result_can_include_schedule_block() -> None:
     )
     assert document["schedule"]["cron"] == "0 0 2 * * ?"
     assert document["schedule"]["enabled"] is False
+
+
+def test_workflow_patch_template_result_returns_valid_patch_document() -> None:
+    result = workflow_patch_template_result()
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {"template": "workflow.patch"}
+    assert data["artifact"] == {
+        "kind": "workflow-patch-template",
+        "format": "yaml",
+        "raw_command": "dsctl template workflow-patch --raw",
+        "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+    }
+    yaml_text = data["yaml"]
+    assert isinstance(yaml_text, str)
+    document = yaml.safe_load(yaml_text)
+    patch = WorkflowPatchDocument.model_validate(document).patch
+
+    assert data["lines"][0]["line"].startswith("# Workflow patch YAML")
+    assert patch.workflow is not None
+    assert patch.workflow.set.description == "Updated workflow description"
+    assert patch.workflow.set.timeout == 3600
+    assert patch.tasks is None
+    assert "tasks.create" in data["rules"][2]
+    assert "dsctl task-type schema TYPE" in data["related_commands"]
+
+
+def test_workflow_instance_patch_template_result_uses_instance_safe_fields() -> None:
+    result = workflow_instance_patch_template_result()
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {"template": "workflow-instance.patch"}
+    assert data["artifact"] == {
+        "kind": "workflow-instance-patch-template",
+        "format": "yaml",
+        "raw_command": "dsctl template workflow-instance-patch --raw",
+        "target_command": "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE",
+    }
+    yaml_text = data["yaml"]
+    assert isinstance(yaml_text, str)
+    document = yaml.safe_load(yaml_text)
+    patch = WorkflowPatchDocument.model_validate(document).patch
+
+    assert data["lines"][0]["line"].startswith("# Workflow-instance patch YAML")
+    assert patch.workflow is not None
+    assert patch.workflow.set.model_fields_set == {"timeout", "global_params"}
+    assert patch.workflow.set.timeout == 3600
+    assert patch.tasks is None
+    assert "workflow-instance edit only accepts" in data["rules"][1]
 
 
 def test_parameter_syntax_result_describes_dynamic_parameter_shape() -> None:

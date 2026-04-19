@@ -201,6 +201,16 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
         row_path="data.lines",
         default_columns=("line_no", "line"),
     ),
+    "template.workflow-patch": DataShape(
+        kind="summary",
+        row_path="data.lines",
+        default_columns=("line_no", "line"),
+    ),
+    "template.workflow-instance-patch": DataShape(
+        kind="summary",
+        row_path="data.lines",
+        default_columns=("line_no", "line"),
+    ),
     "workflow.lineage.list": DataShape(
         kind="summary",
         row_path="data.workFlowRelationDetailList",

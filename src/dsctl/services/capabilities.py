@@ -89,6 +89,8 @@ AUTHORING_SUMMARY_KEYS = (
     "workflow_digest",
     "workflow_schedule_block",
     "workflow_dry_run",
+    "workflow_patch_template",
+    "workflow_instance_patch_template",
     "cluster_config_template",
     "task_template_types",
     "task_authoring_schema",
@@ -165,6 +167,18 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
                 "with_schedule_option": True,
                 "raw_template_command": "dsctl template workflow --raw",
             },
+            "workflow_patch": {
+                "raw_template_command": "dsctl template workflow-patch --raw",
+                "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+            },
+            "workflow_instance_patch": {
+                "raw_template_command": (
+                    "dsctl template workflow-instance-patch --raw"
+                ),
+                "target_command": (
+                    "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+                ),
+            },
             "parameters": parameter_syntax_index_data(),
             "environment": {
                 "command": "dsctl template environment",
@@ -194,6 +208,8 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
             "workflow_digest": True,
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
+            "workflow_patch_template": True,
+            "workflow_instance_patch_template": True,
             "environment_config_template": True,
             "cluster_config_template": True,
             "datasource_payload_templates": True,
@@ -264,6 +280,8 @@ def _capabilities_data(support: VersionSupport) -> dict[str, object]:
             "workflow_digest": True,
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
+            "workflow_patch_template": True,
+            "workflow_instance_patch_template": True,
             "parameter_syntax": parameter_syntax_index_data(),
             "environment_config_template": True,
             "cluster_config_template": True,
