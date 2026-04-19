@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 from dsctl.app import app
 from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.template import parameter_syntax_index_data
+from tests.support import normalize_cli_help
 
 runner = CliRunner()
 
@@ -133,10 +134,11 @@ def test_capabilities_help_points_to_section_discovery() -> None:
     result = runner.invoke(app, ["capabilities", "--help"])
 
     assert result.exit_code == 0
-    assert "dsctl schema --command" in result.stdout
-    assert "capabilities" in result.stdout
-    assert "selection" in result.stdout
-    assert "runtime" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "dsctl schema --command" in help_text
+    assert "capabilities" in help_text
+    assert "selection" in help_text
+    assert "runtime" in help_text
 
 
 def test_capabilities_command_honors_env_file_ds_version() -> None:

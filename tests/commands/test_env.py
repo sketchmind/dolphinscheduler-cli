@@ -13,7 +13,7 @@ from tests.fakes import (
     FakeProjectAdapter,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -78,8 +78,9 @@ def test_env_create_help_points_to_config_template() -> None:
     result = runner.invoke(app, ["environment", "create", "--help"])
 
     assert result.exit_code == 0
-    assert "--config-file" in result.stdout
-    assert "dsctl template environment" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "--config-file" in help_text
+    assert "dsctl template environment" in help_text
 
 
 def test_env_create_command_returns_created_environment() -> None:

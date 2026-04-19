@@ -12,7 +12,7 @@ from tests.fakes import (
     FakeResourceItem,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -89,8 +89,9 @@ def test_resource_path_help_points_to_list_discovery() -> None:
     result = runner.invoke(app, ["resource", "view", "--help"])
 
     assert result.exit_code == 0
-    assert "dsctl resource list" in result.stdout
-    assert "--dir DIR" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "dsctl resource list" in help_text
+    assert "--dir DIR" in help_text
 
 
 def test_resource_upload_and_mkdir_commands_mutate_resources(tmp_path: Path) -> None:
@@ -131,7 +132,7 @@ def test_resource_create_help_points_to_upload_for_local_files() -> None:
     result = runner.invoke(app, ["resource", "create", "--help"])
 
     assert result.exit_code == 0
-    assert "resource upload --file PATH" in result.stdout
+    assert "resource upload --file PATH" in normalize_cli_help(result.stdout)
 
 
 def test_resource_download_command_writes_output_file(tmp_path: Path) -> None:

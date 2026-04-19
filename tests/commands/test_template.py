@@ -5,6 +5,7 @@ from typer.testing import CliRunner
 from dsctl.app import app
 from dsctl.models import supported_typed_task_types
 from dsctl.upstream import upstream_default_task_types
+from tests.support import normalize_cli_help
 
 runner = CliRunner()
 
@@ -278,10 +279,11 @@ def test_template_task_help_points_to_type_and_variant_discovery() -> None:
     result = runner.invoke(app, ["template", "task", "--help"])
 
     assert result.exit_code == 0
-    assert "Required unless --list" in result.stdout
-    assert "post-json" in result.stdout
-    assert "workflow-dependency" in result.stdout
-    assert "dsctl template task --list" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "Required unless --list" in help_text
+    assert "post-json" in help_text
+    assert "workflow-dependency" in help_text
+    assert "dsctl template task --list" in help_text
 
 
 def test_template_task_command_requires_type_without_list() -> None:

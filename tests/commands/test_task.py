@@ -19,7 +19,7 @@ from tests.fakes import (
     FakeWorkflowTaskRelation,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -151,8 +151,9 @@ def test_task_update_help_points_to_command_schema() -> None:
     result = runner.invoke(app, ["task", "update", "--help"])
 
     assert result.exit_code == 0
-    assert "schema --command" in result.stdout
-    assert "task.update" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "schema --command" in help_text
+    assert "task.update" in help_text
 
 
 def test_task_update_command_can_dry_run_native_update() -> None:

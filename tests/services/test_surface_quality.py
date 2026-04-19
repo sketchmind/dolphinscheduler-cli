@@ -8,6 +8,7 @@ from itertools import product
 from pathlib import Path
 from typing import TypedDict
 
+from tests.support import normalize_cli_help
 from typer.testing import CliRunner
 
 from dsctl.app import app
@@ -273,7 +274,7 @@ def test_schema_choice_fields_are_discoverable_from_help_or_schema() -> None:
         if result.exit_code != 0:
             issues.append(f"{' '.join(path)}: help exited {result.exit_code}")
             continue
-        help_text = result.stdout
+        help_text = normalize_cli_help(result.stdout)
         for field_kind, field in _iter_schema_command_fields(command):
             choices = field.get("choices")
             if not isinstance(choices, list) or not choices:
@@ -324,7 +325,7 @@ def test_schema_discovery_commands_point_to_existing_help_surfaces() -> None:
             )
             continue
 
-        help_text = result.stdout
+        help_text = normalize_cli_help(result.stdout)
         issues.extend(
             f"{discovery_command}: {flag} missing from {' '.join(command_path)} --help"
             for flag in _option_flags_after_path(tokens[1:], command_path)
