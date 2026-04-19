@@ -1,4 +1,5 @@
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, cast
 
 import typer
 
@@ -23,8 +24,8 @@ env_app = typer.Typer(
 
 
 def register_env_commands(app: typer.Typer) -> None:
-    """Register the `env` command group."""
-    app.add_typer(env_app, name="env")
+    """Register the `environment` command group."""
+    app.add_typer(env_app, name="environment")
 
 
 @env_app.command("list")
@@ -66,7 +67,7 @@ def list_command(
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
-        "env.list",
+        "environment.list",
         lambda: list_environments_result(
             env_file=env_file,
             search=search,
@@ -82,14 +83,16 @@ def get_command(
     ctx: typer.Context,
     environment: Annotated[
         str,
-        typer.Argument(help="Environment name or numeric code."),
+        typer.Argument(
+            help="Environment name or numeric code. Use list to discover values."
+        ),
     ],
 ) -> None:
     """Get one environment by name or code."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
-        "env.get",
+        "environment.get",
         lambda: get_environment_result(environment, env_file=env_file),
     )
 
@@ -106,12 +109,32 @@ def create_command(
         ),
     ],
     config: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--config",
-            help="Environment config payload.",
+            help=(
+                "Inline DS environment shell/export config. Prefer "
+                "--config-file for multiline configs; run "
+                "`dsctl template environment` "
+                "for an example."
+            ),
         ),
-    ],
+    ] = None,
+    config_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-file",
+            dir_okay=False,
+            exists=True,
+            file_okay=True,
+            help=(
+                "Path to a DS environment shell/export config file. Run "
+                "`dsctl template environment` for an example."
+            ),
+            readable=True,
+            resolve_path=True,
+        ),
+    ] = None,
     description: Annotated[
         str | None,
         typer.Option(
@@ -127,14 +150,21 @@ def create_command(
         ),
     ] = None,
 ) -> None:
-    """Create one environment."""
+    """Create one environment; pass --config or --config-file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
-        "env.create",
+        "environment.create",
         lambda: create_environment_result(
             name=name,
-            config=config,
+            config=cast(
+                "str",
+                _environment_config_from_options(
+                    config=config,
+                    config_file=config_file,
+                    required=True,
+                ),
+            ),
             description=description,
             worker_groups=worker_groups,
             env_file=env_file,
@@ -147,7 +177,9 @@ def update_command(
     ctx: typer.Context,
     environment: Annotated[
         str,
-        typer.Argument(help="Environment name or numeric code."),
+        typer.Argument(
+            help="Environment name or numeric code. Use list to discover values."
+        ),
     ],
     *,
     name: Annotated[
@@ -161,7 +193,26 @@ def update_command(
         str | None,
         typer.Option(
             "--config",
-            help="Updated environment config. Omit to keep the current config.",
+            help=(
+                "Updated inline DS environment shell/export config. Omit to "
+                "keep the current config; prefer --config-file for multiline "
+                "configs."
+            ),
+        ),
+    ] = None,
+    config_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-file",
+            dir_okay=False,
+            exists=True,
+            file_okay=True,
+            help=(
+                "Path to an updated DS environment shell/export config file. "
+                "Omit both config options to keep the current config."
+            ),
+            readable=True,
+            resolve_path=True,
         ),
     ] = None,
     description: Annotated[
@@ -193,7 +244,7 @@ def update_command(
         ),
     ] = False,
 ) -> None:
-    """Update one environment."""
+    """Update one environment; config may come from --config-file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
@@ -224,13 +275,17 @@ def update_command(
         return update_environment_result(
             environment,
             name=name,
-            config=config,
+            config=_environment_config_from_options(
+                config=config,
+                config_file=config_file,
+                required=False,
+            ),
             description=description_update,
             worker_groups=worker_groups_update,
             env_file=env_file,
         )
 
-    emit_result("env.update", build_result)
+    emit_result("environment.update", build_result)
 
 
 @env_app.command("delete")
@@ -238,7 +293,9 @@ def delete_command(
     ctx: typer.Context,
     environment: Annotated[
         str,
-        typer.Argument(help="Environment name or numeric code."),
+        typer.Argument(
+            help="Environment name or numeric code. Use list to discover values."
+        ),
     ],
     *,
     force: Annotated[
@@ -253,10 +310,40 @@ def delete_command(
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
-        "env.delete",
+        "environment.delete",
         lambda: delete_environment_result(
             environment,
             force=force,
             env_file=env_file,
         ),
     )
+
+
+def _environment_config_from_options(
+    *,
+    config: str | None,
+    config_file: Path | None,
+    required: bool,
+) -> str | None:
+    if config is not None and config_file is not None:
+        message = "--config and --config-file are mutually exclusive"
+        raise UserInputError(
+            message,
+            suggestion=(
+                "Pass inline config with --config or read it from --config-file."
+            ),
+        )
+    if config_file is not None:
+        return config_file.read_text(encoding="utf-8")
+    if config is not None:
+        return config
+    if required:
+        message = "Environment config is required"
+        raise UserInputError(
+            message,
+            suggestion=(
+                "Pass --config TEXT or --config-file PATH. Run "
+                "`dsctl template environment` for an example shell/export config."
+            ),
+        )
+    return None

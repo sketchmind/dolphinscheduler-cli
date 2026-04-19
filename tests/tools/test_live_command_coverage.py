@@ -15,6 +15,7 @@ LOCAL_ONLY_COMMANDS = {
     "lint workflow",
     "schema",
     "template datasource",
+    "template environment",
     "template params",
     "template task",
     "template workflow",

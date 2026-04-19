@@ -8,12 +8,12 @@ from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 def env_group() -> dict[str, object]:
     """Build the environment command group schema."""
     return group(
-        "env",
+        "environment",
         summary="Manage DolphinScheduler environments.",
         commands=[
             command(
                 "list",
-                action="env.list",
+                action="environment.list",
                 summary=(
                     "List environments with optional filtering and pagination controls."
                 ),
@@ -48,21 +48,24 @@ def env_group() -> dict[str, object]:
             ),
             command(
                 "get",
-                action="env.get",
+                action="environment.get",
                 summary="Get one environment by name or code.",
                 arguments=[
                     argument(
                         "environment",
                         value_type="string",
-                        description="Environment name or numeric code.",
+                        description=(
+                            "Environment name or numeric code. Use list to "
+                            "discover values."
+                        ),
                         selector="name_or_code",
                     )
                 ],
             ),
             command(
                 "create",
-                action="env.create",
-                summary="Create one environment.",
+                action="environment.create",
+                summary="Create one environment; pass --config or --config-file.",
                 options=[
                     option(
                         "name",
@@ -73,8 +76,20 @@ def env_group() -> dict[str, object]:
                     option(
                         "config",
                         value_type="string",
-                        description="Environment config payload.",
-                        required=True,
+                        description=(
+                            "Inline DS environment shell/export config. Prefer "
+                            "--config-file for multiline configs."
+                        ),
+                        examples=["export JAVA_HOME=/opt/java"],
+                        discovery_command="dsctl template environment",
+                    ),
+                    option(
+                        "config-file",
+                        value_type="path",
+                        description=(
+                            "Path to a DS environment shell/export config file."
+                        ),
+                        discovery_command="dsctl template environment",
                     ),
                     option(
                         "description",
@@ -94,13 +109,19 @@ def env_group() -> dict[str, object]:
             ),
             command(
                 "update",
-                action="env.update",
-                summary="Update one environment by name or code.",
+                action="environment.update",
+                summary=(
+                    "Update one environment by name or code; config may come "
+                    "from --config-file."
+                ),
                 arguments=[
                     argument(
                         "environment",
                         value_type="string",
-                        description="Environment name or numeric code.",
+                        description=(
+                            "Environment name or numeric code. Use list to "
+                            "discover values."
+                        ),
                         selector="name_or_code",
                     )
                 ],
@@ -116,9 +137,22 @@ def env_group() -> dict[str, object]:
                         "config",
                         value_type="string",
                         description=(
-                            "Updated environment config. Omit to keep the current "
+                            "Updated inline DS environment shell/export config. "
+                            "Omit to keep the current config; prefer --config-file "
+                            "for multiline configs."
+                        ),
+                        examples=["export JAVA_HOME=/opt/java"],
+                        discovery_command="dsctl template environment",
+                    ),
+                    option(
+                        "config-file",
+                        value_type="path",
+                        description=(
+                            "Path to an updated DS environment shell/export config "
+                            "file. Omit both config options to keep the current "
                             "config."
                         ),
+                        discovery_command="dsctl template environment",
                     ),
                     option(
                         "description",
@@ -150,13 +184,16 @@ def env_group() -> dict[str, object]:
             ),
             command(
                 "delete",
-                action="env.delete",
+                action="environment.delete",
                 summary="Delete one environment by name or code.",
                 arguments=[
                     argument(
                         "environment",
                         value_type="string",
-                        description="Environment name or numeric code.",
+                        description=(
+                            "Environment name or numeric code. Use list to "
+                            "discover values."
+                        ),
                         selector="name_or_code",
                     )
                 ],
@@ -383,13 +420,11 @@ def datasource_group() -> dict[str, object]:
                         "file",
                         value_type="path",
                         description=(
-                            "Path to one DS-native datasource JSON payload file. "
-                            "Run `dsctl template datasource` to choose a type, "
-                            "then `dsctl template datasource --type TYPE` and "
-                            "write data.json to this file."
+                            "Path to one DS-native datasource JSON payload file."
                         ),
                         required=True,
                         value_name="PATH",
+                        discovery_command="dsctl template datasource",
                     )
                 ],
             ),
@@ -414,13 +449,11 @@ def datasource_group() -> dict[str, object]:
                         "file",
                         value_type="path",
                         description=(
-                            "Path to one DS-native datasource JSON payload file. "
-                            "Start from `dsctl datasource get DATASOURCE` or "
-                            "`dsctl template datasource --type TYPE`; masked "
-                            "password ****** preserves the existing password."
+                            "Path to one DS-native datasource JSON payload file."
                         ),
                         required=True,
                         value_name="PATH",
+                        discovery_command="dsctl template datasource",
                     )
                 ],
             ),

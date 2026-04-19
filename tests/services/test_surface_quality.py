@@ -41,7 +41,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = REPO_ROOT / "src" / "dsctl" / "commands"
 NAME_FIRST_RESOURCE_RESOLVERS = {
     "project": "project",
-    "env": "environment",
+    "environment": "environment",
     "cluster": "cluster",
     "datasource": "datasource",
     "namespace": "namespace",

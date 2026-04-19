@@ -162,6 +162,14 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
                 "with_schedule_option": True,
             },
             "parameters": parameter_syntax_index_data(),
+            "environment": {
+                "command": "dsctl template environment",
+                "source_options": ["--config TEXT", "--config-file PATH"],
+                "target_commands": [
+                    "dsctl environment create --name NAME --config-file env.sh",
+                    "dsctl environment update ENVIRONMENT --config-file env.sh",
+                ],
+            },
             "datasource": datasource_template_index_data(),
             "task": {
                 "supported_types": task_types,
@@ -177,6 +185,7 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
             "workflow_digest": True,
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
+            "environment_config_template": True,
             "datasource_payload_templates": True,
             "datasource_template_types": datasource_template_index_data()[
                 "supported_types"
@@ -244,6 +253,7 @@ def _capabilities_data(support: VersionSupport) -> dict[str, object]:
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
             "parameter_syntax": parameter_syntax_index_data(),
+            "environment_config_template": True,
             "task_template_types": task_types,
             "datasource_payload_templates": True,
             "datasource_template_types": datasource_template_index_data()[

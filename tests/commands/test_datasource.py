@@ -80,6 +80,15 @@ def test_datasource_get_command_resolves_name() -> None:
     assert payload["data"]["host"] == "db.example"
 
 
+def test_datasource_mutating_selector_help_points_to_list() -> None:
+    for command in ("delete", "test"):
+        result = runner.invoke(app, ["datasource", command, "--help"])
+
+        assert result.exit_code == 0
+        assert "Use list to" in result.stdout
+        assert "discover values." in result.stdout
+
+
 def test_datasource_create_command_returns_created_payload(tmp_path: Path) -> None:
     file = _write_json(
         tmp_path / "create.json",

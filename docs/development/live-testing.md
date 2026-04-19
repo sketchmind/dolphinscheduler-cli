@@ -294,7 +294,7 @@ future.
 | enum | `enum names`, `enum list` | No | generated enum metadata |
 | use | `use project|workflow|--clear` | No | local context persistence |
 | lint | `lint workflow FILE` | No | local validation only |
-| template | `template workflow|params|datasource|task` | No | local template rendering |
+| template | `template workflow|params|environment|datasource|task` | No | local template rendering |
 
 ### Meta And Diagnostics
 
@@ -309,7 +309,7 @@ future.
 
 | Surface | Commands | Default persona | Live required | Minimum live coverage |
 | --- | --- | --- | --- | --- |
-| env | `env list|get|create|update|delete` | delegated governance user | Yes | CRUD round-trip plus not-found or validation case |
+| environment | `environment list|get|create|update|delete` | delegated governance user | Yes | CRUD round-trip plus not-found or validation case |
 | cluster | `cluster list|get|create|update|delete` | delegated governance user | Yes | CRUD round-trip plus delete cleanup |
 | datasource | `datasource list|get|create|update|delete|test` | delegated governance user | Yes | CRUD round-trip and real connectivity test where the capability exists |
 | namespace | `namespace list|get|available|create|delete` | delegated governance user | Yes | list and availability plus create/delete round-trip |
@@ -347,7 +347,7 @@ Some resources still require live coverage, but only in a compatible cluster:
 
 - datasource connection tests need a reachable backend
 - alert-plugin tests need installed plugin instances or plugin backends
-- namespace, resource, env, and cluster operations may depend on deployment
+- namespace, resource, environment, and cluster operations may depend on deployment
   topology and storage configuration
 
 The rule is not “skip forever”. The rule is:
@@ -383,7 +383,7 @@ Current verified coverage includes:
   namespace capability/error paths
 - project surfaces: `task-type`, `project`, `project-parameter`,
   `project-preference`, `project-worker-group`
-- runtime-adjacent governance: `cluster`, `env`, `resource`
+- runtime-adjacent governance: `cluster`, `environment`, `resource`
 - workflow runtime surfaces: `workflow`, `task`, `workflow-instance`,
   `task-instance`, parent/sub-workflow relation reads, finished-instance DAG
   update with and without definition sync, schedule-triggered runtime,

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 USE_RESOURCE = "use"
 ENUM_RESOURCE = "enum"
 LINT_RESOURCE = "lint"
-ENV_RESOURCE = "env"
+ENV_RESOURCE = "environment"
 CLUSTER_RESOURCE = "cluster"
 DATASOURCE_RESOURCE = "datasource"
 NAMESPACE_RESOURCE = "namespace"
@@ -268,6 +268,7 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
     TEMPLATE_RESOURCE: (
         _surface_command(WORKFLOW_RESOURCE),
         _surface_command("params"),
+        _surface_command(ENV_RESOURCE),
         _surface_command(DATASOURCE_RESOURCE),
         _surface_command(TASK_RESOURCE),
     ),

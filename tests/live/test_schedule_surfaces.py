@@ -109,7 +109,7 @@ def test_etl_schedule_lifecycle_round_trips_and_triggers_runtime(
             run_dsctl(
                 live_repo_root,
                 [
-                    "env",
+                    "environment",
                     "create",
                     "--name",
                     environment_name,
@@ -122,7 +122,7 @@ def test_etl_schedule_lifecycle_round_trips_and_triggers_runtime(
                 ],
                 env_file=live_admin_env_file,
             ),
-            expected_action="env.create",
+            expected_action="environment.create",
             label="schedule environment create",
         )
         environment_create_data = require_mapping(
@@ -657,7 +657,7 @@ def test_etl_schedule_lifecycle_round_trips_and_triggers_runtime(
         if environment_created and environment_code is not None:
             run_dsctl(
                 live_repo_root,
-                ["env", "delete", str(environment_code), "--force"],
+                ["environment", "delete", str(environment_code), "--force"],
                 env_file=live_admin_env_file,
             )
         if project_created:

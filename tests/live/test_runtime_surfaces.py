@@ -249,7 +249,7 @@ def test_admin_environment_lifecycle_round_trips(
         run_dsctl(
             live_repo_root,
             [
-                "env",
+                "environment",
                 "create",
                 "--name",
                 initial_name,
@@ -262,7 +262,7 @@ def test_admin_environment_lifecycle_round_trips(
             ],
             env_file=live_admin_env_file,
         ),
-        expected_action="env.create",
+        expected_action="environment.create",
         label="env create",
     )
     create_data = require_mapping(create_payload["data"], label="env create data")
@@ -276,10 +276,10 @@ def test_admin_environment_lifecycle_round_trips(
         get_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
-                ["env", "get", current_name],
+                ["environment", "get", current_name],
                 env_file=live_admin_env_file,
             ),
-            expected_action="env.get",
+            expected_action="environment.get",
             label="env get",
         )
         get_data = require_mapping(get_payload["data"], label="env get data")
@@ -296,7 +296,7 @@ def test_admin_environment_lifecycle_round_trips(
             run_dsctl(
                 live_repo_root,
                 [
-                    "env",
+                    "environment",
                     "list",
                     "--search",
                     initial_name,
@@ -305,7 +305,7 @@ def test_admin_environment_lifecycle_round_trips(
                 ],
                 env_file=live_admin_env_file,
             ),
-            expected_action="env.list",
+            expected_action="environment.list",
             label="env list",
         )
         list_data = require_mapping(list_payload["data"], label="env list data")
@@ -319,7 +319,7 @@ def test_admin_environment_lifecycle_round_trips(
             run_dsctl(
                 live_repo_root,
                 [
-                    "env",
+                    "environment",
                     "update",
                     current_name,
                     "--name",
@@ -333,7 +333,7 @@ def test_admin_environment_lifecycle_round_trips(
                 ],
                 env_file=live_admin_env_file,
             ),
-            expected_action="env.update",
+            expected_action="environment.update",
             label="env update",
         )
         update_data = require_mapping(update_payload["data"], label="env update data")
@@ -346,10 +346,10 @@ def test_admin_environment_lifecycle_round_trips(
         get_by_code_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
-                ["env", "get", str(environment_code)],
+                ["environment", "get", str(environment_code)],
                 env_file=live_admin_env_file,
             ),
-            expected_action="env.get",
+            expected_action="environment.get",
             label="env get by code",
         )
         get_by_code_data = require_mapping(
@@ -362,10 +362,10 @@ def test_admin_environment_lifecycle_round_trips(
         delete_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
-                ["env", "delete", current_name, "--force"],
+                ["environment", "delete", current_name, "--force"],
                 env_file=live_admin_env_file,
             ),
-            expected_action="env.delete",
+            expected_action="environment.delete",
             label="env delete",
         )
         delete_data = require_mapping(delete_payload["data"], label="env delete data")

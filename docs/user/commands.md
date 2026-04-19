@@ -46,7 +46,9 @@ dsctl enum list WorkflowExecutionStatus
 
 ```bash
 dsctl project list
-dsctl env list
+dsctl environment list
+dsctl template environment
+dsctl environment create --name stock-etl --config-file env.sh
 dsctl datasource list
 dsctl schema --command datasource.create
 dsctl template datasource --type MYSQL
@@ -108,3 +110,11 @@ dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <
 Use `dsctl schema --command <ACTION>` and inspect `data_shape` to discover the
 canonical row/object path and default display columns for row-oriented
 commands.
+For quick terminal inspection of one command contract, use table output; scoped
+schema views include compact rows for arguments, options, payload hints, and
+data-shape metadata:
+
+```bash
+dsctl --output-format table schema --command datasource.create
+dsctl --output-format table --columns flag,description,discovery_command schema --command environment.create
+```

@@ -173,7 +173,9 @@ def delete_command(
     ctx: typer.Context,
     datasource: Annotated[
         str,
-        typer.Argument(help="Datasource name or numeric id."),
+        typer.Argument(
+            help="Datasource name or numeric id. Use list to discover values.",
+        ),
     ],
     *,
     force: Annotated[
@@ -202,7 +204,9 @@ def test_command(
     ctx: typer.Context,
     datasource: Annotated[
         str,
-        typer.Argument(help="Datasource name or numeric id."),
+        typer.Argument(
+            help="Datasource name or numeric id. Use list to discover values.",
+        ),
     ],
 ) -> None:
     """Run one datasource connection test after create or update."""

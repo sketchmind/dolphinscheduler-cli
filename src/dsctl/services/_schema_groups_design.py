@@ -472,8 +472,14 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                             "Parameter syntax topic. Omit for compact discovery."
                         ),
                         choices=supported_parameter_syntax_topics(),
+                        discovery_command="dsctl template params",
                     )
                 ],
+            ),
+            command(
+                "environment",
+                action="template.environment",
+                summary="Emit a DS environment shell/export config template.",
             ),
             command(
                 "datasource",
@@ -491,6 +497,7 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                             "discovery."
                         ),
                         choices=supported_datasource_types(),
+                        discovery_command="dsctl template datasource",
                     )
                 ],
             ),
@@ -505,6 +512,7 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                         description="Task type to template. Required unless --list.",
                         required=False,
                         choices=task_types,
+                        discovery_command="dsctl template task --list",
                     )
                 ],
                 options=[
@@ -526,6 +534,7 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                             "`template task --list`."
                         ),
                         choices=supported_task_template_variants(),
+                        discovery_command="dsctl template task --list",
                     ),
                 ],
             ),

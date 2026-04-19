@@ -73,7 +73,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "precedence": ["flag", "context"],
         "name_first_resources": [
             "project",
-            "env",
+            "environment",
             "cluster",
             "datasource",
             "namespace",
@@ -121,10 +121,11 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     assert data["resources"]["groups"]["template"]["commands"] == [
         "workflow",
         "params",
+        "environment",
         "datasource",
         "task",
     ]
-    assert data["resources"]["groups"]["env"]["commands"] == [
+    assert data["resources"]["groups"]["environment"]["commands"] == [
         "list",
         "get",
         "create",
@@ -300,6 +301,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "workflow_schedule_block": True,
         "workflow_dry_run": True,
         "parameter_syntax": EXPECTED_PARAMETER_SYNTAX,
+        "environment_config_template": True,
         "datasource_payload_templates": True,
         "datasource_template_types": EXPECTED_DATASOURCE_TEMPLATE_INDEX[
             "supported_types"

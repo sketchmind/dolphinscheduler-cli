@@ -33,7 +33,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "use",
         "enum",
         "lint",
-        "env",
+        "environment",
         "cluster",
         "datasource",
         "namespace",
@@ -64,6 +64,14 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
     assert payload["data"]["capabilities"]["templates"]["parameters"] == (
         parameter_syntax_index_data()
     )
+    assert payload["data"]["capabilities"]["templates"]["environment"] == {
+        "command": "dsctl template environment",
+        "source_options": ["--config TEXT", "--config-file PATH"],
+        "target_commands": [
+            "dsctl environment create --name NAME --config-file env.sh",
+            "dsctl environment update ENVIRONMENT --config-file env.sh",
+        ],
+    }
     assert payload["data"]["capabilities"]["self_description"] == {
         "schema": True,
         "template": True,
@@ -246,8 +254,30 @@ def test_schema_command_datasource_create_table_output_is_compact() -> None:
     )
 
     assert result.exit_code == 0
+    assert max(len(line) for line in result.stdout.splitlines()) < 240
     assert "dsctl template datasource --type MYSQL" in result.stdout
+    assert "template_discovery_command" in result.stdout
     assert "additional_fields_by_type" not in result.stdout
+
+
+def test_schema_command_table_output_supports_contract_columns() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--output-format",
+            "table",
+            "--columns",
+            "flag,description,discovery_command",
+            "schema",
+            "--command",
+            "environment.create",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "--config" in result.stdout
+    assert "dsctl template environment" in result.stdout
+    assert "Unknown display column" not in result.stdout
 
 
 def test_schema_command_rejects_conflicting_scope_options() -> None:

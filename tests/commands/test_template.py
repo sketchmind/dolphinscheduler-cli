@@ -18,6 +18,7 @@ def test_template_workflow_command_returns_yaml_document() -> None:
     assert payload["resolved"]["with_schedule"] is False
     assert "workflow:" in payload["data"]["yaml"]
     assert "tasks:" in payload["data"]["yaml"]
+    assert payload["data"]["lines"][0]["line"].startswith("# Workflow YAML")
     assert "schedule:" not in payload["data"]["yaml"]
 
 
@@ -65,6 +66,31 @@ def test_template_params_command_rejects_unknown_topic() -> None:
     )
 
 
+def test_template_environment_command_returns_environment_config_template() -> None:
+    result = runner.invoke(app, ["template", "environment"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "template.environment"
+    assert payload["resolved"] == {"template": "environment.config"}
+    assert payload["data"]["filename"] == "env.sh"
+    assert "export JAVA_HOME=/opt/java" in payload["data"]["config"]
+    assert payload["data"]["lines"][0]["line"] == "export JAVA_HOME=/opt/java"
+
+
+def test_template_environment_command_can_render_table_rows() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "template", "environment"],
+    )
+
+    assert result.exit_code == 0
+    assert "line" in result.stdout
+    assert "purpose" in result.stdout
+    assert "export JAVA_HOME=/opt/java" in result.stdout
+    assert "target_commands" not in result.stdout
+
+
 def test_template_datasource_command_returns_discovery() -> None:
     result = runner.invoke(app, ["template", "datasource"])
 
@@ -80,6 +106,10 @@ def test_template_datasource_command_returns_discovery() -> None:
         "dsctl template datasource --type TYPE"
     )
     assert "POSTGRESQL" in payload["data"]["supported_types"]
+    assert {
+        "type": "MYSQL",
+        "template_command": "dsctl template datasource --type MYSQL",
+    } in payload["data"]["rows"]
     assert "fields" not in payload["data"]
 
 
@@ -95,6 +125,7 @@ def test_template_datasource_command_returns_payload_for_type() -> None:
     assert payload["data"]["payload"]["type"] == "MYSQL"
     assert payload["data"]["payload"]["port"] == 3306
     assert json.loads(payload["data"]["json"]) == payload["data"]["payload"]
+    assert payload["data"]["rows"] == payload["data"]["fields"]
     assert "payload_schema" not in payload["data"]
 
 
@@ -124,6 +155,7 @@ def test_template_task_command_normalizes_task_type() -> None:
         "resource",
     ]
     assert "type: SHELL" in payload["data"]["yaml"]
+    assert payload["data"]["rows"][0]["line"].startswith("# Task template")
     assert "# Optional task runtime controls:" in payload["data"]["yaml"]
     assert "# timeout_notify_strategy: WARN" in payload["data"]["yaml"]
 
@@ -188,11 +220,20 @@ def test_template_task_command_can_list_supported_types() -> None:
     assert payload["data"]["typed_task_types"] == list(supported_typed_task_types())
     assert "SPARK" in payload["data"]["generic_task_types"]
     assert "Logic" in payload["data"]["task_types_by_category"]
+    assert payload["data"]["rows"][0]["task_type"] == "SHELL"
     assert payload["data"]["task_templates"]["SHELL"]["variants"] == [
         "minimal",
         "params",
         "resource",
     ]
+
+
+def test_template_task_help_points_to_type_and_variant_discovery() -> None:
+    result = runner.invoke(app, ["template", "task", "--help"])
+
+    assert result.exit_code == 0
+    assert "Required unless --list" in result.stdout
+    assert "dsctl template task --list" in result.stdout
 
 
 def test_template_task_command_requires_type_without_list() -> None:
@@ -205,3 +246,19 @@ def test_template_task_command_requires_type_without_list() -> None:
     assert payload["error"]["suggestion"] == (
         "Run `template task --list` to inspect supported task types."
     )
+
+
+def test_template_table_outputs_use_row_shapes() -> None:
+    cases = [
+        (["template", "workflow"], "line_no | line"),
+        (["template", "datasource"], "type"),
+        (["template", "datasource", "--type", "MYSQL"], "name"),
+        (["template", "task", "--list"], "task_type"),
+        (["template", "task", "SHELL"], "line_no | line"),
+    ]
+    for args, expected_header in cases:
+        result = runner.invoke(app, ["--output-format", "table", *args])
+
+        assert result.exit_code == 0
+        assert expected_header in result.stdout.splitlines()[0]
+        assert max(len(line) for line in result.stdout.splitlines()) < 220

@@ -114,6 +114,28 @@ def test_emit_result_uses_datasource_list_defaults_without_owner_user_name(
         set_app_state(AppState(env_file=None))
 
 
+def test_emit_result_can_render_empty_table_with_default_columns(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    set_app_state(
+        AppState(
+            env_file=None,
+            render_options=RenderOptions(output_format="table"),
+        )
+    )
+
+    def builder() -> CommandResult:
+        return CommandResult(data={"totalList": [], "total": 0})
+
+    try:
+        emit_result("cluster.list", builder)
+        assert capsys.readouterr().out == (
+            "code | name | config\n-----+------+-------\n"
+        )
+    finally:
+        set_app_state(AppState(env_file=None))
+
+
 def test_emit_result_columns_wildcard_renders_all_row_fields(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

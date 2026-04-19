@@ -19,7 +19,7 @@ Current stable commands:
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
 - `dsctl task-type list`
-- `dsctl env list|get|create|update|delete`
+- `dsctl environment list|get|create|update|delete`
 - `dsctl cluster list|get|create|update|delete`
 - `dsctl datasource list|get|create|update|delete|test`
 - `dsctl namespace list|get|available|create|delete`
@@ -46,7 +46,7 @@ Current stable commands:
 - `dsctl project-preference get|update|enable|disable`
 - `dsctl project-worker-group list|set|clear`
 - `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|params|datasource|task`
+- `dsctl template workflow|params|environment|datasource|task`
 - `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
 - `dsctl workflow lineage list|get|dependent-tasks`
 - `dsctl workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task`
@@ -71,7 +71,7 @@ Current examples:
 ```bash
 dsctl project get etl-prod
 dsctl project-parameter get warehouse_db --project etl-prod
-dsctl env get prod
+dsctl environment get prod
 dsctl cluster get k8s-prod
 dsctl datasource get warehouse
 dsctl lint workflow workflow.yaml
@@ -355,6 +355,14 @@ Selection rules:
 - scoped schema payloads keep the standard schema header and `commands` tree
   shape but omit `capabilities`; use `dsctl capabilities` for feature
   discovery
+- scoped `--group` and `--command` payloads also include `rows` for compact
+  table/tsv rendering; JSON callers that need the full contract should continue
+  reading `commands`
+- `--group` rows list commands in the group with `kind`, `action`, `name`,
+  `summary`, and `schema_command`
+- `--command` rows flatten the command contract into `command`, `argument`,
+  `option`, `payload`, and `data_shape` rows so terminal output does not
+  collapse nested contract data into one large value cell
 - scoped schema `resolved.schema.view` is `group`, `command`, `groups`, or
   `commands`
 
@@ -371,6 +379,7 @@ Current `data` fields:
 - `confirmation`
 - `capabilities`
 - `commands`
+- `rows` for scoped `--group` and `--command` views
 
 Current guarantees:
 
@@ -881,7 +890,7 @@ Rules:
   schedules; when that happens, the CLI emits a warning aligned with one
   `warning_details[]` item using code `project_worker_group_still_in_use`
 
-## `dsctl env list`
+## `dsctl environment list`
 
 Returns a DS-style paging object.
 
@@ -905,7 +914,7 @@ When `--all` is used, the CLI materializes all fetched items into one
 page-shaped response. `resolved.all` indicates the response was
 client-aggregated.
 
-## `dsctl env get ENVIRONMENT`
+## `dsctl environment get ENVIRONMENT`
 
 Accepts an environment name or a numeric environment code, resolves the stable
 environment identity, then fetches the current environment payload.
@@ -916,21 +925,27 @@ environment identity, then fetches the current environment payload.
 - `name`
 - `description`
 
-## `dsctl env create`
+## `dsctl environment create`
 
 Creates one environment.
 
 Options:
 
 - `--name TEXT` required
-- `--config TEXT` required
+- exactly one of `--config TEXT` or `--config-file PATH`
 - `--description TEXT`
 - `--worker-group NAME` repeatable
+
+Rules:
+
+- `config` is DS environment shell/export text, not JSON
+- prefer `--config-file` for multiline configs
+- run `dsctl template environment` for a starter config file
 
 Successful output returns the refreshed environment payload. `resolved.environment`
 contains the created `code`, `name`, and `description`.
 
-## `dsctl env update ENVIRONMENT`
+## `dsctl environment update ENVIRONMENT`
 
 Updates one resolved environment while preserving omitted fields.
 
@@ -938,6 +953,7 @@ Options:
 
 - `--name TEXT`
 - `--config TEXT`
+- `--config-file PATH`
 - `--description TEXT`
 - `--clear-description`
 - `--worker-group NAME` repeatable
@@ -948,11 +964,12 @@ Rules:
 - `ENVIRONMENT` may be an environment name or numeric code
 - at least one field change is required
 - `--description` and `--clear-description` are mutually exclusive
+- `--config` and `--config-file` are mutually exclusive
 - `--worker-group` and `--clear-worker-groups` are mutually exclusive
 - omitted `name`, `config`, `description`, and worker groups preserve the
   current remote values
 
-## `dsctl env delete ENVIRONMENT --force`
+## `dsctl environment delete ENVIRONMENT --force`
 
 Deletes one resolved environment.
 
@@ -3069,6 +3086,8 @@ Selection rules:
 ## `dsctl template workflow`
 
 Returns the current stable workflow YAML template inside `data.yaml`.
+`data.lines[]` provides the same template as row-oriented `line_no` and `line`
+values for table and tsv output.
 
 Rules:
 
@@ -3136,6 +3155,32 @@ Rules:
 - SQL tasks can publish result columns whose names match OUT parameter `prop`
   values
 
+## `dsctl template environment`
+
+Returns one DS environment shell/export config template.
+
+Default table and tsv output render `data.lines[]` so multiline config content
+does not collapse into one large value cell.
+
+Current `data` fields:
+
+- `filename`
+- `config`
+- `lines`
+- `target_commands`
+- `source_options`
+- `upstream_request_shape`
+- `rules`
+
+Rules:
+
+- `data.config` is the file content accepted by
+  `environment create --config-file` and `environment update --config-file`
+- `data.lines[]` contains row-oriented `line` and `purpose` values for compact
+  terminal scanning
+- DS stores this value as the raw `EnvironmentController` form field `config`
+- environment paths must exist on DolphinScheduler worker hosts
+
 ## `dsctl template datasource`
 
 Returns datasource JSON payload-template type discovery when `--type` is
@@ -3155,6 +3200,7 @@ Default index fields:
 - `data.type_enum`
 - `data.type_discovery_command`
 - `data.supported_types`
+- `data.rows`
 
 `resolved.view` is `list` for the default output. The supported type list lives
 in `data.supported_types`; `resolved` does not duplicate it.
@@ -3167,6 +3213,7 @@ Typed template fields:
 - `data.payload`
 - `data.json`
 - `data.fields`
+- `data.rows`
 - `data.rules`
 
 `resolved.view` is `template` and `resolved.datasource_type` is the normalized
@@ -3180,13 +3227,17 @@ Rules:
 - `data.json` is the same payload rendered as pretty JSON
 - `data.fields` is grounded in generated `BaseDataSourceParamDTO` plus known
   plugin-specific JSON fields for the selected datasource type only
+- `data.rows` is the row-oriented table/tsv view; index output lists
+  datasource types, typed output lists payload fields
 - typed template output does not repeat global `type` choices; the selected
   value is `data.type` and `resolved.datasource_type`, while full type
   discovery lives in the default index and `dsctl enum list db-type`
 
 ## `dsctl template task TASK_TYPE`
 
-Returns one task YAML template inside `data.yaml`.
+Returns one task YAML template inside `data.yaml`. `data.rows[]` provides the
+row-oriented table/tsv view: line rows for a concrete template, and compact
+task-type rows for `--list`.
 
 Options:
 
@@ -3230,6 +3281,7 @@ Rules:
   - `data.generic_task_types`
   - `data.task_types_by_category`
   - `data.task_templates`
+  - `data.rows`
 
 `data.task_templates.TYPE` exposes:
 

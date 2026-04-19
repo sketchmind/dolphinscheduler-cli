@@ -25,7 +25,10 @@ def capabilities_command(
         str | None,
         typer.Option(
             "--section",
-            help="Return one top-level capability section.",
+            help=(
+                "Return one top-level capability section. Discover values with "
+                "`dsctl schema --command capabilities`."
+            ),
         ),
     ] = None,
 ) -> None:

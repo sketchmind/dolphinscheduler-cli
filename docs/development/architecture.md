@@ -33,7 +33,7 @@ The current stable CLI surface is:
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
 - `dsctl task-type list`
-- `dsctl env list|get|create|update|delete`
+- `dsctl environment list|get|create|update|delete`
 - `dsctl cluster list|get|create|update|delete`
 - `dsctl datasource list|get|create|update|delete|test`
 - `dsctl namespace list|get|available|create|delete`
@@ -58,7 +58,7 @@ The current stable CLI surface is:
 - `dsctl project-preference get|update|enable|disable`
 - `dsctl project-worker-group list|set|clear`
 - `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|params|datasource|task`
+- `dsctl template workflow|params|environment|datasource|task`
 - `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
 - `dsctl workflow lineage list|get|dependent-tasks`
 - `dsctl workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task`
@@ -74,7 +74,7 @@ The most useful split is:
 
 | Plane | Core objects |
 | --- | --- |
-| Governance | user, access-token, tenant, queue, worker group, env, cluster, datasource, namespace, resource, alert plugin, alert group |
+| Governance | user, access-token, tenant, queue, worker group, environment, cluster, datasource, namespace, resource, alert plugin, alert group |
 | Project | project, project parameter, project preference, project worker-group, task group |
 | Design | workflow, task, relation, workflow lineage, schedule |
 | Runtime | command, workflow-instance, task-instance, audit log, logs, health |
@@ -281,7 +281,7 @@ Hard rules:
 
 Current naming rules:
 
-- governance and definition resources such as env, datasource, namespace,
+- governance and definition resources such as environment, datasource, namespace,
   queue, worker-group, tenant, user, project, workflow, and task are
   name-first
 - `resource` is path-first and uses the DS `fullName` path selector directly

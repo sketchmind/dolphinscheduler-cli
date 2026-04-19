@@ -417,7 +417,7 @@ def _render_table(rows: Sequence[JsonObject], *, columns: tuple[str, ...]) -> st
         [_format_cell(row.get(column)) for column in columns] for row in rows
     ]
     widths = [
-        max(len(column), *(len(row[index]) for row in rendered_rows))
+        max((len(column), *(len(row[index]) for row in rendered_rows)))
         for index, column in enumerate(columns)
     ]
     header = _render_table_line(columns, widths=widths)

@@ -42,7 +42,7 @@ PAGE_LIST_DEFAULTS: dict[str, tuple[str, ...]] = {
     "audit.list": ("id", "modelName", "operationType", "userName", "createTime"),
     "cluster.list": ("code", "name", "config"),
     "datasource.list": ("id", "name", "type", "createTime"),
-    "env.list": ("code", "name", "workerGroups", "description"),
+    "environment.list": ("code", "name", "workerGroups", "description"),
     "namespace.list": ("id", "namespace", "clusterName"),
     "project-parameter.list": ("code", "paramName", "paramValue", "paramDataType"),
     "project.list": ("code", "name", "description"),
@@ -109,6 +109,7 @@ OBJECT_DEFAULTS: dict[str, tuple[str, ...]] = {
         for action, columns in COLLECTION_DEFAULTS.items()
         if action.endswith(".list")
     },
+    "datasource.get": ("id", "name", "type", "host", "port", "database"),
     "project-preference.get": (),
     "workflow.lineage.get": (),
     "workflow.describe": ("workflow", "tasks", "relations"),
@@ -144,10 +145,32 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
         row_path="data.members",
         default_columns=("name", "value", "attributes"),
     ),
+    "schema": DataShape(
+        kind="summary",
+        row_path="data.rows",
+    ),
     "task-type.list": DataShape(
         kind="summary",
         row_path="data.taskTypes",
         default_columns=("taskType", "taskCategory", "isCollection"),
+    ),
+    "template.environment": DataShape(
+        kind="summary",
+        row_path="data.lines",
+        default_columns=("line", "purpose"),
+    ),
+    "template.datasource": DataShape(
+        kind="summary",
+        row_path="data.rows",
+    ),
+    "template.task": DataShape(
+        kind="summary",
+        row_path="data.rows",
+    ),
+    "template.workflow": DataShape(
+        kind="summary",
+        row_path="data.lines",
+        default_columns=("line_no", "line"),
     ),
     "workflow.lineage.list": DataShape(
         kind="summary",

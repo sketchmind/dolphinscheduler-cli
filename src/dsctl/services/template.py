@@ -28,6 +28,7 @@ class TaskTemplateTypesData(TypedDict):
     generic_task_types: list[str]
     task_types_by_category: dict[str, list[str]]
     task_templates: dict[str, TaskTemplateMetadata]
+    rows: list[TaskTemplateTypeRowData]
 
 
 class ParameterFieldData(TypedDict):
@@ -136,6 +137,42 @@ class ParameterTopicData(TypedDict):
     topic: str
     command: str
     summary: str
+
+
+class EnvironmentConfigLineData(TypedDict):
+    """One line in the DS environment config shell template."""
+
+    line: str
+    purpose: str
+
+
+class TextLineData(TypedDict):
+    """One rendered text-template line for table and tsv output."""
+
+    line_no: int
+    line: str
+
+
+class EnvironmentConfigTemplateData(TypedDict):
+    """Stable discovery payload for `dsctl template environment`."""
+
+    filename: str
+    config: str
+    lines: list[EnvironmentConfigLineData]
+    target_commands: list[str]
+    source_options: list[str]
+    upstream_request_shape: str
+    rules: list[str]
+
+
+class TaskTemplateTypeRowData(TypedDict):
+    """One compact task-template type row."""
+
+    task_type: str
+    kind: str
+    category: str
+    default_variant: str
+    variants: str
 
 
 class ParameterSyntaxIndexData(TypedDict):
@@ -631,29 +668,105 @@ def task_template_metadata() -> dict[str, TaskTemplateMetadata]:
 
 def workflow_template_result(*, with_schedule: bool = False) -> CommandResult:
     """Return the stable workflow YAML template."""
+    yaml_text = _workflow_template_yaml(with_schedule=with_schedule)
     return CommandResult(
         data=require_json_object(
-            {"yaml": _workflow_template_yaml(with_schedule=with_schedule)},
+            {
+                "yaml": yaml_text,
+                "lines": _text_lines(yaml_text),
+            },
             label="workflow template data",
         ),
         resolved={"with_schedule": with_schedule},
     )
 
 
+def environment_config_template_result() -> CommandResult:
+    """Return one DS environment shell/export config template."""
+    lines = [
+        EnvironmentConfigLineData(
+            line="export JAVA_HOME=/opt/java",
+            purpose="Java runtime used by shell, Java, and JVM-based task types.",
+        ),
+        EnvironmentConfigLineData(
+            line="export HADOOP_HOME=/opt/hadoop",
+            purpose="Hadoop client installation used by Hadoop ecosystem tasks.",
+        ),
+        EnvironmentConfigLineData(
+            line="export HADOOP_CONF_DIR=/etc/hadoop/conf",
+            purpose="Hadoop/YARN configuration directory visible to workers.",
+        ),
+        EnvironmentConfigLineData(
+            line="export SPARK_HOME=/opt/spark",
+            purpose="Spark client installation used by Spark tasks.",
+        ),
+        EnvironmentConfigLineData(
+            line="export PYTHON_LAUNCHER=/opt/python/bin/python3",
+            purpose="Python interpreter path used by Python-style tasks.",
+        ),
+        EnvironmentConfigLineData(
+            line=("export PATH=$JAVA_HOME/bin:$HADOOP_HOME/bin:$SPARK_HOME/bin:$PATH"),
+            purpose="Expose selected runtimes on PATH without replacing worker PATH.",
+        ),
+    ]
+    config = "\n".join(item["line"] for item in lines) + "\n"
+    return CommandResult(
+        data=require_json_object(
+            EnvironmentConfigTemplateData(
+                filename="env.sh",
+                config=config,
+                lines=lines,
+                target_commands=[
+                    "dsctl environment create --name NAME --config-file env.sh",
+                    "dsctl environment update ENVIRONMENT --config-file env.sh",
+                ],
+                source_options=["--config TEXT", "--config-file PATH"],
+                upstream_request_shape=(
+                    "EnvironmentController form field `config` stores raw "
+                    "shell/export text."
+                ),
+                rules=[
+                    "Use shell/export syntax, not JSON.",
+                    "Prefer --config-file for multiline environment configs.",
+                    "The paths must exist on DolphinScheduler worker hosts.",
+                    "Keep secrets out of environment configs when possible.",
+                    "Bind worker groups with repeated --worker-group values.",
+                ],
+            ),
+            label="environment config template data",
+        ),
+        resolved={"template": "environment.config"},
+    )
+
+
 def datasource_template_result(datasource_type: str | None = None) -> CommandResult:
     """Return datasource payload-template discovery or one JSON template."""
     if datasource_type is None:
+        index_data = datasource_template_index_data()
+        data = dict(index_data)
+        data["rows"] = [
+            {
+                "type": datasource_type_name,
+                "template_command": (
+                    f"dsctl template datasource --type {datasource_type_name}"
+                ),
+            }
+            for datasource_type_name in index_data["supported_types"]
+        ]
         return CommandResult(
             data=require_json_object(
-                datasource_template_index_data(),
+                data,
                 label="datasource template index data",
             ),
             resolved={"view": "list"},
         )
     normalized_type = require_datasource_payload_type(datasource_type)
+    template_data = datasource_template_data(normalized_type)
+    data = dict(template_data)
+    data["rows"] = template_data["fields"]
     return CommandResult(
         data=require_json_object(
-            datasource_template_data(normalized_type),
+            data,
             label="datasource template data",
         ),
         resolved={
@@ -672,13 +785,15 @@ def task_template_result(
     normalized = _normalize_task_type(task_type)
     normalized_variant = _normalize_task_template_variant(normalized, variant)
     template_kind = _task_templates.task_template_kind(normalized)
+    yaml_text = _task_templates.task_template_yaml(
+        normalized,
+        variant=normalized_variant,
+    )
     return CommandResult(
         data=require_json_object(
             {
-                "yaml": _task_templates.task_template_yaml(
-                    normalized,
-                    variant=normalized_variant,
-                )
+                "yaml": yaml_text,
+                "rows": _text_lines(yaml_text),
             },
             label="task template data",
         ),
@@ -711,6 +826,7 @@ def task_template_types_result() -> CommandResult:
                 generic_task_types=generic_task_types,
                 task_types_by_category=task_types_by_category,
                 task_templates=task_template_metadata(),
+                rows=_task_template_type_rows(),
             ),
             label="task template types data",
         ),
@@ -898,6 +1014,7 @@ def _task_template_types_data(
     generic_task_types: list[str],
     task_types_by_category: dict[str, list[str]],
     task_templates: dict[str, TaskTemplateMetadata],
+    rows: list[TaskTemplateTypeRowData],
 ) -> TaskTemplateTypesData:
     return {
         "task_types": task_types,
@@ -906,7 +1023,22 @@ def _task_template_types_data(
         "generic_task_types": generic_task_types,
         "task_types_by_category": task_types_by_category,
         "task_templates": task_templates,
+        "rows": rows,
     }
+
+
+def _task_template_type_rows() -> list[TaskTemplateTypeRowData]:
+    metadata = task_template_metadata()
+    return [
+        TaskTemplateTypeRowData(
+            task_type=task_type,
+            kind=metadata[task_type]["kind"],
+            category=metadata[task_type]["category"],
+            default_variant=metadata[task_type]["default_variant"],
+            variants=",".join(metadata[task_type]["variants"]),
+        )
+        for task_type in supported_task_template_types()
+    ]
 
 
 def _task_template_types_by_category() -> dict[str, tuple[str, ...]]:
@@ -916,6 +1048,13 @@ def _task_template_types_by_category() -> dict[str, tuple[str, ...]]:
         category = metadata[task_type]["category"]
         categories.setdefault(category, []).append(task_type)
     return {category: tuple(task_types) for category, task_types in categories.items()}
+
+
+def _text_lines(text: str) -> list[TextLineData]:
+    return [
+        TextLineData(line_no=index, line=line)
+        for index, line in enumerate(text.splitlines(), start=1)
+    ]
 
 
 _PARAMETER_SYNTAX_TOPICS = (

@@ -38,7 +38,7 @@ The most useful mental split is:
 
 | Plane | Core objects | Why it matters |
 | --- | --- | --- |
-| Governance | user, tenant, queue, worker group, env, datasource, resource, alert group | execution context, authorization, and cluster-level diagnostics |
+| Governance | user, tenant, queue, worker group, environment, datasource, resource, alert group | execution context, authorization, and cluster-level diagnostics |
 | Project | project | default selection boundary and ownership boundary |
 | Design | workflow, task, relation, schedule | what should run |
 | Runtime | command, workflow-instance, task-instance, logs, health | what actually ran |
@@ -61,7 +61,7 @@ workflow trigger
               └── task-instance[*]
 
 workflow/task runtime resolution
-  └── tenant / queue / worker group / env / datasource / resource / alert group
+  └── tenant / queue / worker group / environment / datasource / resource / alert group
 ```
 
 Important consequences:

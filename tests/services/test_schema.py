@@ -94,7 +94,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
         },
         "name_first_resources": [
             "project",
-            "env",
+            "environment",
             "cluster",
             "datasource",
             "namespace",
@@ -159,7 +159,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "use",
         "enum",
         "lint",
-        "env",
+        "environment",
         "cluster",
         "datasource",
         "namespace",
@@ -214,7 +214,13 @@ def test_schema_result_describes_current_stable_surface() -> None:
     capabilities_command = _find_command(commands, "capabilities")
     capabilities_options = _require_list(capabilities_command["options"])
     assert _find_option(capabilities_options, "summary")["default"] is False
-    section_choices = _find_option(capabilities_options, "section")["choices"]
+    section_option = _find_option(capabilities_options, "section")
+    assert section_option["description"] == (
+        "Return one top-level capability section. Discover values with "
+        "`dsctl schema --command capabilities`."
+    )
+    assert section_option["discovery_command"] == "dsctl schema --command capabilities"
+    section_choices = section_option["choices"]
     assert isinstance(section_choices, list)
     assert "runtime" in section_choices
 
@@ -232,6 +238,15 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "output",
         "all",
     ]
+    assert topic_option["discovery_command"] == "dsctl template params"
+    env_template_command = _find_command(template_group["commands"], "environment")
+    assert env_template_command["action"] == "template.environment"
+    assert env_template_command["data_shape"] == {
+        "kind": "summary",
+        "row_path": "data.lines",
+        "default_columns": ["line", "purpose"],
+        "column_discovery": "runtime_row_keys",
+    }
     task_command = _find_command(template_group["commands"], "task")
     task_arguments = _require_list(task_command["arguments"])
     first_task_argument = _require_dict(task_arguments[0])
@@ -239,10 +254,12 @@ def test_schema_result_describes_current_stable_surface() -> None:
     variant_option = _find_option(task_options, "variant")
     assert task_command["action"] == "template.task"
     assert first_task_argument["choices"] == EXPECTED_TEMPLATE_TASK_TYPES
+    assert first_task_argument["discovery_command"] == "dsctl template task --list"
     variant_choices = variant_option["choices"]
     assert isinstance(variant_choices, list)
     assert "resource" in variant_choices
     assert "post-json" in variant_choices
+    assert variant_option["discovery_command"] == "dsctl template task --list"
     datasource_template_command = _find_command(
         template_group["commands"],
         "datasource",
@@ -253,6 +270,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
         datasource_type_option["choices"]
         == datasource_template_index_data()["supported_types"]
     )
+    assert datasource_type_option["discovery_command"] == "dsctl template datasource"
 
     enum_group = _find_group(commands, "enum")
     enum_command_names = [
@@ -279,7 +297,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
     ]
     assert task_type_command_names == ["list"]
 
-    env_group = _find_group(commands, "env")
+    env_group = _find_group(commands, "environment")
     env_command_names = [
         _require_dict(item)["name"] for item in _require_list(env_group["commands"])
     ]
@@ -290,6 +308,20 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
     ]
+    env_create = _find_command(env_group["commands"], "create")
+    env_create_options = _require_list(env_create["options"])
+    env_create_config = _find_option(env_create_options, "config")
+    env_create_config_file = _find_option(env_create_options, "config-file")
+    assert env_create_config["discovery_command"] == "dsctl template environment"
+    assert env_create_config["examples"] == ["export JAVA_HOME=/opt/java"]
+    assert env_create_config["required"] is False
+    assert env_create_config_file["discovery_command"] == "dsctl template environment"
+    env_update = _find_command(env_group["commands"], "update")
+    env_update_options = _require_list(env_update["options"])
+    assert (
+        _find_option(env_update_options, "config-file")["discovery_command"]
+        == "dsctl template environment"
+    )
 
     cluster_group = _find_group(commands, "cluster")
     cluster_command_names = [
@@ -773,6 +805,14 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "templates": {
             "workflow": {"with_schedule_option": True},
             "parameters": EXPECTED_PARAMETER_SYNTAX,
+            "environment": {
+                "command": "dsctl template environment",
+                "source_options": ["--config TEXT", "--config-file PATH"],
+                "target_commands": [
+                    "dsctl environment create --name NAME --config-file env.sh",
+                    "dsctl environment update ENVIRONMENT --config-file env.sh",
+                ],
+            },
             "datasource": datasource_template_index_data(),
             "task": {
                 "supported_types": EXPECTED_TEMPLATE_TASK_TYPES,
@@ -788,6 +828,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "workflow_digest": True,
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
+            "environment_config_template": True,
             "datasource_payload_templates": True,
             "datasource_template_types": datasource_template_index_data()[
                 "supported_types"
@@ -862,6 +903,14 @@ def test_schema_result_can_return_one_group() -> None:
     assert "workflow" not in {
         _require_dict(item)["name"] for item in task_instance_options
     }
+    rows = _require_list(data["rows"])
+    assert rows[0] == {
+        "kind": "command",
+        "action": "task-instance.list",
+        "name": "list",
+        "summary": "List task instances with project-scoped runtime filters.",
+        "schema_command": "dsctl schema --command task-instance.list",
+    }
 
 
 def test_schema_result_can_return_one_command() -> None:
@@ -898,6 +947,18 @@ def test_schema_result_can_return_one_command() -> None:
         ],
         "column_discovery": "runtime_row_keys",
     }
+    rows = _require_list(data["rows"])
+    assert rows[0] == {
+        "kind": "command",
+        "name": "task-instance.list",
+        "description": "List task instances with project-scoped runtime filters.",
+    }
+    assert any(
+        _require_dict(row).get("kind") == "data_shape"
+        and _require_dict(row).get("name") == "row_path"
+        and _require_dict(row).get("value") == "data.totalList"
+        for row in rows
+    )
 
     workflow_instance_result = get_schema_result(
         command_action="workflow-instance.list"
@@ -963,6 +1024,37 @@ def test_schema_result_can_return_one_command() -> None:
         "default_columns": ["id", "name", "type", "createTime"],
         "column_discovery": "runtime_row_keys",
     }
+    datasource_get_result = get_schema_result(command_action="datasource.get")
+    datasource_get_data = _require_dict(datasource_get_result.data)
+    datasource_get_group = _require_dict(
+        _require_list(datasource_get_data["commands"])[0]
+    )
+    datasource_get_command = _require_dict(
+        _require_list(datasource_get_group["commands"])[0]
+    )
+    assert datasource_get_command["data_shape"] == {
+        "kind": "object",
+        "row_path": "data",
+        "default_columns": ["id", "name", "type", "host", "port", "database"],
+        "column_discovery": "runtime_row_keys",
+    }
+
+
+def test_schema_result_command_rows_expose_payload_discovery() -> None:
+    result = get_schema_result(command_action="datasource.create")
+    data = _require_dict(result.data)
+    rows = [_require_dict(row) for row in _require_list(data["rows"])]
+
+    file_row = next(row for row in rows if row.get("name") == "file")
+    assert file_row["discovery_command"] == "dsctl template datasource"
+    assert file_row["description"] == (
+        "Path to one DS-native datasource JSON payload file."
+    )
+    assert {
+        "kind": "payload",
+        "name": "template_discovery_command",
+        "value": "dsctl template datasource",
+    } in rows
 
 
 def test_schema_result_can_list_group_and_command_discovery_rows() -> None:

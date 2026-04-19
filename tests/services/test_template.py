@@ -10,6 +10,7 @@ from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services.template import (
     ParameterSyntaxIndexData,
     datasource_template_result,
+    environment_config_template_result,
     generic_task_template_types,
     parameter_syntax_data,
     parameter_syntax_result,
@@ -32,6 +33,7 @@ def test_workflow_template_result_returns_valid_yaml_document() -> None:
     assert result.resolved["with_schedule"] is False
     yaml_text = data["yaml"]
     assert isinstance(yaml_text, str)
+    assert data["lines"][0]["line"].startswith("# Workflow YAML")
     document = yaml.safe_load(yaml_text)
 
     assert "# Optional task runtime controls:" in yaml_text
@@ -122,8 +124,30 @@ def test_datasource_template_result_returns_discovery_without_type() -> None:
     ]
     assert data["type_discovery_command"] == "dsctl enum list db-type"
     assert data["supported_types"] == list(supported_datasource_types())
+    assert {
+        "type": "MYSQL",
+        "template_command": "dsctl template datasource --type MYSQL",
+    } in data["rows"]
     assert "fields" not in data
     assert "rules" not in data
+
+
+def test_environment_config_template_result_returns_shell_template() -> None:
+    result = environment_config_template_result()
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {"template": "environment.config"}
+    assert data["filename"] == "env.sh"
+    assert "export JAVA_HOME=/opt/java" in data["config"]
+    assert data["target_commands"] == [
+        "dsctl environment create --name NAME --config-file env.sh",
+        "dsctl environment update ENVIRONMENT --config-file env.sh",
+    ]
+    assert data["source_options"] == ["--config TEXT", "--config-file PATH"]
+    lines = data["lines"]
+    assert isinstance(lines, list)
+    assert lines[0]["line"] == "export JAVA_HOME=/opt/java"
 
 
 def test_datasource_template_result_returns_json_payload_template() -> None:
@@ -144,6 +168,7 @@ def test_datasource_template_result_returns_json_payload_template() -> None:
     payload = data["payload"]
     assert isinstance(payload, dict)
     assert payload == json.loads(data["json"])
+    assert data["rows"] == data["fields"]
     assert payload["type"] == "MYSQL"
     assert payload["port"] == 3306
     assert payload["other"] == {"serverTimezone": "UTC"}
@@ -212,6 +237,7 @@ def test_task_template_result_returns_valid_yaml_for_supported_types(
     assert result.resolved["task_category"] == expected_category
     yaml_text = data["yaml"]
     assert isinstance(yaml_text, str)
+    assert data["rows"][0]["line"].startswith("# Task template")
     document = yaml.safe_load(yaml_text)
 
     assert "# Optional task runtime controls:" in yaml_text
@@ -238,6 +264,7 @@ def test_task_template_types_result_lists_supported_types() -> None:
     assert data["generic_task_types"] == list(generic_task_template_types())
     assert "Universal" in data["task_types_by_category"]
     assert "Logic" in data["task_types_by_category"]
+    assert data["rows"][0]["task_type"] == "SHELL"
     assert data["task_templates"]["SHELL"]["variants"] == [
         "minimal",
         "params",

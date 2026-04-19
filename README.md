@@ -90,7 +90,7 @@ Stable user-facing commands today:
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
 - `dsctl task-type list`
-- `dsctl env list|get|create|update|delete`
+- `dsctl environment list|get|create|update|delete`
 - `dsctl cluster list|get|create|update|delete`
 - `dsctl datasource list|get|create|update|delete|test`
 - `dsctl namespace list|get|available|create|delete`
@@ -115,7 +115,7 @@ Stable user-facing commands today:
 - `dsctl project-preference get|update|enable|disable`
 - `dsctl project-worker-group list|set|clear`
 - `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|params|datasource|task`
+- `dsctl template workflow|params|environment|datasource|task`
 - `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
 - `dsctl workflow lineage list|get|dependent-tasks`
 - `dsctl workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task`
