@@ -75,6 +75,14 @@ def test_project_get_command_resolves_name() -> None:
     assert payload["data"]["name"] == "etl-prod"
 
 
+def test_project_get_help_points_to_list_for_selector() -> None:
+    result = runner.invoke(app, ["project", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "project" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_project_get_command_reports_not_found_suggestion() -> None:
     result = runner.invoke(app, ["project", "get", "missing"])
 

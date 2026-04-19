@@ -19,6 +19,10 @@ dsctl workflow create --file workflow.yaml --dry-run
 
 ## Discovery Flow
 
+Use `dsctl task-type list` when you need the live DS task-type catalog for the
+configured cluster and current user. Use `dsctl template task --list` when you
+need the local YAML template catalog and per-task template variants.
+
 `dsctl template workflow` returns a minimal full workflow. It is intentionally
 small so generated files do not include unrelated optional fields.
 

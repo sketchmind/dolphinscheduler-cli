@@ -92,6 +92,14 @@ def test_schedule_list_command_returns_paginated_payload() -> None:
     assert payload["data"]["totalList"][0]["workflowDefinitionName"] == "daily-sync"
 
 
+def test_schedule_list_help_points_to_project_and_workflow_discovery() -> None:
+    result = runner.invoke(app, ["schedule", "list", "--help"])
+
+    assert result.exit_code == 0
+    assert "project list" in result.stdout
+    assert "workflow list" in result.stdout
+
+
 def test_schedule_list_command_rejects_workflow_and_search_together() -> None:
     result = runner.invoke(
         app,
@@ -125,6 +133,13 @@ def test_schedule_get_command_returns_schedule_payload() -> None:
     assert payload["data"]["crontab"] == "0 0 2 * * ?"
 
 
+def test_schedule_get_help_points_to_schedule_list() -> None:
+    result = runner.invoke(app, ["schedule", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "schedule list" in result.stdout
+
+
 def test_schedule_preview_command_returns_times_and_analysis() -> None:
     result = runner.invoke(app, ["schedule", "preview", "1"])
 
@@ -156,6 +171,18 @@ def test_schedule_preview_command_rejects_mixing_id_and_schedule_fields() -> Non
         "the id and pass `--project`, `--cron`, `--start`, `--end`, and "
         "`--timezone` for an ad hoc preview."
     )
+
+
+def test_schedule_create_help_points_to_related_discovery_commands() -> None:
+    result = runner.invoke(app, ["schedule", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "workflow list" in result.stdout
+    assert "project list" in result.stdout
+    assert "alert-group" in result.stdout
+    assert "worker-group" in result.stdout
+    assert "tenant list" in result.stdout
+    assert "environment list" in result.stdout
 
 
 def test_schedule_explain_command_returns_create_explanation() -> None:

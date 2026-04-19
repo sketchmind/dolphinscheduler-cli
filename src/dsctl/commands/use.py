@@ -54,7 +54,10 @@ def use_project_command(
     name: Annotated[
         str | None,
         typer.Argument(
-            help="Project name to persist for later commands.",
+            help=(
+                "Project name to persist for later commands. Run `dsctl "
+                "project list` to discover values."
+            ),
         ),
     ] = None,
     *,
@@ -96,7 +99,10 @@ def use_workflow_command(
     name: Annotated[
         str | None,
         typer.Argument(
-            help="Workflow name to persist for later commands.",
+            help=(
+                "Workflow name to persist for later commands. Run `dsctl "
+                "workflow list` in the selected project to discover values."
+            ),
         ),
     ] = None,
     *,

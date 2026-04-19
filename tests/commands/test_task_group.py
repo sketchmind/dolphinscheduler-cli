@@ -96,6 +96,18 @@ def test_task_group_list_command_reports_status_choices() -> None:
     assert payload["error"]["suggestion"] == "Pass `open`/`closed` or `1`/`0`."
 
 
+def test_task_group_help_points_to_selector_and_status_values() -> None:
+    get_result = runner.invoke(app, ["task-group", "get", "--help"])
+    list_result = runner.invoke(app, ["task-group", "list", "--help"])
+
+    assert get_result.exit_code == 0
+    assert "task-group" in get_result.stdout
+    assert "list" in get_result.stdout
+    assert list_result.exit_code == 0
+    assert "open," in list_result.stdout
+    assert "closed, 1, or 0" in list_result.stdout
+
+
 def test_task_group_create_command_uses_project_selection() -> None:
     result = runner.invoke(
         app,
@@ -134,6 +146,15 @@ def test_task_group_queue_force_start_command_returns_confirmation() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "task-group.queue.force-start"
     assert payload["data"] == {"queueId": 31, "forceStarted": True}
+
+
+def test_task_group_queue_help_points_to_queue_id_discovery() -> None:
+    result = runner.invoke(app, ["task-group", "queue", "force-start", "--help"])
+
+    assert result.exit_code == 0
+    assert "task-group queue list" in result.stdout
+    assert "discover" in result.stdout
+    assert "ids" in result.stdout
 
 
 def test_task_group_queue_force_start_command_reports_already_started(

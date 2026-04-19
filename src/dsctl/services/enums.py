@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.config import load_selected_ds_version
 from dsctl.errors import UserInputError
-from dsctl.output import CommandResult, require_json_object
+from dsctl.output import CommandResult, require_json_object, require_json_value
 from dsctl.upstream import (
     SUPPORTED_VERSIONS,
     get_enum_spec,
@@ -36,12 +36,41 @@ class EnumData(TypedDict):
     members: list[EnumMemberData]
 
 
+class EnumNameData(TypedDict):
+    """One supported enum discovery name."""
+
+    name: str
+    list_command: str
+
+
 class ResolvedEnumData(TypedDict):
     """Resolved enum selector metadata."""
 
     requested: str
     name: str
     ds_version: str
+
+
+def list_enum_names_result(*, env_file: str | None = None) -> CommandResult:
+    """Return supported generated enum discovery names."""
+    support = get_version_support(load_selected_ds_version(env_file))
+    names = supported_enum_names(support.contract_version)
+    rows = [
+        EnumNameData(name=name, list_command=f"dsctl enum list {name}")
+        for name in names
+    ]
+    return CommandResult(
+        data=require_json_value(rows, label="enum names data"),
+        resolved={
+            "enum": require_json_object(
+                {
+                    "ds_version": support.server_version,
+                    "count": len(rows),
+                },
+                label="resolved enum names",
+            )
+        },
+    )
 
 
 def list_enum_result(enum_name: str, *, env_file: str | None = None) -> CommandResult:
@@ -58,10 +87,7 @@ def list_enum_result(enum_name: str, *, env_file: str | None = None) -> CommandR
                 "enum": enum_name,
                 "supported_enums": supported,
             },
-            suggestion=(
-                "Run `capabilities` and inspect `data.enums.names` to choose "
-                "a supported enum name."
-            ),
+            suggestion="Run `dsctl enum names` to choose a supported enum name.",
         )
 
     return CommandResult(
@@ -120,4 +146,9 @@ def _enum_member_data(member: EnumMemberSpec) -> EnumMemberData:
     }
 
 
-__all__ = ["enum_capabilities_data", "list_enum_result", "supported_enum_choices"]
+__all__ = [
+    "enum_capabilities_data",
+    "list_enum_names_result",
+    "list_enum_result",
+    "supported_enum_choices",
+]

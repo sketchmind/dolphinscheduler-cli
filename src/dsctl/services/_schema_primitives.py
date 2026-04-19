@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from dsctl.support.yaml_io import JsonObject, JsonValue
 
 
 def use_target_options(*, clear_help: str) -> list[dict[str, object]]:
@@ -30,8 +32,12 @@ def project_option() -> dict[str, object]:
     return option(
         "project",
         value_type="string",
-        description="Project name or code. Falls back to stored project context.",
+        description=(
+            "Project name or code. Run `dsctl project list` to discover values; "
+            "falls back to stored project context."
+        ),
         selector="name_or_code",
+        discovery_command="dsctl project list",
     )
 
 
@@ -42,6 +48,7 @@ def workflow_option(*, description: str) -> dict[str, object]:
         value_type="string",
         description=description,
         selector="name_or_code",
+        discovery_command="dsctl workflow list",
     )
 
 
@@ -83,16 +90,23 @@ def command(
     summary: str,
     arguments: list[dict[str, object]] | None = None,
     options: list[dict[str, object]] | None = None,
+    payload: JsonObject | None = None,
+    payload_schema: JsonObject | None = None,
 ) -> dict[str, object]:
     """Build one schema command payload."""
-    return {
+    data: JsonObject = {
         "kind": "command",
         "name": name,
         "action": action,
         "summary": summary,
-        "arguments": arguments or [],
-        "options": options or [],
+        "arguments": cast("JsonValue", arguments or []),
+        "options": cast("JsonValue", options or []),
     }
+    if payload is not None:
+        data["payload"] = payload
+    if payload_schema is not None:
+        data["payload_schema"] = payload_schema
+    return cast("dict[str, object]", data)
 
 
 def argument(
@@ -103,6 +117,7 @@ def argument(
     required: bool = True,
     selector: str | None = None,
     choices: Sequence[object] | None = None,
+    discovery_command: str | None = None,
 ) -> dict[str, object]:
     """Build one schema positional-argument payload."""
     data: dict[str, object] = {
@@ -116,6 +131,8 @@ def argument(
         data["selector"] = selector
     if choices is not None:
         data["choices"] = list(choices)
+    if discovery_command is not None:
+        data["discovery_command"] = discovery_command
     return data
 
 
@@ -132,6 +149,7 @@ def option(
     multiple: bool = False,
     examples: Sequence[str] | None = None,
     supported_keys: Sequence[str] | None = None,
+    discovery_command: str | None = None,
 ) -> dict[str, object]:
     """Build one schema option payload."""
     data: dict[str, object] = {
@@ -156,4 +174,6 @@ def option(
         data["examples"] = list(examples)
     if supported_keys is not None:
         data["supported_keys"] = list(supported_keys)
+    if discovery_command is not None:
+        data["discovery_command"] = discovery_command
     return data

@@ -44,9 +44,9 @@ def test_build_steps_matches_ci_shape() -> None:
         "python",
         "-m",
         "pytest",
+        "-m",
+        "not live",
         "-q",
-        "--ignore",
-        "tests/live",
     )
 
 
@@ -98,9 +98,9 @@ def test_build_steps_can_append_live_suite() -> None:
         "python",
         "-m",
         "pytest",
+        "-m",
+        "not live",
         "-q",
-        "--ignore",
-        "tests/live",
     )
     assert live_tests_step.command == (
         "python",

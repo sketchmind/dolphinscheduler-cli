@@ -35,6 +35,8 @@ user_revoke_app = typer.Typer(
     no_args_is_help=True,
 )
 
+USER_HELP = "User name or numeric id. Run `dsctl user list` to discover values."
+
 
 def register_user_commands(app: typer.Typer) -> None:
     """Register the `user` command group."""
@@ -98,7 +100,7 @@ def get_command(
     ctx: typer.Context,
     user: Annotated[
         str,
-        typer.Argument(help="User name or numeric id."),
+        typer.Argument(help=USER_HELP),
     ],
 ) -> None:
     """Get one user by name or id."""
@@ -139,7 +141,9 @@ def create_command(
         str,
         typer.Option(
             "--tenant",
-            help="Tenant code or numeric id.",
+            help=(
+                "Tenant code or numeric id. Run `dsctl tenant list` to discover values."
+            ),
         ),
     ],
     state_value: Annotated[
@@ -162,7 +166,10 @@ def create_command(
         str | None,
         typer.Option(
             "--queue",
-            help="Optional queue-name override stored on the user.",
+            help=(
+                "Optional queue-name override stored on the user. Run "
+                "`dsctl queue list` to discover queue names."
+            ),
         ),
     ] = None,
 ) -> None:
@@ -189,7 +196,7 @@ def update_command(
     ctx: typer.Context,
     user: Annotated[
         str,
-        typer.Argument(help="User name or numeric id."),
+        typer.Argument(help=USER_HELP),
     ],
     *,
     user_name: Annotated[
@@ -217,7 +224,10 @@ def update_command(
         str | None,
         typer.Option(
             "--tenant",
-            help="Updated tenant code or numeric id.",
+            help=(
+                "Updated tenant code or numeric id. Run `dsctl tenant list` to "
+                "discover values."
+            ),
         ),
     ] = None,
     state_value: Annotated[
@@ -247,7 +257,10 @@ def update_command(
         str | None,
         typer.Option(
             "--queue",
-            help="Updated queue-name override stored on the user.",
+            help=(
+                "Updated queue-name override stored on the user. Run "
+                "`dsctl queue list` to discover queue names."
+            ),
         ),
     ] = None,
     clear_queue: Annotated[
@@ -315,7 +328,7 @@ def delete_command(
     ctx: typer.Context,
     user: Annotated[
         str,
-        typer.Argument(help="User name or numeric id."),
+        typer.Argument(help=USER_HELP),
     ],
     *,
     force: Annotated[
@@ -344,11 +357,16 @@ def grant_project_command(
     ctx: typer.Context,
     user: Annotated[
         str,
-        typer.Argument(help="User name or numeric id."),
+        typer.Argument(help=USER_HELP),
     ],
     project: Annotated[
         str,
-        typer.Argument(help="Project name or numeric code."),
+        typer.Argument(
+            help=(
+                "Project name or numeric code. Run `dsctl project list` "
+                "to discover values."
+            )
+        ),
     ],
 ) -> None:
     """Grant one project to one user with write permission."""
@@ -369,14 +387,17 @@ def grant_datasource_command(
     ctx: typer.Context,
     user: Annotated[
         str,
-        typer.Argument(help="User name or numeric id."),
+        typer.Argument(help=USER_HELP),
     ],
     *,
     datasource: Annotated[
         list[str],
         typer.Option(
             "--datasource",
-            help="Datasource name or numeric id. Repeat to grant multiple datasources.",
+            help=(
+                "Datasource name or numeric id. Repeat to grant multiple "
+                "datasources; run `dsctl datasource list` to discover values."
+            ),
         ),
     ],
 ) -> None:
@@ -398,14 +419,17 @@ def grant_namespace_command(
     ctx: typer.Context,
     user: Annotated[
         str,
-        typer.Argument(help="User name or numeric id."),
+        typer.Argument(help=USER_HELP),
     ],
     *,
     namespace: Annotated[
         list[str],
         typer.Option(
             "--namespace",
-            help="Namespace name or numeric id. Repeat to grant multiple namespaces.",
+            help=(
+                "Namespace name or numeric id. Repeat to grant multiple "
+                "namespaces; run `dsctl namespace list` to discover values."
+            ),
         ),
     ],
 ) -> None:
@@ -427,11 +451,16 @@ def revoke_project_command(
     ctx: typer.Context,
     user: Annotated[
         str,
-        typer.Argument(help="User name or numeric id."),
+        typer.Argument(help=USER_HELP),
     ],
     project: Annotated[
         str,
-        typer.Argument(help="Project name or numeric code."),
+        typer.Argument(
+            help=(
+                "Project name or numeric code. Run `dsctl project list` "
+                "to discover values."
+            )
+        ),
     ],
 ) -> None:
     """Revoke one project from one user."""
@@ -452,7 +481,7 @@ def revoke_datasource_command(
     ctx: typer.Context,
     user: Annotated[
         str,
-        typer.Argument(help="User name or numeric id."),
+        typer.Argument(help=USER_HELP),
     ],
     *,
     datasource: Annotated[
@@ -460,7 +489,8 @@ def revoke_datasource_command(
         typer.Option(
             "--datasource",
             help=(
-                "Datasource name or numeric id. Repeat to revoke multiple datasources."
+                "Datasource name or numeric id. Repeat to revoke multiple "
+                "datasources; run `dsctl datasource list` to discover values."
             ),
         ),
     ],
@@ -483,14 +513,17 @@ def revoke_namespace_command(
     ctx: typer.Context,
     user: Annotated[
         str,
-        typer.Argument(help="User name or numeric id."),
+        typer.Argument(help=USER_HELP),
     ],
     *,
     namespace: Annotated[
         list[str],
         typer.Option(
             "--namespace",
-            help="Namespace name or numeric id. Repeat to revoke multiple namespaces.",
+            help=(
+                "Namespace name or numeric id. Repeat to revoke multiple "
+                "namespaces; run `dsctl namespace list` to discover values."
+            ),
         ),
     ],
 ) -> None:

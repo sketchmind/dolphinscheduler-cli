@@ -5,7 +5,7 @@ from dataclasses import dataclass
 USE_RESOURCE = "use"
 ENUM_RESOURCE = "enum"
 LINT_RESOURCE = "lint"
-ENV_RESOURCE = "env"
+ENV_RESOURCE = "environment"
 CLUSTER_RESOURCE = "cluster"
 DATASOURCE_RESOURCE = "datasource"
 NAMESPACE_RESOURCE = "namespace"
@@ -97,7 +97,7 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
         _surface_command(PROJECT_RESOURCE),
         _surface_command(WORKFLOW_RESOURCE),
     ),
-    ENUM_RESOURCE: (_surface_command("list"),),
+    ENUM_RESOURCE: (_surface_command("names"), _surface_command("list")),
     LINT_RESOURCE: (_surface_command("workflow"),),
     ENV_RESOURCE: (
         _surface_command("list"),
@@ -173,6 +173,10 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
         _surface_command("update"),
         _surface_command("delete"),
         _surface_command("test"),
+        _surface_command(
+            "definition",
+            _surface_command("list"),
+        ),
     ),
     ALERT_GROUP_RESOURCE: (
         _surface_command("list"),
@@ -264,6 +268,9 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
     TEMPLATE_RESOURCE: (
         _surface_command(WORKFLOW_RESOURCE),
         _surface_command("params"),
+        _surface_command(ENV_RESOURCE),
+        _surface_command(CLUSTER_RESOURCE),
+        _surface_command(DATASOURCE_RESOURCE),
         _surface_command(TASK_RESOURCE),
     ),
     TASK_TYPE_RESOURCE: (_surface_command("list"),),

@@ -27,7 +27,6 @@ def test_current_entries_match_reviewed_raw_findings() -> None:
         "page_hook|audit|_list_audit_logs_result",
         "page_hook|project|_list_projects_result",
         "page_hook|task_instance|_list_task_instances_result",
-        "page_hook|workflow_instance|_list_workflow_instances_result",
         (
             "raw_matrix|alert_group|_translate_alert_group_api_error|"
             "CREATE_ALERT_GROUP_ERROR,LIST_PAGING_ALERT_GROUP_ERROR,"

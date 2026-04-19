@@ -291,10 +291,10 @@ future.
 | --- | --- | --- | --- |
 | meta | `version`, `context` | No | local metadata and merged local context |
 | schema | `schema`, `capabilities` | No | static CLI self-description |
-| enum | `enum list` | No | generated enum metadata |
+| enum | `enum names`, `enum list` | No | generated enum metadata |
 | use | `use project|workflow|--clear` | No | local context persistence |
 | lint | `lint workflow FILE` | No | local validation only |
-| template | `template workflow|task` | No | local template rendering |
+| template | `template workflow|params|environment|cluster|datasource|task` | No | local template rendering |
 
 ### Meta And Diagnostics
 
@@ -309,14 +309,14 @@ future.
 
 | Surface | Commands | Default persona | Live required | Minimum live coverage |
 | --- | --- | --- | --- | --- |
-| env | `env list|get|create|update|delete` | delegated governance user | Yes | CRUD round-trip plus not-found or validation case |
+| environment | `environment list|get|create|update|delete` | delegated governance user | Yes | CRUD round-trip plus not-found or validation case |
 | cluster | `cluster list|get|create|update|delete` | delegated governance user | Yes | CRUD round-trip plus delete cleanup |
 | datasource | `datasource list|get|create|update|delete|test` | delegated governance user | Yes | CRUD round-trip and real connectivity test where the capability exists |
 | namespace | `namespace list|get|available|create|delete` | delegated governance user | Yes | list and availability plus create/delete round-trip |
 | resource | `resource list|view|upload|create|mkdir|download|delete` | `etl-developer` | Yes | file and directory lifecycle with content round-trip |
 | queue | `queue list|get|create|update|delete` | `admin-bootstrap` or delegated governance user | Yes | CRUD round-trip plus permission boundary |
 | worker-group | `worker-group list|get|create|update|delete` | `admin-bootstrap` or delegated governance user | Yes | CRUD round-trip plus selector correctness |
-| alert-plugin | `alert-plugin list|get|schema|create|update|delete|test` | `admin-bootstrap` or delegated governance user | Yes | schema/read paths plus create/update/delete and plugin test where installed |
+| alert-plugin | `alert-plugin list|get|definition list|schema|create|update|delete|test` | `admin-bootstrap` or delegated governance user | Yes | definition/schema/read paths plus create/update/delete and plugin test where installed |
 | alert-group | `alert-group list|get|create|update|delete` | delegated governance user | Yes | CRUD round-trip and referenceable group payload shape |
 | tenant | `tenant list|get|create|update|delete` | `admin-bootstrap` | Yes | CRUD round-trip plus non-admin denial case |
 | user | `user list|get|create|update|delete|grant project|datasource|namespace|revoke project|datasource|namespace` | `admin-bootstrap` | Yes | CRUD plus grant/revoke effect and non-admin denial case |
@@ -347,7 +347,7 @@ Some resources still require live coverage, but only in a compatible cluster:
 
 - datasource connection tests need a reachable backend
 - alert-plugin tests need installed plugin instances or plugin backends
-- namespace, resource, env, and cluster operations may depend on deployment
+- namespace, resource, environment, and cluster operations may depend on deployment
   topology and storage configuration
 
 The rule is not “skip forever”. The rule is:
@@ -383,7 +383,7 @@ Current verified coverage includes:
   namespace capability/error paths
 - project surfaces: `task-type`, `project`, `project-parameter`,
   `project-preference`, `project-worker-group`
-- runtime-adjacent governance: `cluster`, `env`, `resource`
+- runtime-adjacent governance: `cluster`, `environment`, `resource`
 - workflow runtime surfaces: `workflow`, `task`, `workflow-instance`,
   `task-instance`, parent/sub-workflow relation reads, finished-instance DAG
   update with and without definition sync, schedule-triggered runtime,
@@ -403,11 +403,12 @@ live additions.
 - `resource view` is not reliable through the DS view endpoint because the
   upstream controller misuses the `limit` parameter. The adapter now reads the
   download endpoint and applies the line window client-side.
-- `workflow-instance` task inspection in DS 3.4.1 is backed by
-  `GET /projects/{projectCode}/workflow-instances/{id}/tasks`, and the useful
-  payload lives under the DS `dataList` envelope as
-  `{ "taskList": [...], "workflowInstanceState": ... }`. Do not assume a page
-  envelope on this path.
+- `task-instance list` in DS 3.4.1 is backed by the project-scoped
+  `GET /projects/{projectCode}/task-instances` paging query. The CLI narrows
+  the common per-run inspection path by sending `workflowInstanceId`, and it
+  uses the same path for broader project-scoped runtime triage filters.
+  Workflow-definition filtering is intentionally not exposed here because the
+  upstream BATCH query does not reliably apply `workflowDefinitionName`.
 - `workflow describe` returns one root sentinel relation with
   `preTaskCode=0`. That row is part of the DS DAG encoding and should not be
   confused with a user-authored dependency edge.
@@ -435,9 +436,9 @@ live additions.
 - schedule create also needs the workflow definition to be `ONLINE`, and the
   current cluster requires explicit `tenantCode` plus a valid nonzero
   `environmentCode`.
-- `alert-plugin schema Script` exposes only the DS plugin definition metadata,
-  not a rich parameter form. The live suite should treat that as the upstream
-  contract unless source confirms otherwise.
+- `alert-plugin definition list` discovers supported plugin definitions, while
+  `alert-plugin schema PLUGIN` fetches the full DS UI parameter form for one
+  definition when the upstream detail endpoint exposes it.
 - `alert-plugin test` against the current Script plugin returns DS result code
   `110014` when no executable script backend is configured. This is a valid
   cluster capability failure, not a transport error.

@@ -3,10 +3,15 @@ from __future__ import annotations
 import ast
 import inspect
 import re
+import shlex
 from itertools import product
 from pathlib import Path
 from typing import TypedDict
 
+from tests.support import normalize_cli_help
+from typer.testing import CliRunner
+
+from dsctl.app import app
 from dsctl.cli_surface import (
     NAME_FIRST_RESOURCES,
     RESOURCE_COMMAND_TREE,
@@ -38,9 +43,10 @@ LOCAL_PAGINATION_CONSTANT_PATTERN = re.compile(
 )
 SERVICES_DIR = Path(__file__).resolve().parents[2] / "src" / "dsctl" / "services"
 REPO_ROOT = Path(__file__).resolve().parents[2]
+COMMANDS_DIR = REPO_ROOT / "src" / "dsctl" / "commands"
 NAME_FIRST_RESOURCE_RESOLVERS = {
     "project": "project",
-    "env": "environment",
+    "environment": "environment",
     "cluster": "cluster",
     "datasource": "datasource",
     "namespace": "namespace",
@@ -113,6 +119,7 @@ STABLE_COMMAND_DOC_BLOCKS = {
         "## Naming and Selection Rules",
     ),
 }
+RUNNER = CliRunner()
 
 
 def test_services_do_not_inline_resource_slug_literals() -> None:
@@ -201,6 +208,133 @@ def test_paginated_schema_commands_expose_standard_all_option() -> None:
     assert malformed == []
 
 
+def test_literal_emit_result_actions_are_declared_in_schema() -> None:
+    data = get_schema_result().data
+    assert isinstance(data, dict)
+    commands = data["commands"]
+    assert isinstance(commands, list)
+    declared_actions = _iter_schema_action_names(commands)
+    emitted_actions = _literal_emit_result_actions()
+
+    missing = [
+        f"{action} ({path.relative_to(REPO_ROOT)}:{line_number})"
+        for action, path, line_number in emitted_actions
+        if action not in declared_actions
+    ]
+
+    assert missing == []
+
+
+def test_schema_declared_commands_expose_help() -> None:
+    data = get_schema_result().data
+    assert isinstance(data, dict)
+    commands = data["commands"]
+    assert isinstance(commands, list)
+
+    failures: list[str] = []
+    for path, command in _iter_schema_command_paths(commands):
+        result = RUNNER.invoke(app, [*path, "--help"])
+        if result.exit_code != 0:
+            action = command.get("action")
+            failures.append(f"{' '.join(path)} ({action}) exited {result.exit_code}")
+
+    assert failures == []
+
+
+def test_schema_selector_fields_expose_discovery_commands() -> None:
+    data = get_schema_result().data
+    assert isinstance(data, dict)
+    commands = data["commands"]
+    assert isinstance(commands, list)
+
+    missing: list[str] = []
+    for path, command in _iter_schema_command_paths(commands):
+        for field_kind, field in _iter_schema_command_fields(command):
+            if not field.get("selector"):
+                continue
+            discovery_command = field.get("discovery_command")
+            if isinstance(discovery_command, str) and discovery_command:
+                continue
+            missing.append(
+                f"{'.'.join(path)}:{field_kind}:{field.get('name', '<unknown>')}"
+            )
+
+    assert missing == []
+
+
+def test_schema_choice_fields_are_discoverable_from_help_or_schema() -> None:
+    data = get_schema_result().data
+    assert isinstance(data, dict)
+    commands = data["commands"]
+    assert isinstance(commands, list)
+
+    issues: list[str] = []
+    for path, command in _iter_schema_command_paths(commands):
+        result = RUNNER.invoke(app, [*path, "--help"])
+        if result.exit_code != 0:
+            issues.append(f"{' '.join(path)}: help exited {result.exit_code}")
+            continue
+        help_text = normalize_cli_help(result.stdout)
+        for field_kind, field in _iter_schema_command_fields(command):
+            choices = field.get("choices")
+            if not isinstance(choices, list) or not choices:
+                continue
+            field_label = f"{'.'.join(path)}:{field_kind}:{field.get('name')}"
+            if len(choices) <= 10:
+                missing_choices = [
+                    str(choice) for choice in choices if str(choice) not in help_text
+                ]
+                if missing_choices:
+                    issues.append(
+                        f"{field_label} missing help choices {missing_choices}"
+                    )
+                continue
+            discovery_command = field.get("discovery_command")
+            if not isinstance(discovery_command, str) or not discovery_command:
+                issues.append(
+                    f"{field_label} has {len(choices)} choices without discovery"
+                )
+
+    assert issues == []
+
+
+def test_schema_discovery_commands_point_to_existing_help_surfaces() -> None:
+    data = get_schema_result().data
+    assert isinstance(data, dict)
+    commands = data["commands"]
+    assert isinstance(commands, list)
+
+    known_paths = {path for path, _command in _iter_schema_command_paths(commands)}
+    issues: list[str] = []
+    for discovery_command in sorted(_iter_discovery_commands(data)):
+        tokens = shlex.split(discovery_command)
+        if not tokens or tokens[0] != "dsctl":
+            issues.append(f"{discovery_command}: must start with dsctl")
+            continue
+
+        command_path = _longest_known_command_path(tokens[1:], known_paths)
+        if command_path is None:
+            issues.append(f"{discovery_command}: no declared command path")
+            continue
+
+        result = RUNNER.invoke(app, [*command_path, "--help"])
+        if result.exit_code != 0:
+            issues.append(
+                f"{discovery_command}: {' '.join(command_path)} --help "
+                f"exited {result.exit_code}"
+            )
+            continue
+
+        help_text = normalize_cli_help(result.stdout)
+        issues.extend(
+            f"{discovery_command}: {flag} missing from {' '.join(command_path)} --help"
+            for flag in _option_flags_after_path(tokens[1:], command_path)
+            if flag not in help_text
+        )
+
+    assert issues == []
+
+
 def test_name_first_resources_have_resolver_functions() -> None:
     assert set(NAME_FIRST_RESOURCE_RESOLVERS) == set(NAME_FIRST_RESOURCES)
     available = {
@@ -287,6 +421,20 @@ def test_stable_command_docs_cover_shared_cli_surface() -> None:
     assert missing_by_doc == {}
 
 
+def test_cli_contract_command_blocks_do_not_duplicate_rules_sections() -> None:
+    text = (REPO_ROOT / "docs/reference/cli-contract.md").read_text(encoding="utf-8")
+    violations: list[str] = []
+    for block in re.split(r"(?=^## `dsctl )", text, flags=re.MULTILINE):
+        if not block.startswith("## `dsctl "):
+            continue
+        title = block.splitlines()[0]
+        rules_count = sum(1 for line in block.splitlines() if line.strip() == "Rules:")
+        if rules_count > 1:
+            violations.append(f"{title}: {rules_count} Rules sections")
+
+    assert violations == []
+
+
 def _iter_schema_commands(nodes: list[object]) -> list[CommandNode]:
     commands: list[CommandNode] = []
     for node in nodes:
@@ -311,7 +459,120 @@ def _iter_schema_commands(nodes: list[object]) -> list[CommandNode]:
     return commands
 
 
+def _iter_schema_action_names(nodes: list[object]) -> set[str]:
+    actions: set[str] = set()
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        action = node.get("action")
+        if isinstance(action, str):
+            actions.add(action)
+        group_action = node.get("group_action")
+        if isinstance(group_action, dict):
+            group_action_name = group_action.get("action")
+            if isinstance(group_action_name, str):
+                actions.add(group_action_name)
+        nested = node.get("commands")
+        if isinstance(nested, list):
+            actions.update(_iter_schema_action_names(nested))
+    return actions
+
+
+def _literal_emit_result_actions() -> list[tuple[str, Path, int]]:
+    emitted_actions: list[tuple[str, Path, int]] = []
+    for path in COMMANDS_DIR.glob("*.py"):
+        module = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(module):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "emit_result"
+                and node.args
+            ):
+                continue
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                emitted_actions.append((first_arg.value, path, node.lineno))
+    return emitted_actions
+
+
 SurfacePath = tuple[str, ...]
+SchemaCommandPath = tuple[SurfacePath, dict[str, object]]
+
+
+def _iter_schema_command_paths(
+    nodes: list[object],
+    prefix: SurfacePath = (),
+) -> list[SchemaCommandPath]:
+    commands: list[SchemaCommandPath] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        name = node.get("name")
+        if not isinstance(name, str):
+            continue
+        path = (*prefix, name)
+        action = node.get("action")
+        if isinstance(action, str):
+            commands.append((path, node))
+        group_action = node.get("group_action")
+        if isinstance(group_action, dict) and isinstance(
+            group_action.get("action"),
+            str,
+        ):
+            commands.append((path, group_action))
+        nested = node.get("commands")
+        if isinstance(nested, list):
+            commands.extend(_iter_schema_command_paths(nested, path))
+    return commands
+
+
+def _iter_schema_command_fields(
+    command: dict[str, object],
+) -> list[tuple[str, dict[str, object]]]:
+    fields: list[tuple[str, dict[str, object]]] = []
+    for field_kind in ("arguments", "options"):
+        value = command.get(field_kind)
+        if not isinstance(value, list):
+            continue
+        fields.extend((field_kind, field) for field in value if isinstance(field, dict))
+    return fields
+
+
+def _iter_discovery_commands(value: object) -> set[str]:
+    commands: set[str] = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "discovery_command" and isinstance(item, str):
+                commands.add(item)
+                continue
+            commands.update(_iter_discovery_commands(item))
+    elif isinstance(value, list):
+        for item in value:
+            commands.update(_iter_discovery_commands(item))
+    return commands
+
+
+def _longest_known_command_path(
+    tokens: list[str],
+    known_paths: set[SurfacePath],
+) -> SurfacePath | None:
+    for length in range(len(tokens), 0, -1):
+        candidate = tuple(tokens[:length])
+        if candidate in known_paths:
+            return candidate
+    return None
+
+
+def _option_flags_after_path(
+    tokens: list[str],
+    command_path: SurfacePath,
+) -> tuple[str, ...]:
+    return tuple(
+        token.split("=", 1)[0]
+        for token in tokens[len(command_path) :]
+        if token.startswith("--")
+    )
 
 
 def _stable_surface_leaf_paths() -> set[SurfacePath]:

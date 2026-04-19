@@ -35,3 +35,15 @@ def test_use_clear_command_clears_project_scope() -> None:
         assert payload["action"] == "use.clear"
         assert payload["data"]["project"] is None
         assert payload["data"]["workflow"] is None
+
+
+def test_use_help_points_to_context_target_discovery() -> None:
+    project_result = runner.invoke(app, ["use", "project", "--help"])
+    workflow_result = runner.invoke(app, ["use", "workflow", "--help"])
+
+    assert project_result.exit_code == 0
+    assert "project" in project_result.stdout
+    assert "list" in project_result.stdout
+    assert workflow_result.exit_code == 0
+    assert "workflow" in workflow_result.stdout
+    assert "list" in workflow_result.stdout

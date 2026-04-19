@@ -20,6 +20,10 @@ project_app = typer.Typer(
     no_args_is_help=True,
 )
 
+PROJECT_HELP = (
+    "Project name or numeric code. Run `dsctl project list` to discover values."
+)
+
 
 def register_project_commands(app: typer.Typer) -> None:
     """Register the `project` command group."""
@@ -81,7 +85,7 @@ def get_command(
     ctx: typer.Context,
     project: Annotated[
         str,
-        typer.Argument(help="Project name or numeric code."),
+        typer.Argument(help=PROJECT_HELP),
     ],
 ) -> None:
     """Get one project by name or code."""
@@ -130,7 +134,7 @@ def update_command(
     ctx: typer.Context,
     project: Annotated[
         str,
-        typer.Argument(help="Project name or numeric code."),
+        typer.Argument(help=PROJECT_HELP),
     ],
     *,
     name: Annotated[
@@ -193,7 +197,7 @@ def delete_command(
     ctx: typer.Context,
     project: Annotated[
         str,
-        typer.Argument(help="Project name or numeric code."),
+        typer.Argument(help=PROJECT_HELP),
     ],
     *,
     force: Annotated[

@@ -39,7 +39,7 @@ _RESOURCE_RESOLUTION_HINTS: dict[str, tuple[str, str, str | None]] = {
         "in the selected project",
     ),
     WORKFLOW_RESOURCE: ("workflow list", "code", "in the selected project"),
-    ENV_RESOURCE: ("env list", "code", None),
+    ENV_RESOURCE: ("environment list", "code", None),
     CLUSTER_RESOURCE: ("cluster list", "code", None),
     DATASOURCE_RESOURCE: ("datasource list", "id", None),
     NAMESPACE_RESOURCE: ("namespace list", "id", None),
@@ -126,6 +126,12 @@ class InvalidStateError(DsctlError):
     """Raised when a resource state does not permit the requested operation."""
 
     error_type = "invalid_state"
+
+
+class TaskNotDispatchedError(DsctlError):
+    """Raised when DS has not dispatched a task instance and no log exists yet."""
+
+    error_type = "task_not_dispatched"
 
 
 class ConfirmationRequiredError(DsctlError):

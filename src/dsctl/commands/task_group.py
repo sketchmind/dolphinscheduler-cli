@@ -27,6 +27,10 @@ task_group_queue_app = typer.Typer(
     no_args_is_help=True,
 )
 
+TASK_GROUP_HELP = (
+    "Task-group name or numeric id. Run `dsctl task-group list` to discover values."
+)
+
 
 def register_task_group_commands(app: typer.Typer) -> None:
     """Register the `task-group` command group."""
@@ -42,7 +46,10 @@ def list_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Use only for project-scoped listing.",
+            help=(
+                "Project name or code. Use only for project-scoped listing; "
+                "run `dsctl project list` to discover values."
+            ),
         ),
     ] = None,
     search: Annotated[
@@ -56,7 +63,7 @@ def list_command(
         str | None,
         typer.Option(
             "--status",
-            help="Filter task groups by status: open or closed.",
+            help="Filter task groups by status: open, closed, 1, or 0.",
         ),
     ] = None,
     page_no: Annotated[
@@ -94,7 +101,7 @@ def get_command(
     ctx: typer.Context,
     task_group: Annotated[
         str,
-        typer.Argument(help="Task-group name or numeric id."),
+        typer.Argument(help=TASK_GROUP_HELP),
     ],
 ) -> None:
     """Get one task group by name or id."""
@@ -114,7 +121,10 @@ def create_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Falls back to stored project context; "
+                "run `dsctl project list` to discover values."
+            ),
         ),
     ] = None,
     name: Annotated[
@@ -150,7 +160,7 @@ def update_command(
     ctx: typer.Context,
     task_group: Annotated[
         str,
-        typer.Argument(help="Task-group name or numeric id."),
+        typer.Argument(help=TASK_GROUP_HELP),
     ],
     *,
     name: Annotated[
@@ -198,7 +208,7 @@ def close_command(
     ctx: typer.Context,
     task_group: Annotated[
         str,
-        typer.Argument(help="Task-group name or numeric id."),
+        typer.Argument(help=TASK_GROUP_HELP),
     ],
 ) -> None:
     """Close one task group."""
@@ -215,7 +225,7 @@ def start_command(
     ctx: typer.Context,
     task_group: Annotated[
         str,
-        typer.Argument(help="Task-group name or numeric id."),
+        typer.Argument(help=TASK_GROUP_HELP),
     ],
 ) -> None:
     """Start one task group."""
@@ -232,7 +242,7 @@ def list_queue_command(
     ctx: typer.Context,
     task_group: Annotated[
         str,
-        typer.Argument(help="Task-group name or numeric id."),
+        typer.Argument(help=TASK_GROUP_HELP),
     ],
     *,
     task_instance: Annotated[
@@ -250,7 +260,10 @@ def list_queue_command(
         str | None,
         typer.Option(
             "--status",
-            help="Filter by queue status: WAIT_QUEUE, ACQUIRE_SUCCESS, or RELEASE.",
+            help=(
+                "Filter by queue status: WAIT_QUEUE, ACQUIRE_SUCCESS, RELEASE, "
+                "-1, 1, or 2."
+            ),
         ),
     ] = None,
     page_no: Annotated[
@@ -289,7 +302,12 @@ def force_start_queue_command(
     ctx: typer.Context,
     queue_id: Annotated[
         int,
-        typer.Argument(help="Numeric task-group queue id."),
+        typer.Argument(
+            help=(
+                "Numeric task-group queue id. Run "
+                "`dsctl task-group queue list TASK_GROUP` to discover ids."
+            ),
+        ),
     ],
 ) -> None:
     """Force-start one waiting task-group queue row."""
@@ -306,7 +324,12 @@ def set_priority_queue_command(
     ctx: typer.Context,
     queue_id: Annotated[
         int,
-        typer.Argument(help="Numeric task-group queue id."),
+        typer.Argument(
+            help=(
+                "Numeric task-group queue id. Run "
+                "`dsctl task-group queue list TASK_GROUP` to discover ids."
+            ),
+        ),
     ],
     *,
     priority: Annotated[

@@ -46,9 +46,13 @@ def use_group() -> dict[str, object]:
                     argument(
                         "name",
                         value_type="string",
-                        description="Project name to persist. Required unless --clear.",
+                        description=(
+                            "Project name to persist. Run `dsctl project list` "
+                            "to discover values. Required unless --clear."
+                        ),
                         required=False,
                         selector="opaque_name",
+                        discovery_command="dsctl project list",
                     )
                 ],
                 options=use_target_options(
@@ -67,10 +71,13 @@ def use_group() -> dict[str, object]:
                         "name",
                         value_type="string",
                         description=(
-                            "Workflow name to persist. Required unless --clear."
+                            "Workflow name to persist. Run `dsctl workflow list` "
+                            "in the selected project to discover values. Required "
+                            "unless --clear."
                         ),
                         required=False,
                         selector="opaque_name",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=use_target_options(
@@ -129,8 +136,12 @@ def project_group() -> dict[str, object]:
                     argument(
                         "project",
                         value_type="string",
-                        description="Project name or numeric code.",
+                        description=(
+                            "Project name or numeric code. Run `dsctl project "
+                            "list` to discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl project list",
                     )
                 ],
             ),
@@ -160,8 +171,12 @@ def project_group() -> dict[str, object]:
                     argument(
                         "project",
                         value_type="string",
-                        description="Project name or numeric code.",
+                        description=(
+                            "Project name or numeric code. Run `dsctl project "
+                            "list` to discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl project list",
                     )
                 ],
                 options=[
@@ -193,8 +208,12 @@ def project_group() -> dict[str, object]:
                     argument(
                         "project",
                         value_type="string",
-                        description="Project name or numeric code.",
+                        description=(
+                            "Project name or numeric code. Run `dsctl project "
+                            "list` to discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl project list",
                     )
                 ],
                 options=[
@@ -234,8 +253,10 @@ def project_parameter_group() -> dict[str, object]:
                         "data-type",
                         value_type="string",
                         description=(
-                            "Filter project parameters by DS projectParameterDataType."
+                            "Filter by DS projectParameterDataType. Run `dsctl "
+                            "enum list data-type` to discover values."
                         ),
+                        discovery_command="dsctl enum list data-type",
                     ),
                     option(
                         "page-no",
@@ -265,8 +286,13 @@ def project_parameter_group() -> dict[str, object]:
                     argument(
                         "project-parameter",
                         value_type="string",
-                        description="Project parameter name or numeric code.",
+                        description=(
+                            "Project parameter name or numeric code. Run `dsctl "
+                            "project-parameter list` in the selected project to "
+                            "discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl project-parameter list",
                     )
                 ],
                 options=[project_option()],
@@ -292,8 +318,12 @@ def project_parameter_group() -> dict[str, object]:
                     option(
                         "data-type",
                         value_type="string",
-                        description="DS projectParameterDataType value.",
+                        description=(
+                            "DS projectParameterDataType value. Run `dsctl enum "
+                            "list data-type` to discover values."
+                        ),
                         default="VARCHAR",
+                        discovery_command="dsctl enum list data-type",
                     ),
                 ],
             ),
@@ -305,8 +335,13 @@ def project_parameter_group() -> dict[str, object]:
                     argument(
                         "project-parameter",
                         value_type="string",
-                        description="Project parameter name or numeric code.",
+                        description=(
+                            "Project parameter name or numeric code. Run `dsctl "
+                            "project-parameter list` in the selected project to "
+                            "discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl project-parameter list",
                     )
                 ],
                 options=[
@@ -328,7 +363,11 @@ def project_parameter_group() -> dict[str, object]:
                     option(
                         "data-type",
                         value_type="string",
-                        description="Updated DS projectParameterDataType value.",
+                        description=(
+                            "Updated DS projectParameterDataType value. Run "
+                            "`dsctl enum list data-type` to discover values."
+                        ),
+                        discovery_command="dsctl enum list data-type",
                     ),
                 ],
             ),
@@ -340,8 +379,13 @@ def project_parameter_group() -> dict[str, object]:
                     argument(
                         "project-parameter",
                         value_type="string",
-                        description="Project parameter name or numeric code.",
+                        description=(
+                            "Project parameter name or numeric code. Run `dsctl "
+                            "project-parameter list` in the selected project to "
+                            "discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl project-parameter list",
                     )
                 ],
                 options=[
@@ -448,9 +492,11 @@ def project_worker_group_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Worker group to keep assigned to this project. Repeat "
-                            "as needed."
+                            "as needed; run `dsctl worker-group list` to discover "
+                            "values."
                         ),
                         multiple=True,
+                        discovery_command="dsctl worker-group list",
                     ),
                 ],
             ),

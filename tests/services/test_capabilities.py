@@ -1,7 +1,14 @@
+import pytest
+
 from dsctl.cli_surface import SURFACE_PLANES
+from dsctl.errors import UserInputError
 from dsctl.models import supported_typed_task_types
 from dsctl.services.capabilities import get_capabilities_result
-from dsctl.services.template import parameter_syntax_index_data, task_template_metadata
+from dsctl.services.datasource_payload import datasource_template_index_data
+from dsctl.services.template import (
+    parameter_syntax_index_data,
+    task_template_metadata,
+)
 from dsctl.upstream import (
     upstream_default_task_types,
     upstream_default_task_types_by_category,
@@ -22,6 +29,7 @@ EXPECTED_GENERIC_TEMPLATE_TASK_TYPES = [
 EXPECTED_UNTEMPLATED_UPSTREAM_TASK_TYPES: list[str] = []
 EXPECTED_TASK_TEMPLATE_METADATA = task_template_metadata()
 EXPECTED_PARAMETER_SYNTAX = parameter_syntax_index_data()
+EXPECTED_DATASOURCE_TEMPLATE_INDEX = datasource_template_index_data()
 EXPECTED_VERSION_METADATA = [
     {
         "server_version": "3.3.2",
@@ -68,7 +76,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "precedence": ["flag", "context"],
         "name_first_resources": [
             "project",
-            "env",
+            "environment",
             "cluster",
             "datasource",
             "namespace",
@@ -96,6 +104,8 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "schema": True,
         "template": True,
         "capabilities": True,
+        "command_invocation_source": "schema",
+        "capabilities_scope": "feature_discovery",
     }
     assert data["resources"]["top_level"] == [
         "version",
@@ -108,15 +118,18 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "project",
         "workflow",
     ]
-    assert data["resources"]["groups"]["enum"]["commands"] == ["list"]
+    assert data["resources"]["groups"]["enum"]["commands"] == ["names", "list"]
     assert data["resources"]["groups"]["lint"]["commands"] == ["workflow"]
     assert data["resources"]["groups"]["task-type"]["commands"] == ["list"]
     assert data["resources"]["groups"]["template"]["commands"] == [
         "workflow",
         "params",
+        "environment",
+        "cluster",
+        "datasource",
         "task",
     ]
-    assert data["resources"]["groups"]["env"]["commands"] == [
+    assert data["resources"]["groups"]["environment"]["commands"] == [
         "list",
         "get",
         "create",
@@ -185,6 +198,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
         "test",
+        "definition",
     ]
     assert data["resources"]["groups"]["alert-group"]["commands"] == [
         "list",
@@ -291,6 +305,12 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "workflow_schedule_block": True,
         "workflow_dry_run": True,
         "parameter_syntax": EXPECTED_PARAMETER_SYNTAX,
+        "environment_config_template": True,
+        "cluster_config_template": True,
+        "datasource_payload_templates": True,
+        "datasource_template_types": EXPECTED_DATASOURCE_TEMPLATE_INDEX[
+            "supported_types"
+        ],
         "task_template_types": EXPECTED_TEMPLATE_TASK_TYPES,
         "task_templates": EXPECTED_TASK_TEMPLATE_METADATA,
         "typed_task_specs": EXPECTED_TYPED_TASK_TYPES,
@@ -359,3 +379,58 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     assert data["planes"] == {
         name: list(resources) for name, resources in SURFACE_PLANES.items()
     }
+
+
+def test_capabilities_result_can_return_summary() -> None:
+    result = get_capabilities_result(summary=True)
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {"capabilities": {"view": "summary"}}
+    assert data["cli"] == {"name": "dsctl", "version": "0.1.0"}
+    assert data["ds"] == EXPECTED_DS_CAPABILITIES
+    assert "resources" in data
+    assert "runtime" in data
+    assert "authoring" in data
+    authoring = data["authoring"]
+    assert isinstance(authoring, dict)
+    assert authoring["workflow_yaml_create"] is True
+    assert authoring["task_template_types"] == EXPECTED_TEMPLATE_TASK_TYPES
+    assert "parameter_syntax" not in authoring
+    assert "task_templates" not in authoring
+
+
+def test_capabilities_result_can_return_one_section() -> None:
+    result = get_capabilities_result(section="authoring")
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {
+        "capabilities": {
+            "view": "section",
+            "section": "authoring",
+        }
+    }
+    assert set(data) == {"cli", "ds", "self_description", "authoring"}
+    authoring = data["authoring"]
+    assert isinstance(authoring, dict)
+    assert authoring["parameter_syntax"] == EXPECTED_PARAMETER_SYNTAX
+    assert authoring["task_templates"] == EXPECTED_TASK_TEMPLATE_METADATA
+
+
+def test_capabilities_result_rejects_conflicting_scope_options() -> None:
+    with pytest.raises(UserInputError, match="mutually exclusive"):
+        get_capabilities_result(summary=True, section="runtime")
+
+
+def test_capabilities_result_rejects_unknown_section() -> None:
+    with pytest.raises(
+        UserInputError,
+        match="Unknown capabilities section",
+    ) as exc_info:
+        get_capabilities_result(section="missing")
+
+    assert exc_info.value.details["section"] == "missing"
+    available_sections = exc_info.value.details["available_sections"]
+    assert isinstance(available_sections, list)
+    assert "authoring" in available_sections

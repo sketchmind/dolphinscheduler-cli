@@ -8,15 +8,18 @@ is not described here, treat it as roadmap work rather than contract.
 Current stable commands:
 
 - global option `--env-file PATH`
+- global option `--output-format {json,table,tsv}`
+- global option `--columns CSV`
 - `dsctl version`
 - `dsctl context`
 - `dsctl doctor`
 - `dsctl schema`
 - `dsctl capabilities`
+- `dsctl enum names`
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
 - `dsctl task-type list`
-- `dsctl env list|get|create|update|delete`
+- `dsctl environment list|get|create|update|delete`
 - `dsctl cluster list|get|create|update|delete`
 - `dsctl datasource list|get|create|update|delete|test`
 - `dsctl namespace list|get|available|create|delete`
@@ -26,6 +29,7 @@ Current stable commands:
 - `dsctl task-group list|get|create|update|close|start`
 - `dsctl task-group queue list|force-start|set-priority`
 - `dsctl alert-plugin list|get|schema|create|update|delete|test`
+- `dsctl alert-plugin definition list`
 - `dsctl alert-group list|get|create|update|delete`
 - `dsctl tenant list|get|create|update|delete`
 - `dsctl user list|get|create|update|delete`
@@ -42,7 +46,7 @@ Current stable commands:
 - `dsctl project-preference get|update|enable|disable`
 - `dsctl project-worker-group list|set|clear`
 - `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|params|task`
+- `dsctl template workflow|params|environment|cluster|datasource|task`
 - `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
 - `dsctl workflow lineage list|get|dependent-tasks`
 - `dsctl workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task`
@@ -67,7 +71,7 @@ Current examples:
 ```bash
 dsctl project get etl-prod
 dsctl project-parameter get warehouse_db --project etl-prod
-dsctl env get prod
+dsctl environment get prod
 dsctl cluster get k8s-prod
 dsctl datasource get warehouse
 dsctl lint workflow workflow.yaml
@@ -108,9 +112,58 @@ Example:
 dsctl --env-file cluster.env context
 ```
 
+### `--output-format {json,table,tsv}`
+
+Controls display rendering. The default is `json`.
+
+Rules:
+
+- `json` returns the standard JSON envelope and remains the stable machine
+  contract; when `--columns` is present, only the command data payload at the
+  canonical row/object path is projected
+- `table` renders row/object-oriented data as a plain text table for terminal
+  scanning
+- `tsv` renders the same row model as tab-separated text for shell pipelines
+- row-oriented formats use each command's `data_shape` metadata when present
+  and fall back to runtime shape inference for simple list payloads
+- global options are passed before the command group, for example:
+
+```bash
+dsctl --output-format table workflow-instance list --project etl-prod
+```
+
+### `--columns CSV`
+
+Selects top-level row/object fields. For `json`, this narrows the standard
+envelope data payload at the command's canonical row/object path. For `table`
+and `tsv`, it selects rendered display columns.
+
+Rules:
+
+- comma-separated values keep the requested order
+- only top-level row/object fields are selected
+- `--columns '*'` selects all top-level row fields; quote `*` so the shell does
+  not expand it as a filesystem glob
+- unknown columns are a `user_input_error` when rows are available to validate
+  against
+- errors are never projected; failed commands keep the full structured error
+  payload
+
+Example:
+
+```bash
+dsctl --columns id,name,state workflow-instance list --project etl-prod
+dsctl --output-format tsv --columns id,name,state,host task-instance list --workflow-instance 901
+dsctl --output-format tsv --columns '*' task-instance list --workflow-instance 901
+```
+
 ## Output Envelope
 
 Every stable command returns the standard JSON envelope from `src/dsctl/output.py`.
+This statement applies to the default `--output-format json` mode. Explicit
+`--columns` projection keeps the envelope and narrows only the command `data`
+payload. Row-oriented display formats are an alternate rendering layer over the
+same command result.
 
 Success shape:
 
@@ -188,6 +241,26 @@ Field rules:
 - all stable warnings emitted by the CLI include aligned `warning_details`
 - every dry-run result includes one standard warning detail with code
   `dry_run_no_request_sent`
+- `resolved` records facts selected or adopted by this command invocation, such
+  as resolved resource identities, normalized selectors, applied filters, or
+  the active output view
+- `resolved.view`, when present, is reserved for commands whose single stable
+  action can return more than one `data` shape; it is not required for commands
+  whose `action` already uniquely identifies the output shape
+- discovery candidates and allowed values do not belong in `resolved`; expose
+  them through command `data`, schema `choices`, `discovery_command`, enum
+  commands, capabilities, or structured error `details`
+- command schema entries may include `data_shape` metadata with a stable
+  low-entropy row/object model for renderers, JSON projection, and AI agents
+
+Current `data_shape` fields:
+
+- `kind`: one of `page`, `collection`, `object`, or `summary`
+- `row_path`: dot-path from the standard JSON envelope to the canonical row
+  collection or object, such as `data.totalList` or `data`
+- `default_columns`: suggested compact display columns
+- `column_discovery`: currently `runtime_row_keys`, meaning full column
+  discovery comes from the JSON row payload
 
 ## `dsctl version`
 
@@ -252,6 +325,46 @@ Current guarantees:
 ## `dsctl schema`
 
 Returns the stable machine-readable command schema for the current CLI surface.
+This is the authoritative self-description for command invocation: arguments,
+options, choices, selectors, defaults, and supported composite keys.
+
+Options:
+
+- `--group GROUP`
+- `--command ACTION`
+- `--list-groups`
+- `--list-commands`
+
+Selection rules:
+
+- omit all scope options to return the full schema, including `capabilities`
+- `--group` returns one command-group schema by stable group name such as
+  `task-instance`
+- `--group` values come from `dsctl schema --list-groups`
+- `--command` returns one command schema by stable action such as
+  `task-instance.list` or `version`
+- `--command` values come from `dsctl schema --list-commands`
+- `--list-groups` returns compact rows with `name`, `summary`,
+  `command_count`, and `schema_command`
+- `--list-commands` returns compact rows with `action`, `group`, `name`,
+  `summary`, and `schema_command`
+- `--list-commands` uses `group: null` for root-level commands such as
+  `version`
+- `--group`, `--command`, `--list-groups`, and `--list-commands` are mutually
+  exclusive
+- scoped schema payloads keep the standard schema header and `commands` tree
+  shape but omit `capabilities`; use `dsctl capabilities` for feature
+  discovery
+- scoped `--group` and `--command` payloads also include `rows` for compact
+  table/tsv rendering; JSON callers that need the full contract should continue
+  reading `commands`
+- `--group` rows list commands in the group with `kind`, `action`, `name`,
+  `summary`, and `schema_command`
+- `--command` rows flatten the command contract into `command`, `argument`,
+  `option`, `payload`, and `data_shape` rows so terminal output does not
+  collapse nested contract data into one large value cell
+- scoped schema `resolved.schema.view` is `group`, `command`, `groups`, or
+  `commands`
 
 Current `data` fields:
 
@@ -266,26 +379,60 @@ Current `data` fields:
 - `confirmation`
 - `capabilities`
 - `commands`
+- `rows` for scoped `--group` and `--command` views
 
 Current guarantees:
 
 - describes only the current stable surface
+- uses `DS_VERSION` and `--env-file` when rendering embedded capability
+  metadata, matching `dsctl capabilities`
 - includes selector semantics for name-first, path-first, and id-first resources
 - includes the standard success/error envelope contract
 - includes the stable structured error envelope and `error.source` contract
 - command arguments and options may include additive metadata such as
-  `choices`, `examples`, and `supported_keys` when the CLI can expose a
-  tighter contract for composite inputs
+  `choices`, `examples`, `supported_keys`, and `discovery_command` when the
+  CLI can expose a tighter contract for composite inputs
+- command entries that accept file payloads may include compact `payload`
+  metadata; when present, `payload.template_command` is the preferred
+  progressive-discovery command for a concrete payload template
 - includes task template type and variant discovery under
   `capabilities.templates.task`
+- `--group`, `--command`, `--list-groups`, and `--list-commands` are additive
+  scoped or discovery views over the same command tree, not a different schema
+  mode
 - `schema_version` changes for breaking schema changes; additive fields may
   appear within the same version
 - is tested against the actual registered command tree
+- command entries that expose row/object-oriented output include `data_shape`;
+  this is the authoritative model for `--columns` and
+  `--output-format table|tsv`
+- schema and capabilities output metadata expose `json_column_projection` when
+  JSON `--columns` projection is supported
 
 ## `dsctl capabilities`
 
 Returns stable version and surface capability discovery for the current CLI and
 selected DS version.
+This payload is intentionally lighter than `dsctl schema`: it answers what
+resource families and feature groups exist, not how to invoke every command.
+Agents that need to construct commands should read `dsctl schema`.
+
+Options:
+
+- `--summary`
+- `--section SECTION`
+
+Selection rules:
+
+- omit both options to return full capability discovery
+- `--summary` returns lightweight capability discovery with `cli`, `ds`,
+  `self_description`, `resources`, `planes`, `runtime`, `schedule`, `monitor`,
+  `enums`, and a summarized `authoring` section
+- `--section` returns one top-level section plus the standard `cli`, `ds`, and
+  `self_description` header
+- valid sections are `selection`, `output`, `errors`, `resources`, `planes`,
+  `authoring`, `schedule`, `monitor`, `enums`, and `runtime`
+- `--summary` and `--section` are mutually exclusive
 
 Current `data` fields:
 
@@ -322,6 +469,12 @@ Current guarantees:
 - exposes untemplated upstream task types for authoring gap analysis
 - keeps live runtime task-type discovery out of the static capability payload;
   use `dsctl task-type list` for cluster/user-visible DS task types
+- does not describe command arguments or options; use `dsctl schema` for that
+- exposes `data.self_description.command_invocation_source="schema"` and
+  `data.self_description.capabilities_scope="feature_discovery"` so tools can
+  distinguish feature discovery from command invocation metadata
+- `--summary` and `--section` are additive scoped views over the same feature
+  discovery data, not output-format modes
 - is intended as the lightweight companion to `dsctl schema`
 
 ## `dsctl use`
@@ -386,14 +539,31 @@ Current `data` fields:
 - `checks`
 - `diagnostics`
 
+## `dsctl enum names`
+
+Returns compact discovery rows for generated enum names supported by the
+current selected DS contract.
+
+Rules:
+
+- this command is local-only and does not require DS connectivity
+- each row includes the stable enum discovery name and the corresponding
+  `dsctl enum list` command
+- schema entries that require an enum discovery name should point to this
+  command with `discovery_command`
+
+Successful output returns a list of rows with:
+
+- `name`
+- `list_command`
+
 ## `dsctl enum list ENUM`
 
 Returns one generated enum and its members for the current supported DS version.
 
 Rules:
 
-- `ENUM` uses the stable enum discovery names exposed by `dsctl schema` and
-  `dsctl capabilities`
+- `ENUM` uses the stable enum discovery names exposed by `dsctl enum names`
 - class-name aliases such as `ReleaseState` are also accepted
 - enum member metadata is projected from generated enum attributes and kept
   under `members[].attributes`
@@ -410,7 +580,8 @@ Successful output returns:
 
 ## `dsctl task-type list`
 
-Returns the DS task type list for the current user/runtime.
+Returns the live DS task-type catalog for the configured cluster and current
+user.
 
 Rules:
 
@@ -419,6 +590,7 @@ Rules:
   user's `isCollection` favourite flag
 - unlike `capabilities`, this payload depends on the configured cluster and
   authenticated user
+- unlike `template task --list`, this is not the local YAML template catalog
 - `resolved.source` is always `favourite/taskTypes`
 
 `data.taskTypes` projects the DS `FavTaskDto` records and keeps DS-native field
@@ -461,10 +633,14 @@ When `--all` is used, the CLI materializes all fetched items into one
 page-shaped response. `resolved.all` indicates the response was
 client-aggregated.
 
+Use `dsctl project list` to discover project names and numeric codes.
+
 ## `dsctl project get PROJECT`
 
 Accepts a project name or a numeric project code, resolves the stable project
 identity, then fetches the current project payload.
+
+Use `dsctl project list` to discover project names and numeric codes.
 
 `resolved.project` includes:
 
@@ -482,6 +658,7 @@ Updates one project resolved by name or code.
 
 Rules:
 
+- use `dsctl project list` to discover project names and numeric codes
 - omitting `--name` preserves the current name
 - omitting both `--description` and `--clear-description` preserves the
   current description
@@ -495,6 +672,7 @@ Deletes one resolved project.
 Rules:
 
 - `PROJECT` may be a project name or numeric code
+- use `dsctl project list` to discover project names and numeric codes
 - `--force` is required
 
 Successful output returns:
@@ -514,6 +692,9 @@ Options:
 - `--page-no N`
 - `--page-size N`
 - `--all`
+
+Use `dsctl project list` to discover projects. Use
+`dsctl enum list data-type` to discover project-parameter data-type values.
 
 The payload keeps DS paging field names:
 
@@ -548,6 +729,8 @@ Selection rules:
 - `--project` falls back to context, then config
 - `PROJECT_PARAMETER` is name-first within that project, with a numeric `code`
   shortcut
+- use `dsctl project-parameter list` inside the selected project to discover
+  parameter names and codes
 
 `resolved.projectParameter` includes:
 
@@ -564,6 +747,7 @@ Rules:
 - `--name` is required
 - `--value` is required
 - `--data-type` defaults to `VARCHAR`
+- use `dsctl enum list data-type` to discover data-type values
 
 ## `dsctl project-parameter update PROJECT_PARAMETER`
 
@@ -575,6 +759,9 @@ Rules:
 - requires at least one of `--name`, `--value`, or `--data-type`
 - omitting `--name`, `--value`, or `--data-type` preserves the current remote
   value for that field
+- use `dsctl project-parameter list` inside the selected project to discover
+  parameter names and codes
+- use `dsctl enum list data-type` to discover data-type values
 
 ## `dsctl project-parameter delete PROJECT_PARAMETER --force`
 
@@ -584,6 +771,8 @@ Rules:
 
 - `--project` falls back to context, then config
 - `PROJECT_PARAMETER` may be a project-parameter name or numeric code
+- use `dsctl project-parameter list` inside the selected project to discover
+  parameter names and codes
 - `--force` is required
 
 Successful output returns:
@@ -599,6 +788,7 @@ project.
 Rules:
 
 - `--project` follows the standard `flag > context` selection rule
+- use `dsctl project list` to discover project names and numeric codes
 - DS may return `data: null` when the selected project has no stored preference
 - `state=1` means the stored preference is enabled as a project-level
   default-value source for CLI and UI surfaces that explicitly support it
@@ -630,6 +820,7 @@ Options:
 
 Rules:
 
+- use `dsctl project list` to discover project names and numeric codes
 - the input must decode to one JSON object
 - the CLI normalizes that object into a compact JSON string before sending it
   as DS `projectPreferences`
@@ -645,6 +836,7 @@ source for one selected project.
 Rules:
 
 - `--project` follows the standard `flag > context` selection rule
+- use `dsctl project list` to discover project names and numeric codes
 - DS uses integer state `1` for enabled
 - enabling project preference does not mutate existing workflow/task/schedule
   rows; it only affects clients that choose to consume it as a default source
@@ -660,6 +852,7 @@ source for one selected project.
 Rules:
 
 - `--project` follows the standard `flag > context` selection rule
+- use `dsctl project list` to discover project names and numeric codes
 - DS uses integer state `0` for disabled
 - disabling project preference does not delete the stored JSON payload
 - the same missing-row warning semantics as `enable` apply
@@ -671,6 +864,7 @@ Lists the worker groups currently reported for one selected project.
 Rules:
 
 - selection uses `--project`, then context, then config
+- use `dsctl project list` to discover project names and numeric codes
 - upstream `GET /projects/{projectCode}/worker-group` may return both explicitly
   assigned worker groups and worker groups still implied by tasks or schedules
 - output is a JSON array, not a paging wrapper
@@ -694,7 +888,9 @@ Replaces the explicit worker-group assignment set for one selected project.
 Rules:
 
 - selection uses `--project`, then context, then config
+- use `dsctl project list` to discover project names and numeric codes
 - repeat `--worker-group NAME` to keep multiple worker groups assigned
+- use `dsctl worker-group list` to discover worker-group names
 - the CLI normalizes duplicates after trimming whitespace
 - the CLI rejects an empty assignment set; use `clear --force` instead
 - successful output returns the current upstream-reported worker-group list after
@@ -713,6 +909,7 @@ Removes the explicit worker-group assignment set for one selected project.
 
 Rules:
 
+- use `dsctl project list` to discover project names and numeric codes
 - `--force` is required
 - successful output returns the current upstream-reported worker-group list after
   the mutation
@@ -720,7 +917,7 @@ Rules:
   schedules; when that happens, the CLI emits a warning aligned with one
   `warning_details[]` item using code `project_worker_group_still_in_use`
 
-## `dsctl env list`
+## `dsctl environment list`
 
 Returns a DS-style paging object.
 
@@ -744,7 +941,7 @@ When `--all` is used, the CLI materializes all fetched items into one
 page-shaped response. `resolved.all` indicates the response was
 client-aggregated.
 
-## `dsctl env get ENVIRONMENT`
+## `dsctl environment get ENVIRONMENT`
 
 Accepts an environment name or a numeric environment code, resolves the stable
 environment identity, then fetches the current environment payload.
@@ -755,21 +952,27 @@ environment identity, then fetches the current environment payload.
 - `name`
 - `description`
 
-## `dsctl env create`
+## `dsctl environment create`
 
 Creates one environment.
 
 Options:
 
 - `--name TEXT` required
-- `--config TEXT` required
+- exactly one of `--config TEXT` or `--config-file PATH`
 - `--description TEXT`
 - `--worker-group NAME` repeatable
+
+Rules:
+
+- `config` is DS environment shell/export text, not JSON
+- prefer `--config-file` for multiline configs
+- run `dsctl template environment` for a starter config file
 
 Successful output returns the refreshed environment payload. `resolved.environment`
 contains the created `code`, `name`, and `description`.
 
-## `dsctl env update ENVIRONMENT`
+## `dsctl environment update ENVIRONMENT`
 
 Updates one resolved environment while preserving omitted fields.
 
@@ -777,6 +980,7 @@ Options:
 
 - `--name TEXT`
 - `--config TEXT`
+- `--config-file PATH`
 - `--description TEXT`
 - `--clear-description`
 - `--worker-group NAME` repeatable
@@ -787,11 +991,12 @@ Rules:
 - `ENVIRONMENT` may be an environment name or numeric code
 - at least one field change is required
 - `--description` and `--clear-description` are mutually exclusive
+- `--config` and `--config-file` are mutually exclusive
 - `--worker-group` and `--clear-worker-groups` are mutually exclusive
 - omitted `name`, `config`, `description`, and worker groups preserve the
   current remote values
 
-## `dsctl env delete ENVIRONMENT --force`
+## `dsctl environment delete ENVIRONMENT --force`
 
 Deletes one resolved environment.
 
@@ -855,8 +1060,15 @@ Creates one cluster.
 Options:
 
 - `--name TEXT` required
-- `--config TEXT` required
+- exactly one of `--config TEXT` or `--config-file PATH`
 - `--description TEXT`
+
+Rules:
+
+- `config` is DS cluster config JSON text; in DS 3.4.1 the UI submits
+  `{"k8s": "...", "yarn": ""}`
+- prefer `--config-file` for multiline Kubernetes kubeconfigs
+- run `dsctl template cluster` for a starter config file
 
 Successful output returns the refreshed cluster payload. `resolved.cluster`
 contains the created `code`, `name`, and `description`.
@@ -869,6 +1081,7 @@ Options:
 
 - `--name TEXT`
 - `--config TEXT`
+- `--config-file PATH`
 - `--description TEXT`
 - `--clear-description`
 
@@ -877,6 +1090,7 @@ Rules:
 - `CLUSTER` may be a cluster name or numeric code
 - at least one field change is required
 - `--description` and `--clear-description` are mutually exclusive
+- `--config` and `--config-file` are mutually exclusive
 - omitted `name`, `config`, and `description` preserve the current remote
   values
 
@@ -921,9 +1135,14 @@ Current datasource list item fields:
 - `note`
 - `type`
 - `userId`
-- `userName`
+- `userName` — DS datasource owner/creator user, not the datasource
+  connection username
 - `createTime`
 - `updateTime`
+
+`datasource list` keeps DS-native field names. For connection credentials, use
+`datasource get DATASOURCE`; in that detail payload, `userName` is the
+datasource connection username accepted by datasource create/update payloads.
 
 ## `dsctl datasource get DATASOURCE`
 
@@ -954,8 +1173,12 @@ Rules:
 
 - the file must contain one JSON object
 - the payload must include string fields `name` and `type`
+- `type` is normalized against the generated DS `DbType` enum; discover values
+  with `dsctl enum list db-type`
 - the payload must not include `id`
 - masked password placeholders such as `******` are rejected for create
+- run `dsctl template datasource` to choose a supported type, then
+  `dsctl template datasource --type TYPE` and write `data.json` to the file
 
 ## `dsctl datasource update DATASOURCE`
 
@@ -970,9 +1193,13 @@ Rules:
 - `DATASOURCE` may be a datasource name or numeric id
 - the file must contain one JSON object
 - the payload must include string fields `name` and `type`
+- `type` is normalized against the generated DS `DbType` enum; discover values
+  with `dsctl enum list db-type`
 - if the payload includes `id`, it must match the selected datasource id
 - if the payload contains `password: "******"` from a prior `datasource get`,
   the CLI sends an empty password so DS preserves the existing secret
+- start from `dsctl datasource get DATASOURCE` or
+  `dsctl template datasource --type TYPE` when preparing an update file
 - when that warning is present, the aligned `warning_details[]` item uses code
   `datasource_update_preserved_existing_password`
 
@@ -1091,6 +1318,7 @@ Selection and behavior:
 
 - this command is admin-only because DS 3.4.1 namespace create is admin-only
 - `--cluster-code` is the DS cluster code stored in the namespace record
+- run `dsctl cluster list` to discover cluster codes
 - the returned `data` payload keeps the DS-native namespace shape
 - `data.clusterName` may be `null` in the immediate create response because the
   DS create path does not always project the cluster name
@@ -1128,6 +1356,8 @@ Rules:
 
 - when `--dir` is omitted, the CLI resolves the upstream resource base directory
 - selectors are DS `fullName` paths rather than opaque names
+- run `dsctl resource list` or `dsctl resource list --dir DIR` to discover
+  resource paths
 - the paging payload keeps DS field names
 
 Current resource list item fields:
@@ -1154,6 +1384,7 @@ Options:
 Rules:
 
 - `RESOURCE` is a DS `fullName` path
+- run `dsctl resource list --dir DIR` to discover resource paths
 - `resolved.resource` returns the normalized path metadata
 - `data.content` contains the returned text window
 
@@ -1169,6 +1400,7 @@ Options:
 
 Rules:
 
+- run `dsctl resource list` to discover destination directory paths
 - when `--name` is omitted, the local leaf filename is reused remotely
 - the returned `data` payload is a CLI projection because DS upload does not
   return an entity body
@@ -1188,6 +1420,8 @@ Rules:
 
 - `--name` must include a file extension because DS online-create accepts
   `fileName` and `suffix` separately
+- use `dsctl resource upload --file PATH` when the content already lives in a
+  local file
 - the returned `data` payload is a CLI projection because DS online-create does
   not return an entity body
 
@@ -1202,6 +1436,7 @@ Options:
 Rules:
 
 - `NAME` is one leaf directory name, not a path
+- run `dsctl resource list` to discover parent directory paths
 - the returned `data` payload is a CLI projection because DS directory create
   does not return an entity body
 
@@ -1213,6 +1448,10 @@ Options:
 
 - `--output PATH`
 - `--overwrite`
+
+Rules:
+
+- run `dsctl resource list --dir DIR` to discover resource paths
 
 Successful output returns:
 
@@ -1227,6 +1466,7 @@ Deletes one resource selected by DS `fullName` path.
 
 Rules:
 
+- run `dsctl resource list --dir DIR` to discover resource paths
 - `RESOURCE` is path-first, not name-first
 - `--force` is required
 - `data.resource.isDirectory` may be `null` when the selector does not prove the
@@ -1265,6 +1505,8 @@ Current queue list item fields:
 Accepts a queue name or a numeric queue id, resolves the stable queue identity,
 then returns the current queue payload.
 
+Run `dsctl queue list` to discover queue names and ids.
+
 `resolved.queue` includes:
 
 - `id`
@@ -1282,8 +1524,8 @@ Options:
 
 Rules:
 
-- `queueName` is the human-facing queue name
-- `queue` is the underlying DolphinScheduler queue value
+- `queueName` is the human-facing DS queue name used as the selector label
+- `queue` is the underlying YARN queue value stored in DS
 
 ## `dsctl queue update QUEUE`
 
@@ -1297,6 +1539,7 @@ Options:
 Rules:
 
 - `QUEUE` may be a queue name or numeric id
+- run `dsctl queue list` to discover queue names and ids
 - at least one field change is required
 - omitted `queueName` and `queue` preserve the current remote values
 
@@ -1307,6 +1550,7 @@ Deletes one resolved queue.
 Rules:
 
 - `QUEUE` may be a queue name or numeric id
+- run `dsctl queue list` to discover queue names and ids
 - `--force` is required
 
 Successful output returns:
@@ -1357,6 +1601,8 @@ Current worker-group list item fields:
 Accepts a worker-group name or a numeric worker-group id, resolves the stable
 worker-group identity, then returns the current worker-group payload.
 
+Run `dsctl worker-group list` to discover worker-group names and ids.
+
 `resolved.workerGroup` includes:
 
 - `id`
@@ -1377,6 +1623,7 @@ Options:
 Rules:
 
 - repeated `--addr` values are joined into the upstream `addrList`
+- run `dsctl monitor server worker` to discover worker server addresses
 - omitting `--addr` creates the worker group with an empty `addrList`
 
 ## `dsctl worker-group update WORKER_GROUP`
@@ -1394,6 +1641,9 @@ Options:
 Rules:
 
 - `WORKER_GROUP` may be a worker-group name or numeric id
+- run `dsctl worker-group list` to discover worker-group names and ids
+- run `dsctl monitor server worker` to discover worker server addresses for
+  `--addr`
 - at least one field change is required
 - omitted fields preserve the current remote values
 - `--addr` and `--clear-addrs` are mutually exclusive
@@ -1407,6 +1657,7 @@ Deletes one resolved worker group.
 Rules:
 
 - `WORKER_GROUP` may be a worker-group name or numeric id
+- run `dsctl worker-group list` to discover worker-group names and ids
 - `--force` is required
 - config-derived worker-group rows cannot be deleted through the CRUD endpoint
 
@@ -1434,6 +1685,7 @@ Rules:
   task-group paging API
 - with `--project`, the CLI resolves project selection and uses DS's
   project-scoped task-group list shape
+- run `dsctl project list` to discover project names and codes for `--project`
 - `--project` cannot be combined with `--search` or `--status` because
   DolphinScheduler 3.4.1 does not expose that filter shape
 - `--status` accepts `open`, `closed`, `1`, or `0`
@@ -1465,6 +1717,8 @@ Current task-group list item fields:
 Accepts a task-group name or a numeric task-group id, resolves the stable
 task-group identity, then returns the current task-group payload.
 
+Run `dsctl task-group list` to discover task-group names and ids.
+
 `resolved.taskGroup` includes:
 
 - `id`
@@ -1485,6 +1739,7 @@ Options:
 Rules:
 
 - project selection uses `flag > context`
+- run `dsctl project list` to discover project names and codes for `--project`
 - `groupSize` must be greater than or equal to `1`
 - omitted description is sent as an empty string
 
@@ -1504,6 +1759,7 @@ Options:
 Rules:
 
 - `TASK_GROUP` may be a task-group name or numeric id
+- run `dsctl task-group list` to discover task-group names and ids
 - at least one field change is required
 - omitted fields preserve the current remote values
 - `--clear-description` sends an empty description
@@ -1518,6 +1774,7 @@ Closes one resolved task group and returns the refreshed task-group payload.
 Rules:
 
 - `TASK_GROUP` may be a task-group name or numeric id
+- run `dsctl task-group list` to discover task-group names and ids
 - closing an already closed task group returns `invalid_state` with a
   suggestion to run `task-group start`
 
@@ -1528,6 +1785,7 @@ Starts one resolved task group and returns the refreshed task-group payload.
 Rules:
 
 - `TASK_GROUP` may be a task-group name or numeric id
+- run `dsctl task-group list` to discover task-group names and ids
 - starting an already open task group returns `invalid_state` with a suggestion
   to keep it open or run `task-group close`
 
@@ -1547,6 +1805,7 @@ Options:
 Rules:
 
 - `TASK_GROUP` may be a task-group name or numeric id
+- run `dsctl task-group list` to discover task-group names and ids
 - `--task-instance` filters by task-instance name
 - `--workflow-instance` filters by workflow-instance name
 - `--status` accepts `WAIT_QUEUE`, `ACQUIRE_SUCCESS`, `RELEASE`, `-1`, `1`,
@@ -1573,6 +1832,8 @@ The payload keeps DS paging field names. Current queue item fields:
 
 Force-starts one waiting task-group queue row by numeric queue id.
 
+Run `dsctl task-group queue list TASK_GROUP` to discover queue ids.
+
 Successful output returns:
 
 - `data.queueId`
@@ -1592,6 +1853,7 @@ Options:
 Rules:
 
 - `QUEUE_ID` is id-first and does not use context
+- run `dsctl task-group queue list TASK_GROUP` to discover queue ids
 - `--priority` must be greater than or equal to `0`
 
 Successful output returns:
@@ -1640,12 +1902,41 @@ Rules:
 Accepts an alert-plugin instance name or a numeric alert-plugin id, resolves
 the stable identity, then returns the current alert-plugin payload.
 
+Run `dsctl alert-plugin list` to discover alert-plugin instance names and ids.
+
 `resolved.alertPlugin` includes:
 
 - `id`
 - `instanceName`
 - `pluginDefineId`
 - `alertPluginName`
+
+## `dsctl alert-plugin definition list`
+
+Lists the alert-plugin definitions supported by the current DolphinScheduler
+runtime. This command returns plugin definitions such as `Feishu`, `Email`, or
+`Slack`; it does not return configured alert-plugin instances.
+
+Current definition list payload fields:
+
+- `definitions`
+- `count`
+- `schema_command`
+
+Current definition row fields:
+
+- `id`
+- `pluginName`
+- `pluginType`
+- `createTime`
+- `updateTime`
+
+Rules:
+
+- use this command to discover valid `--plugin` values for
+  `alert-plugin create`
+- use `alert-plugin schema PLUGIN` to fetch the full parameter schema for one
+  returned definition
 
 ## `dsctl alert-plugin schema PLUGIN`
 
@@ -1658,14 +1949,22 @@ Current plugin definition fields:
 - `pluginName`
 - `pluginType`
 - `pluginParams`
+- `pluginParamFields`
 - `createTime`
 - `updateTime`
 
 Rules:
 
-- `PLUGIN` must resolve to an `ALERT` UI plugin definition
+- `PLUGIN` must resolve to an alert UI plugin definition; plugin-definition
+  names are matched exactly first, then case-insensitively when unique
+- run `dsctl alert-plugin definition list` to discover plugin definitions
+- name resolution fetches the plugin-detail endpoint after locating the id
+  because the upstream list endpoint returns only definition summaries
 - `pluginParams` is the DS-native UI param-list schema used by create/update
   and test-send flows
+- `pluginParamFields` is a compact derived summary of the same schema for
+  field discovery; it includes `field`, `type`, `required`, `defaultValue`,
+  and options when present
 
 ## `dsctl alert-plugin create`
 
@@ -1675,15 +1974,21 @@ Options:
 
 - `--name TEXT` required
 - `--plugin TEXT` required
+- `--param KEY=VALUE`
 - `--params-json JSON`
 - `--file PATH`
 
 Rules:
 
 - `--plugin` accepts an alert UI plugin definition name or numeric id
-- pass exactly one of `--params-json` or `--file`
-- the params payload must be a DS-native JSON array of UI param objects, not a
-  plain key/value JSON object
+- run `dsctl alert-plugin definition list` to discover `--plugin` values
+- pass exactly one of `--param`, `--params-json`, or `--file`
+- `--param` may be repeated; it overlays fields from the upstream plugin
+  schema and then submits DS-native UI params to DolphinScheduler
+- field names from `--param` are matched exactly first, then
+  case-insensitively when unique
+- `--params-json` and `--file` accept a DS-native JSON array of UI param
+  objects, not a plain key/value JSON object
 - use `dsctl alert-plugin schema PLUGIN` to fetch the upstream param template,
   fill each item's `value`, then submit it unchanged
 
@@ -1696,17 +2001,21 @@ Updates one resolved alert-plugin instance while preserving omitted fields.
 Options:
 
 - `--name TEXT`
+- `--param KEY=VALUE`
 - `--params-json JSON`
 - `--file PATH`
 
 Rules:
 
 - `ALERT_PLUGIN` may be an alert-plugin instance name or numeric id
+- run `dsctl alert-plugin list` to discover alert-plugin instance names and ids
 - at least one field change is required
 - omitted params preserve the current upstream `pluginInstanceParams`
-- when params are provided, pass exactly one of `--params-json` or `--file`
-- the params payload format is the same DS-native JSON array accepted by
-  `create`
+- when params are provided, pass exactly one of `--param`, `--params-json`, or
+  `--file`
+- `--param` overlays the current upstream UI params; omitted fields keep their
+  current values
+- `--params-json` and `--file` replace the full DS-native UI params array
 
 ## `dsctl alert-plugin delete ALERT_PLUGIN --force`
 
@@ -1715,6 +2024,7 @@ Deletes one resolved alert-plugin instance.
 Rules:
 
 - `ALERT_PLUGIN` may be an alert-plugin instance name or numeric id
+- run `dsctl alert-plugin list` to discover alert-plugin instance names and ids
 - `--force` is required
 
 Successful output returns:
@@ -1729,6 +2039,7 @@ Sends one test alert using the resolved alert-plugin instance.
 Rules:
 
 - `ALERT_PLUGIN` may be an alert-plugin instance name or numeric id
+- run `dsctl alert-plugin list` to discover alert-plugin instance names and ids
 - the CLI reuses the current upstream `pluginDefineId` and
   `pluginInstanceParams` from the resolved instance
 
@@ -1770,11 +2081,14 @@ Current alert-group list item fields:
 Rules:
 
 - `search` is passed through to the upstream alert-group name filter
+- use `dsctl alert-group list` to discover alert-group names and ids
 
 ## `dsctl alert-group get ALERT_GROUP`
 
 Accepts an alert-group name or a numeric alert-group id, resolves the stable
 alert-group identity, then returns the current alert-group payload.
+
+Use `dsctl alert-group list` to discover alert-group names and ids.
 
 `resolved.alertGroup` includes:
 
@@ -1794,6 +2108,7 @@ Options:
 
 Rules:
 
+- use `dsctl alert-plugin list` to discover alert plugin instance ids
 - repeated `--instance-id` values are deduplicated before the upstream request
 - omitting `--instance-id` sends an empty upstream `alertInstanceIds` string
 
@@ -1812,6 +2127,8 @@ Options:
 Rules:
 
 - `ALERT_GROUP` may be an alert-group name or numeric id
+- use `dsctl alert-group list` to discover alert-group names and ids
+- use `dsctl alert-plugin list` to discover alert plugin instance ids
 - at least one field change is required
 - omitted fields preserve the current remote values
 - `--instance-id` and `--clear-instance-ids` are mutually exclusive
@@ -1824,6 +2141,7 @@ Deletes one resolved alert group.
 Rules:
 
 - `ALERT_GROUP` may be an alert-group name or numeric id
+- use `dsctl alert-group list` to discover alert-group names and ids
 - `--force` is required
 - DS 3.4.1 does not allow deleting the default alert group
 
@@ -1866,6 +2184,7 @@ Current tenant list item fields:
 Rules:
 
 - `search` is passed through to the upstream tenant-code filter
+- use `dsctl tenant list` to discover tenant codes and ids
 - `queueName` is usually present from the paging endpoint
 - `queue` may be `null` because the DS tenant paging query does not always
   project the underlying queue value
@@ -1886,6 +2205,7 @@ identity, then returns the current tenant payload.
 
 Rules:
 
+- use `dsctl tenant list` to discover tenant codes and ids
 - `queueName` is the more reliable upstream tenant queue label
 - `queue` may still be `null` on real clusters when the DS tenant detail query
   does not project the underlying queue value
@@ -1903,6 +2223,7 @@ Options:
 Rules:
 
 - `--queue` accepts a queue name or numeric id
+- use `dsctl queue list` to discover queue names and ids
 - the CLI resolves `--queue` to the upstream `queueId`
 
 ## `dsctl tenant update TENANT`
@@ -1920,6 +2241,8 @@ Rules:
 
 - `TENANT` may be a tenant code or numeric id
 - `--queue` accepts a queue name or numeric id
+- use `dsctl tenant list` to discover tenant codes and ids
+- use `dsctl queue list` to discover queue names and ids
 - at least one field change is required
 - omitted fields preserve the current remote values
 - `--description` and `--clear-description` are mutually exclusive
@@ -1931,6 +2254,7 @@ Deletes one resolved tenant.
 Rules:
 
 - `TENANT` may be a tenant code or numeric id
+- use `dsctl tenant list` to discover tenant codes and ids
 - `--force` is required
 
 Successful output returns:
@@ -1976,6 +2300,7 @@ Current user list item fields:
 Rules:
 
 - `search` is passed through to the upstream user-name filter
+- use `dsctl user list` to discover user names and ids
 - `queue` is the effective queue surfaced by the upstream paging view
 - `queueName` is the tenant queue name joined by the upstream paging view
 
@@ -2000,6 +2325,7 @@ Current get-only extra fields:
 Rules:
 
 - `USER` may be a user name or numeric id
+- use `dsctl user list` to discover user names and ids
 - `queue` remains the effective queue shown by the merged upstream user views
 
 ## `dsctl user create`
@@ -2020,6 +2346,8 @@ Rules:
 
 - `--tenant` accepts a tenant code or numeric id
 - `--queue` is the raw queue-name override stored on the user record
+- use `dsctl tenant list` to discover tenant codes and ids
+- use `dsctl queue list` to discover queue names
 - `--state 1` means enabled and `--state 0` means disabled
 
 ## `dsctl user update USER`
@@ -2042,9 +2370,12 @@ Options:
 Rules:
 
 - `USER` may be a user name or numeric id
+- use `dsctl user list` to discover user names and ids
 - omitted fields preserve the current remote values
 - `--tenant` accepts a tenant code or numeric id
 - `--queue` is the raw queue-name override stored on the user record
+- use `dsctl tenant list` to discover tenant codes and ids
+- use `dsctl queue list` to discover queue names
 - `--phone` and `--clear-phone` are mutually exclusive
 - `--queue` and `--clear-queue` are mutually exclusive
 - at least one field change is required
@@ -2056,6 +2387,7 @@ Deletes one resolved user.
 Rules:
 
 - `USER` may be a user name or numeric id
+- use `dsctl user list` to discover user names and ids
 - `--force` is required
 
 Successful output returns:
@@ -2071,6 +2403,7 @@ Rules:
 
 - `USER` may be a user name or numeric id
 - `PROJECT` may be a project name or numeric code
+- use `dsctl user list` and `dsctl project list` to discover selectors
 - the command uses the DS additive project grant path rather than replacing the
   full user grant set
 
@@ -2089,6 +2422,7 @@ Rules:
 
 - `USER` may be a user name or numeric id
 - `PROJECT` may be a project name or numeric code
+- use `dsctl user list` and `dsctl project list` to discover selectors
 
 Successful output returns:
 
@@ -2108,6 +2442,7 @@ Rules:
 
 - `USER` may be a user name or numeric id
 - each `--datasource` accepts a datasource name or numeric id
+- use `dsctl user list` and `dsctl datasource list` to discover selectors
 - the CLI reads the user's currently authorized datasources, merges the
   requested datasources into that set, then writes the full set back through
   the DS datasource-grant endpoint
@@ -2132,6 +2467,7 @@ Rules:
 
 - `USER` may be a user name or numeric id
 - each `--datasource` accepts a datasource name or numeric id
+- use `dsctl user list` and `dsctl datasource list` to discover selectors
 - the CLI reads the user's currently authorized datasources, subtracts the
   requested datasources from that set, then writes the remaining full set back
   through the DS datasource-grant endpoint
@@ -2156,6 +2492,7 @@ Rules:
 
 - `USER` may be a user name or numeric id
 - each `--namespace` accepts a namespace name or numeric id
+- use `dsctl user list` and `dsctl namespace list` to discover selectors
 - namespace names may be ambiguous across clusters; when that happens, the CLI
   returns a resolution error and expects a numeric namespace id
 - the CLI reads the user's currently authorized namespaces, merges the
@@ -2182,6 +2519,7 @@ Rules:
 
 - `USER` may be a user name or numeric id
 - each `--namespace` accepts a namespace name or numeric id
+- use `dsctl user list` and `dsctl namespace list` to discover selectors
 - namespace names may be ambiguous across clusters; when that happens, the CLI
   returns a resolution error and expects a numeric namespace id
 - the CLI reads the user's currently authorized namespaces, subtracts the
@@ -2233,6 +2571,7 @@ Accepts one numeric access-token id.
 Selection rules:
 
 - `ACCESS_TOKEN` is id-first
+- use `dsctl access-token list` to discover token ids
 
 `resolved.accessToken` includes:
 
@@ -2247,7 +2586,9 @@ Creates one access token.
 Rules:
 
 - `--user` is required and accepts a user name or numeric id
-- `--expire-time` is required
+- use `dsctl user list` to discover user names and ids
+- `--expire-time` is required and follows the DS format
+  `YYYY-MM-DD HH:MM:SS`
 - `--token` is optional; omitting it lets DS generate one
 
 ## `dsctl access-token update ACCESS_TOKEN`
@@ -2259,6 +2600,8 @@ Rules:
 - requires at least one of `--user`, `--expire-time`, `--token`, or
   `--regenerate-token`
 - `--user` accepts a user name or numeric id
+- use `dsctl access-token list` to discover token ids
+- use `dsctl user list` to discover user names and ids
 - omitted `--user` and `--expire-time` preserve the current remote values
 - omitted `--token` preserves the current token unless `--regenerate-token` is
   used
@@ -2270,6 +2613,7 @@ Deletes one access token by numeric id.
 
 Rules:
 
+- use `dsctl access-token list` to discover token ids
 - `--force` is required
 
 Successful output returns:
@@ -2284,7 +2628,9 @@ Generates one token string without persisting it.
 Rules:
 
 - `--user` is required and accepts a user name or numeric id
-- `--expire-time` is required
+- use `dsctl user list` to discover user names and ids
+- `--expire-time` is required and follows the DS format
+  `YYYY-MM-DD HH:MM:SS`
 
 Successful output returns:
 
@@ -2376,6 +2722,8 @@ Rules:
 
 - `--model-type` is repeatable and mapped to DS `modelTypes`
 - `--operation-type` is repeatable and mapped to DS `operationTypes`
+- use `dsctl audit model-types` to discover model-type filter values
+- use `dsctl audit operation-types` to discover operation-type filter values
 - `--start` and `--end` must use DS datetime format `YYYY-MM-DD HH:MM:SS`
 - when both `--start` and `--end` are provided, `end` must be greater than or
   equal to `start`
@@ -2444,6 +2792,7 @@ Selection rules:
 
 - `--project` wins
 - then stored context project
+- use `dsctl project list` to discover project names and codes
 
 The `data` payload is a JSON array of workflow summaries:
 
@@ -2459,6 +2808,7 @@ Selection rules:
 
 - project selection: `flag > context`
 - workflow selection: positional argument, then context workflow
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Formats:
 
@@ -2469,6 +2819,8 @@ Formats:
 
 Returns one workflow DAG as structured JSON:
 
+Use `dsctl project list` and `dsctl workflow list` to discover selectors.
+
 - `data.workflow`
 - `data.tasks`
 - `data.relations`
@@ -2476,6 +2828,8 @@ Returns one workflow DAG as structured JSON:
 ## `dsctl workflow digest`
 
 Returns one compact workflow graph summary derived from the workflow DAG.
+
+Use `dsctl project list` and `dsctl workflow list` to discover selectors.
 
 Current `data` fields:
 
@@ -2511,6 +2865,8 @@ Options:
 
 Rules:
 
+- use `dsctl template workflow` to start a workflow YAML file
+- use `dsctl project list` to discover project names and codes for `--project`
 - project selection precedence is:
   - explicit `--project`
   - then `workflow.project` from the YAML file
@@ -2613,6 +2969,7 @@ Rules:
   - explicit positional `WORKFLOW`
   - then workflow context
 - project selection precedence remains `flag > context`
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
 - the patch is applied against the current live workflow YAML export, then
   compiled back into one legacy whole-definition update payload
 - current stable patch operations are:
@@ -2710,6 +3067,7 @@ Selection rules:
 
 - project selection: `flag > context`
 - workflow selection: `flag > context`
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
 
@@ -2736,6 +3094,7 @@ Returns the project-wide workflow lineage graph for one resolved project.
 Selection rules:
 
 - project selection: `flag > context`
+- use `dsctl project list` to discover project names and codes
 
 Current `data` fields:
 
@@ -2766,6 +3125,7 @@ Selection rules:
 
 - project selection: `flag > context`
 - workflow selection: `flag > context`
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
 
@@ -2781,6 +3141,8 @@ Selection rules:
 - project selection: `flag > context`
 - workflow selection: `flag > context`
 - optional task filter is explicit-only through `--task`
+- use `dsctl project list`, `dsctl workflow list`, and `dsctl task list` to
+  discover selectors
 
 Options:
 
@@ -2822,6 +3184,9 @@ Options:
 Rules:
 
 - `--workflow` and `--search` are mutually exclusive
+- use `dsctl project list` to discover project names and codes for `--project`
+- use `dsctl workflow list` inside the selected project to discover workflow
+  names and codes for `--workflow`
 - the payload keeps DS paging field names:
   - `totalList`
   - `total`
@@ -2849,10 +3214,13 @@ Fetches one schedule by numeric id.
 Selection rules:
 
 - `SCHEDULE_ID` is id-first and does not use context
+- use `dsctl schedule list` inside the selected project to discover schedule ids
 
 ## `dsctl template workflow`
 
 Returns the current stable workflow YAML template inside `data.yaml`.
+`data.lines[]` provides the same template as row-oriented `line_no` and `line`
+values for table and tsv output.
 
 Rules:
 
@@ -2920,12 +3288,121 @@ Rules:
 - SQL tasks can publish result columns whose names match OUT parameter `prop`
   values
 
-## `dsctl template task TASK_TYPE`
+## `dsctl template environment`
 
-Returns one task YAML template inside `data.yaml`.
+Returns one DS environment shell/export config template.
+
+Default table and tsv output render `data.lines[]` so multiline config content
+does not collapse into one large value cell.
+
+Current `data` fields:
+
+- `filename`
+- `config`
+- `lines`
+- `target_commands`
+- `source_options`
+- `upstream_request_shape`
+- `rules`
+
+Rules:
+
+- `data.config` is the file content accepted by
+  `environment create --config-file` and `environment update --config-file`
+- `data.lines[]` contains row-oriented `line` and `purpose` values for compact
+  terminal scanning
+- DS stores this value as the raw `EnvironmentController` form field `config`
+- environment paths must exist on DolphinScheduler worker hosts
+
+## `dsctl template cluster`
+
+Returns one DS cluster config JSON template.
+
+Default table and tsv output render `data.fields[]` so multiline kubeconfig
+content does not collapse into one large value cell.
+
+Current `data` fields:
+
+- `filename`
+- `config`
+- `payload`
+- `fields`
+- `rows`
+- `target_commands`
+- `source_options`
+- `upstream_request_shape`
+- `upstream_ui_shape`
+- `rules`
+
+Rules:
+
+- `data.config` is the file content accepted by
+  `cluster create --config-file` and `cluster update --config-file`
+- DS stores this value as the raw `ClusterController` form field `config`
+- DS 3.4.1 reads the `k8s` JSON field as Kubernetes kubeconfig content
+- keep `yarn` as an empty string unless your DS deployment uses it
+
+## `dsctl template datasource`
+
+Returns datasource JSON payload-template type discovery when `--type` is
+omitted, or one DS-native datasource JSON payload template when `--type TYPE`
+is passed.
 
 Options:
 
+- `--type TYPE`
+
+Default index fields:
+
+- `data.default_type`
+- `data.template_command`
+- `data.template_command_pattern`
+- `data.target_commands`
+- `data.type_enum`
+- `data.type_discovery_command`
+- `data.supported_types`
+- `data.rows`
+
+`resolved.view` is `list` for the default output. The supported type list lives
+in `data.supported_types`; `resolved` does not duplicate it.
+
+Typed template fields:
+
+- `data.type`
+- `data.target_commands`
+- `data.source_option`
+- `data.payload`
+- `data.json`
+- `data.fields`
+- `data.rows`
+- `data.rules`
+
+`resolved.view` is `template` and `resolved.datasource_type` is the normalized
+DS `DbType` value selected by `--type`.
+
+Rules:
+
+- `type` matching is case-insensitive and accepts common generated `DbType`
+  aliases such as `mysql` and `aliyun-serverless-spark`
+- `data.payload` is the object shape accepted by `datasource create --file`
+- `data.json` is the same payload rendered as pretty JSON
+- `data.fields` is grounded in generated `BaseDataSourceParamDTO` plus known
+  plugin-specific JSON fields for the selected datasource type only
+- `data.rows` is the row-oriented table/tsv view; index output lists
+  datasource types, typed output lists payload fields
+- typed template output does not repeat global `type` choices; the selected
+  value is `data.type` and `resolved.datasource_type`, while full type
+  discovery lives in the default index and `dsctl enum list db-type`
+
+## `dsctl template task TASK_TYPE`
+
+Returns one task YAML template inside `data.yaml`. `data.rows[]` provides the
+row-oriented table/tsv view: line rows for a concrete template, and compact
+task-type rows for `--list`.
+
+Options:
+
+- `--list`
 - `--variant VARIANT`
 
 Current stable task template coverage includes every DS 3.4.1 upstream default
@@ -2949,6 +3426,8 @@ The remaining upstream default task types return generic templates with raw
 Rules:
 
 - task type matching is case-insensitive
+- `--list` keeps the stable action `template.task` and returns
+  `resolved.mode=list`
 - the normalized type is returned as `resolved.task_type`
 - `resolved.task_category` reports the upstream DS category
 - `resolved.template_kind` is `typed` or `generic`
@@ -2963,6 +3442,7 @@ Rules:
   - `data.generic_task_types`
   - `data.task_types_by_category`
   - `data.task_templates`
+  - `data.rows`
 
 `data.task_templates.TYPE` exposes:
 
@@ -3013,6 +3493,7 @@ Supported forms:
 
 Rules:
 
+- use `dsctl schedule list` inside the selected project to discover schedule ids
 - preview by id does not accept `--project`, `--cron`, `--start`, `--end`, or
   `--timezone`
 - ad hoc preview requires all of `--cron`, `--start`, `--end`, and
@@ -3020,6 +3501,8 @@ Rules:
 - `--cron` must be a DolphinScheduler Quartz cron expression with 6 or 7
   fields and seconds first
 - ad hoc preview resolves project selection with `flag > context`
+- use `dsctl project list` to discover project names and codes for ad hoc
+  `--project`
 
 Successful output returns:
 
@@ -3047,6 +3530,15 @@ Rules:
 
 - without `SCHEDULE_ID`, explain models `schedule.create` selection and risk
   rules
+- use `dsctl schedule list` inside the selected project to discover schedule ids
+  for update-form explain
+- use `dsctl project list` and `dsctl workflow list` to discover create-form
+  selectors
+- use `dsctl alert-group list`, `dsctl worker-group list`,
+  `dsctl tenant list`, and `dsctl environment list` to discover optional
+  create/update selector values
+- `--failure-strategy`, `--warning-type`, and `--priority` use generated DS
+  enum values exposed by `dsctl enum list`
 - create-form tenant selection:
   `flag > enabled project preference.tenant > current-user tenantCode > "default"`
 - create-form omitted `warningType`, `warningGroupId`,
@@ -3112,6 +3604,13 @@ Selection rules:
 - workflow selection: `flag > context`
 - tenant selection:
   `flag > enabled project preference.tenant > current-user tenantCode > "default"`
+- use `dsctl project list` and `dsctl workflow list` to discover project and
+  workflow selectors
+- use `dsctl alert-group list`, `dsctl worker-group list`,
+  `dsctl tenant list`, and `dsctl environment list` to discover optional
+  selector values
+- `--failure-strategy`, `--warning-type`, and `--priority` use generated DS
+  enum values exposed by `dsctl enum list`
 
 Required options:
 
@@ -3163,6 +3662,11 @@ Updates one schedule by numeric id.
 Rules:
 
 - `SCHEDULE_ID` is id-first and does not use context
+- use `dsctl schedule list` inside the selected project to discover schedule ids
+- use `dsctl alert-group list`, `dsctl worker-group list`, and
+  `dsctl environment list` to discover optional update selector values
+- `--failure-strategy`, `--warning-type`, and `--priority` use generated DS
+  enum values exposed by `dsctl enum list`
 - omitted fields preserve current remote values
 - at least one field change is required
 - `--confirm-risk TOKEN` accepts a token previously returned in a
@@ -3183,6 +3687,7 @@ Deletes one schedule by numeric id.
 Rules:
 
 - `SCHEDULE_ID` is id-first and does not use context
+- use `dsctl schedule list` inside the selected project to discover schedule ids
 - `--force` is required
 - deleting an online schedule returns `invalid_state`
 
@@ -3198,6 +3703,7 @@ Brings one schedule online and returns the refreshed schedule payload.
 Rules:
 
 - `SCHEDULE_ID` is id-first and does not use context
+- use `dsctl schedule list` inside the selected project to discover schedule ids
 - the DS 3.4.1 adapter resolves the bound workflow to recover `projectCode`
   for the legacy online endpoint
 - bringing a schedule online requires the bound workflow to already be online
@@ -3209,6 +3715,7 @@ Brings one schedule offline and returns the refreshed schedule payload.
 Rules:
 
 - `SCHEDULE_ID` is id-first and does not use context
+- use `dsctl schedule list` inside the selected project to discover schedule ids
 - the DS 3.4.1 adapter resolves the bound workflow to recover `projectCode`
   for the legacy offline endpoint
 
@@ -3220,6 +3727,7 @@ Selection rules:
 
 - project selection: `flag > context`
 - workflow selection: `flag > context`
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 The `data` payload is a JSON array of task summaries:
 
@@ -3236,6 +3744,8 @@ Selection rules:
 - project selection: `flag > context`
 - workflow selection: `flag > context`
 - task is resolved by name or numeric code within the selected workflow
+- use `dsctl task list` inside the selected workflow to discover task names and
+  codes
 
 ## `dsctl task update`
 
@@ -3271,6 +3781,10 @@ Current stable `--set` keys:
 Rules:
 
 - selection precedence matches `task get`
+- use `dsctl task list` inside the selected workflow to discover task names and
+  codes
+- use `dsctl schema --command task.update` to discover supported `--set` keys,
+  examples, and machine-readable metadata
 - the CLI compiles the update into the DS native
   `updateTaskWithUpstream` form request
 - `command` updates are supported only for `SHELL`, `PYTHON`, and
@@ -3305,6 +3819,10 @@ Selection rules:
 
 - project selection: `flag > context`
 - workflow selection: `flag > context`
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
+- use `dsctl worker-group list`, `dsctl tenant list`,
+  `dsctl alert-group list`, and `dsctl environment list` to discover optional
+  runtime selectors
 - worker group selection:
   `flag > enabled project preference.workerGroup > "default"`
 - tenant selection:
@@ -3364,6 +3882,8 @@ Selection rules:
 - project selection: `flag > context`
 - workflow selection: `argument > context`
 - task selection: `--task` name or code within the workflow definition
+- use `dsctl project list`, `dsctl workflow list`, and `dsctl task list` to
+  discover selectors
 - worker group selection:
   `flag > enabled project preference.workerGroup > "default"`
 - tenant selection:
@@ -3420,6 +3940,11 @@ Selection rules:
 - project selection: `flag > context`
 - workflow selection: `argument > context`
 - optional task selection: `--task` name or code within the workflow definition
+- use `dsctl project list`, `dsctl workflow list`, and `dsctl task list` to
+  discover selectors
+- use `dsctl worker-group list`, `dsctl tenant list`,
+  `dsctl alert-group list`, and `dsctl environment list` to discover optional
+  runtime selectors
 - worker group, tenant, warning, priority, environment, start params, and
   execution dry-run rules match `dsctl workflow run`
 
@@ -3466,6 +3991,7 @@ Selection rules:
 
 - project selection: `flag > context`
 - workflow selection: `flag > context`
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
 
@@ -3484,6 +4010,7 @@ Selection rules:
 
 - project selection: `flag > context`
 - workflow selection: `flag > context`
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
 
@@ -3504,14 +4031,35 @@ Options:
 - `--all`
 - `--project TEXT`
 - `--workflow TEXT`
+- `--search TEXT`
+- `--executor TEXT`
+- `--host TEXT`
+- `--start TEXT`
+- `--end TEXT`
 - `--state TEXT`
 
 Selection rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
-- `--project` and `--workflow` are filter strings forwarded to the DS v2 list
-  API
+- discover workflow-instance ids with `dsctl workflow-instance list`
+- discover `--project` values with `dsctl project list`
+- discover `--workflow` values with `dsctl workflow list`
+- discover `--state` values with
+  `dsctl enum list workflow-execution-status`
+- without `--project`, the CLI uses the DS v2 workflow-instance list API and
+  supports global `--workflow`, `--host`, `--start`, `--end`, and `--state`
+  filters
+- with `--project`, the CLI resolves the project code and uses the
+  project-scoped DS workflow-instance list API; `--workflow` is then resolved
+  as a workflow definition name or code inside that project
+- `--search` filters workflow-instance names through upstream `searchVal` and
+  requires `--project`
+- `--executor` filters by exact executor user name and requires `--project`
+- `--host` filters by upstream host substring
+- `--start` and `--end` filter workflow-instance `start_time` using DS datetime
+  format `YYYY-MM-DD HH:MM:SS`; both are optional, and when both are present
+  `--end` must be greater than or equal to `--start`
 - `--state` accepts DS workflow execution status names such as
   `RUNNING_EXECUTION` and `SUCCESS`
 - with `--all`, the CLI fetches remaining pages up to the standard safety limit
@@ -3556,6 +4104,7 @@ Selection rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
+- discover workflow-instance ids with `dsctl workflow-instance list`
 
 ## `dsctl workflow-instance parent`
 
@@ -3565,6 +4114,7 @@ Selection rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
+- discover sub-workflow instance ids with `dsctl workflow-instance list`
 - the CLI first fetches the sub-workflow instance payload, then recovers its
   owning `projectCode` for the DS 3.4.1 relation endpoint
 - the workflow instance must itself be a DS sub-workflow instance
@@ -3582,6 +4132,7 @@ Selection rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
+- discover workflow-instance ids with `dsctl workflow-instance list`
 - the CLI fetches the owning workflow-instance payload, then auto-exhausts the
   task-instance list for that workflow instance inside the standard page safety
   limit
@@ -3623,6 +4174,7 @@ Rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
+- discover workflow-instance ids with `dsctl workflow-instance list`
 - the workflow instance must already be in one DS final state
 - the CLI requires `dagData` from the workflow-instance payload and rebuilds a
   live workflow spec snapshot from that instance DAG before applying the patch
@@ -3655,6 +4207,7 @@ Rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
+- discover workflow-instance ids with `dsctl workflow-instance list`
 - the CLI checks the current DS workflow execution status before sending the
   stop request
 - states that are not stoppable return `invalid_state`
@@ -3677,6 +4230,7 @@ Rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
+- discover workflow-instance ids with `dsctl workflow-instance list`
 - default polling interval is `5` seconds
 - default timeout is `600` seconds
 - `--timeout-seconds 0` means wait indefinitely
@@ -3692,6 +4246,7 @@ Rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
+- discover workflow-instance ids with `dsctl workflow-instance list`
 - the workflow instance must already be in one DS final state
 - if DS accepts the request but the refreshed state is still final, the command
   succeeds and adds a warning describing the current state; the aligned
@@ -3708,6 +4263,7 @@ Rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
+- discover workflow-instance ids with `dsctl workflow-instance list`
 - the workflow instance must currently be in DS `FAILURE`
 - if DS accepts the request but the refreshed state is still final, the command
   succeeds and adds a warning describing the current state; the aligned
@@ -3729,6 +4285,9 @@ Rules:
 
 - workflow-instance resources are id-first and do not consume project/workflow
   context
+- discover workflow-instance ids with `dsctl workflow-instance list`
+- discover `--task` values with
+  `dsctl task-instance list --workflow-instance WORKFLOW_INSTANCE`
 - the workflow instance must already be in one DS final state
 - the CLI resolves `--task` against the owning workflow definition recovered
   from the workflow instance payload
@@ -3740,28 +4299,58 @@ Rules:
   `warning_details[]` item uses code
   `workflow_instance_action_state_after_request` with
   `action="execute-task"` and `expect_non_final=true`
-  succeeds and adds a warning describing the current state
 
 ## `dsctl task-instance list`
 
-Lists task instances inside one workflow instance.
+Lists task instances through the project-scoped DS task-instance paging query.
 
 Options:
 
 - `--workflow-instance ID`
+- `--project TEXT`
+- `--workflow-instance-name TEXT`
 - `--page-no N`
 - `--page-size N`
 - `--all`
 - `--search TEXT`
+- `--task TEXT`
+- `--task-code N`
+- `--executor TEXT`
 - `--state TEXT`
+- `--host TEXT`
+- `--start TEXT`
+- `--end TEXT`
+- `--execute-type TEXT`
 
 Selection rules:
 
 - task-instance resources are id-first
-- `--workflow-instance` is required because the DS 3.4.1 task-instance list API
-  remains project-scoped under the hood
+- discover task-instance ids with `dsctl task-instance list`
+- discover `--workflow-instance` values with `dsctl workflow-instance list`
+- discover `--project` values with `dsctl project list`
+- discover `--task-code` values with `dsctl task list`
+- discover `--state` values with `dsctl enum list task-execution-status`
+- discover `--execute-type` values with
+  `dsctl enum list task-execute-type`
+- `--workflow-instance` narrows the project-scoped query to one workflow
+  instance; when it is omitted, pass `--project` or set project context
+- when `--workflow-instance` is present, the CLI resolves the owning project
+  from the workflow instance; an explicit `--project` must match that project
+- workflow-definition filtering is not part of the stable `task-instance list`
+  contract for DS 3.4.1 because the upstream BATCH task-instance paging query
+  does not reliably apply `workflowDefinitionName`; use
+  `workflow-instance list --workflow ...` first, then pass the returned
+  workflow-instance id to `task-instance list --workflow-instance`
+- `--workflow-instance-name` filters by the upstream workflow-instance name
 - `--state` accepts DS task execution status names such as
   `RUNNING_EXECUTION` and `SUCCESS`
+- `--execute-type` accepts DS task execute type names such as `BATCH` and
+  `STREAM`
+- `--search` is the upstream free-text `searchVal` filter; use `--task` for an
+  exact task instance name filter
+- `--start` and `--end` filter task start time using DS datetime format
+  `YYYY-MM-DD HH:MM:SS`; both are optional, and when both are present `--end`
+  must be greater than or equal to `--start`
 - with `--all`, the CLI fetches remaining pages up to the standard safety limit
   and materializes one DS-style page payload
 
@@ -3802,6 +4391,8 @@ Fetches one task instance by id within one workflow instance.
 Selection rules:
 
 - task-instance resources are id-first
+- discover task-instance ids with `dsctl task-instance list`
+- discover `--workflow-instance` values with `dsctl workflow-instance list`
 - `--workflow-instance` is required because the DS 3.4.1 direct get endpoint is
   still project-scoped and the CLI recovers `projectCode` from the owning
   workflow instance
@@ -3819,6 +4410,8 @@ Options:
 Rules:
 
 - task-instance resources are id-first
+- discover task-instance ids with `dsctl task-instance list`
+- discover `--workflow-instance` values with `dsctl workflow-instance list`
 - `--workflow-instance` is required because the DS 3.4.1 direct get endpoint is
   still project-scoped and the CLI recovers `projectCode` from the owning
   workflow instance
@@ -3837,6 +4430,8 @@ Returns the child workflow instance for one `SUB_WORKFLOW` task instance.
 Selection rules:
 
 - task-instance resources are id-first
+- discover task-instance ids with `dsctl task-instance list`
+- discover `--workflow-instance` values with `dsctl workflow-instance list`
 - `--workflow-instance` is required because the DS 3.4.1 relation endpoint is
   still project-scoped and the CLI recovers `projectCode` from the owning
   workflow instance
@@ -3855,10 +4450,13 @@ Fetches the tail of one task-instance log.
 Selection rules:
 
 - task-instance resources are id-first
+- discover task-instance ids with `dsctl task-instance list`
 - `--workflow-instance` is not required because the DS logger API reads log
   chunks by task-instance id
 - `--tail` means “keep the last N lines” and is implemented by chunking the DS
   logger API until exhaustion
+- DS result code `10103` for an empty task log path is translated to stable
+  error type `task_not_dispatched`
 
 The `data` payload is a JSON object:
 
@@ -3872,6 +4470,8 @@ Forces one failed task instance into `FORCED_SUCCESS`.
 Selection rules:
 
 - task-instance resources are id-first
+- discover task-instance ids with `dsctl task-instance list`
+- discover `--workflow-instance` values with `dsctl workflow-instance list`
 - `--workflow-instance` is required because the DS 3.4.1 mutation endpoint is
   still project-scoped and the CLI recovers `projectCode` from the owning
   workflow instance
@@ -3888,6 +4488,8 @@ Requests one savepoint for a running task instance.
 Selection rules:
 
 - task-instance resources are id-first
+- discover task-instance ids with `dsctl task-instance list`
+- discover `--workflow-instance` values with `dsctl workflow-instance list`
 - `--workflow-instance` is required because the DS 3.4.1 mutation endpoint is
   still project-scoped and the CLI recovers `projectCode` from the owning
   workflow instance
@@ -3905,6 +4507,8 @@ Requests stop for one task instance.
 Selection rules:
 
 - task-instance resources are id-first
+- discover task-instance ids with `dsctl task-instance list`
+- discover `--workflow-instance` values with `dsctl workflow-instance list`
 - `--workflow-instance` is required because the DS 3.4.1 mutation endpoint is
   still project-scoped and the CLI recovers `projectCode` from the owning
   workflow instance

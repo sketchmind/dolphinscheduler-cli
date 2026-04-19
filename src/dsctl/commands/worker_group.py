@@ -21,6 +21,10 @@ worker_group_app = typer.Typer(
     no_args_is_help=True,
 )
 
+WORKER_GROUP_HELP = (
+    "Worker-group name or numeric id. Run `dsctl worker-group list` to discover values."
+)
+
 
 def register_worker_group_commands(app: typer.Typer) -> None:
     """Register the `worker-group` command group."""
@@ -82,7 +86,7 @@ def get_command(
     ctx: typer.Context,
     worker_group: Annotated[
         str,
-        typer.Argument(help="Worker-group name or numeric id."),
+        typer.Argument(help=WORKER_GROUP_HELP),
     ],
 ) -> None:
     """Get one worker group by name or id."""
@@ -109,7 +113,10 @@ def create_command(
         list[str] | None,
         typer.Option(
             "--addr",
-            help="Worker address to include in addrList. Repeat as needed.",
+            help=(
+                "Worker server address to include in addrList. Repeat as needed; "
+                "run `dsctl monitor server worker` to discover workers."
+            ),
         ),
     ] = None,
     description: Annotated[
@@ -139,7 +146,7 @@ def update_command(
     ctx: typer.Context,
     worker_group: Annotated[
         str,
-        typer.Argument(help="Worker-group name or numeric id."),
+        typer.Argument(help=WORKER_GROUP_HELP),
     ],
     *,
     name: Annotated[
@@ -155,7 +162,8 @@ def update_command(
             "--addr",
             help=(
                 "Replacement worker address list. Repeat as needed. Omit to keep "
-                "the current addrList."
+                "the current addrList; run `dsctl monitor server worker` to "
+                "discover workers."
             ),
         ),
     ] = None,
@@ -225,7 +233,7 @@ def delete_command(
     ctx: typer.Context,
     worker_group: Annotated[
         str,
-        typer.Argument(help="Worker-group name or numeric id."),
+        typer.Argument(help=WORKER_GROUP_HELP),
     ],
     *,
     force: Annotated[

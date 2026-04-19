@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 from dsctl.cli_surface import TASK_RESOURCE, WORKFLOW_INSTANCE_RESOURCE
 from dsctl.errors import (
@@ -26,9 +26,11 @@ from dsctl.services._serialization import (
     serialize_workflow_instance,
 )
 from dsctl.services._validation import (
+    optional_ds_datetime,
     require_non_empty_text,
     require_non_negative_int,
     require_positive_int,
+    validate_ds_datetime_range,
 )
 from dsctl.services._workflow_instance_digest import (
     digest_workflow_instance as _digest_workflow_instance,
@@ -44,9 +46,15 @@ from dsctl.services.pagination import (
     collect_all_pages,
     requested_page_data,
 )
-from dsctl.services.resolver import ResolvedProjectData, ResolvedTaskData
+from dsctl.services.resolver import (
+    ResolvedProject,
+    ResolvedProjectData,
+    ResolvedTaskData,
+    ResolvedWorkflow,
+)
 from dsctl.services.resolver import project as resolve_project
 from dsctl.services.resolver import task as resolve_task
+from dsctl.services.resolver import workflow as resolve_workflow
 from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
 from dsctl.upstream.runtime_enums import (
     WORKFLOW_EXECUTION_FAILURE_STATE,
@@ -85,6 +93,7 @@ DATA_IS_NOT_VALID = 50017
 WORKFLOW_NODE_HAS_CYCLE = 50019
 WORKFLOW_NODE_S_PARAMETER_INVALID = 50020
 CHECK_WORKFLOW_TASK_RELATION_ERROR = 50036
+QUERY_WORKFLOW_INSTANCE_LIST_PAGING_ERROR = 10113
 WORKFLOW_INSTANCE_PATCH_SUPPORTED_WORKFLOW_FIELDS = frozenset(
     {"global_params", "timeout"}
 )
@@ -134,6 +143,9 @@ class WorkflowInstanceUpdateNoChangeWarningDetail(TypedDict):
     request_sent: bool
 
 
+WorkflowInstanceListResolvedValue: TypeAlias = int | str | bool
+
+
 def list_workflow_instances_result(
     *,
     page_no: int = 1,
@@ -141,12 +153,28 @@ def list_workflow_instances_result(
     all_pages: bool = False,
     project: str | None = None,
     workflow: str | None = None,
+    search: str | None = None,
+    executor: str | None = None,
+    host: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
     state: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
     """List workflow instances using explicit runtime filters."""
     normalized_project = optional_text(project)
     normalized_workflow = optional_text(workflow)
+    normalized_search = optional_text(search)
+    normalized_executor = optional_text(executor)
+    normalized_host = optional_text(host)
+    normalized_start = optional_ds_datetime(start, label="start")
+    normalized_end = optional_ds_datetime(end, label="end")
+    validate_ds_datetime_range(normalized_start, normalized_end)
+    _validate_workflow_instance_list_filters(
+        project=normalized_project,
+        search=normalized_search,
+        executor=normalized_executor,
+    )
     normalized_state = _normalized_workflow_instance_state(state)
     normalized_page_no = require_positive_int(page_no, label="page_no")
     normalized_page_size = require_positive_int(page_size, label="page_size")
@@ -158,6 +186,11 @@ def list_workflow_instances_result(
         all_pages=all_pages,
         project=normalized_project,
         workflow=normalized_workflow,
+        search=normalized_search,
+        executor=normalized_executor,
+        host=normalized_host,
+        start=normalized_start,
+        end=normalized_end,
         state=normalized_state,
     )
 
@@ -342,6 +375,58 @@ def update_workflow_instance_result(
     )
 
 
+def _validate_workflow_instance_list_filters(
+    *,
+    project: str | None,
+    search: str | None,
+    executor: str | None,
+) -> None:
+    if project is not None:
+        return
+    project_scoped_filters = [
+        name
+        for name, value in (("search", search), ("executor", executor))
+        if value is not None
+    ]
+    if not project_scoped_filters:
+        return
+    message = "These workflow-instance list filters require --project"
+    raise UserInputError(
+        message,
+        details={"filters": project_scoped_filters},
+        suggestion=(
+            "Pass --project PROJECT with --search or --executor, or use "
+            "--workflow, --state, --host, --start, and --end for global "
+            "workflow-instance filtering."
+        ),
+    )
+
+
+def _resolve_workflow_instance_list_project(
+    runtime: ServiceRuntime,
+    *,
+    project: str | None,
+) -> ResolvedProject | None:
+    if project is None:
+        return None
+    return resolve_project(project, adapter=runtime.upstream.projects)
+
+
+def _resolve_workflow_instance_list_workflow(
+    runtime: ServiceRuntime,
+    *,
+    workflow: str | None,
+    project: ResolvedProject | None,
+) -> ResolvedWorkflow | None:
+    if workflow is None or project is None:
+        return None
+    return resolve_workflow(
+        workflow,
+        adapter=runtime.upstream.workflows,
+        project_code=project.code,
+    )
+
+
 def _list_workflow_instances_result(
     runtime: ServiceRuntime,
     *,
@@ -350,16 +435,41 @@ def _list_workflow_instances_result(
     all_pages: bool,
     project: str | None,
     workflow: str | None,
+    search: str | None,
+    executor: str | None,
+    host: str | None,
+    start: str | None,
+    end: str | None,
     state: str | None,
 ) -> CommandResult:
+    resolved_project = _resolve_workflow_instance_list_project(
+        runtime,
+        project=project,
+    )
+    resolved_workflow = _resolve_workflow_instance_list_workflow(
+        runtime,
+        workflow=workflow,
+        project=resolved_project,
+    )
     data = require_json_object(
         requested_page_data(
             lambda current_page_no, current_page_size: (
                 runtime.upstream.workflow_instances.list(
                     page_no=current_page_no,
                     page_size=current_page_size,
+                    project_code=(
+                        None if resolved_project is None else resolved_project.code
+                    ),
+                    workflow_code=(
+                        None if resolved_workflow is None else resolved_workflow.code
+                    ),
                     project_name=project,
                     workflow_name=workflow,
+                    search=search,
+                    executor=executor,
+                    host=host,
+                    start_time=start,
+                    end_time=end,
                     state=state,
                 )
             ),
@@ -369,20 +479,35 @@ def _list_workflow_instances_result(
             resource=WORKFLOW_INSTANCE_RESOURCE,
             serialize_item=serialize_workflow_instance,
             max_pages=MAX_AUTO_EXHAUST_PAGES,
+            translate_error=lambda exc: _translate_workflow_instance_list_error(
+                exc,
+                project=project,
+                workflow=workflow,
+                search=search,
+                executor=executor,
+                host=host,
+                start=start,
+                end=end,
+                state=state,
+            ),
         ),
         label="workflow-instance list data",
     )
-    resolved: dict[str, int | str | None] = {
-        "page_no": page_no,
-        "page_size": page_size,
-        "all": all_pages,
-    }
-    if project is not None:
-        resolved["project"] = project
-    if workflow is not None:
-        resolved["workflow"] = workflow
-    if state is not None:
-        resolved["state"] = state
+    resolved = _workflow_instance_list_resolved(
+        page_no=page_no,
+        page_size=page_size,
+        all_pages=all_pages,
+        project=project,
+        resolved_project=resolved_project,
+        workflow=workflow,
+        resolved_workflow=resolved_workflow,
+        search=search,
+        executor=executor,
+        host=host,
+        start=start,
+        end=end,
+        state=state,
+    )
     return CommandResult(
         data=data,
         resolved=require_json_object(
@@ -390,6 +515,45 @@ def _list_workflow_instances_result(
             label="workflow-instance list resolved",
         ),
     )
+
+
+def _workflow_instance_list_resolved(
+    *,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
+    project: str | None,
+    resolved_project: ResolvedProject | None,
+    workflow: str | None,
+    resolved_workflow: ResolvedWorkflow | None,
+    search: str | None,
+    executor: str | None,
+    host: str | None,
+    start: str | None,
+    end: str | None,
+    state: str | None,
+) -> dict[str, WorkflowInstanceListResolvedValue]:
+    resolved: dict[str, WorkflowInstanceListResolvedValue] = {
+        "page_no": page_no,
+        "page_size": page_size,
+        "all": all_pages,
+    }
+    optional_values: dict[str, WorkflowInstanceListResolvedValue | None] = {
+        "project": project,
+        "project_code": None if resolved_project is None else resolved_project.code,
+        "workflow": workflow,
+        "workflow_code": None if resolved_workflow is None else resolved_workflow.code,
+        "search": search,
+        "executor": executor,
+        "host": host,
+        "start": start,
+        "end": end,
+        "state": state,
+    }
+    resolved.update(
+        {key: value for key, value in optional_values.items() if value is not None}
+    )
+    return resolved
 
 
 def _get_workflow_instance_result(
@@ -1113,6 +1277,46 @@ def _raise_workflow_instance_action_error(
     raise exc
 
 
+def _translate_workflow_instance_list_error(
+    exc: ApiResultError,
+    *,
+    project: str | None,
+    workflow: str | None,
+    search: str | None,
+    executor: str | None,
+    host: str | None,
+    start: str | None,
+    end: str | None,
+    state: str | None,
+) -> ApiResultError | UserInputError:
+    if exc.result_code != QUERY_WORKFLOW_INSTANCE_LIST_PAGING_ERROR:
+        return exc
+    filters = {
+        key: value
+        for key, value in {
+            "project": project,
+            "workflow": workflow,
+            "search": search,
+            "executor": executor,
+            "host": host,
+            "start": start,
+            "end": end,
+            "state": state,
+        }.items()
+        if value is not None
+    }
+    message = "DolphinScheduler rejected the workflow-instance list filters."
+    return UserInputError(
+        message,
+        details={"filters": filters},
+        suggestion=(
+            "Retry with a narrower workflow-instance filter, for example "
+            "`dsctl workflow-instance list --project PROJECT --start "
+            "'YYYY-MM-DD HH:MM:SS' --end 'YYYY-MM-DD HH:MM:SS'`."
+        ),
+    )
+
+
 def _parent_workflow_instance_not_found(
     *,
     sub_workflow_instance_id: int,
@@ -1356,7 +1560,7 @@ def _normalized_workflow_instance_state(value: str | None) -> str | None:
             message,
             details={"state": value},
             suggestion=(
-                "Run `dsctl enum list workflow_execution_status` to inspect "
+                "Run `dsctl enum list workflow-execution-status` to inspect "
                 "the supported state names."
             ),
         ) from exc

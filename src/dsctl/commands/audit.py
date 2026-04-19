@@ -28,14 +28,20 @@ def list_command(
         list[str] | None,
         typer.Option(
             "--model-type",
-            help="Audit model type filter. Repeat as needed.",
+            help=(
+                "Audit model type filter. Repeat as needed; run "
+                "`dsctl audit model-types` to discover values."
+            ),
         ),
     ] = None,
     operation_types: Annotated[
         list[str] | None,
         typer.Option(
             "--operation-type",
-            help="Audit operation type filter. Repeat as needed.",
+            help=(
+                "Audit operation type filter. Repeat as needed; run "
+                "`dsctl audit operation-types` to discover values."
+            ),
         ),
     ] = None,
     start: Annotated[

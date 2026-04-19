@@ -20,6 +20,8 @@ tenant_app = typer.Typer(
     no_args_is_help=True,
 )
 
+TENANT_HELP = "Tenant code or numeric id. Run `dsctl tenant list` to discover values."
+
 
 def register_tenant_commands(app: typer.Typer) -> None:
     """Register the `tenant` command group."""
@@ -81,7 +83,7 @@ def get_command(
     ctx: typer.Context,
     tenant: Annotated[
         str,
-        typer.Argument(help="Tenant code or numeric id."),
+        typer.Argument(help=TENANT_HELP),
     ],
 ) -> None:
     """Get one tenant by code or id."""
@@ -108,7 +110,10 @@ def create_command(
         str,
         typer.Option(
             "--queue",
-            help="Queue name or numeric id to bind to this tenant.",
+            help=(
+                "Queue name or numeric id to bind to this tenant. Run "
+                "`dsctl queue list` to discover values."
+            ),
         ),
     ],
     description: Annotated[
@@ -138,7 +143,7 @@ def update_command(
     ctx: typer.Context,
     tenant: Annotated[
         str,
-        typer.Argument(help="Tenant code or numeric id."),
+        typer.Argument(help=TENANT_HELP),
     ],
     *,
     tenant_code: Annotated[
@@ -152,7 +157,10 @@ def update_command(
         str | None,
         typer.Option(
             "--queue",
-            help="Updated queue name or numeric id. Omit to keep the current queue.",
+            help=(
+                "Updated queue name or numeric id. Run `dsctl queue list` to "
+                "discover values; omit to keep the current queue."
+            ),
         ),
     ] = None,
     description: Annotated[
@@ -203,7 +211,7 @@ def delete_command(
     ctx: typer.Context,
     tenant: Annotated[
         str,
-        typer.Argument(help="Tenant code or numeric id."),
+        typer.Argument(help=TENANT_HELP),
     ],
     *,
     force: Annotated[

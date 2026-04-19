@@ -121,6 +121,14 @@ def test_access_token_get_command_reports_not_found_suggestion() -> None:
     )
 
 
+def test_access_token_get_help_points_to_list_for_selector() -> None:
+    result = runner.invoke(app, ["access-token", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "access-token" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_access_token_create_command_returns_created_token() -> None:
     result = runner.invoke(
         app,
@@ -139,6 +147,15 @@ def test_access_token_create_command_returns_created_token() -> None:
     assert payload["action"] == "access-token.create"
     assert payload["data"]["id"] == 12
     assert payload["data"]["userId"] == 1
+
+
+def test_access_token_create_help_points_to_user_list_and_time_format() -> None:
+    result = runner.invoke(app, ["access-token", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "dsctl user list" in result.stdout
+    assert "2027-01-01" in result.stdout
+    assert "00:00:00" in result.stdout
 
 
 def test_access_token_update_command_can_regenerate_token() -> None:

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -12,7 +13,7 @@ from tests.fakes import (
     FakeProjectAdapter,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -44,32 +45,49 @@ def patch_env_service(
 
 
 def test_env_list_command_returns_paginated_payload() -> None:
-    result = runner.invoke(app, ["env", "list", "--page-size", "1"])
+    result = runner.invoke(app, ["environment", "list", "--page-size", "1"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
-    assert payload["action"] == "env.list"
+    assert payload["action"] == "environment.list"
     assert payload["data"]["total"] == 2
     assert payload["data"]["pageSize"] == 1
     assert payload["data"]["totalList"][0]["name"] == "prod"
 
 
 def test_env_get_command_resolves_name() -> None:
-    result = runner.invoke(app, ["env", "get", "prod"])
+    result = runner.invoke(app, ["environment", "get", "prod"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["action"] == "env.get"
+    assert payload["action"] == "environment.get"
     assert payload["resolved"]["environment"]["code"] == 7
     assert payload["data"]["name"] == "prod"
+
+
+def test_env_selector_help_points_to_list() -> None:
+    result = runner.invoke(app, ["environment", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "environment" in result.stdout
+    assert "list" in result.stdout
+
+
+def test_env_create_help_points_to_config_template() -> None:
+    result = runner.invoke(app, ["environment", "create", "--help"])
+
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout)
+    assert "--config-file" in help_text
+    assert "dsctl template environment" in help_text
 
 
 def test_env_create_command_returns_created_environment() -> None:
     result = runner.invoke(
         app,
         [
-            "env",
+            "environment",
             "create",
             "--name",
             "qa",
@@ -82,16 +100,81 @@ def test_env_create_command_returns_created_environment() -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["action"] == "env.create"
+    assert payload["action"] == "environment.create"
     assert payload["data"]["name"] == "qa"
     assert payload["data"]["workerGroups"] == ["default"]
+
+
+def test_env_create_command_accepts_config_file() -> None:
+    with runner.isolated_filesystem():
+        Path("env.sh").write_text(
+            "export JAVA_HOME=/opt/java\nexport PATH=$JAVA_HOME/bin:$PATH\n",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "environment",
+                "create",
+                "--name",
+                "qa",
+                "--config-file",
+                "env.sh",
+            ],
+        )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "environment.create"
+    assert payload["data"]["config"] == (
+        "export JAVA_HOME=/opt/java\nexport PATH=$JAVA_HOME/bin:$PATH"
+    )
+
+
+def test_env_create_command_requires_config_source() -> None:
+    result = runner.invoke(app, ["environment", "create", "--name", "qa"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "environment.create"
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["suggestion"] == (
+        "Pass --config TEXT or --config-file PATH. Run `dsctl template environment` "
+        "for an example shell/export config."
+    )
+
+
+def test_env_create_command_rejects_multiple_config_sources() -> None:
+    with runner.isolated_filesystem():
+        Path("env.sh").write_text("export JAVA_HOME=/opt/java\n", encoding="utf-8")
+
+        result = runner.invoke(
+            app,
+            [
+                "environment",
+                "create",
+                "--name",
+                "qa",
+                "--config",
+                "export JAVA_HOME=/other",
+                "--config-file",
+                "env.sh",
+            ],
+        )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "environment.create"
+    assert payload["error"]["type"] == "user_input_error"
+    assert "mutually exclusive" in payload["error"]["message"]
 
 
 def test_env_update_command_can_clear_description_and_worker_groups() -> None:
     result = runner.invoke(
         app,
         [
-            "env",
+            "environment",
             "update",
             "prod",
             "--config",
@@ -103,17 +186,43 @@ def test_env_update_command_can_clear_description_and_worker_groups() -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["action"] == "env.update"
+    assert payload["action"] == "environment.update"
     assert payload["data"]["description"] is None
     assert payload["data"]["workerGroups"] == []
 
 
+def test_env_update_command_accepts_config_file() -> None:
+    with runner.isolated_filesystem():
+        Path("env.sh").write_text(
+            "export JAVA_HOME=/opt/java-21\nexport PATH=$JAVA_HOME/bin:$PATH\n",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "environment",
+                "update",
+                "prod",
+                "--config-file",
+                "env.sh",
+            ],
+        )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "environment.update"
+    assert payload["data"]["config"] == (
+        "export JAVA_HOME=/opt/java-21\nexport PATH=$JAVA_HOME/bin:$PATH"
+    )
+
+
 def test_env_update_command_requires_one_change_suggestion() -> None:
-    result = runner.invoke(app, ["env", "update", "prod"])
+    result = runner.invoke(app, ["environment", "update", "prod"])
 
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
-    assert payload["action"] == "env.update"
+    assert payload["action"] == "environment.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Pass at least one update flag such as --name, --config, "
@@ -145,7 +254,7 @@ def test_env_update_command_reports_upstream_input_suggestion(
     result = runner.invoke(
         app,
         [
-            "env",
+            "environment",
             "update",
             "prod",
             "--config",
@@ -155,7 +264,7 @@ def test_env_update_command_reports_upstream_input_suggestion(
 
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
-    assert payload["action"] == "env.update"
+    assert payload["action"] == "environment.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Verify --name, --config, and --worker-group values, then retry."
@@ -163,19 +272,19 @@ def test_env_update_command_reports_upstream_input_suggestion(
 
 
 def test_env_delete_command_requires_force() -> None:
-    result = runner.invoke(app, ["env", "delete", "prod"])
+    result = runner.invoke(app, ["environment", "delete", "prod"])
 
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
-    assert payload["action"] == "env.delete"
+    assert payload["action"] == "environment.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."
 
 
 def test_env_delete_command_returns_deleted_confirmation() -> None:
-    result = runner.invoke(app, ["env", "delete", "prod", "--force"])
+    result = runner.invoke(app, ["environment", "delete", "prod", "--force"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["action"] == "env.delete"
+    assert payload["action"] == "environment.delete"
     assert payload["data"]["deleted"] is True

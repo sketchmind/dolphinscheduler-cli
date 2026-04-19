@@ -123,7 +123,8 @@ dsctl use --clear
 - [x] `--dry-run` support
 - [x] `tests/models/test_workflow_spec.py` — YAML parsing tests
 - [x] `tests/services/test_workflow.py` — create workflow tests
-- [x] `dsctl template workflow` and `dsctl template task SHELL|SQL|HTTP|...`
+- [x] `dsctl template workflow`, `dsctl template environment`, `dsctl template cluster`, and
+      `dsctl template task SHELL|SQL|HTTP|...`
 - [x] YAML `schedule:` block support during `workflow create`
 - [x] extend task-type coverage for DS logical/compound nodes:
       `SUB_WORKFLOW`, `DEPENDENT`, `SWITCH`, `CONDITIONS`
@@ -331,10 +332,10 @@ for production use.
 - [x] `queue` — CRUD
 - [x] `worker-group` — CRUD
 - [x] `task-group` — lifecycle plus task-group queue list/force-start/priority
-- [x] `alert-plugin` — list/get/schema/create/update/delete/test
+- [x] `alert-plugin` — list/get/definition list/schema/create/update/delete/test
 - [x] `alert-group` — CRUD
 - [x] `tenant` — CRUD
-- [x] `env` — environment CRUD
+- [x] `environment` — environment CRUD
 - [x] `cluster` — cluster CRUD
 - [x] `monitor` — health, servers, database stats
 - [x] `audit` — list, model-types, operation-types
@@ -363,7 +364,7 @@ surface.
 - [x] `dsctl lint` for local workflow design-time checks
 - [x] `dsctl doctor` for runtime and governance diagnostics
 - [x] `dsctl schema` — JSON tool definition output for the current stable surface
-- [x] `dsctl enum list <enum>` — enum value discovery
+- [x] `dsctl enum names`, `dsctl enum list <enum>` — enum value discovery
 - [x] `dsctl task-type list` — live DS task-type discovery with favourite flags
 - [x] audit log inspection and audit filter metadata discovery
 - [x] workflow lineage inspection and dependent-task discovery
@@ -450,7 +451,7 @@ live contract test.
 - [x] live contract cases for:
       `tenant`, `user`, `access-token`, `queue`, `worker-group`
 - [x] live contract cases for:
-      `env`, `cluster`, `alert-group`
+      `environment`, `cluster`, `alert-group`
 - [x] permission-boundary tests for admin-only mutations
 - [x] grant/revoke live tests where cluster policy allows them
 
@@ -462,7 +463,8 @@ have admin-path live coverage plus at least one denial or boundary case.
 - [x] `datasource` live tests in an environment with real reachable backends
 - [x] `alert-plugin` live tests in an environment with installed plugin
       backends
-- [x] capability-gated `env`, `cluster`, `namespace`, and `resource` scenarios
+- [x] capability-gated `environment`, `cluster`, `namespace`, and `resource`
+      scenarios
       in compatible deployments where needed
 - [x] any skipped suite records the missing capability explicitly
 

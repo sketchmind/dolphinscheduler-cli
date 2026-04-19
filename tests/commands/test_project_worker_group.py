@@ -93,6 +93,13 @@ def test_project_worker_group_set_command_accepts_repeated_worker_group_flags() 
     assert [item["workerGroup"] for item in payload["data"]] == ["default", "gpu"]
 
 
+def test_project_worker_group_set_help_points_to_worker_group_list() -> None:
+    result = runner.invoke(app, ["project-worker-group", "set", "--help"])
+
+    assert result.exit_code == 0
+    assert "worker-group list" in result.stdout
+
+
 def test_project_worker_group_clear_command_requires_force() -> None:
     result = runner.invoke(app, ["project-worker-group", "clear"])
 

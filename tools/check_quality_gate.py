@@ -143,7 +143,7 @@ def build_steps(
         steps.append(
             Step(
                 "Run tests",
-                python_cmd(python, "-m", "pytest", "-q", "--ignore", "tests/live"),
+                python_cmd(python, "-m", "pytest", "-m", "not live", "-q"),
             )
         )
     if include_live:
