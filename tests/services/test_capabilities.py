@@ -5,7 +5,10 @@ from dsctl.errors import UserInputError
 from dsctl.models import supported_typed_task_types
 from dsctl.services.capabilities import get_capabilities_result
 from dsctl.services.datasource_payload import datasource_template_index_data
-from dsctl.services.template import parameter_syntax_index_data, task_template_metadata
+from dsctl.services.template import (
+    parameter_syntax_index_data,
+    task_template_metadata,
+)
 from dsctl.upstream import (
     upstream_default_task_types,
     upstream_default_task_types_by_category,
@@ -122,6 +125,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "workflow",
         "params",
         "environment",
+        "cluster",
         "datasource",
         "task",
     ]
@@ -302,6 +306,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "workflow_dry_run": True,
         "parameter_syntax": EXPECTED_PARAMETER_SYNTAX,
         "environment_config_template": True,
+        "cluster_config_template": True,
         "datasource_payload_templates": True,
         "datasource_template_types": EXPECTED_DATASOURCE_TEMPLATE_INDEX[
             "supported_types"

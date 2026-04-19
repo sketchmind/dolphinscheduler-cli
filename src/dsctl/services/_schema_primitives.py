@@ -32,8 +32,12 @@ def project_option() -> dict[str, object]:
     return option(
         "project",
         value_type="string",
-        description="Project name or code. Falls back to stored project context.",
+        description=(
+            "Project name or code. Run `dsctl project list` to discover values; "
+            "falls back to stored project context."
+        ),
         selector="name_or_code",
+        discovery_command="dsctl project list",
     )
 
 
@@ -44,6 +48,7 @@ def workflow_option(*, description: str) -> dict[str, object]:
         value_type="string",
         description=description,
         selector="name_or_code",
+        discovery_command="dsctl workflow list",
     )
 
 

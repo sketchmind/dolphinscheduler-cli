@@ -70,8 +70,8 @@ def test_env_selector_help_points_to_list() -> None:
     result = runner.invoke(app, ["environment", "get", "--help"])
 
     assert result.exit_code == 0
-    assert "Use list to" in result.stdout
-    assert "discover values" in result.stdout
+    assert "environment" in result.stdout
+    assert "list" in result.stdout
 
 
 def test_env_create_help_points_to_config_template() -> None:

@@ -92,6 +92,14 @@ def test_tenant_get_command_resolves_code() -> None:
     assert payload["data"]["queueName"] == "default"
 
 
+def test_tenant_get_help_points_to_list_for_selector() -> None:
+    result = runner.invoke(app, ["tenant", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "tenant" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_tenant_create_command_returns_created_tenant() -> None:
     result = runner.invoke(
         app,
@@ -110,6 +118,13 @@ def test_tenant_create_command_returns_created_tenant() -> None:
     assert payload["action"] == "tenant.create"
     assert payload["data"]["tenantCode"] == "tenant-ops"
     assert payload["data"]["queueId"] == 11
+
+
+def test_tenant_create_help_points_to_queue_list() -> None:
+    result = runner.invoke(app, ["tenant", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "dsctl queue list" in result.stdout
 
 
 def test_tenant_update_command_returns_updated_tenant() -> None:

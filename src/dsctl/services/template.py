@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from textwrap import dedent
 from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
@@ -146,6 +147,15 @@ class EnvironmentConfigLineData(TypedDict):
     purpose: str
 
 
+class ClusterConfigFieldData(TypedDict):
+    """One field in the DS cluster config JSON object."""
+
+    name: str
+    required: bool
+    value_type: str
+    description: str
+
+
 class TextLineData(TypedDict):
     """One rendered text-template line for table and tsv output."""
 
@@ -163,6 +173,29 @@ class EnvironmentConfigTemplateData(TypedDict):
     source_options: list[str]
     upstream_request_shape: str
     rules: list[str]
+
+
+class ClusterConfigTemplateData(TypedDict):
+    """Stable discovery payload for `dsctl template cluster`."""
+
+    filename: str
+    config: str
+    payload: dict[str, str]
+    fields: list[ClusterConfigFieldData]
+    rows: list[ClusterConfigFieldData]
+    target_commands: list[str]
+    source_options: list[str]
+    upstream_request_shape: str
+    upstream_ui_shape: str
+    rules: list[str]
+
+
+class ClusterConfigTemplateCapabilityData(TypedDict):
+    """Compact capability metadata for cluster config templates."""
+
+    command: str
+    source_options: list[str]
+    target_commands: list[str]
 
 
 class TaskTemplateTypeRowData(TypedDict):
@@ -242,10 +275,10 @@ def parameter_syntax_index_data() -> ParameterSyntaxIndexData:
             },
         ],
         "recommended_flow": [
-            "Run `template params` first and select only the needed topic.",
-            "Run `template task TYPE --variant params` for task-specific YAML.",
-            "Run `lint workflow FILE` before sending the workflow to DS.",
-            "Run `workflow create --file FILE --dry-run` before mutation.",
+            "Run `dsctl template params` first and select only the needed topic.",
+            "Run `dsctl template task TYPE --variant params` for task-specific YAML.",
+            "Run `dsctl lint workflow FILE` before sending the workflow to DS.",
+            "Run `dsctl workflow create --file FILE --dry-run` before mutation.",
         ],
         "rules": [
             "The CLI preserves DS parameter expressions as strings.",
@@ -309,7 +342,7 @@ def _normalize_parameter_syntax_topic(topic: str) -> str:
     raise UserInputError(
         message,
         details={"topic": topic},
-        suggestion="Run `template params` to inspect available topics.",
+        suggestion="Run `dsctl template params` to inspect available topics.",
     )
 
 
@@ -739,6 +772,81 @@ def environment_config_template_result() -> CommandResult:
     )
 
 
+def cluster_config_template_result() -> CommandResult:
+    """Return one DS cluster config JSON template."""
+    payload = {
+        "k8s": _cluster_k8s_config_placeholder(),
+        "yarn": "",
+    }
+    fields = [
+        ClusterConfigFieldData(
+            name="k8s",
+            required=True,
+            value_type="string",
+            description=(
+                "Kubernetes kubeconfig content. DS currently reads this field "
+                "when resolving a cluster's Kubernetes config."
+            ),
+        ),
+        ClusterConfigFieldData(
+            name="yarn",
+            required=False,
+            value_type="string",
+            description=(
+                "Reserved by the DS UI shape; DS 3.4.1 does not actively use "
+                "this field."
+            ),
+        ),
+    ]
+    return CommandResult(
+        data=require_json_object(
+            ClusterConfigTemplateData(
+                filename="cluster-config.json",
+                config=_cluster_config_json(payload),
+                payload=payload,
+                fields=fields,
+                rows=fields,
+                target_commands=[
+                    (
+                        "dsctl cluster create --name NAME "
+                        "--config-file cluster-config.json"
+                    ),
+                    "dsctl cluster update CLUSTER --config-file cluster-config.json",
+                ],
+                source_options=["--config TEXT", "--config-file PATH"],
+                upstream_request_shape=(
+                    "ClusterController form field `config` stores a raw string; "
+                    "DS 3.4.1 expects a JSON object for cluster config usage."
+                ),
+                upstream_ui_shape=(
+                    "The DS 3.4.1 UI submits JSON.stringify({k8s, yarn})."
+                ),
+                rules=[
+                    "Use JSON object syntax, not a bare kubeconfig string.",
+                    "Prefer --config-file for multiline Kubernetes kubeconfigs.",
+                    "Keep the k8s value as the full kubeconfig text.",
+                    "Keep yarn as an empty string unless your DS deployment uses it.",
+                    "The kubeconfig must be usable from DolphinScheduler API/workers.",
+                ],
+            ),
+            label="cluster config template data",
+        ),
+        resolved={"template": "cluster.config"},
+    )
+
+
+def cluster_config_template_capability_data() -> ClusterConfigTemplateCapabilityData:
+    """Return compact capability metadata for cluster config templates."""
+    return {
+        "command": "dsctl template cluster",
+        "source_options": ["--config TEXT", "--config-file PATH"],
+        "target_commands": [
+            "dsctl cluster create --name NAME --config-file cluster-config.json",
+            "dsctl cluster update CLUSTER --config-file cluster-config.json",
+        ],
+    }
+
+
 def datasource_template_result(datasource_type: str | None = None) -> CommandResult:
     """Return datasource payload-template discovery or one JSON template."""
     if datasource_type is None:
@@ -836,18 +944,27 @@ def task_template_types_result() -> CommandResult:
 
 def _normalize_task_type(task_type: str) -> str:
     normalized = canonical_task_type(task_type)
-    suggestion = "Run `template task --list` to inspect supported task types."
+    suggestion = "Run `dsctl template task --list` to inspect supported task types."
     if not normalized:
-        supported = ", ".join(_SUPPORTED_TASK_TEMPLATE_TYPES)
-        message = f"TASK_TYPE is required. Supported: {supported}"
-        raise UserInputError(message, suggestion=suggestion)
+        message = "TASK_TYPE is required."
+        raise UserInputError(
+            message,
+            details={
+                "available_task_types_count": len(_SUPPORTED_TASK_TEMPLATE_TYPES),
+                "discovery_command": "dsctl template task --list",
+            },
+            suggestion=suggestion,
+        )
     if normalized in _SUPPORTED_TASK_TEMPLATE_TYPES:
         return normalized
-    supported = ", ".join(_SUPPORTED_TASK_TEMPLATE_TYPES)
-    message = f"Unsupported task template type '{task_type}'. Supported: {supported}"
+    message = f"Unsupported task template type '{task_type}'."
     raise UserInputError(
         message,
-        details={"task_type": task_type},
+        details={
+            "task_type": task_type,
+            "available_task_types_count": len(_SUPPORTED_TASK_TEMPLATE_TYPES),
+            "discovery_command": "dsctl template task --list",
+        },
         suggestion=suggestion,
     )
 
@@ -859,15 +976,18 @@ def _normalize_task_template_variant(task_type: str, variant: str | None) -> str
     supported_variants = _task_templates.task_template_variants(task_type)
     if normalized in supported_variants:
         return normalized
-    supported = ", ".join(supported_variants)
     message = (
-        f"Unsupported task template variant '{variant}' for task type "
-        f"'{task_type}'. Supported: {supported}"
+        f"Unsupported task template variant '{variant}' for task type '{task_type}'."
     )
     raise UserInputError(
         message,
-        details={"task_type": task_type, "variant": variant},
-        suggestion="Run `template task --list` to inspect supported variants.",
+        details={
+            "task_type": task_type,
+            "variant": variant,
+            "available_variants": list(supported_variants),
+            "discovery_command": "dsctl template task --list",
+        },
+        suggestion="Run `dsctl template task --list` to inspect supported variants.",
     )
 
 
@@ -1005,6 +1125,35 @@ def _workflow_template_yaml(*, with_schedule: bool) -> str:
         """
     )
     return f"{base}{schedule}"
+
+
+def _cluster_k8s_config_placeholder() -> str:
+    return dedent(
+        """\
+        apiVersion: v1
+        kind: Config
+        clusters:
+          - cluster:
+              certificate-authority-data: CHANGE_ME_BASE64_CA
+              server: https://KUBERNETES_API_SERVER:6443
+            name: kubernetes
+        contexts:
+          - context:
+              cluster: kubernetes
+              user: kubernetes-admin
+            name: kubernetes-admin@kubernetes
+        current-context: kubernetes-admin@kubernetes
+        users:
+          - name: kubernetes-admin
+            user:
+              client-certificate-data: CHANGE_ME_BASE64_CERT
+              client-key-data: CHANGE_ME_BASE64_KEY
+        """
+    )
+
+
+def _cluster_config_json(payload: dict[str, str]) -> str:
+    return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
 
 
 def _task_template_types_data(

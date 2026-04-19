@@ -21,6 +21,10 @@ datasource_app = typer.Typer(
     no_args_is_help=True,
 )
 
+DATASOURCE_HELP = (
+    "Datasource name or numeric id. Run `dsctl datasource list` to discover values."
+)
+
 
 def register_datasource_commands(app: typer.Typer) -> None:
     """Register the `datasource` command group."""
@@ -82,9 +86,7 @@ def get_command(
     ctx: typer.Context,
     datasource: Annotated[
         str,
-        typer.Argument(
-            help="Datasource name or numeric id. Use list to discover values.",
-        ),
+        typer.Argument(help=DATASOURCE_HELP),
     ],
 ) -> None:
     """Get one datasource by name or id."""
@@ -108,10 +110,10 @@ def create_command(
             exists=True,
             file_okay=True,
             help=(
-                "Path to one DS-native datasource JSON payload file. Run "
-                "`dsctl template datasource` to choose a type, then "
-                "`dsctl template datasource --type TYPE` and write data.json "
-                "to this file."
+                "Path to one DS-native datasource JSON payload file. Start "
+                "with `dsctl template datasource`, then "
+                "`dsctl template datasource --type TYPE` and pass the saved "
+                "data.json path here."
             ),
             readable=True,
             resolve_path=True,
@@ -132,9 +134,7 @@ def update_command(
     ctx: typer.Context,
     datasource: Annotated[
         str,
-        typer.Argument(
-            help="Datasource name or numeric id. Use list to discover values.",
-        ),
+        typer.Argument(help=DATASOURCE_HELP),
     ],
     *,
     file: Annotated[
@@ -147,8 +147,9 @@ def update_command(
             help=(
                 "Path to one DS-native datasource JSON payload file. Start from "
                 "`dsctl datasource get DATASOURCE` or "
-                "`dsctl template datasource --type TYPE`; masked password "
-                "****** preserves the existing password."
+                "`dsctl template datasource --type TYPE`, then pass the saved "
+                "JSON path here. Masked password ****** preserves the existing "
+                "password."
             ),
             readable=True,
             resolve_path=True,
@@ -173,9 +174,7 @@ def delete_command(
     ctx: typer.Context,
     datasource: Annotated[
         str,
-        typer.Argument(
-            help="Datasource name or numeric id. Use list to discover values.",
-        ),
+        typer.Argument(help=DATASOURCE_HELP),
     ],
     *,
     force: Annotated[
@@ -204,9 +203,7 @@ def test_command(
     ctx: typer.Context,
     datasource: Annotated[
         str,
-        typer.Argument(
-            help="Datasource name or numeric id. Use list to discover values.",
-        ),
+        typer.Argument(help=DATASOURCE_HELP),
     ],
 ) -> None:
     """Run one datasource connection test after create or update."""

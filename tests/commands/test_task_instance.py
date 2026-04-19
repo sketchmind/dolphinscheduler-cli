@@ -213,6 +213,19 @@ def test_task_instance_list_command_rejects_workflow_definition_filter() -> None
     assert "workflow-instance list" in payload["error"]["suggestion"]
 
 
+def test_task_instance_list_help_points_to_filter_discovery() -> None:
+    result = runner.invoke(app, ["task-instance", "list", "--help"])
+
+    assert result.exit_code == 0
+    assert "workflow-instance" in result.stdout
+    assert "project" in result.stdout
+    assert "task-execution-status" in result.stdout
+    assert "BATCH" in result.stdout
+    assert "STREAM" in result.stdout
+    assert "task-execute-type" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_task_instance_get_command_returns_one_instance() -> None:
     result = runner.invoke(
         app,
@@ -223,6 +236,15 @@ def test_task_instance_get_command_returns_one_instance() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "task-instance.get"
     assert payload["data"]["workflowInstanceId"] == 901
+
+
+def test_task_instance_get_help_points_to_instance_discovery() -> None:
+    result = runner.invoke(app, ["task-instance", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "task-instance" in result.stdout
+    assert "workflow-instance" in result.stdout
+    assert "list" in result.stdout
 
 
 def test_task_instance_watch_command_returns_finished_instance() -> None:
@@ -440,8 +462,31 @@ def test_task_instance_list_command_reports_supported_state_names() -> None:
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl enum list task_execution_status` to inspect the supported DS "
+        "Run `dsctl enum list task-execution-status` to inspect the supported DS "
         "task-instance states."
+    )
+
+
+def test_task_instance_list_command_reports_supported_execute_types() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "task-instance",
+            "list",
+            "--workflow-instance",
+            "901",
+            "--execute-type",
+            "not-real",
+        ],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "task-instance.list"
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["suggestion"] == (
+        "Run `dsctl enum list task-execute-type` to inspect the supported DS "
+        "task execute-type names."
     )
 
 

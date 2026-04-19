@@ -85,6 +85,14 @@ def test_resource_view_command_returns_text_content() -> None:
     assert payload["data"]["content"] == "select 1;"
 
 
+def test_resource_path_help_points_to_list_discovery() -> None:
+    result = runner.invoke(app, ["resource", "view", "--help"])
+
+    assert result.exit_code == 0
+    assert "dsctl resource list" in result.stdout
+    assert "--dir DIR" in result.stdout
+
+
 def test_resource_upload_and_mkdir_commands_mutate_resources(tmp_path: Path) -> None:
     upload_path = tmp_path / "upload.sql"
     upload_path.write_text("select 3;\n", encoding="utf-8")
@@ -117,6 +125,13 @@ def test_resource_create_command_rejects_empty_content() -> None:
         "Pass non-empty inline content, or use `resource upload` if the content "
         "already lives in a local file."
     )
+
+
+def test_resource_create_help_points_to_upload_for_local_files() -> None:
+    result = runner.invoke(app, ["resource", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "resource upload --file PATH" in result.stdout
 
 
 def test_resource_download_command_writes_output_file(tmp_path: Path) -> None:

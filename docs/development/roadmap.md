@@ -123,7 +123,7 @@ dsctl use --clear
 - [x] `--dry-run` support
 - [x] `tests/models/test_workflow_spec.py` — YAML parsing tests
 - [x] `tests/services/test_workflow.py` — create workflow tests
-- [x] `dsctl template workflow`, `dsctl template environment`, and
+- [x] `dsctl template workflow`, `dsctl template environment`, `dsctl template cluster`, and
       `dsctl template task SHELL|SQL|HTTP|...`
 - [x] YAML `schedule:` block support during `workflow create`
 - [x] extend task-type coverage for DS logical/compound nodes:

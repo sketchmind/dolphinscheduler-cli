@@ -16,6 +16,8 @@ queue_app = typer.Typer(
     no_args_is_help=True,
 )
 
+QUEUE_HELP = "Queue name or numeric id. Run `dsctl queue list` to discover values."
+
 
 def register_queue_commands(app: typer.Typer) -> None:
     """Register the `queue` command group."""
@@ -77,7 +79,7 @@ def get_command(
     ctx: typer.Context,
     queue: Annotated[
         str,
-        typer.Argument(help="Queue name or numeric id."),
+        typer.Argument(help=QUEUE_HELP),
     ],
 ) -> None:
     """Get one queue by name or id."""
@@ -97,14 +99,14 @@ def create_command(
         str,
         typer.Option(
             "--queue-name",
-            help="Human-facing queue name.",
+            help="Human-facing DS queue name used as the selector label.",
         ),
     ],
     queue: Annotated[
         str,
         typer.Option(
             "--queue",
-            help="Underlying DolphinScheduler queue value.",
+            help="Underlying YARN queue value stored in DolphinScheduler.",
         ),
     ],
 ) -> None:
@@ -126,21 +128,30 @@ def update_command(
     ctx: typer.Context,
     queue_identifier: Annotated[
         str,
-        typer.Argument(help="Queue name or numeric id."),
+        typer.Argument(
+            help=QUEUE_HELP,
+            metavar="QUEUE",
+        ),
     ],
     *,
     queue_name: Annotated[
         str | None,
         typer.Option(
             "--queue-name",
-            help="Updated queue name. Omit to keep the current queue name.",
+            help=(
+                "Updated human-facing DS queue name. Omit to keep the current "
+                "queue name."
+            ),
         ),
     ] = None,
     queue: Annotated[
         str | None,
         typer.Option(
             "--queue",
-            help="Updated queue value. Omit to keep the current queue value.",
+            help=(
+                "Updated underlying YARN queue value. Omit to keep the current "
+                "queue value."
+            ),
         ),
     ] = None,
 ) -> None:
@@ -163,7 +174,7 @@ def delete_command(
     ctx: typer.Context,
     queue: Annotated[
         str,
-        typer.Argument(help="Queue name or numeric id."),
+        typer.Argument(help=QUEUE_HELP),
     ],
     *,
     force: Annotated[

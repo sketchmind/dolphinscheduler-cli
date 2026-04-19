@@ -49,6 +49,8 @@ dsctl project list
 dsctl environment list
 dsctl template environment
 dsctl environment create --name stock-etl --config-file env.sh
+dsctl template cluster
+dsctl cluster create --name k8s-prod --config-file cluster-config.json
 dsctl datasource list
 dsctl schema --command datasource.create
 dsctl template datasource --type MYSQL

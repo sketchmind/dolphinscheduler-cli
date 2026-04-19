@@ -34,6 +34,40 @@ workflow_lineage_app = typer.Typer(
 )
 workflow_app.add_typer(workflow_lineage_app, name="lineage")
 
+ENVIRONMENT_CODE_HELP = (
+    "Environment code. Run `dsctl environment list` to discover values; omit to "
+    "allow enabled project preference."
+)
+PARAM_HELP = (
+    "Workflow start parameter in KEY=VALUE form. Repeat for multiple parameters."
+)
+PROJECT_HELP = (
+    "Project name or code. Run `dsctl project list` to discover values; falls "
+    "back to stored project context."
+)
+TASK_HELP = (
+    "Task name or numeric code inside the selected workflow. Run `dsctl task "
+    "list` to discover values."
+)
+TENANT_HELP = (
+    "Override the tenant code used to start the workflow instance. Run `dsctl "
+    "tenant list` to discover values; omit to allow enabled project preference "
+    "before the DS fallback `default` tenant."
+)
+WARNING_GROUP_HELP = (
+    "Warning group id. Run `dsctl alert-group list` to discover ids; omit to "
+    "allow enabled project preference."
+)
+WORKER_GROUP_HELP = (
+    "Override the worker group used to start the workflow instance. Run `dsctl "
+    "worker-group list` to discover values; omit to allow enabled project "
+    "preference before the DS fallback `default` worker group."
+)
+WORKFLOW_HELP = (
+    "Workflow name or numeric code. Run `dsctl workflow list` in the selected "
+    "project to discover values; falls back to workflow context when omitted."
+)
+
 
 def register_workflow_commands(app: typer.Typer) -> None:
     """Register the `workflow` command group."""
@@ -48,7 +82,7 @@ def list_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     search: Annotated[
@@ -78,10 +112,7 @@ def get_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context"
-                " when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -89,7 +120,7 @@ def get_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     output_format: Annotated[
@@ -121,10 +152,7 @@ def describe_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context"
-                " when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -132,7 +160,7 @@ def describe_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
 ) -> None:
@@ -155,10 +183,7 @@ def digest_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context"
-                " when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -166,7 +191,7 @@ def digest_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
 ) -> None:
@@ -191,7 +216,7 @@ def lineage_list_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
 ) -> None:
@@ -213,10 +238,7 @@ def lineage_get_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context "
-                "when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -224,7 +246,7 @@ def lineage_get_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
 ) -> None:
@@ -247,10 +269,7 @@ def lineage_dependent_tasks_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context "
-                "when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -258,14 +277,14 @@ def lineage_dependent_tasks_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     task: Annotated[
         str | None,
         typer.Option(
             "--task",
-            help="Task name or numeric code inside the selected workflow.",
+            help=TASK_HELP,
         ),
     ] = None,
 ) -> None:
@@ -306,7 +325,10 @@ def create_command(
         str | None,
         typer.Option(
             "--project",
-            help="Override workflow.project from the YAML file.",
+            help=(
+                "Override workflow.project from the YAML file. Run `dsctl "
+                "project list` to discover values."
+            ),
         ),
     ] = None,
     dry_run: Annotated[
@@ -348,10 +370,7 @@ def edit_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context "
-                "when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -374,7 +393,7 @@ def edit_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     dry_run: Annotated[
@@ -406,10 +425,7 @@ def online_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context"
-                " when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -417,7 +433,7 @@ def online_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
 ) -> None:
@@ -440,10 +456,7 @@ def offline_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context"
-                " when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -451,7 +464,7 @@ def offline_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
 ) -> None:
@@ -474,10 +487,7 @@ def run_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context"
-                " when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -485,29 +495,21 @@ def run_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     worker_group: Annotated[
         str | None,
         typer.Option(
             "--worker-group",
-            help=(
-                "Override the worker group used to start the workflow instance. "
-                "Omit to allow enabled project preference before the DS "
-                "fallback `default` worker group."
-            ),
+            help=WORKER_GROUP_HELP,
         ),
     ] = None,
     tenant: Annotated[
         str | None,
         typer.Option(
             "--tenant",
-            help=(
-                "Override the tenant code used to start the workflow instance. "
-                "Omit to allow enabled project preference before the DS "
-                "fallback `default` tenant."
-            ),
+            help=TENANT_HELP,
         ),
     ] = None,
     failure_strategy: Annotated[
@@ -541,24 +543,21 @@ def run_command(
         int | None,
         typer.Option(
             "--warning-group-id",
-            help="Warning group id. Omit to allow enabled project preference.",
+            help=WARNING_GROUP_HELP,
         ),
     ] = None,
     environment_code: Annotated[
         int | None,
         typer.Option(
             "--environment-code",
-            help="Environment code. Omit to allow enabled project preference.",
+            help=ENVIRONMENT_CODE_HELP,
         ),
     ] = None,
     params: Annotated[
         list[str] | None,
         typer.Option(
             "--param",
-            help=(
-                "Workflow start parameter in KEY=VALUE form. Repeat for multiple "
-                "parameters."
-            ),
+            help=PARAM_HELP,
         ),
     ] = None,
     dry_run: Annotated[
@@ -608,10 +607,7 @@ def run_task_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context"
-                " when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -619,14 +615,14 @@ def run_task_command(
         str,
         typer.Option(
             "--task",
-            help="Task name or task code within the workflow definition.",
+            help=TASK_HELP,
         ),
     ],
     project: Annotated[
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     scope: Annotated[
@@ -640,22 +636,14 @@ def run_task_command(
         str | None,
         typer.Option(
             "--worker-group",
-            help=(
-                "Override the worker group used to start the workflow instance. "
-                "Omit to allow enabled project preference before the DS "
-                "fallback `default` worker group."
-            ),
+            help=WORKER_GROUP_HELP,
         ),
     ] = None,
     tenant: Annotated[
         str | None,
         typer.Option(
             "--tenant",
-            help=(
-                "Override the tenant code used to start the workflow instance. "
-                "Omit to allow enabled project preference before the DS "
-                "fallback `default` tenant."
-            ),
+            help=TENANT_HELP,
         ),
     ] = None,
     failure_strategy: Annotated[
@@ -689,24 +677,21 @@ def run_task_command(
         int | None,
         typer.Option(
             "--warning-group-id",
-            help="Warning group id. Omit to allow enabled project preference.",
+            help=WARNING_GROUP_HELP,
         ),
     ] = None,
     environment_code: Annotated[
         int | None,
         typer.Option(
             "--environment-code",
-            help="Environment code. Omit to allow enabled project preference.",
+            help=ENVIRONMENT_CODE_HELP,
         ),
     ] = None,
     params: Annotated[
         list[str] | None,
         typer.Option(
             "--param",
-            help=(
-                "Workflow start parameter in KEY=VALUE form. Repeat for multiple "
-                "parameters."
-            ),
+            help=PARAM_HELP,
         ),
     ] = None,
     dry_run: Annotated[
@@ -758,10 +743,7 @@ def backfill_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context"
-                " when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -769,7 +751,7 @@ def backfill_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     start: Annotated[
@@ -800,7 +782,7 @@ def backfill_command(
         str | None,
         typer.Option(
             "--task",
-            help="Optional task name or task code to backfill from.",
+            help=TASK_HELP,
         ),
     ] = None,
     scope: Annotated[
@@ -849,22 +831,14 @@ def backfill_command(
         str | None,
         typer.Option(
             "--worker-group",
-            help=(
-                "Override the worker group used to start the workflow instance. "
-                "Omit to allow enabled project preference before the DS "
-                "fallback `default` worker group."
-            ),
+            help=WORKER_GROUP_HELP,
         ),
     ] = None,
     tenant: Annotated[
         str | None,
         typer.Option(
             "--tenant",
-            help=(
-                "Override the tenant code used to start the workflow instance. "
-                "Omit to allow enabled project preference before the DS "
-                "fallback `default` tenant."
-            ),
+            help=TENANT_HELP,
         ),
     ] = None,
     failure_strategy: Annotated[
@@ -898,24 +872,21 @@ def backfill_command(
         int | None,
         typer.Option(
             "--warning-group-id",
-            help="Warning group id. Omit to allow enabled project preference.",
+            help=WARNING_GROUP_HELP,
         ),
     ] = None,
     environment_code: Annotated[
         int | None,
         typer.Option(
             "--environment-code",
-            help="Environment code. Omit to allow enabled project preference.",
+            help=ENVIRONMENT_CODE_HELP,
         ),
     ] = None,
     params: Annotated[
         list[str] | None,
         typer.Option(
             "--param",
-            help=(
-                "Workflow start parameter in KEY=VALUE form. Repeat for multiple "
-                "parameters."
-            ),
+            help=PARAM_HELP,
         ),
     ] = None,
     dry_run: Annotated[
@@ -975,10 +946,7 @@ def delete_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=(
-                "Workflow name or numeric code. Falls back to workflow context"
-                " when omitted."
-            ),
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     *,
@@ -986,7 +954,7 @@ def delete_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     force: Annotated[

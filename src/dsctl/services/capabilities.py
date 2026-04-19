@@ -27,6 +27,7 @@ from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.enums import enum_capabilities_data
 from dsctl.services.monitor import MONITOR_SERVER_TYPE_CHOICES
 from dsctl.services.template import (
+    cluster_config_template_capability_data,
     generic_task_template_types,
     parameter_syntax_index_data,
     supported_task_template_types,
@@ -88,6 +89,7 @@ AUTHORING_SUMMARY_KEYS = (
     "workflow_digest",
     "workflow_schedule_block",
     "workflow_dry_run",
+    "cluster_config_template",
     "task_template_types",
     "datasource_payload_templates",
     "datasource_template_types",
@@ -170,6 +172,7 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
                     "dsctl environment update ENVIRONMENT --config-file env.sh",
                 ],
             },
+            "cluster": cluster_config_template_capability_data(),
             "datasource": datasource_template_index_data(),
             "task": {
                 "supported_types": task_types,
@@ -186,6 +189,7 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
             "environment_config_template": True,
+            "cluster_config_template": True,
             "datasource_payload_templates": True,
             "datasource_template_types": datasource_template_index_data()[
                 "supported_types"
@@ -254,6 +258,7 @@ def _capabilities_data(support: VersionSupport) -> dict[str, object]:
             "workflow_dry_run": True,
             "parameter_syntax": parameter_syntax_index_data(),
             "environment_config_template": True,
+            "cluster_config_template": True,
             "task_template_types": task_types,
             "datasource_payload_templates": True,
             "datasource_template_types": datasource_template_index_data()[

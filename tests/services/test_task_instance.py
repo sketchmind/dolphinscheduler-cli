@@ -774,8 +774,36 @@ def test_list_task_instances_result_reports_supported_state_names(
         )
 
     assert exc_info.value.suggestion == (
-        "Run `dsctl enum list task_execution_status` to inspect the supported DS "
+        "Run `dsctl enum list task-execution-status` to inspect the supported DS "
         "task-instance states."
+    )
+
+
+def test_list_task_instances_result_reports_supported_execute_types(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(
+        UserInputError,
+        match="Task execute type must be one of the DS task execute-type names",
+    ) as exc_info:
+        task_instance_service.list_task_instances_result(
+            workflow_instance=901,
+            execute_type="not-real",
+        )
+
+    assert exc_info.value.suggestion == (
+        "Run `dsctl enum list task-execute-type` to inspect the supported DS "
+        "task execute-type names."
     )
 
 

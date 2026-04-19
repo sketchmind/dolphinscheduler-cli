@@ -321,7 +321,7 @@ def test_list_workflow_instances_result_reports_supported_state_names(
     ) as exc_info:
         workflow_instance_service.list_workflow_instances_result(state="running")
     assert exc_info.value.suggestion == (
-        "Run `dsctl enum list workflow_execution_status` to inspect the "
+        "Run `dsctl enum list workflow-execution-status` to inspect the "
         "supported state names."
     )
 

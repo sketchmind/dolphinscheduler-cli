@@ -22,6 +22,14 @@ env_app = typer.Typer(
     no_args_is_help=True,
 )
 
+ENVIRONMENT_HELP = (
+    "Environment name or numeric code. Run `dsctl environment list` to discover values."
+)
+WORKER_GROUP_HELP = (
+    "Worker group to bind to this environment. Repeat as needed; run "
+    "`dsctl worker-group list` to discover values."
+)
+
 
 def register_env_commands(app: typer.Typer) -> None:
     """Register the `environment` command group."""
@@ -83,9 +91,7 @@ def get_command(
     ctx: typer.Context,
     environment: Annotated[
         str,
-        typer.Argument(
-            help="Environment name or numeric code. Use list to discover values."
-        ),
+        typer.Argument(help=ENVIRONMENT_HELP),
     ],
 ) -> None:
     """Get one environment by name or code."""
@@ -146,7 +152,7 @@ def create_command(
         list[str] | None,
         typer.Option(
             "--worker-group",
-            help="Worker group to bind to this environment. Repeat as needed.",
+            help=WORKER_GROUP_HELP,
         ),
     ] = None,
 ) -> None:
@@ -177,9 +183,7 @@ def update_command(
     ctx: typer.Context,
     environment: Annotated[
         str,
-        typer.Argument(
-            help="Environment name or numeric code. Use list to discover values."
-        ),
+        typer.Argument(help=ENVIRONMENT_HELP),
     ],
     *,
     name: Annotated[
@@ -233,7 +237,7 @@ def update_command(
         list[str] | None,
         typer.Option(
             "--worker-group",
-            help="Worker group to bind to this environment. Repeat as needed.",
+            help=WORKER_GROUP_HELP,
         ),
     ] = None,
     clear_worker_groups: Annotated[
@@ -293,9 +297,7 @@ def delete_command(
     ctx: typer.Context,
     environment: Annotated[
         str,
-        typer.Argument(
-            help="Environment name or numeric code. Use list to discover values."
-        ),
+        typer.Argument(help=ENVIRONMENT_HELP),
     ],
     *,
     force: Annotated[

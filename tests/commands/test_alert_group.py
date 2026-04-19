@@ -77,6 +77,14 @@ def test_alert_group_get_command_resolves_name() -> None:
     assert payload["data"]["alertInstanceIds"] == "7,8"
 
 
+def test_alert_group_get_help_points_to_list_for_selector() -> None:
+    result = runner.invoke(app, ["alert-group", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "alert-group" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_alert_group_create_command_returns_created_group() -> None:
     result = runner.invoke(
         app,
@@ -99,6 +107,13 @@ def test_alert_group_create_command_returns_created_group() -> None:
     assert payload["action"] == "alert-group.create"
     assert payload["data"]["groupName"] == "platform"
     assert payload["data"]["alertInstanceIds"] == "7,8"
+
+
+def test_alert_group_create_help_points_to_alert_plugin_list() -> None:
+    result = runner.invoke(app, ["alert-group", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "alert-plugin list" in result.stdout
 
 
 def test_alert_group_update_command_returns_updated_group() -> None:

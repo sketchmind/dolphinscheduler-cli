@@ -9,6 +9,7 @@ from dsctl.models import WorkflowSpec, supported_typed_task_types
 from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services.template import (
     ParameterSyntaxIndexData,
+    cluster_config_template_result,
     datasource_template_result,
     environment_config_template_result,
     generic_task_template_types,
@@ -150,6 +151,26 @@ def test_environment_config_template_result_returns_shell_template() -> None:
     assert lines[0]["line"] == "export JAVA_HOME=/opt/java"
 
 
+def test_cluster_config_template_result_returns_json_template() -> None:
+    result = cluster_config_template_result()
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {"template": "cluster.config"}
+    assert data["filename"] == "cluster-config.json"
+    assert data["target_commands"] == [
+        "dsctl cluster create --name NAME --config-file cluster-config.json",
+        "dsctl cluster update CLUSTER --config-file cluster-config.json",
+    ]
+    assert data["source_options"] == ["--config TEXT", "--config-file PATH"]
+    payload = data["payload"]
+    assert isinstance(payload, dict)
+    assert json.loads(data["config"]) == payload
+    assert set(payload) == {"k8s", "yarn"}
+    assert "apiVersion: v1" in payload["k8s"]
+    assert data["rows"] == data["fields"]
+
+
 def test_datasource_template_result_returns_json_payload_template() -> None:
     result = datasource_template_result("mysql")
     data = result.data
@@ -248,8 +269,14 @@ def test_task_template_result_returns_valid_yaml_for_supported_types(
 
 
 def test_task_template_result_rejects_unsupported_type() -> None:
-    with pytest.raises(UserInputError, match="Unsupported task template type"):
+    with pytest.raises(UserInputError, match="Unsupported task template type") as exc:
         task_template_result("SPARK_SQL")
+
+    assert exc.value.details == {
+        "task_type": "SPARK_SQL",
+        "available_task_types_count": len(supported_task_template_types()),
+        "discovery_command": "dsctl template task --list",
+    }
 
 
 def test_task_template_types_result_lists_supported_types() -> None:
@@ -329,8 +356,17 @@ def test_task_template_result_renders_discoverable_variants(
 
 
 def test_task_template_result_rejects_unsupported_variant() -> None:
-    with pytest.raises(UserInputError, match="Unsupported task template variant"):
+    with pytest.raises(
+        UserInputError, match="Unsupported task template variant"
+    ) as exc:
         task_template_result("SHELL", variant="post-json")
+
+    assert exc.value.details == {
+        "task_type": "SHELL",
+        "variant": "post-json",
+        "available_variants": ["minimal", "params", "resource"],
+        "discovery_command": "dsctl template task --list",
+    }
 
 
 @pytest.mark.parametrize(

@@ -4,6 +4,7 @@ import typer
 
 from dsctl.cli_runtime import emit_result
 from dsctl.services.template import (
+    cluster_config_template_result,
     datasource_template_result,
     environment_config_template_result,
     parameter_syntax_result,
@@ -66,6 +67,12 @@ def environment_command() -> None:
     emit_result("template.environment", environment_config_template_result)
 
 
+@template_app.command("cluster")
+def cluster_command() -> None:
+    """Emit a DS cluster config JSON template."""
+    emit_result("template.cluster", cluster_config_template_result)
+
+
 @template_app.command("datasource")
 def datasource_command(
     datasource_type: Annotated[
@@ -74,7 +81,9 @@ def datasource_command(
             "--type",
             help=(
                 "Datasource type to template. Omit for compact type discovery. "
-                f"Common: {', '.join(supported_datasource_types()[:6])}."
+                "Run `dsctl template datasource` or `dsctl enum list db-type` "
+                "for all values. Common: "
+                f"{', '.join(supported_datasource_types()[:6])}."
             ),
         ),
     ] = None,
@@ -110,7 +119,10 @@ def task_command(
             "--variant",
             help=(
                 "Task template scenario. Valid choices depend on the selected "
-                "task type; inspect them with `dsctl template task --list`."
+                "task type. Known variants include minimal, params, resource, "
+                "post-json, pre-post-statements, branching, condition-routing, "
+                "workflow-dependency, child-workflow, and datasource; inspect "
+                "per-type values with `dsctl template task --list`."
             ),
         ),
     ] = None,

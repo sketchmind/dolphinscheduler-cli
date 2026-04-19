@@ -85,8 +85,22 @@ def test_datasource_mutating_selector_help_points_to_list() -> None:
         result = runner.invoke(app, ["datasource", command, "--help"])
 
         assert result.exit_code == 0
-        assert "Use list to" in result.stdout
-        assert "discover values." in result.stdout
+        assert "datasource" in result.stdout
+        assert "list" in result.stdout
+
+
+def test_datasource_payload_file_help_points_to_template_flow() -> None:
+    create_result = runner.invoke(app, ["datasource", "create", "--help"])
+    update_result = runner.invoke(app, ["datasource", "update", "--help"])
+
+    assert create_result.exit_code == 0
+    assert "Start with `dsctl template datasource`" in create_result.stdout
+    assert "pass the saved" in create_result.stdout
+    assert "write data.json to this file" not in create_result.stdout
+    assert update_result.exit_code == 0
+    assert "Start from `dsctl datasource get DATASOURCE`" in update_result.stdout
+    assert "pass" in update_result.stdout
+    assert "the saved JSON path here" in update_result.stdout
 
 
 def test_datasource_create_command_returns_created_payload(tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ from dsctl.services.task_instance import (
     DEFAULT_TASK_INSTANCE_WATCH_TIMEOUT_SECONDS,
 )
 from dsctl.services.template import (
+    cluster_config_template_capability_data,
     parameter_syntax_index_data,
     task_template_metadata,
 )
@@ -216,8 +217,9 @@ def test_schema_result_describes_current_stable_surface() -> None:
     assert _find_option(capabilities_options, "summary")["default"] is False
     section_option = _find_option(capabilities_options, "section")
     assert section_option["description"] == (
-        "Return one top-level capability section. Discover values with "
-        "`dsctl schema --command capabilities`."
+        "Return one top-level capability section. Supported: selection, output, "
+        "errors, resources, planes, authoring, schedule, monitor, enums, runtime. "
+        "Discover values with `dsctl schema --command capabilities`."
     )
     assert section_option["discovery_command"] == "dsctl schema --command capabilities"
     section_choices = section_option["choices"]
@@ -247,6 +249,14 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "default_columns": ["line", "purpose"],
         "column_discovery": "runtime_row_keys",
     }
+    cluster_template_command = _find_command(template_group["commands"], "cluster")
+    assert cluster_template_command["action"] == "template.cluster"
+    assert cluster_template_command["data_shape"] == {
+        "kind": "summary",
+        "row_path": "data.fields",
+        "default_columns": ["name", "required", "value_type", "description"],
+        "column_discovery": "runtime_row_keys",
+    }
     task_command = _find_command(template_group["commands"], "task")
     task_arguments = _require_list(task_command["arguments"])
     first_task_argument = _require_dict(task_arguments[0])
@@ -259,6 +269,10 @@ def test_schema_result_describes_current_stable_surface() -> None:
     assert isinstance(variant_choices, list)
     assert "resource" in variant_choices
     assert "post-json" in variant_choices
+    variant_description = _require_str(variant_option["description"])
+    assert "Known variants include" in variant_description
+    assert "workflow-dependency" in variant_description
+    assert "dsctl template task --list" in variant_description
     assert variant_option["discovery_command"] == "dsctl template task --list"
     datasource_template_command = _find_command(
         template_group["commands"],
@@ -296,6 +310,14 @@ def test_schema_result_describes_current_stable_surface() -> None:
         for item in _require_list(task_type_group["commands"])
     ]
     assert task_type_command_names == ["list"]
+    assert task_type_group["summary"] == (
+        "List live DS task-type catalog for the configured cluster and current user."
+    )
+    task_type_list = _find_command(task_type_group["commands"], "list")
+    assert task_type_list["summary"] == (
+        "List live DS task types, categories, favourite flags, and CLI authoring "
+        "coverage."
+    )
 
     env_group = _find_group(commands, "environment")
     env_command_names = [
@@ -334,6 +356,19 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
     ]
+    cluster_create = _find_command(cluster_group["commands"], "create")
+    cluster_create_options = _require_list(cluster_create["options"])
+    cluster_create_config = _find_option(cluster_create_options, "config")
+    cluster_create_config_file = _find_option(cluster_create_options, "config-file")
+    assert cluster_create_config["discovery_command"] == "dsctl template cluster"
+    assert cluster_create_config["required"] is False
+    assert cluster_create_config_file["discovery_command"] == "dsctl template cluster"
+    cluster_update = _find_command(cluster_group["commands"], "update")
+    cluster_update_options = _require_list(cluster_update["options"])
+    assert (
+        _find_option(cluster_update_options, "config-file")["discovery_command"]
+        == "dsctl template cluster"
+    )
 
     datasource_group = _find_group(commands, "datasource")
     datasource_command_names = [
@@ -384,6 +419,13 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "dsctl template datasource --type MYSQL"
     )
 
+    project_group = _find_group(commands, "project")
+    project_get = _find_command(project_group["commands"], "get")
+    project_get_args = _require_list(project_get["arguments"])
+    assert (
+        _require_dict(project_get_args[0])["discovery_command"] == "dsctl project list"
+    )
+
     schedule_group = _find_group(commands, "schedule")
     schedule_command_names = [
         _require_dict(item)["name"]
@@ -400,6 +442,44 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "online",
         "offline",
     ]
+    schedule_list = _find_command(schedule_group["commands"], "list")
+    schedule_list_options = _require_list(schedule_list["options"])
+    assert (
+        _find_option(schedule_list_options, "project")["discovery_command"]
+        == "dsctl project list"
+    )
+    assert (
+        _find_option(schedule_list_options, "workflow")["discovery_command"]
+        == "dsctl workflow list"
+    )
+    schedule_get = _find_command(schedule_group["commands"], "get")
+    schedule_get_args = _require_list(schedule_get["arguments"])
+    assert (
+        _require_dict(schedule_get_args[0])["discovery_command"]
+        == "dsctl schedule list"
+    )
+    schedule_create = _find_command(schedule_group["commands"], "create")
+    schedule_create_options = _require_list(schedule_create["options"])
+    assert _find_option(schedule_create_options, "failure-strategy")["choices"] == [
+        "CONTINUE",
+        "END",
+    ]
+    assert (
+        _find_option(schedule_create_options, "warning-group-id")["discovery_command"]
+        == "dsctl alert-group list"
+    )
+    assert (
+        _find_option(schedule_create_options, "worker-group")["discovery_command"]
+        == "dsctl worker-group list"
+    )
+    assert (
+        _find_option(schedule_create_options, "tenant-code")["discovery_command"]
+        == "dsctl tenant list"
+    )
+    assert (
+        _find_option(schedule_create_options, "environment-code")["discovery_command"]
+        == "dsctl environment list"
+    )
 
     project_parameter_group = _find_group(commands, "project-parameter")
     project_parameter_command_names = [
@@ -413,6 +493,25 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
     ]
+    project_parameter_list = _find_command(
+        project_parameter_group["commands"],
+        "list",
+    )
+    project_parameter_list_options = _require_list(project_parameter_list["options"])
+    assert (
+        _find_option(project_parameter_list_options, "project")["discovery_command"]
+        == "dsctl project list"
+    )
+    assert (
+        _find_option(project_parameter_list_options, "data-type")["discovery_command"]
+        == "dsctl enum list data-type"
+    )
+    project_parameter_get = _find_command(project_parameter_group["commands"], "get")
+    project_parameter_get_args = _require_list(project_parameter_get["arguments"])
+    assert (
+        _require_dict(project_parameter_get_args[0])["discovery_command"]
+        == "dsctl project-parameter list"
+    )
 
     project_preference_group = _find_group(commands, "project-preference")
     project_preference_command_names = [
@@ -425,6 +524,12 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "enable",
         "disable",
     ]
+    project_preference_get = _find_command(project_preference_group["commands"], "get")
+    project_preference_get_options = _require_list(project_preference_get["options"])
+    assert (
+        _find_option(project_preference_get_options, "project")["discovery_command"]
+        == "dsctl project list"
+    )
 
     project_worker_group_group = _find_group(commands, "project-worker-group")
     project_worker_group_command_names = [
@@ -436,6 +541,19 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "set",
         "clear",
     ]
+    project_worker_group_set = _find_command(
+        project_worker_group_group["commands"],
+        "set",
+    )
+    project_worker_group_set_options = _require_list(
+        project_worker_group_set["options"]
+    )
+    assert (
+        _find_option(project_worker_group_set_options, "worker-group")[
+            "discovery_command"
+        ]
+        == "dsctl worker-group list"
+    )
 
     access_token_group = _find_group(commands, "access-token")
     access_token_command_names = [
@@ -450,6 +568,18 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "delete",
         "generate",
     ]
+    access_token_get = _find_command(access_token_group["commands"], "get")
+    access_token_get_args = _require_list(access_token_get["arguments"])
+    assert (
+        _require_dict(access_token_get_args[0])["discovery_command"]
+        == "dsctl access-token list"
+    )
+    access_token_create = _find_command(access_token_group["commands"], "create")
+    access_token_create_options = _require_list(access_token_create["options"])
+    assert (
+        _find_option(access_token_create_options, "user")["discovery_command"]
+        == "dsctl user list"
+    )
 
     namespace_group = _find_group(commands, "namespace")
     namespace_command_names = [
@@ -463,6 +593,12 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "create",
         "delete",
     ]
+    namespace_create = _find_command(namespace_group["commands"], "create")
+    namespace_create_options = _require_list(namespace_create["options"])
+    assert (
+        _find_option(namespace_create_options, "cluster-code")["discovery_command"]
+        == "dsctl cluster list"
+    )
 
     resource_group = _find_group(commands, "resource")
     resource_command_names = [
@@ -478,6 +614,16 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "download",
         "delete",
     ]
+    resource_view = _find_command(resource_group["commands"], "view")
+    resource_view_args = _require_list(resource_view["arguments"])
+    resource_view_arg = _require_dict(resource_view_args[0])
+    assert resource_view_arg["discovery_command"] == "dsctl resource list --dir DIR"
+    resource_list = _find_command(resource_group["commands"], "list")
+    resource_list_options = _require_list(resource_list["options"])
+    assert (
+        _find_option(resource_list_options, "dir")["discovery_command"]
+        == "dsctl resource list"
+    )
 
     queue_group = _find_group(commands, "queue")
     queue_command_names = [
@@ -490,6 +636,9 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
     ]
+    queue_get = _find_command(queue_group["commands"], "get")
+    queue_get_args = _require_list(queue_get["arguments"])
+    assert _require_dict(queue_get_args[0])["discovery_command"] == "dsctl queue list"
 
     worker_group_group = _find_group(commands, "worker-group")
     worker_group_command_names = [
@@ -503,6 +652,18 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
     ]
+    worker_group_create = _find_command(worker_group_group["commands"], "create")
+    worker_group_create_options = _require_list(worker_group_create["options"])
+    assert (
+        _find_option(worker_group_create_options, "addr")["discovery_command"]
+        == "dsctl monitor server worker"
+    )
+    worker_group_get = _find_command(worker_group_group["commands"], "get")
+    worker_group_get_args = _require_list(worker_group_get["arguments"])
+    assert (
+        _require_dict(worker_group_get_args[0])["discovery_command"]
+        == "dsctl worker-group list"
+    )
 
     task_group_group = _find_group(commands, "task-group")
     task_group_command_names = [
@@ -518,6 +679,20 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "start",
         "queue",
     ]
+    task_group_list = _find_command(task_group_group["commands"], "list")
+    task_group_list_options = _require_list(task_group_list["options"])
+    assert _find_option(task_group_list_options, "status")["choices"] == [
+        "open",
+        "closed",
+        "1",
+        "0",
+    ]
+    task_group_get = _find_command(task_group_group["commands"], "get")
+    task_group_get_args = _require_list(task_group_get["arguments"])
+    assert (
+        _require_dict(task_group_get_args[0])["discovery_command"]
+        == "dsctl task-group list"
+    )
     task_group_queue_group = _find_group(task_group_group["commands"], "queue")
     task_group_queue_command_names = [
         _require_dict(item)["name"]
@@ -528,6 +703,25 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "force-start",
         "set-priority",
     ]
+    task_group_queue_list = _find_command(task_group_queue_group["commands"], "list")
+    task_group_queue_list_options = _require_list(task_group_queue_list["options"])
+    assert _find_option(task_group_queue_list_options, "status")["choices"] == [
+        "WAIT_QUEUE",
+        "ACQUIRE_SUCCESS",
+        "RELEASE",
+        "-1",
+        "1",
+        "2",
+    ]
+    task_group_queue_force_start = _find_command(
+        task_group_queue_group["commands"],
+        "force-start",
+    )
+    force_start_args = _require_list(task_group_queue_force_start["arguments"])
+    assert (
+        _require_dict(force_start_args[0])["discovery_command"]
+        == "dsctl task-group queue list TASK_GROUP"
+    )
 
     alert_plugin_group = _find_group(commands, "alert-plugin")
     alert_plugin_command_names = [
@@ -544,6 +738,22 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "test",
         "definition",
     ]
+    alert_plugin_create = _find_command(alert_plugin_group["commands"], "create")
+    alert_plugin_create_options = _require_list(alert_plugin_create["options"])
+    assert (
+        _find_option(alert_plugin_create_options, "plugin")["discovery_command"]
+        == "dsctl alert-plugin definition list"
+    )
+    assert (
+        _find_option(alert_plugin_create_options, "param")["discovery_command"]
+        == "dsctl alert-plugin schema PLUGIN"
+    )
+    alert_plugin_get = _find_command(alert_plugin_group["commands"], "get")
+    alert_plugin_get_args = _require_list(alert_plugin_get["arguments"])
+    assert (
+        _require_dict(alert_plugin_get_args[0])["discovery_command"]
+        == "dsctl alert-plugin list"
+    )
     alert_plugin_definition_group = _find_group(
         alert_plugin_group["commands"],
         "definition",
@@ -566,6 +776,18 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
     ]
+    alert_group_get = _find_command(alert_group_group["commands"], "get")
+    alert_group_get_args = _require_list(alert_group_get["arguments"])
+    assert (
+        _require_dict(alert_group_get_args[0])["discovery_command"]
+        == "dsctl alert-group list"
+    )
+    alert_group_create = _find_command(alert_group_group["commands"], "create")
+    alert_group_create_options = _require_list(alert_group_create["options"])
+    assert (
+        _find_option(alert_group_create_options, "instance-id")["discovery_command"]
+        == "dsctl alert-plugin list"
+    )
 
     tenant_group = _find_group(commands, "tenant")
     tenant_command_names = [
@@ -578,6 +800,15 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "update",
         "delete",
     ]
+    tenant_get = _find_command(tenant_group["commands"], "get")
+    tenant_get_args = _require_list(tenant_get["arguments"])
+    assert _require_dict(tenant_get_args[0])["discovery_command"] == "dsctl tenant list"
+    tenant_create = _find_command(tenant_group["commands"], "create")
+    tenant_create_options = _require_list(tenant_create["options"])
+    assert (
+        _find_option(tenant_create_options, "queue")["discovery_command"]
+        == "dsctl queue list"
+    )
 
     user_group = _find_group(commands, "user")
     user_command_names = [
@@ -592,11 +823,36 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "grant",
         "revoke",
     ]
+    user_get = _find_command(user_group["commands"], "get")
+    user_get_args = _require_list(user_get["arguments"])
+    assert _require_dict(user_get_args[0])["discovery_command"] == "dsctl user list"
+    user_create = _find_command(user_group["commands"], "create")
+    user_create_options = _require_list(user_create["options"])
+    assert (
+        _find_option(user_create_options, "tenant")["discovery_command"]
+        == "dsctl tenant list"
+    )
+    assert (
+        _find_option(user_create_options, "queue")["discovery_command"]
+        == "dsctl queue list"
+    )
     user_grant_group = _find_group(_require_list(user_group["commands"]), "grant")
     assert [
         _require_dict(item)["name"]
         for item in _require_list(user_grant_group["commands"])
     ] == ["project", "datasource", "namespace"]
+    user_grant_project = _find_command(user_grant_group["commands"], "project")
+    user_grant_project_args = _require_list(user_grant_project["arguments"])
+    assert (
+        _require_dict(user_grant_project_args[1])["discovery_command"]
+        == "dsctl project list"
+    )
+    user_grant_datasource = _find_command(user_grant_group["commands"], "datasource")
+    user_grant_datasource_options = _require_list(user_grant_datasource["options"])
+    assert (
+        _find_option(user_grant_datasource_options, "datasource")["discovery_command"]
+        == "dsctl datasource list"
+    )
     user_revoke_group = _find_group(_require_list(user_group["commands"]), "revoke")
     assert [
         _require_dict(item)["name"]
@@ -627,6 +883,16 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "model-types",
         "operation-types",
     ]
+    audit_list = _find_command(audit_group["commands"], "list")
+    audit_list_options = _require_list(audit_list["options"])
+    assert (
+        _find_option(audit_list_options, "model-type")["discovery_command"]
+        == "dsctl audit model-types"
+    )
+    assert (
+        _find_option(audit_list_options, "operation-type")["discovery_command"]
+        == "dsctl audit operation-types"
+    )
 
     workflow_group = _find_group(commands, "workflow")
     workflow_command_names = [
@@ -662,12 +928,40 @@ def test_schema_result_describes_current_stable_surface() -> None:
     workflow_edit_options = _require_list(workflow_edit["options"])
     assert _find_option(workflow_edit_options, "patch")["required"] is True
     assert _find_option(workflow_edit_options, "dry-run")["default"] is False
+    workflow_get = _find_command(workflow_group["commands"], "get")
+    workflow_get_args = _require_list(workflow_get["arguments"])
+    assert (
+        _require_dict(workflow_get_args[0])["discovery_command"]
+        == "dsctl workflow list"
+    )
     workflow_delete = _find_command(workflow_group["commands"], "delete")
     workflow_delete_options = _require_list(workflow_delete["options"])
     assert _find_option(workflow_delete_options, "force")["default"] is False
+    workflow_run = _find_command(workflow_group["commands"], "run")
+    workflow_run_options = _require_list(workflow_run["options"])
+    assert (
+        _find_option(workflow_run_options, "worker-group")["discovery_command"]
+        == "dsctl worker-group list"
+    )
+    assert (
+        _find_option(workflow_run_options, "tenant")["discovery_command"]
+        == "dsctl tenant list"
+    )
+    assert (
+        _find_option(workflow_run_options, "warning-group-id")["discovery_command"]
+        == "dsctl alert-group list"
+    )
+    assert (
+        _find_option(workflow_run_options, "environment-code")["discovery_command"]
+        == "dsctl environment list"
+    )
     workflow_run_task = _find_command(workflow_group["commands"], "run-task")
     workflow_run_task_options = _require_list(workflow_run_task["options"])
     assert _find_option(workflow_run_task_options, "task")["required"] is True
+    assert (
+        _find_option(workflow_run_task_options, "task")["discovery_command"]
+        == "dsctl task list"
+    )
     assert _find_option(workflow_run_task_options, "scope")["default"] == "self"
     assert _find_option(workflow_run_task_options, "scope")["choices"] == [
         "self",
@@ -681,6 +975,10 @@ def test_schema_result_describes_current_stable_surface() -> None:
     assert _find_option(workflow_run_task_options, "param")["multiple"] is True
     workflow_backfill = _find_command(workflow_group["commands"], "backfill")
     workflow_backfill_options = _require_list(workflow_backfill["options"])
+    assert (
+        _find_option(workflow_backfill_options, "task")["discovery_command"]
+        == "dsctl task list"
+    )
     assert _find_option(workflow_backfill_options, "scope")["default"] == "self"
     assert _find_option(workflow_backfill_options, "run-mode")["default"] == "serial"
     assert (
@@ -708,6 +1006,29 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "recover-failed",
         "execute-task",
     ]
+    workflow_instance_list = _find_command(
+        workflow_instance_group["commands"],
+        "list",
+    )
+    workflow_instance_list_options = _require_list(workflow_instance_list["options"])
+    assert (
+        _find_option(workflow_instance_list_options, "project")["discovery_command"]
+        == "dsctl project list"
+    )
+    assert (
+        _find_option(workflow_instance_list_options, "workflow")["discovery_command"]
+        == "dsctl workflow list"
+    )
+    assert (
+        _find_option(workflow_instance_list_options, "state")["discovery_command"]
+        == "dsctl enum list workflow-execution-status"
+    )
+    workflow_instance_get = _find_command(workflow_instance_group["commands"], "get")
+    workflow_instance_get_args = _require_list(workflow_instance_get["arguments"])
+    assert (
+        _require_dict(workflow_instance_get_args[0])["discovery_command"]
+        == "dsctl workflow-instance list"
+    )
     workflow_instance_update = _find_command(
         workflow_instance_group["commands"],
         "update",
@@ -726,6 +1047,12 @@ def test_schema_result_describes_current_stable_surface() -> None:
     )
     workflow_instance_execute_task_options = _require_list(
         workflow_instance_execute_task["options"]
+    )
+    assert (
+        _find_option(workflow_instance_execute_task_options, "task")[
+            "discovery_command"
+        ]
+        == "dsctl task-instance list --workflow-instance WORKFLOW_INSTANCE"
     )
     assert _find_option(workflow_instance_execute_task_options, "scope")["choices"] == [
         "self",
@@ -771,6 +1098,45 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "savepoint",
         "stop",
     ]
+    task_instance_list = _find_command(task_instance_group["commands"], "list")
+    task_instance_list_options = _require_list(task_instance_list["options"])
+    assert (
+        _find_option(task_instance_list_options, "workflow-instance")[
+            "discovery_command"
+        ]
+        == "dsctl workflow-instance list"
+    )
+    assert (
+        _find_option(task_instance_list_options, "project")["discovery_command"]
+        == "dsctl project list"
+    )
+    assert (
+        _find_option(task_instance_list_options, "task-code")["discovery_command"]
+        == "dsctl task list"
+    )
+    assert (
+        _find_option(task_instance_list_options, "state")["discovery_command"]
+        == "dsctl enum list task-execution-status"
+    )
+    execute_type_option = _find_option(task_instance_list_options, "execute-type")
+    execute_type_description = _require_str(execute_type_option["description"])
+    assert "BATCH or STREAM" in execute_type_description
+    assert (
+        execute_type_option["discovery_command"] == "dsctl enum list task-execute-type"
+    )
+    task_instance_get = _find_command(task_instance_group["commands"], "get")
+    task_instance_get_args = _require_list(task_instance_get["arguments"])
+    task_instance_get_options = _require_list(task_instance_get["options"])
+    assert (
+        _require_dict(task_instance_get_args[0])["discovery_command"]
+        == "dsctl task-instance list"
+    )
+    assert (
+        _find_option(task_instance_get_options, "workflow-instance")[
+            "discovery_command"
+        ]
+        == "dsctl workflow-instance list"
+    )
 
     capabilities = data["capabilities"]
     assert capabilities == {
@@ -813,6 +1179,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
                     "dsctl environment update ENVIRONMENT --config-file env.sh",
                 ],
             },
+            "cluster": cluster_config_template_capability_data(),
             "datasource": datasource_template_index_data(),
             "task": {
                 "supported_types": EXPECTED_TEMPLATE_TASK_TYPES,
@@ -829,6 +1196,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
             "environment_config_template": True,
+            "cluster_config_template": True,
             "datasource_payload_templates": True,
             "datasource_template_types": datasource_template_index_data()[
                 "supported_types"
@@ -1265,6 +1633,17 @@ def test_schema_result_describes_group_level_use_clear_action() -> None:
         _require_dict(item)["name"] for item in _require_list(use_group["commands"])
     ]
     assert use_command_names == ["project", "workflow"]
+    use_project = _find_command(use_group["commands"], "project")
+    use_project_args = _require_list(use_project["arguments"])
+    assert (
+        _require_dict(use_project_args[0])["discovery_command"] == "dsctl project list"
+    )
+    use_workflow = _find_command(use_group["commands"], "workflow")
+    use_workflow_args = _require_list(use_workflow["arguments"])
+    assert (
+        _require_dict(use_workflow_args[0])["discovery_command"]
+        == "dsctl workflow list"
+    )
 
 
 def test_schema_defaults_follow_runtime_constants() -> None:
@@ -1309,6 +1688,9 @@ def test_schema_task_update_set_option_exposes_supported_keys() -> None:
     task_update_options = _require_list(task_update["options"])
     set_option = _find_option(task_update_options, "set")
 
+    task_update_args = _require_list(task_update["arguments"])
+    assert _require_dict(task_update_args[0])["discovery_command"] == "dsctl task list"
+    assert set_option["discovery_command"] == "dsctl schema --command task.update"
     assert set_option["supported_keys"] == [
         "command",
         "cpu_quota",

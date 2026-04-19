@@ -1560,7 +1560,7 @@ def _normalized_workflow_instance_state(value: str | None) -> str | None:
             message,
             details={"state": value},
             suggestion=(
-                "Run `dsctl enum list workflow_execution_status` to inspect "
+                "Run `dsctl enum list workflow-execution-status` to inspect "
                 "the supported state names."
             ),
         ) from exc

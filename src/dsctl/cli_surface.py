@@ -269,6 +269,7 @@ RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
         _surface_command(WORKFLOW_RESOURCE),
         _surface_command("params"),
         _surface_command(ENV_RESOURCE),
+        _surface_command(CLUSTER_RESOURCE),
         _surface_command(DATASOURCE_RESOURCE),
         _surface_command(TASK_RESOURCE),
     ),

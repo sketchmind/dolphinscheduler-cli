@@ -71,8 +71,11 @@ def schedule_group() -> dict[str, object]:
                     argument(
                         "schedule_id",
                         value_type="integer",
-                        description="Schedule id.",
+                        description=(
+                            "Schedule id. Use `dsctl schedule list` to discover values."
+                        ),
                         selector="id",
+                        discovery_command="dsctl schedule list",
                     )
                 ],
             ),
@@ -84,9 +87,13 @@ def schedule_group() -> dict[str, object]:
                     argument(
                         "schedule_id",
                         value_type="integer",
-                        description="Existing schedule id to preview.",
+                        description=(
+                            "Existing schedule id to preview. Use `dsctl schedule "
+                            "list` to discover values."
+                        ),
                         required=False,
                         selector="id",
+                        discovery_command="dsctl schedule list",
                     )
                 ],
                 options=[
@@ -124,9 +131,13 @@ def schedule_group() -> dict[str, object]:
                     argument(
                         "schedule_id",
                         value_type="integer",
-                        description="Existing schedule id to explain as an update.",
+                        description=(
+                            "Existing schedule id to explain as an update. Use "
+                            "`dsctl schedule list` to discover values."
+                        ),
                         required=False,
                         selector="id",
+                        discovery_command="dsctl schedule list",
                     )
                 ],
                 options=[
@@ -163,11 +174,15 @@ def schedule_group() -> dict[str, object]:
                         "failure-strategy",
                         value_type="string",
                         description="Failure strategy: CONTINUE or END.",
+                        choices=["CONTINUE", "END"],
+                        discovery_command="dsctl enum list failure-strategy",
                     ),
                     option(
                         "warning-type",
                         value_type="string",
                         description="Warning type: NONE, SUCCESS, FAILURE, or ALL.",
+                        choices=["NONE", "SUCCESS", "FAILURE", "ALL"],
+                        discovery_command="dsctl enum list warning-type",
                     ),
                     option(
                         "warning-group-id",
@@ -177,6 +192,7 @@ def schedule_group() -> dict[str, object]:
                             "for update explain. Create explain can also inherit an "
                             "enabled project preference when omitted."
                         ),
+                        discovery_command="dsctl alert-group list",
                     ),
                     option(
                         "priority",
@@ -185,6 +201,8 @@ def schedule_group() -> dict[str, object]:
                             "Workflow instance priority: HIGHEST, HIGH, MEDIUM, LOW, "
                             "or LOWEST."
                         ),
+                        choices=["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"],
+                        discovery_command="dsctl enum list priority",
                     ),
                     option(
                         "worker-group",
@@ -194,6 +212,7 @@ def schedule_group() -> dict[str, object]:
                             "update explain. Create explain can also inherit an "
                             "enabled project preference when omitted."
                         ),
+                        discovery_command="dsctl worker-group list",
                     ),
                     option(
                         "tenant-code",
@@ -202,6 +221,7 @@ def schedule_group() -> dict[str, object]:
                             "Tenant code for create explain. Create explain can "
                             "also inherit an enabled project preference when omitted."
                         ),
+                        discovery_command="dsctl tenant list",
                     ),
                     option(
                         "environment-code",
@@ -211,6 +231,7 @@ def schedule_group() -> dict[str, object]:
                             "for update explain. Create explain can also inherit "
                             "an enabled project preference when omitted."
                         ),
+                        discovery_command="dsctl environment list",
                     ),
                 ],
             ),
@@ -255,11 +276,15 @@ def schedule_group() -> dict[str, object]:
                         "failure-strategy",
                         value_type="string",
                         description="Failure strategy: CONTINUE or END.",
+                        choices=["CONTINUE", "END"],
+                        discovery_command="dsctl enum list failure-strategy",
                     ),
                     option(
                         "warning-type",
                         value_type="string",
                         description="Warning type: NONE, SUCCESS, FAILURE, or ALL.",
+                        choices=["NONE", "SUCCESS", "FAILURE", "ALL"],
+                        discovery_command="dsctl enum list warning-type",
                     ),
                     option(
                         "warning-group-id",
@@ -268,6 +293,7 @@ def schedule_group() -> dict[str, object]:
                             "Warning group id. Omit to keep the CLI fallback "
                             "chain, including enabled project preference."
                         ),
+                        discovery_command="dsctl alert-group list",
                     ),
                     option(
                         "priority",
@@ -276,6 +302,8 @@ def schedule_group() -> dict[str, object]:
                             "Workflow instance priority: HIGHEST, HIGH, MEDIUM, LOW, "
                             "or LOWEST."
                         ),
+                        choices=["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"],
+                        discovery_command="dsctl enum list priority",
                     ),
                     option(
                         "worker-group",
@@ -283,6 +311,7 @@ def schedule_group() -> dict[str, object]:
                         description=(
                             "Worker group. Omit to allow enabled project preference."
                         ),
+                        discovery_command="dsctl worker-group list",
                     ),
                     option(
                         "tenant-code",
@@ -290,6 +319,7 @@ def schedule_group() -> dict[str, object]:
                         description=(
                             "Tenant code. Omit to allow enabled project preference."
                         ),
+                        discovery_command="dsctl tenant list",
                     ),
                     option(
                         "environment-code",
@@ -298,6 +328,7 @@ def schedule_group() -> dict[str, object]:
                             "Environment code. Omit to keep the CLI fallback "
                             "chain, including enabled project preference."
                         ),
+                        discovery_command="dsctl environment list",
                     ),
                     confirm_risk_option(),
                 ],
@@ -310,8 +341,11 @@ def schedule_group() -> dict[str, object]:
                     argument(
                         "schedule_id",
                         value_type="integer",
-                        description="Schedule id.",
+                        description=(
+                            "Schedule id. Use `dsctl schedule list` to discover values."
+                        ),
                         selector="id",
+                        discovery_command="dsctl schedule list",
                     )
                 ],
                 options=[
@@ -349,11 +383,15 @@ def schedule_group() -> dict[str, object]:
                         "failure-strategy",
                         value_type="string",
                         description="Failure strategy: CONTINUE or END.",
+                        choices=["CONTINUE", "END"],
+                        discovery_command="dsctl enum list failure-strategy",
                     ),
                     option(
                         "warning-type",
                         value_type="string",
                         description="Warning type: NONE, SUCCESS, FAILURE, or ALL.",
+                        choices=["NONE", "SUCCESS", "FAILURE", "ALL"],
+                        discovery_command="dsctl enum list warning-type",
                     ),
                     option(
                         "warning-group-id",
@@ -361,6 +399,7 @@ def schedule_group() -> dict[str, object]:
                         description=(
                             "Updated warning group id. Omit to keep the current value."
                         ),
+                        discovery_command="dsctl alert-group list",
                     ),
                     option(
                         "priority",
@@ -369,6 +408,8 @@ def schedule_group() -> dict[str, object]:
                             "Workflow instance priority: HIGHEST, HIGH, MEDIUM, LOW, "
                             "or LOWEST."
                         ),
+                        choices=["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"],
+                        discovery_command="dsctl enum list priority",
                     ),
                     option(
                         "worker-group",
@@ -376,6 +417,7 @@ def schedule_group() -> dict[str, object]:
                         description=(
                             "Updated worker group. Omit to keep the current value."
                         ),
+                        discovery_command="dsctl worker-group list",
                     ),
                     option(
                         "environment-code",
@@ -383,6 +425,7 @@ def schedule_group() -> dict[str, object]:
                         description=(
                             "Updated environment code. Omit to keep the current value."
                         ),
+                        discovery_command="dsctl environment list",
                     ),
                     confirm_risk_option(),
                 ],
@@ -395,8 +438,11 @@ def schedule_group() -> dict[str, object]:
                     argument(
                         "schedule_id",
                         value_type="integer",
-                        description="Schedule id.",
+                        description=(
+                            "Schedule id. Use `dsctl schedule list` to discover values."
+                        ),
                         selector="id",
+                        discovery_command="dsctl schedule list",
                     )
                 ],
                 options=[
@@ -416,8 +462,11 @@ def schedule_group() -> dict[str, object]:
                     argument(
                         "schedule_id",
                         value_type="integer",
-                        description="Schedule id.",
+                        description=(
+                            "Schedule id. Use `dsctl schedule list` to discover values."
+                        ),
                         selector="id",
+                        discovery_command="dsctl schedule list",
                     )
                 ],
             ),
@@ -429,8 +478,11 @@ def schedule_group() -> dict[str, object]:
                     argument(
                         "schedule_id",
                         value_type="integer",
-                        description="Schedule id.",
+                        description=(
+                            "Schedule id. Use `dsctl schedule list` to discover values."
+                        ),
                         selector="id",
+                        discovery_command="dsctl schedule list",
                     )
                 ],
             ),
@@ -482,6 +534,11 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                 summary="Emit a DS environment shell/export config template.",
             ),
             command(
+                "cluster",
+                action="template.cluster",
+                summary="Emit a DS cluster config JSON template.",
+            ),
+            command(
                 "datasource",
                 action="template.datasource",
                 summary=(
@@ -493,8 +550,8 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                         "type",
                         value_type="string",
                         description=(
-                            "Datasource type to template. Omit for compact type "
-                            "discovery."
+                            "Datasource type. Omit for discovery; full values via "
+                            "`dsctl enum list db-type`."
                         ),
                         choices=supported_datasource_types(),
                         discovery_command="dsctl template datasource",
@@ -530,8 +587,12 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Task template scenario. Valid choices depend on "
-                            "the selected task type and are discoverable through "
-                            "`template task --list`."
+                            "the selected task type. Known variants include "
+                            "minimal, params, resource, post-json, "
+                            "pre-post-statements, branching, condition-routing, "
+                            "workflow-dependency, child-workflow, and datasource; "
+                            "inspect per-type values with `dsctl template task "
+                            "--list`."
                         ),
                         choices=supported_task_template_variants(),
                         discovery_command="dsctl template task --list",
@@ -578,6 +639,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[
@@ -605,6 +667,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[project_option()],
@@ -623,6 +686,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[project_option()],
@@ -645,8 +709,12 @@ def workflow_group() -> dict[str, object]:
                     option(
                         "project",
                         value_type="string",
-                        description="Override workflow.project from the YAML file.",
+                        description=(
+                            "Override workflow.project from the YAML file. Run "
+                            "`dsctl project list` to discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl project list",
                     ),
                     option(
                         "dry-run",
@@ -674,6 +742,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[
@@ -712,6 +781,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[project_option()],
@@ -730,6 +800,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[project_option()],
@@ -751,6 +822,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[
@@ -764,6 +836,7 @@ def workflow_group() -> dict[str, object]:
                             "preference before the DS fallback `default` worker "
                             "group."
                         ),
+                        discovery_command="dsctl worker-group list",
                     ),
                     option(
                         "tenant",
@@ -773,6 +846,7 @@ def workflow_group() -> dict[str, object]:
                             "workflow instance. Omit to allow enabled project "
                             "preference before the DS fallback `default` tenant."
                         ),
+                        discovery_command="dsctl tenant list",
                     ),
                     option(
                         "failure-strategy",
@@ -802,6 +876,7 @@ def workflow_group() -> dict[str, object]:
                             "Warning group id. Omit to allow enabled project "
                             "preference."
                         ),
+                        discovery_command="dsctl alert-group list",
                     ),
                     option(
                         "environment-code",
@@ -810,6 +885,7 @@ def workflow_group() -> dict[str, object]:
                             "Environment code. Omit to allow enabled project "
                             "preference."
                         ),
+                        discovery_command="dsctl environment list",
                     ),
                     option(
                         "param",
@@ -854,6 +930,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[
@@ -861,10 +938,12 @@ def workflow_group() -> dict[str, object]:
                         "task",
                         value_type="string",
                         description=(
-                            "Task name or task code within the workflow definition."
+                            "Task name or task code within the workflow "
+                            "definition. Run `dsctl task list` to discover values."
                         ),
                         required=True,
                         selector="name_or_code",
+                        discovery_command="dsctl task list",
                     ),
                     project_option(),
                     option(
@@ -883,6 +962,7 @@ def workflow_group() -> dict[str, object]:
                             "preference before the DS fallback `default` worker "
                             "group."
                         ),
+                        discovery_command="dsctl worker-group list",
                     ),
                     option(
                         "tenant",
@@ -892,6 +972,7 @@ def workflow_group() -> dict[str, object]:
                             "workflow instance. Omit to allow enabled project "
                             "preference before the DS fallback `default` tenant."
                         ),
+                        discovery_command="dsctl tenant list",
                     ),
                     option(
                         "failure-strategy",
@@ -921,6 +1002,7 @@ def workflow_group() -> dict[str, object]:
                             "Warning group id. Omit to allow enabled project "
                             "preference."
                         ),
+                        discovery_command="dsctl alert-group list",
                     ),
                     option(
                         "environment-code",
@@ -929,6 +1011,7 @@ def workflow_group() -> dict[str, object]:
                             "Environment code. Omit to allow enabled project "
                             "preference."
                         ),
+                        discovery_command="dsctl environment list",
                     ),
                     option(
                         "param",
@@ -976,6 +1059,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[
@@ -1003,8 +1087,12 @@ def workflow_group() -> dict[str, object]:
                     option(
                         "task",
                         value_type="string",
-                        description="Optional task name or task code to backfill from.",
+                        description=(
+                            "Optional task name or task code to backfill from. "
+                            "Run `dsctl task list` to discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl task list",
                     ),
                     option(
                         "scope",
@@ -1061,6 +1149,7 @@ def workflow_group() -> dict[str, object]:
                             "preference before the DS fallback `default` worker "
                             "group."
                         ),
+                        discovery_command="dsctl worker-group list",
                     ),
                     option(
                         "tenant",
@@ -1070,6 +1159,7 @@ def workflow_group() -> dict[str, object]:
                             "workflow instance. Omit to allow enabled project "
                             "preference before the DS fallback `default` tenant."
                         ),
+                        discovery_command="dsctl tenant list",
                     ),
                     option(
                         "failure-strategy",
@@ -1099,6 +1189,7 @@ def workflow_group() -> dict[str, object]:
                             "Warning group id. Omit to allow enabled project "
                             "preference."
                         ),
+                        discovery_command="dsctl alert-group list",
                     ),
                     option(
                         "environment-code",
@@ -1107,6 +1198,7 @@ def workflow_group() -> dict[str, object]:
                             "Environment code. Omit to allow enabled project "
                             "preference."
                         ),
+                        discovery_command="dsctl environment list",
                     ),
                     option(
                         "param",
@@ -1152,6 +1244,7 @@ def workflow_group() -> dict[str, object]:
                         ),
                         required=False,
                         selector="name_or_code",
+                        discovery_command="dsctl workflow list",
                     )
                 ],
                 options=[
@@ -1188,6 +1281,7 @@ def workflow_group() -> dict[str, object]:
                                 ),
                                 required=False,
                                 selector="name_or_code",
+                                discovery_command="dsctl workflow list",
                             )
                         ],
                         options=[project_option()],
@@ -1209,6 +1303,7 @@ def workflow_group() -> dict[str, object]:
                                 ),
                                 required=False,
                                 selector="name_or_code",
+                                discovery_command="dsctl workflow list",
                             )
                         ],
                         options=[
@@ -1221,6 +1316,7 @@ def workflow_group() -> dict[str, object]:
                                     "workflow."
                                 ),
                                 selector="name_or_code",
+                                discovery_command="dsctl task list",
                             ),
                         ],
                     ),
@@ -1265,8 +1361,12 @@ def task_group() -> dict[str, object]:
                     argument(
                         "task",
                         value_type="string",
-                        description="Task name or numeric code.",
+                        description=(
+                            "Task name or numeric code. Use `dsctl task list` to "
+                            "discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl task list",
                     )
                 ],
                 options=[
@@ -1286,8 +1386,12 @@ def task_group() -> dict[str, object]:
                     argument(
                         "task",
                         value_type="string",
-                        description="Task name or numeric code.",
+                        description=(
+                            "Task name or numeric code. Use `dsctl task list` to "
+                            "discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl task list",
                     )
                 ],
                 options=[
@@ -1302,11 +1406,12 @@ def task_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Inline task update in KEY=VALUE form. Repeat for "
-                            "multiple fields. Inspect `dsctl schema` for "
-                            "supported keys and examples."
+                            "multiple fields. Inspect `dsctl schema --command "
+                            "task.update` for supported keys and examples."
                         ),
                         multiple=True,
                         required=True,
+                        discovery_command="dsctl schema --command task.update",
                         examples=[
                             "command=python v2.py",
                             "retry.times=5",

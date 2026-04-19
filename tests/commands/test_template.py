@@ -62,7 +62,7 @@ def test_template_params_command_rejects_unknown_topic() -> None:
     payload = json.loads(result.stdout)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Run `template params` to inspect available topics."
+        "Run `dsctl template params` to inspect available topics."
     )
 
 
@@ -91,6 +91,32 @@ def test_template_environment_command_can_render_table_rows() -> None:
     assert "target_commands" not in result.stdout
 
 
+def test_template_cluster_command_returns_cluster_config_template() -> None:
+    result = runner.invoke(app, ["template", "cluster"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "template.cluster"
+    assert payload["resolved"] == {"template": "cluster.config"}
+    assert payload["data"]["filename"] == "cluster-config.json"
+    assert "apiVersion: v1" in payload["data"]["payload"]["k8s"]
+    assert json.loads(payload["data"]["config"]) == payload["data"]["payload"]
+    assert payload["data"]["rows"] == payload["data"]["fields"]
+
+
+def test_template_cluster_command_can_render_table_rows() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "template", "cluster"],
+    )
+
+    assert result.exit_code == 0
+    assert "name" in result.stdout
+    assert "value_type" in result.stdout
+    assert "k8s" in result.stdout
+    assert "CHANGE_ME_BASE64" not in result.stdout
+
+
 def test_template_datasource_command_returns_discovery() -> None:
     result = runner.invoke(app, ["template", "datasource"])
 
@@ -111,6 +137,21 @@ def test_template_datasource_command_returns_discovery() -> None:
         "template_command": "dsctl template datasource --type MYSQL",
     } in payload["data"]["rows"]
     assert "fields" not in payload["data"]
+
+
+def test_template_datasource_help_points_to_type_discovery() -> None:
+    result = runner.invoke(app, ["template", "datasource", "--help"])
+
+    assert result.exit_code == 0
+    assert "dsctl template datasource" in result.stdout
+    assert "enum list db-type" in result.stdout
+
+
+def test_template_cluster_help_describes_json_config_template() -> None:
+    result = runner.invoke(app, ["template", "cluster", "--help"])
+
+    assert result.exit_code == 0
+    assert "cluster config JSON template" in result.stdout
 
 
 def test_template_datasource_command_returns_payload_for_type() -> None:
@@ -203,8 +244,13 @@ def test_template_task_command_rejects_unknown_task_type() -> None:
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
     assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["message"] == "Unsupported task template type 'UNKNOWN'."
+    assert payload["error"]["details"]["task_type"] == "UNKNOWN"
+    assert payload["error"]["details"]["discovery_command"] == (
+        "dsctl template task --list"
+    )
     assert payload["error"]["suggestion"] == (
-        "Run `template task --list` to inspect supported task types."
+        "Run `dsctl template task --list` to inspect supported task types."
     )
 
 
@@ -233,6 +279,8 @@ def test_template_task_help_points_to_type_and_variant_discovery() -> None:
 
     assert result.exit_code == 0
     assert "Required unless --list" in result.stdout
+    assert "post-json" in result.stdout
+    assert "workflow-dependency" in result.stdout
     assert "dsctl template task --list" in result.stdout
 
 
@@ -242,15 +290,20 @@ def test_template_task_command_requires_type_without_list() -> None:
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
     assert payload["error"]["type"] == "user_input_error"
-    assert payload["error"]["message"].startswith("TASK_TYPE is required.")
+    assert payload["error"]["message"] == "TASK_TYPE is required."
+    assert payload["error"]["details"]["discovery_command"] == (
+        "dsctl template task --list"
+    )
     assert payload["error"]["suggestion"] == (
-        "Run `template task --list` to inspect supported task types."
+        "Run `dsctl template task --list` to inspect supported task types."
     )
 
 
 def test_template_table_outputs_use_row_shapes() -> None:
     cases = [
         (["template", "workflow"], "line_no | line"),
+        (["template", "environment"], "purpose"),
+        (["template", "cluster"], "name"),
         (["template", "datasource"], "type"),
         (["template", "datasource", "--type", "MYSQL"], "name"),
         (["template", "task", "--list"], "task_type"),

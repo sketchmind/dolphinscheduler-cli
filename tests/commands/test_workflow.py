@@ -207,6 +207,20 @@ def test_workflow_get_command_can_emit_yaml_inside_json_envelope() -> None:
     assert "workflow:" in payload["data"]["yaml"]
 
 
+def test_workflow_list_help_points_to_project_discovery() -> None:
+    result = runner.invoke(app, ["workflow", "list", "--help"])
+
+    assert result.exit_code == 0
+    assert "project list" in result.stdout
+
+
+def test_workflow_get_help_points_to_workflow_discovery() -> None:
+    result = runner.invoke(app, ["workflow", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "workflow list" in result.stdout
+
+
 def test_workflow_get_command_reports_supported_output_formats() -> None:
     result = runner.invoke(app, ["workflow", "get", "--format", "table"])
 
@@ -280,6 +294,13 @@ def test_workflow_lineage_dependent_tasks_command_can_filter_by_task() -> None:
             "taskDefinitionName": "depends-on-extract",
         }
     ]
+
+
+def test_workflow_lineage_dependent_tasks_help_points_to_task_discovery() -> None:
+    result = runner.invoke(app, ["workflow", "lineage", "dependent-tasks", "--help"])
+
+    assert result.exit_code == 0
+    assert "task list" in result.stdout
 
 
 def test_workflow_create_command_can_dry_run_yaml_spec(
@@ -533,6 +554,19 @@ def test_workflow_run_command_returns_created_instance_ids() -> None:
     assert payload["data"]["workflowInstanceIds"] == [901]
 
 
+def test_workflow_run_help_points_to_runtime_selector_discovery() -> None:
+    result = runner.invoke(app, ["workflow", "run", "--help"])
+
+    assert result.exit_code == 0
+    assert "workflow" in result.stdout
+    assert "project" in result.stdout
+    assert "worker-group" in result.stdout
+    assert "tenant" in result.stdout
+    assert "alert-group" in result.stdout
+    assert "environment" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_workflow_run_task_command_returns_created_instance_ids_and_warning() -> None:
     result = runner.invoke(app, ["workflow", "run-task", "--task", "extract"])
 
@@ -546,6 +580,14 @@ def test_workflow_run_task_command_returns_created_instance_ids_and_warning() ->
     assert payload["warning_details"][0]["code"] == (
         "workflow_run_task_dependent_context"
     )
+
+
+def test_workflow_run_task_help_points_to_task_discovery() -> None:
+    result = runner.invoke(app, ["workflow", "run-task", "--help"])
+
+    assert result.exit_code == 0
+    assert "task" in result.stdout
+    assert "list" in result.stdout
 
 
 def test_workflow_run_command_can_dry_run_runtime_options() -> None:
@@ -600,6 +642,17 @@ def test_workflow_backfill_command_can_dry_run_task_scope() -> None:
     assert form["startNodeList"] == "201"
     assert form["taskDependType"] == "TASK_ONLY"
     assert form["runMode"] == "RUN_MODE_SERIAL"
+
+
+def test_workflow_backfill_help_points_to_task_and_runtime_discovery() -> None:
+    result = runner.invoke(app, ["workflow", "backfill", "--help"])
+
+    assert result.exit_code == 0
+    assert "task" in result.stdout
+    assert "list" in result.stdout
+    assert "worker-group" in result.stdout
+    assert "tenant" in result.stdout
+    assert "environment" in result.stdout
 
 
 def test_workflow_backfill_command_reports_missing_time_selection() -> None:

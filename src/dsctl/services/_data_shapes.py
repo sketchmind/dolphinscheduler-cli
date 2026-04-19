@@ -159,6 +159,11 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
         row_path="data.lines",
         default_columns=("line", "purpose"),
     ),
+    "template.cluster": DataShape(
+        kind="summary",
+        row_path="data.fields",
+        default_columns=("name", "required", "value_type", "description"),
+    ),
     "template.datasource": DataShape(
         kind="summary",
         row_path="data.rows",

@@ -294,7 +294,7 @@ future.
 | enum | `enum names`, `enum list` | No | generated enum metadata |
 | use | `use project|workflow|--clear` | No | local context persistence |
 | lint | `lint workflow FILE` | No | local validation only |
-| template | `template workflow|params|environment|datasource|task` | No | local template rendering |
+| template | `template workflow|params|environment|cluster|datasource|task` | No | local template rendering |
 
 ### Meta And Diagnostics
 

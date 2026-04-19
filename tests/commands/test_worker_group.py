@@ -63,6 +63,14 @@ def test_worker_group_get_command_resolves_name() -> None:
     assert payload["data"]["addrList"] == "worker-a:1234"
 
 
+def test_worker_group_selector_help_points_to_list_discovery() -> None:
+    result = runner.invoke(app, ["worker-group", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "worker-group" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_worker_group_create_command_returns_created_worker_group() -> None:
     result = runner.invoke(
         app,
@@ -83,6 +91,14 @@ def test_worker_group_create_command_returns_created_worker_group() -> None:
     assert payload["action"] == "worker-group.create"
     assert payload["data"]["name"] == "ops"
     assert payload["data"]["addrList"] == "worker-a:1234,worker-b:1234"
+
+
+def test_worker_group_create_help_points_to_worker_server_discovery() -> None:
+    result = runner.invoke(app, ["worker-group", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "monitor server" in result.stdout
+    assert "worker" in result.stdout
 
 
 def test_worker_group_update_command_returns_updated_worker_group() -> None:

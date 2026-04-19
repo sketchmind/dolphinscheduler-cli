@@ -33,7 +33,10 @@ def get_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
 ) -> None:
@@ -57,7 +60,10 @@ def update_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
     preferences_json: Annotated[
@@ -102,7 +108,10 @@ def enable_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
 ) -> None:
@@ -126,7 +135,10 @@ def disable_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
 ) -> None:

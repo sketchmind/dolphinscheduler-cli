@@ -37,12 +37,18 @@ def task_type_group() -> dict[str, object]:
     """Build the task-type command group schema."""
     return group(
         "task-type",
-        summary="Discover DolphinScheduler task types for the current runtime.",
+        summary=(
+            "List live DS task-type catalog for the configured cluster and "
+            "current user."
+        ),
         commands=[
             command(
                 "list",
                 action="task-type.list",
-                summary=("List DS task types plus the current user's favourite flags."),
+                summary=(
+                    "List live DS task types, categories, favourite flags, and "
+                    "CLI authoring coverage."
+                ),
             )
         ],
     )

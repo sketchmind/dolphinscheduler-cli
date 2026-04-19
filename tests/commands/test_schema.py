@@ -7,6 +7,7 @@ from dsctl.app import app
 from dsctl.models import supported_typed_task_types
 from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.template import (
+    cluster_config_template_capability_data,
     parameter_syntax_index_data,
     task_template_metadata,
 )
@@ -72,6 +73,9 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
             "dsctl environment update ENVIRONMENT --config-file env.sh",
         ],
     }
+    assert payload["data"]["capabilities"]["templates"]["cluster"] == (
+        cluster_config_template_capability_data()
+    )
     assert payload["data"]["capabilities"]["self_description"] == {
         "schema": True,
         "template": True,
@@ -258,6 +262,19 @@ def test_schema_command_datasource_create_table_output_is_compact() -> None:
     assert "dsctl template datasource --type MYSQL" in result.stdout
     assert "template_discovery_command" in result.stdout
     assert "additional_fields_by_type" not in result.stdout
+
+
+def test_schema_command_long_choices_render_as_discovery_hint() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "schema", "--command", "template.datasource"],
+    )
+
+    assert result.exit_code == 0
+    assert max(len(line) for line in result.stdout.splitlines()) < 240
+    assert "choices=29 values; use discovery_command" in result.stdout
+    assert "dsctl template datasource" in result.stdout
+    assert "ALIYUN_SERVERLESS_SPARK" not in result.stdout
 
 
 def test_schema_command_table_output_supports_contract_columns() -> None:

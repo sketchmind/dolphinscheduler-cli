@@ -71,6 +71,7 @@ def test_capabilities_command_returns_surface_discovery() -> None:
         "workflow",
         "params",
         "environment",
+        "cluster",
         "datasource",
         "task",
     ]
@@ -118,6 +119,7 @@ def test_capabilities_command_returns_surface_discovery() -> None:
         parameter_syntax_index_data()
     )
     assert payload["data"]["authoring"]["environment_config_template"] is True
+    assert payload["data"]["authoring"]["cluster_config_template"] is True
     assert payload["data"]["authoring"]["datasource_payload_templates"] is True
     assert (
         payload["data"]["authoring"]["datasource_template_types"]
@@ -131,7 +133,10 @@ def test_capabilities_help_points_to_section_discovery() -> None:
     result = runner.invoke(app, ["capabilities", "--help"])
 
     assert result.exit_code == 0
-    assert "dsctl schema --command capabilities" in result.stdout
+    assert "dsctl schema --command" in result.stdout
+    assert "capabilities" in result.stdout
+    assert "selection" in result.stdout
+    assert "runtime" in result.stdout
 
 
 def test_capabilities_command_honors_env_file_ds_version() -> None:

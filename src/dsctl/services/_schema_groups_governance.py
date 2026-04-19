@@ -55,10 +55,11 @@ def env_group() -> dict[str, object]:
                         "environment",
                         value_type="string",
                         description=(
-                            "Environment name or numeric code. Use list to "
-                            "discover values."
+                            "Environment name or numeric code. Run `dsctl "
+                            "environment list` to discover values."
                         ),
                         selector="name_or_code",
+                        discovery_command="dsctl environment list",
                     )
                 ],
             ),
@@ -101,9 +102,11 @@ def env_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Worker group to bind to this environment. Repeat as "
-                            "needed."
+                            "needed; run `dsctl worker-group list` to discover "
+                            "values."
                         ),
                         multiple=True,
+                        discovery_command="dsctl worker-group list",
                     ),
                 ],
             ),
@@ -119,10 +122,11 @@ def env_group() -> dict[str, object]:
                         "environment",
                         value_type="string",
                         description=(
-                            "Environment name or numeric code. Use list to "
-                            "discover values."
+                            "Environment name or numeric code. Run `dsctl "
+                            "environment list` to discover values."
                         ),
                         selector="name_or_code",
+                        discovery_command="dsctl environment list",
                     )
                 ],
                 options=[
@@ -170,9 +174,11 @@ def env_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Worker group to bind to this environment. Repeat as "
-                            "needed."
+                            "needed; run `dsctl worker-group list` to discover "
+                            "values."
                         ),
                         multiple=True,
+                        discovery_command="dsctl worker-group list",
                     ),
                     option(
                         "clear-worker-groups",
@@ -191,10 +197,11 @@ def env_group() -> dict[str, object]:
                         "environment",
                         value_type="string",
                         description=(
-                            "Environment name or numeric code. Use list to "
-                            "discover values."
+                            "Environment name or numeric code. Run `dsctl "
+                            "environment list` to discover values."
                         ),
                         selector="name_or_code",
+                        discovery_command="dsctl environment list",
                     )
                 ],
                 options=[
@@ -258,15 +265,19 @@ def cluster_group() -> dict[str, object]:
                     argument(
                         "cluster",
                         value_type="string",
-                        description="Cluster name or numeric code.",
+                        description=(
+                            "Cluster name or numeric code. Run `dsctl cluster "
+                            "list` to discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl cluster list",
                     )
                 ],
             ),
             command(
                 "create",
                 action="cluster.create",
-                summary="Create one cluster.",
+                summary="Create one cluster; pass --config or --config-file.",
                 options=[
                     option(
                         "name",
@@ -277,8 +288,17 @@ def cluster_group() -> dict[str, object]:
                     option(
                         "config",
                         value_type="string",
-                        description="Cluster config payload.",
-                        required=True,
+                        description=(
+                            "Inline DS cluster config JSON. Prefer --config-file "
+                            "for multiline Kubernetes configs."
+                        ),
+                        discovery_command="dsctl template cluster",
+                    ),
+                    option(
+                        "config-file",
+                        value_type="path",
+                        description="Path to one DS cluster config JSON file.",
+                        discovery_command="dsctl template cluster",
                     ),
                     option(
                         "description",
@@ -295,8 +315,12 @@ def cluster_group() -> dict[str, object]:
                     argument(
                         "cluster",
                         value_type="string",
-                        description="Cluster name or numeric code.",
+                        description=(
+                            "Cluster name or numeric code. Run `dsctl cluster "
+                            "list` to discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl cluster list",
                     )
                 ],
                 options=[
@@ -311,8 +335,20 @@ def cluster_group() -> dict[str, object]:
                         "config",
                         value_type="string",
                         description=(
-                            "Updated cluster config. Omit to keep the current config."
+                            "Updated inline DS cluster config JSON. Omit to keep "
+                            "the current config; prefer --config-file for "
+                            "multiline Kubernetes configs."
                         ),
+                        discovery_command="dsctl template cluster",
+                    ),
+                    option(
+                        "config-file",
+                        value_type="path",
+                        description=(
+                            "Path to an updated DS cluster config JSON file. Omit "
+                            "both config options to keep the current config."
+                        ),
+                        discovery_command="dsctl template cluster",
                     ),
                     option(
                         "description",
@@ -335,8 +371,12 @@ def cluster_group() -> dict[str, object]:
                     argument(
                         "cluster",
                         value_type="string",
-                        description="Cluster name or numeric code.",
+                        description=(
+                            "Cluster name or numeric code. Run `dsctl cluster "
+                            "list` to discover values."
+                        ),
                         selector="name_or_code",
+                        discovery_command="dsctl cluster list",
                     )
                 ],
                 options=[
@@ -403,10 +443,11 @@ def datasource_group() -> dict[str, object]:
                         "datasource",
                         value_type="string",
                         description=(
-                            "Datasource name or numeric id. Use list to discover "
-                            "values."
+                            "Datasource name or numeric id. Run `dsctl "
+                            "datasource list` to discover values."
                         ),
                         selector="name_or_id",
+                        discovery_command="dsctl datasource list",
                     )
                 ],
             ),
@@ -438,10 +479,11 @@ def datasource_group() -> dict[str, object]:
                         "datasource",
                         value_type="string",
                         description=(
-                            "Datasource name or numeric id. Use list to discover "
-                            "values."
+                            "Datasource name or numeric id. Run `dsctl "
+                            "datasource list` to discover values."
                         ),
                         selector="name_or_id",
+                        discovery_command="dsctl datasource list",
                     )
                 ],
                 options=[
@@ -466,10 +508,11 @@ def datasource_group() -> dict[str, object]:
                         "datasource",
                         value_type="string",
                         description=(
-                            "Datasource name or numeric id. Use list to discover "
-                            "values."
+                            "Datasource name or numeric id. Run `dsctl "
+                            "datasource list` to discover values."
                         ),
                         selector="name_or_id",
+                        discovery_command="dsctl datasource list",
                     )
                 ],
                 options=[
@@ -490,10 +533,11 @@ def datasource_group() -> dict[str, object]:
                         "datasource",
                         value_type="string",
                         description=(
-                            "Datasource name or numeric id. Use list to discover "
-                            "values."
+                            "Datasource name or numeric id. Run `dsctl "
+                            "datasource list` to discover values."
                         ),
                         selector="name_or_id",
+                        discovery_command="dsctl datasource list",
                     )
                 ],
             ),
@@ -520,8 +564,10 @@ def resource_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "DS directory fullName path. Defaults to the upstream "
-                            "base directory."
+                            "base directory; run `dsctl resource list` to discover "
+                            "paths."
                         ),
+                        discovery_command="dsctl resource list",
                     ),
                     option(
                         "search",
@@ -558,8 +604,12 @@ def resource_group() -> dict[str, object]:
                     argument(
                         "resource",
                         value_type="string",
-                        description="DS resource fullName path.",
+                        description=(
+                            "DS resource fullName path. Run "
+                            "`dsctl resource list --dir DIR` to discover paths."
+                        ),
                         selector="resource_path",
+                        discovery_command="dsctl resource list --dir DIR",
                     )
                 ],
                 options=[
@@ -594,8 +644,10 @@ def resource_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Destination DS directory fullName path. Defaults to the "
-                            "upstream base directory."
+                            "upstream base directory; run `dsctl resource list` to "
+                            "discover paths."
                         ),
+                        discovery_command="dsctl resource list",
                     ),
                     option(
                         "name",
@@ -625,7 +677,8 @@ def resource_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Inline text content to write into the remote resource "
-                            "file."
+                            "file. For local files, use "
+                            "`dsctl resource upload --file PATH`."
                         ),
                         required=True,
                     ),
@@ -634,8 +687,10 @@ def resource_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Destination DS directory fullName path. Defaults to the "
-                            "upstream base directory."
+                            "upstream base directory; run `dsctl resource list` to "
+                            "discover paths."
                         ),
+                        discovery_command="dsctl resource list",
                     ),
                 ],
             ),
@@ -656,8 +711,10 @@ def resource_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Parent DS directory fullName path. Defaults to the "
-                            "upstream base directory."
+                            "upstream base directory; run `dsctl resource list` to "
+                            "discover paths."
                         ),
+                        discovery_command="dsctl resource list",
                     )
                 ],
             ),
@@ -669,8 +726,12 @@ def resource_group() -> dict[str, object]:
                     argument(
                         "resource",
                         value_type="string",
-                        description="DS resource fullName path.",
+                        description=(
+                            "DS resource fullName path. Run "
+                            "`dsctl resource list --dir DIR` to discover paths."
+                        ),
                         selector="resource_path",
+                        discovery_command="dsctl resource list --dir DIR",
                     )
                 ],
                 options=[
@@ -700,8 +761,12 @@ def resource_group() -> dict[str, object]:
                     argument(
                         "resource",
                         value_type="string",
-                        description="DS resource fullName path.",
+                        description=(
+                            "DS resource fullName path. Run "
+                            "`dsctl resource list --dir DIR` to discover paths."
+                        ),
                         selector="resource_path",
+                        discovery_command="dsctl resource list --dir DIR",
                     )
                 ],
                 options=[
@@ -766,8 +831,12 @@ def namespace_group() -> dict[str, object]:
                     argument(
                         "namespace",
                         value_type="string",
-                        description="Namespace name or numeric id.",
+                        description=(
+                            "Namespace name or numeric id. Run `dsctl namespace "
+                            "list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl namespace list",
                     )
                 ],
             ),
@@ -790,8 +859,12 @@ def namespace_group() -> dict[str, object]:
                     option(
                         "cluster-code",
                         value_type="integer",
-                        description="Owning cluster code.",
+                        description=(
+                            "Owning cluster code. Run `dsctl cluster list` "
+                            "to discover codes."
+                        ),
                         required=True,
+                        discovery_command="dsctl cluster list",
                     ),
                 ],
             ),
@@ -803,8 +876,12 @@ def namespace_group() -> dict[str, object]:
                     argument(
                         "namespace",
                         value_type="string",
-                        description="Namespace name or numeric id.",
+                        description=(
+                            "Namespace name or numeric id. Run `dsctl namespace "
+                            "list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl namespace list",
                     )
                 ],
                 options=[
@@ -867,8 +944,12 @@ def queue_group() -> dict[str, object]:
                     argument(
                         "queue",
                         value_type="string",
-                        description="Queue name or numeric id.",
+                        description=(
+                            "Queue name or numeric id. Run `dsctl queue list` "
+                            "to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl queue list",
                     )
                 ],
             ),
@@ -880,13 +961,15 @@ def queue_group() -> dict[str, object]:
                     option(
                         "queue-name",
                         value_type="string",
-                        description="Human-facing queue name.",
+                        description=(
+                            "Human-facing DS queue name used as the selector label."
+                        ),
                         required=True,
                     ),
                     option(
                         "queue",
                         value_type="string",
-                        description="Underlying DolphinScheduler queue value.",
+                        description="Underlying YARN queue value stored in DS.",
                         required=True,
                     ),
                 ],
@@ -899,8 +982,12 @@ def queue_group() -> dict[str, object]:
                     argument(
                         "queue",
                         value_type="string",
-                        description="Queue name or numeric id.",
+                        description=(
+                            "Queue name or numeric id. Run `dsctl queue list` "
+                            "to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl queue list",
                     )
                 ],
                 options=[
@@ -908,14 +995,16 @@ def queue_group() -> dict[str, object]:
                         "queue-name",
                         value_type="string",
                         description=(
-                            "Updated queue name. Omit to keep the current queue name."
+                            "Updated human-facing DS queue name. Omit to keep the "
+                            "current queue name."
                         ),
                     ),
                     option(
                         "queue",
                         value_type="string",
                         description=(
-                            "Updated queue value. Omit to keep the current queue value."
+                            "Updated underlying YARN queue value. Omit to keep the "
+                            "current queue value."
                         ),
                     ),
                 ],
@@ -928,8 +1017,12 @@ def queue_group() -> dict[str, object]:
                     argument(
                         "queue",
                         value_type="string",
-                        description="Queue name or numeric id.",
+                        description=(
+                            "Queue name or numeric id. Run `dsctl queue list` "
+                            "to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl queue list",
                     )
                 ],
                 options=[
@@ -995,8 +1088,12 @@ def worker_group_group() -> dict[str, object]:
                     argument(
                         "worker_group",
                         value_type="string",
-                        description="Worker-group name or numeric id.",
+                        description=(
+                            "Worker-group name or numeric id. Run `dsctl "
+                            "worker-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl worker-group list",
                     )
                 ],
             ),
@@ -1015,9 +1112,12 @@ def worker_group_group() -> dict[str, object]:
                         "addr",
                         value_type="string",
                         description=(
-                            "Worker address to include in addrList. Repeat as needed."
+                            "Worker server address to include in addrList. Repeat "
+                            "as needed; run `dsctl monitor server worker` to "
+                            "discover workers."
                         ),
                         multiple=True,
+                        discovery_command="dsctl monitor server worker",
                     ),
                     option(
                         "description",
@@ -1034,8 +1134,12 @@ def worker_group_group() -> dict[str, object]:
                     argument(
                         "worker_group",
                         value_type="string",
-                        description="Worker-group name or numeric id.",
+                        description=(
+                            "Worker-group name or numeric id. Run `dsctl "
+                            "worker-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl worker-group list",
                     )
                 ],
                 options=[
@@ -1050,9 +1154,11 @@ def worker_group_group() -> dict[str, object]:
                         "addr",
                         value_type="string",
                         description=(
-                            "Replacement worker address list. Repeat as needed."
+                            "Replacement worker address list. Repeat as needed; "
+                            "run `dsctl monitor server worker` to discover workers."
                         ),
                         multiple=True,
+                        discovery_command="dsctl monitor server worker",
                     ),
                     option(
                         "clear-addrs",
@@ -1081,8 +1187,12 @@ def worker_group_group() -> dict[str, object]:
                     argument(
                         "worker_group",
                         value_type="string",
-                        description="Worker-group name or numeric id.",
+                        description=(
+                            "Worker-group name or numeric id. Run `dsctl "
+                            "worker-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl worker-group list",
                     )
                 ],
                 options=[
@@ -1114,7 +1224,11 @@ def task_group_group() -> dict[str, object]:
                     option(
                         "project",
                         value_type="string",
-                        description="Project name or code for project-scoped listing.",
+                        description=(
+                            "Project name or code for project-scoped listing. "
+                            "Run `dsctl project list` to discover values."
+                        ),
+                        discovery_command="dsctl project list",
                     ),
                     option(
                         "search",
@@ -1124,7 +1238,8 @@ def task_group_group() -> dict[str, object]:
                     option(
                         "status",
                         value_type="string",
-                        description="Filter task groups by status: open or closed.",
+                        description="Filter task groups by status.",
+                        choices=["open", "closed", "1", "0"],
                     ),
                     option(
                         "page-no",
@@ -1154,8 +1269,12 @@ def task_group_group() -> dict[str, object]:
                     argument(
                         "task_group",
                         value_type="string",
-                        description="Task-group name or numeric id.",
+                        description=(
+                            "Task-group name or numeric id. Run `dsctl "
+                            "task-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl task-group list",
                     )
                 ],
             ),
@@ -1169,8 +1288,10 @@ def task_group_group() -> dict[str, object]:
                         value_type="string",
                         description=(
                             "Project name or code. Falls back to stored "
-                            "project context."
+                            "project context; run `dsctl project list` to "
+                            "discover values."
                         ),
+                        discovery_command="dsctl project list",
                     ),
                     option(
                         "name",
@@ -1199,8 +1320,12 @@ def task_group_group() -> dict[str, object]:
                     argument(
                         "task_group",
                         value_type="string",
-                        description="Task-group name or numeric id.",
+                        description=(
+                            "Task-group name or numeric id. Run `dsctl "
+                            "task-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl task-group list",
                     )
                 ],
                 options=[
@@ -1235,8 +1360,12 @@ def task_group_group() -> dict[str, object]:
                     argument(
                         "task_group",
                         value_type="string",
-                        description="Task-group name or numeric id.",
+                        description=(
+                            "Task-group name or numeric id. Run `dsctl "
+                            "task-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl task-group list",
                     )
                 ],
             ),
@@ -1248,8 +1377,12 @@ def task_group_group() -> dict[str, object]:
                     argument(
                         "task_group",
                         value_type="string",
-                        description="Task-group name or numeric id.",
+                        description=(
+                            "Task-group name or numeric id. Run `dsctl "
+                            "task-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl task-group list",
                     )
                 ],
             ),
@@ -1265,8 +1398,12 @@ def task_group_group() -> dict[str, object]:
                             argument(
                                 "task_group",
                                 value_type="string",
-                                description="Task-group name or numeric id.",
+                                description=(
+                                    "Task-group name or numeric id. Run `dsctl "
+                                    "task-group list` to discover values."
+                                ),
                                 selector="name_or_id",
+                                discovery_command="dsctl task-group list",
                             )
                         ],
                         options=[
@@ -1283,10 +1420,15 @@ def task_group_group() -> dict[str, object]:
                             option(
                                 "status",
                                 value_type="string",
-                                description=(
-                                    "Filter by queue status: WAIT_QUEUE, "
-                                    "ACQUIRE_SUCCESS, or RELEASE."
-                                ),
+                                description="Filter by task-group queue status.",
+                                choices=[
+                                    "WAIT_QUEUE",
+                                    "ACQUIRE_SUCCESS",
+                                    "RELEASE",
+                                    "-1",
+                                    "1",
+                                    "2",
+                                ],
                             ),
                             option(
                                 "page-no",
@@ -1322,8 +1464,15 @@ def task_group_group() -> dict[str, object]:
                             argument(
                                 "queue_id",
                                 value_type="integer",
-                                description="Numeric task-group queue id.",
+                                description=(
+                                    "Numeric task-group queue id. Run "
+                                    "`dsctl task-group queue list TASK_GROUP` "
+                                    "to discover ids."
+                                ),
                                 selector="id",
+                                discovery_command=(
+                                    "dsctl task-group queue list TASK_GROUP"
+                                ),
                             )
                         ],
                     ),
@@ -1335,8 +1484,15 @@ def task_group_group() -> dict[str, object]:
                             argument(
                                 "queue_id",
                                 value_type="integer",
-                                description="Numeric task-group queue id.",
+                                description=(
+                                    "Numeric task-group queue id. Run "
+                                    "`dsctl task-group queue list TASK_GROUP` "
+                                    "to discover ids."
+                                ),
                                 selector="id",
+                                discovery_command=(
+                                    "dsctl task-group queue list TASK_GROUP"
+                                ),
                             )
                         ],
                         options=[
@@ -1404,8 +1560,12 @@ def alert_plugin_group() -> dict[str, object]:
                     argument(
                         "alert-plugin",
                         value_type="string",
-                        description="Alert-plugin instance name or numeric id.",
+                        description=(
+                            "Alert-plugin instance name or numeric id. Run "
+                            "`dsctl alert-plugin list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl alert-plugin list",
                     )
                 ],
             ),
@@ -1417,8 +1577,13 @@ def alert_plugin_group() -> dict[str, object]:
                     argument(
                         "plugin",
                         value_type="string",
-                        description="Alert UI plugin definition name or numeric id.",
+                        description=(
+                            "Alert UI plugin definition name or numeric id. Run "
+                            "`dsctl alert-plugin definition list` to discover "
+                            "values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl alert-plugin definition list",
                     )
                 ],
             ),
@@ -1436,32 +1601,46 @@ def alert_plugin_group() -> dict[str, object]:
                     option(
                         "plugin",
                         value_type="string",
-                        description="Alert UI plugin definition name or numeric id.",
+                        description=(
+                            "Alert UI plugin definition name or numeric id. Run "
+                            "`dsctl alert-plugin definition list` to discover "
+                            "values."
+                        ),
                         required=True,
                         selector="name_or_id",
+                        discovery_command="dsctl alert-plugin definition list",
                     ),
                     option(
                         "params-json",
                         value_type="string",
-                        description="DS-native alert-plugin UI params JSON array.",
+                        description=(
+                            "DS-native alert-plugin UI params JSON array. Run "
+                            "`dsctl alert-plugin schema PLUGIN` to inspect fields."
+                        ),
+                        discovery_command="dsctl alert-plugin schema PLUGIN",
                     ),
                     option(
                         "param",
                         value_type="string",
                         description=(
                             "Alert-plugin UI param in KEY=VALUE form. Repeat for "
-                            "multiple fields."
+                            "multiple fields; run "
+                            "`dsctl alert-plugin schema PLUGIN` to inspect keys."
                         ),
                         value_name="KEY=VALUE",
                         multiple=True,
+                        discovery_command="dsctl alert-plugin schema PLUGIN",
                     ),
                     option(
                         "file",
                         value_type="path",
                         description=(
-                            "Path to one DS-native alert-plugin UI params JSON file."
+                            "Path to one DS-native alert-plugin UI params JSON file. "
+                            "Run `dsctl alert-plugin schema PLUGIN` to inspect "
+                            "fields."
                         ),
                         value_name="PATH",
+                        discovery_command="dsctl alert-plugin schema PLUGIN",
                     ),
                 ],
             ),
@@ -1473,8 +1652,12 @@ def alert_plugin_group() -> dict[str, object]:
                     argument(
                         "alert-plugin",
                         value_type="string",
-                        description="Alert-plugin instance name or numeric id.",
+                        description=(
+                            "Alert-plugin instance name or numeric id. Run "
+                            "`dsctl alert-plugin list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl alert-plugin list",
                     )
                 ],
                 options=[
@@ -1489,6 +1672,7 @@ def alert_plugin_group() -> dict[str, object]:
                         description=(
                             "Replacement DS-native alert-plugin UI params JSON array."
                         ),
+                        discovery_command="dsctl alert-plugin schema PLUGIN",
                     ),
                     option(
                         "param",
@@ -1496,19 +1680,23 @@ def alert_plugin_group() -> dict[str, object]:
                         description=(
                             "Replacement alert-plugin UI param in KEY=VALUE form. "
                             "Repeat for multiple fields; omitted fields keep "
-                            "current values."
+                            "current values. Run "
+                            "`dsctl alert-plugin schema PLUGIN` to inspect keys."
                         ),
                         value_name="KEY=VALUE",
                         multiple=True,
+                        discovery_command="dsctl alert-plugin schema PLUGIN",
                     ),
                     option(
                         "file",
                         value_type="path",
                         description=(
                             "Path to one replacement DS-native alert-plugin UI "
-                            "params JSON file."
+                            "params JSON file. Run "
+                            "`dsctl alert-plugin schema PLUGIN` to inspect fields."
                         ),
                         value_name="PATH",
+                        discovery_command="dsctl alert-plugin schema PLUGIN",
                     ),
                 ],
             ),
@@ -1520,8 +1708,12 @@ def alert_plugin_group() -> dict[str, object]:
                     argument(
                         "alert-plugin",
                         value_type="string",
-                        description="Alert-plugin instance name or numeric id.",
+                        description=(
+                            "Alert-plugin instance name or numeric id. Run "
+                            "`dsctl alert-plugin list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl alert-plugin list",
                     )
                 ],
                 options=[
@@ -1541,8 +1733,12 @@ def alert_plugin_group() -> dict[str, object]:
                     argument(
                         "alert-plugin",
                         value_type="string",
-                        description="Alert-plugin instance name or numeric id.",
+                        description=(
+                            "Alert-plugin instance name or numeric id. Run "
+                            "`dsctl alert-plugin list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl alert-plugin list",
                     )
                 ],
             ),
@@ -1616,8 +1812,12 @@ def alert_group_group() -> dict[str, object]:
                     argument(
                         "alert-group",
                         value_type="string",
-                        description="Alert-group name or numeric id.",
+                        description=(
+                            "Alert-group name or numeric id. Run `dsctl "
+                            "alert-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl alert-group list",
                     )
                 ],
             ),
@@ -1637,9 +1837,11 @@ def alert_group_group() -> dict[str, object]:
                         value_type="integer",
                         description=(
                             "Alert plugin instance id to bind to this group. "
-                            "Repeat as needed."
+                            "Repeat as needed; run `dsctl alert-plugin list` "
+                            "to discover ids."
                         ),
                         multiple=True,
+                        discovery_command="dsctl alert-plugin list",
                     ),
                     option(
                         "description",
@@ -1656,8 +1858,12 @@ def alert_group_group() -> dict[str, object]:
                     argument(
                         "alert-group",
                         value_type="string",
-                        description="Alert-group name or numeric id.",
+                        description=(
+                            "Alert-group name or numeric id. Run `dsctl "
+                            "alert-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl alert-group list",
                     )
                 ],
                 options=[
@@ -1673,9 +1879,11 @@ def alert_group_group() -> dict[str, object]:
                         value_type="integer",
                         description=(
                             "Alert plugin instance id to bind to this group. "
-                            "Repeat as needed."
+                            "Repeat as needed; run `dsctl alert-plugin list` "
+                            "to discover ids."
                         ),
                         multiple=True,
+                        discovery_command="dsctl alert-plugin list",
                     ),
                     option(
                         "clear-instance-ids",
@@ -1704,8 +1912,12 @@ def alert_group_group() -> dict[str, object]:
                     argument(
                         "alert-group",
                         value_type="string",
-                        description="Alert-group name or numeric id.",
+                        description=(
+                            "Alert-group name or numeric id. Run `dsctl "
+                            "alert-group list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl alert-group list",
                     )
                 ],
                 options=[
@@ -1768,8 +1980,12 @@ def tenant_group() -> dict[str, object]:
                     argument(
                         "tenant",
                         value_type="string",
-                        description="Tenant code or numeric id.",
+                        description=(
+                            "Tenant code or numeric id. Run `dsctl tenant list` "
+                            "to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl tenant list",
                     )
                 ],
             ),
@@ -1787,8 +2003,12 @@ def tenant_group() -> dict[str, object]:
                     option(
                         "queue",
                         value_type="string",
-                        description="Queue name or numeric id to bind to this tenant.",
+                        description=(
+                            "Queue name or numeric id to bind to this tenant. "
+                            "Run `dsctl queue list` to discover values."
+                        ),
                         required=True,
+                        discovery_command="dsctl queue list",
                     ),
                     option(
                         "description",
@@ -1805,8 +2025,12 @@ def tenant_group() -> dict[str, object]:
                     argument(
                         "tenant",
                         value_type="string",
-                        description="Tenant code or numeric id.",
+                        description=(
+                            "Tenant code or numeric id. Run `dsctl tenant list` "
+                            "to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl tenant list",
                     )
                 ],
                 options=[
@@ -1821,9 +2045,11 @@ def tenant_group() -> dict[str, object]:
                         "queue",
                         value_type="string",
                         description=(
-                            "Updated queue name or numeric id. Omit to keep the "
-                            "current queue."
+                            "Updated queue name or numeric id. Run `dsctl queue "
+                            "list` to discover values; omit to keep the current "
+                            "queue."
                         ),
+                        discovery_command="dsctl queue list",
                     ),
                     option(
                         "description",
@@ -1846,8 +2072,12 @@ def tenant_group() -> dict[str, object]:
                     argument(
                         "tenant",
                         value_type="string",
-                        description="Tenant code or numeric id.",
+                        description=(
+                            "Tenant code or numeric id. Run `dsctl tenant list` "
+                            "to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl tenant list",
                     )
                 ],
                 options=[
@@ -1909,8 +2139,12 @@ def user_group() -> dict[str, object]:
                     argument(
                         "user",
                         value_type="string",
-                        description="User name or numeric id.",
+                        description=(
+                            "User name or numeric id. Run `dsctl user list` "
+                            "to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl user list",
                     )
                 ],
             ),
@@ -1940,8 +2174,12 @@ def user_group() -> dict[str, object]:
                     option(
                         "tenant",
                         value_type="string",
-                        description="Tenant code or numeric id.",
+                        description=(
+                            "Tenant code or numeric id. Run `dsctl tenant list` "
+                            "to discover values."
+                        ),
                         required=True,
+                        discovery_command="dsctl tenant list",
                     ),
                     option(
                         "state",
@@ -1958,7 +2196,11 @@ def user_group() -> dict[str, object]:
                     option(
                         "queue",
                         value_type="string",
-                        description="Optional queue-name override stored on the user.",
+                        description=(
+                            "Optional queue-name override stored on the user. "
+                            "Run `dsctl queue list` to discover queue names."
+                        ),
+                        discovery_command="dsctl queue list",
                     ),
                 ],
             ),
@@ -1970,8 +2212,12 @@ def user_group() -> dict[str, object]:
                     argument(
                         "user",
                         value_type="string",
-                        description="User name or numeric id.",
+                        description=(
+                            "User name or numeric id. Run `dsctl user list` "
+                            "to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl user list",
                     )
                 ],
                 options=[
@@ -1993,7 +2239,11 @@ def user_group() -> dict[str, object]:
                     option(
                         "tenant",
                         value_type="string",
-                        description="Updated tenant code or numeric id.",
+                        description=(
+                            "Updated tenant code or numeric id. Run `dsctl tenant "
+                            "list` to discover values."
+                        ),
+                        discovery_command="dsctl tenant list",
                     ),
                     option(
                         "state",
@@ -2017,7 +2267,11 @@ def user_group() -> dict[str, object]:
                     option(
                         "queue",
                         value_type="string",
-                        description="Updated queue-name override stored on the user.",
+                        description=(
+                            "Updated queue-name override stored on the user. "
+                            "Run `dsctl queue list` to discover queue names."
+                        ),
+                        discovery_command="dsctl queue list",
                     ),
                     option(
                         "clear-queue",
@@ -2040,8 +2294,12 @@ def user_group() -> dict[str, object]:
                     argument(
                         "user",
                         value_type="string",
-                        description="User name or numeric id.",
+                        description=(
+                            "User name or numeric id. Run `dsctl user list` "
+                            "to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl user list",
                     )
                 ],
                 options=[
@@ -2065,14 +2323,22 @@ def user_group() -> dict[str, object]:
                             argument(
                                 "user",
                                 value_type="string",
-                                description="User name or numeric id.",
+                                description=(
+                                    "User name or numeric id. Run `dsctl user "
+                                    "list` to discover values."
+                                ),
                                 selector="name_or_id",
+                                discovery_command="dsctl user list",
                             ),
                             argument(
                                 "project",
                                 value_type="string",
-                                description="Project name or numeric code.",
+                                description=(
+                                    "Project name or numeric code. Run `dsctl "
+                                    "project list` to discover values."
+                                ),
                                 selector="name_or_code",
+                                discovery_command="dsctl project list",
                             ),
                         ],
                     ),
@@ -2084,8 +2350,12 @@ def user_group() -> dict[str, object]:
                             argument(
                                 "user",
                                 value_type="string",
-                                description="User name or numeric id.",
+                                description=(
+                                    "User name or numeric id. Run `dsctl user "
+                                    "list` to discover values."
+                                ),
                                 selector="name_or_id",
+                                discovery_command="dsctl user list",
                             )
                         ],
                         options=[
@@ -2094,11 +2364,13 @@ def user_group() -> dict[str, object]:
                                 value_type="string",
                                 description=(
                                     "Datasource name or numeric id. Repeat to grant "
-                                    "multiple datasources."
+                                    "multiple datasources; run `dsctl datasource "
+                                    "list` to discover values."
                                 ),
                                 selector="name_or_id",
                                 multiple=True,
                                 required=True,
+                                discovery_command="dsctl datasource list",
                             )
                         ],
                     ),
@@ -2110,8 +2382,12 @@ def user_group() -> dict[str, object]:
                             argument(
                                 "user",
                                 value_type="string",
-                                description="User name or numeric id.",
+                                description=(
+                                    "User name or numeric id. Run `dsctl user "
+                                    "list` to discover values."
+                                ),
                                 selector="name_or_id",
+                                discovery_command="dsctl user list",
                             )
                         ],
                         options=[
@@ -2120,11 +2396,13 @@ def user_group() -> dict[str, object]:
                                 value_type="string",
                                 description=(
                                     "Namespace name or numeric id. Repeat to grant "
-                                    "multiple namespaces."
+                                    "multiple namespaces; run `dsctl namespace "
+                                    "list` to discover values."
                                 ),
                                 selector="name_or_id",
                                 multiple=True,
                                 required=True,
+                                discovery_command="dsctl namespace list",
                             )
                         ],
                     ),
@@ -2142,14 +2420,22 @@ def user_group() -> dict[str, object]:
                             argument(
                                 "user",
                                 value_type="string",
-                                description="User name or numeric id.",
+                                description=(
+                                    "User name or numeric id. Run `dsctl user "
+                                    "list` to discover values."
+                                ),
                                 selector="name_or_id",
+                                discovery_command="dsctl user list",
                             ),
                             argument(
                                 "project",
                                 value_type="string",
-                                description="Project name or numeric code.",
+                                description=(
+                                    "Project name or numeric code. Run `dsctl "
+                                    "project list` to discover values."
+                                ),
                                 selector="name_or_code",
+                                discovery_command="dsctl project list",
                             ),
                         ],
                     ),
@@ -2161,8 +2447,12 @@ def user_group() -> dict[str, object]:
                             argument(
                                 "user",
                                 value_type="string",
-                                description="User name or numeric id.",
+                                description=(
+                                    "User name or numeric id. Run `dsctl user "
+                                    "list` to discover values."
+                                ),
                                 selector="name_or_id",
+                                discovery_command="dsctl user list",
                             )
                         ],
                         options=[
@@ -2171,11 +2461,13 @@ def user_group() -> dict[str, object]:
                                 value_type="string",
                                 description=(
                                     "Datasource name or numeric id. Repeat to revoke "
-                                    "multiple datasources."
+                                    "multiple datasources; run `dsctl datasource "
+                                    "list` to discover values."
                                 ),
                                 selector="name_or_id",
                                 multiple=True,
                                 required=True,
+                                discovery_command="dsctl datasource list",
                             )
                         ],
                     ),
@@ -2187,8 +2479,12 @@ def user_group() -> dict[str, object]:
                             argument(
                                 "user",
                                 value_type="string",
-                                description="User name or numeric id.",
+                                description=(
+                                    "User name or numeric id. Run `dsctl user "
+                                    "list` to discover values."
+                                ),
                                 selector="name_or_id",
+                                discovery_command="dsctl user list",
                             )
                         ],
                         options=[
@@ -2197,11 +2493,13 @@ def user_group() -> dict[str, object]:
                                 value_type="string",
                                 description=(
                                     "Namespace name or numeric id. Repeat to revoke "
-                                    "multiple namespaces."
+                                    "multiple namespaces; run `dsctl namespace "
+                                    "list` to discover values."
                                 ),
                                 selector="name_or_id",
                                 multiple=True,
                                 required=True,
+                                discovery_command="dsctl namespace list",
                             )
                         ],
                     ),
@@ -2260,8 +2558,12 @@ def access_token_group() -> dict[str, object]:
                     argument(
                         "access-token",
                         value_type="integer",
-                        description="Access-token id.",
+                        description=(
+                            "Access-token id. Run `dsctl access-token list` "
+                            "to discover values."
+                        ),
                         selector="id",
+                        discovery_command="dsctl access-token list",
                     )
                 ],
             ),
@@ -2273,14 +2575,20 @@ def access_token_group() -> dict[str, object]:
                     option(
                         "user",
                         value_type="string",
-                        description="User name or numeric id.",
+                        description=(
+                            "User name or numeric id. Run `dsctl user list` to "
+                            "discover values."
+                        ),
                         selector="name_or_id",
                         required=True,
+                        discovery_command="dsctl user list",
                     ),
                     option(
                         "expire-time",
                         value_type="string",
-                        description="Token expiration time.",
+                        description=(
+                            "Token expiration time, for example '2027-01-01 00:00:00'."
+                        ),
                         required=True,
                     ),
                     option(
@@ -2300,21 +2608,32 @@ def access_token_group() -> dict[str, object]:
                     argument(
                         "access-token",
                         value_type="integer",
-                        description="Access-token id.",
+                        description=(
+                            "Access-token id. Run `dsctl access-token list` "
+                            "to discover values."
+                        ),
                         selector="id",
+                        discovery_command="dsctl access-token list",
                     )
                 ],
                 options=[
                     option(
                         "user",
                         value_type="string",
-                        description="Updated user name or numeric id.",
+                        description=(
+                            "Updated user name or numeric id. Run `dsctl user "
+                            "list` to discover values."
+                        ),
                         selector="name_or_id",
+                        discovery_command="dsctl user list",
                     ),
                     option(
                         "expire-time",
                         value_type="string",
-                        description="Updated token expiration time.",
+                        description=(
+                            "Updated token expiration time, for example "
+                            "'2027-01-01 00:00:00'."
+                        ),
                     ),
                     option(
                         "token",
@@ -2337,8 +2656,12 @@ def access_token_group() -> dict[str, object]:
                     argument(
                         "access-token",
                         value_type="integer",
-                        description="Access-token id.",
+                        description=(
+                            "Access-token id. Run `dsctl access-token list` "
+                            "to discover values."
+                        ),
                         selector="id",
+                        discovery_command="dsctl access-token list",
                     )
                 ],
                 options=[
@@ -2358,14 +2681,20 @@ def access_token_group() -> dict[str, object]:
                     option(
                         "user",
                         value_type="string",
-                        description="User name or numeric id.",
+                        description=(
+                            "User name or numeric id. Run `dsctl user list` to "
+                            "discover values."
+                        ),
                         selector="name_or_id",
                         required=True,
+                        discovery_command="dsctl user list",
                     ),
                     option(
                         "expire-time",
                         value_type="string",
-                        description="Token expiration time.",
+                        description=(
+                            "Token expiration time, for example '2027-01-01 00:00:00'."
+                        ),
                         required=True,
                     ),
                 ],

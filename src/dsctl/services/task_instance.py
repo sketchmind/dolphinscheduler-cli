@@ -1018,7 +1018,7 @@ def _normalized_task_instance_state(value: str | None) -> str | None:
             message,
             details={"state": value},
             suggestion=(
-                "Run `dsctl enum list task_execution_status` to inspect the "
+                "Run `dsctl enum list task-execution-status` to inspect the "
                 "supported DS task-instance states."
             ),
         ) from exc
@@ -1036,7 +1036,10 @@ def _normalized_task_execute_type(value: str | None) -> str | None:
         raise UserInputError(
             message,
             details={"execute_type": value},
-            suggestion=("Use BATCH or STREAM for --execute-type."),
+            suggestion=(
+                "Run `dsctl enum list task-execute-type` to inspect the "
+                "supported DS task execute-type names."
+            ),
         ) from exc
 
 

@@ -211,9 +211,27 @@ def test_workflow_instance_list_command_reports_supported_state_names() -> None:
         "Workflow instance state must be one of the DS execution status names"
     )
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl enum list workflow_execution_status` to inspect the "
+        "Run `dsctl enum list workflow-execution-status` to inspect the "
         "supported state names."
     )
+
+
+def test_workflow_instance_list_help_points_to_filter_discovery() -> None:
+    result = runner.invoke(app, ["workflow-instance", "list", "--help"])
+
+    assert result.exit_code == 0
+    assert "project" in result.stdout
+    assert "workflow" in result.stdout
+    assert "workflow-execution-status" in result.stdout
+    assert "list" in result.stdout
+
+
+def test_workflow_instance_get_help_points_to_instance_discovery() -> None:
+    result = runner.invoke(app, ["workflow-instance", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "workflow-instance" in result.stdout
+    assert "list" in result.stdout
 
 
 def test_workflow_instance_get_command_returns_one_instance() -> None:
@@ -784,3 +802,12 @@ def test_workflow_instance_execute_task_command_reports_scope_choices() -> None:
     assert payload["error"]["suggestion"] == (
         "Pass `--scope self`, `--scope pre`, or `--scope post`."
     )
+
+
+def test_workflow_instance_execute_task_help_points_to_task_discovery() -> None:
+    result = runner.invoke(app, ["workflow-instance", "execute-task", "--help"])
+
+    assert result.exit_code == 0
+    assert "task-instance" in result.stdout
+    assert "workflow-instance" in result.stdout
+    assert "list" in result.stdout

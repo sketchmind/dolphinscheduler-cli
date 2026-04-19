@@ -14,6 +14,7 @@ LOCAL_ONLY_COMMANDS = {
     "enum list",
     "lint workflow",
     "schema",
+    "template cluster",
     "template datasource",
     "template environment",
     "template params",

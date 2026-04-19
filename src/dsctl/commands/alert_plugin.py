@@ -24,6 +24,11 @@ alert_plugin_definition_app = typer.Typer(
     no_args_is_help=True,
 )
 
+ALERT_PLUGIN_HELP = (
+    "Alert-plugin instance name or numeric id. Run `dsctl alert-plugin list` "
+    "to discover values."
+)
+
 
 def register_alert_plugin_commands(app: typer.Typer) -> None:
     """Register the `alert-plugin` command group."""
@@ -86,7 +91,7 @@ def get_command(
     ctx: typer.Context,
     alert_plugin: Annotated[
         str,
-        typer.Argument(help="Alert-plugin instance name or numeric id."),
+        typer.Argument(help=ALERT_PLUGIN_HELP),
     ],
 ) -> None:
     """Get one alert-plugin instance by name or id."""
@@ -103,7 +108,12 @@ def schema_command(
     ctx: typer.Context,
     plugin: Annotated[
         str,
-        typer.Argument(help="Alert UI plugin definition name or numeric id."),
+        typer.Argument(
+            help=(
+                "Alert UI plugin definition name or numeric id. Run "
+                "`dsctl alert-plugin definition list` to discover values."
+            ),
+        ),
     ],
 ) -> None:
     """Get one alert-plugin definition schema by name or id."""
@@ -141,14 +151,20 @@ def create_command(
         str,
         typer.Option(
             "--plugin",
-            help="Alert UI plugin definition name or numeric id.",
+            help=(
+                "Alert UI plugin definition name or numeric id. Run "
+                "`dsctl alert-plugin definition list` to discover values."
+            ),
         ),
     ],
     params_json: Annotated[
         str | None,
         typer.Option(
             "--params-json",
-            help="DS-native alert-plugin UI params JSON array.",
+            help=(
+                "DS-native alert-plugin UI params JSON array. Run "
+                "`dsctl alert-plugin schema PLUGIN` to inspect fields."
+            ),
         ),
     ] = None,
     file: Annotated[
@@ -158,7 +174,10 @@ def create_command(
             dir_okay=False,
             exists=True,
             file_okay=True,
-            help="Path to one DS-native alert-plugin UI params JSON file.",
+            help=(
+                "Path to one DS-native alert-plugin UI params JSON file. Run "
+                "`dsctl alert-plugin schema PLUGIN` to inspect fields."
+            ),
             readable=True,
             resolve_path=True,
         ),
@@ -168,7 +187,9 @@ def create_command(
         typer.Option(
             "--param",
             help=(
-                "Alert-plugin UI param in KEY=VALUE form. Repeat for multiple fields."
+                "Alert-plugin UI param in KEY=VALUE form. Repeat for multiple "
+                "fields; run `dsctl alert-plugin schema PLUGIN` to inspect "
+                "keys."
             ),
         ),
     ] = None,
@@ -194,7 +215,7 @@ def update_command(
     ctx: typer.Context,
     alert_plugin: Annotated[
         str,
-        typer.Argument(help="Alert-plugin instance name or numeric id."),
+        typer.Argument(help=ALERT_PLUGIN_HELP),
     ],
     *,
     name: Annotated[
@@ -208,7 +229,10 @@ def update_command(
         str | None,
         typer.Option(
             "--params-json",
-            help="Replacement DS-native alert-plugin UI params JSON array.",
+            help=(
+                "Replacement DS-native alert-plugin UI params JSON array. Run "
+                "`dsctl alert-plugin schema PLUGIN` to inspect fields."
+            ),
         ),
     ] = None,
     file: Annotated[
@@ -218,7 +242,10 @@ def update_command(
             dir_okay=False,
             exists=True,
             file_okay=True,
-            help="Path to one replacement DS-native alert-plugin UI params JSON file.",
+            help=(
+                "Path to one replacement DS-native alert-plugin UI params JSON "
+                "file. Run `dsctl alert-plugin schema PLUGIN` to inspect fields."
+            ),
             readable=True,
             resolve_path=True,
         ),
@@ -229,7 +256,8 @@ def update_command(
             "--param",
             help=(
                 "Replacement alert-plugin UI param in KEY=VALUE form. Repeat "
-                "for multiple fields; omitted fields keep current values."
+                "for multiple fields; omitted fields keep current values. Run "
+                "`dsctl alert-plugin schema PLUGIN` to inspect keys."
             ),
         ),
     ] = None,
@@ -255,7 +283,7 @@ def delete_command(
     ctx: typer.Context,
     alert_plugin: Annotated[
         str,
-        typer.Argument(help="Alert-plugin instance name or numeric id."),
+        typer.Argument(help=ALERT_PLUGIN_HELP),
     ],
     *,
     force: Annotated[
@@ -284,7 +312,7 @@ def test_command(
     ctx: typer.Context,
     alert_plugin: Annotated[
         str,
-        typer.Argument(help="Alert-plugin instance name or numeric id."),
+        typer.Argument(help=ALERT_PLUGIN_HELP),
     ],
 ) -> None:
     """Send one test alert using one existing alert-plugin instance."""

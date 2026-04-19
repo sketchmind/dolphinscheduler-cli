@@ -34,7 +34,10 @@ def list_command(
         str | None,
         typer.Option(
             "--dir",
-            help="DS directory fullName path. Defaults to the upstream base directory.",
+            help=(
+                "DS directory fullName path. Defaults to the upstream base "
+                "directory; run `dsctl resource list` to discover paths."
+            ),
         ),
     ] = None,
     search: Annotated[
@@ -89,7 +92,12 @@ def view_command(
     ctx: typer.Context,
     resource: Annotated[
         str,
-        typer.Argument(help="DS resource fullName path."),
+        typer.Argument(
+            help=(
+                "DS resource fullName path. Run `dsctl resource list --dir DIR` "
+                "to discover paths."
+            ),
+        ),
     ],
     *,
     skip_line_num: Annotated[
@@ -145,7 +153,8 @@ def upload_command(
             "--dir",
             help=(
                 "Destination DS directory fullName path. Defaults to the "
-                "upstream base directory."
+                "upstream base directory; run `dsctl resource list` to "
+                "discover paths."
             ),
         ),
     ] = None,
@@ -186,7 +195,10 @@ def create_command(
         str,
         typer.Option(
             "--content",
-            help="Inline text content to write into the remote resource file.",
+            help=(
+                "Inline text content to write into the remote resource file. "
+                "For local files, use `dsctl resource upload --file PATH`."
+            ),
         ),
     ],
     directory: Annotated[
@@ -195,7 +207,8 @@ def create_command(
             "--dir",
             help=(
                 "Destination DS directory fullName path. Defaults to the "
-                "upstream base directory."
+                "upstream base directory; run `dsctl resource list` to "
+                "discover paths."
             ),
         ),
     ] = None,
@@ -228,7 +241,7 @@ def mkdir_command(
             "--dir",
             help=(
                 "Parent DS directory fullName path. Defaults to the upstream "
-                "base directory."
+                "base directory; run `dsctl resource list` to discover paths."
             ),
         ),
     ] = None,
@@ -251,7 +264,12 @@ def download_command(
     ctx: typer.Context,
     resource: Annotated[
         str,
-        typer.Argument(help="DS resource fullName path."),
+        typer.Argument(
+            help=(
+                "DS resource fullName path. Run `dsctl resource list --dir DIR` "
+                "to discover paths."
+            ),
+        ),
     ],
     *,
     output: Annotated[
@@ -294,7 +312,12 @@ def delete_command(
     ctx: typer.Context,
     resource: Annotated[
         str,
-        typer.Argument(help="DS resource fullName path."),
+        typer.Argument(
+            help=(
+                "DS resource fullName path. Run `dsctl resource list --dir DIR` "
+                "to discover paths."
+            ),
+        ),
     ],
     *,
     force: Annotated[

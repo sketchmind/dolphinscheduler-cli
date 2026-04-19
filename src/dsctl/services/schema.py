@@ -506,13 +506,24 @@ def _schema_parameter_value(item: JsonObject) -> str:
         parts.append(f"default={_compact_schema_value(item['default'])}")
     choices = item.get("choices")
     if isinstance(choices, list):
-        parts.append(f"choices={_compact_schema_value(choices)}")
+        parts.append(
+            f"choices={_schema_choices_summary(choices, item=item)}",
+        )
     if item.get("multiple") is True:
         parts.append("multiple=true")
     value_name = item.get("value_name")
     if isinstance(value_name, str):
         parts.append(f"value_name={value_name}")
     return "; ".join(parts)
+
+
+def _schema_choices_summary(choices: list[JsonValue], *, item: JsonObject) -> str:
+    if len(choices) <= 8:
+        return _compact_schema_value(choices)
+    discovery_command = item.get("discovery_command")
+    if isinstance(discovery_command, str):
+        return f"{len(choices)} values; use discovery_command"
+    return f"{len(choices)} values"
 
 
 def _schema_payload_rows(payload: JsonObject) -> list[JsonObject]:
@@ -770,7 +781,8 @@ def _top_level_command_schema(name: str) -> JsonObject:
                         "section",
                         value_type="string",
                         description=(
-                            "Return one top-level capability section. Discover "
+                            "Return one top-level capability section. Supported: "
+                            f"{', '.join(CAPABILITIES_SECTION_CHOICES)}. Discover "
                             "values with `dsctl schema --command capabilities`."
                         ),
                         choices=list(CAPABILITIES_SECTION_CHOICES),
