@@ -9,9 +9,13 @@ from dsctl.models import WorkflowSpec, supported_typed_task_types
 from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services.template import (
     ParameterSyntaxIndexData,
+    cluster_config_template_result,
+    datasource_template_result,
+    environment_config_template_result,
     generic_task_template_types,
     parameter_syntax_data,
     parameter_syntax_result,
+    supported_datasource_types,
     supported_task_template_types,
     task_template_metadata,
     task_template_result,
@@ -30,6 +34,7 @@ def test_workflow_template_result_returns_valid_yaml_document() -> None:
     assert result.resolved["with_schedule"] is False
     yaml_text = data["yaml"]
     assert isinstance(yaml_text, str)
+    assert data["lines"][0]["line"].startswith("# Workflow YAML")
     document = yaml.safe_load(yaml_text)
 
     assert "# Optional task runtime controls:" in yaml_text
@@ -105,6 +110,124 @@ def test_parameter_syntax_result_can_expand_specific_topics() -> None:
     ]
 
 
+def test_datasource_template_result_returns_discovery_without_type() -> None:
+    result = datasource_template_result()
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {"view": "list"}
+    assert data["default_type"] == "MYSQL"
+    assert data["template_command"] == "dsctl template datasource --type MYSQL"
+    assert data["template_command_pattern"] == "dsctl template datasource --type TYPE"
+    assert data["target_commands"] == [
+        "dsctl datasource create --file FILE",
+        "dsctl datasource update DATASOURCE --file FILE",
+    ]
+    assert data["type_discovery_command"] == "dsctl enum list db-type"
+    assert data["supported_types"] == list(supported_datasource_types())
+    assert {
+        "type": "MYSQL",
+        "template_command": "dsctl template datasource --type MYSQL",
+    } in data["rows"]
+    assert "fields" not in data
+    assert "rules" not in data
+
+
+def test_environment_config_template_result_returns_shell_template() -> None:
+    result = environment_config_template_result()
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {"template": "environment.config"}
+    assert data["filename"] == "env.sh"
+    assert "export JAVA_HOME=/opt/java" in data["config"]
+    assert data["target_commands"] == [
+        "dsctl environment create --name NAME --config-file env.sh",
+        "dsctl environment update ENVIRONMENT --config-file env.sh",
+    ]
+    assert data["source_options"] == ["--config TEXT", "--config-file PATH"]
+    lines = data["lines"]
+    assert isinstance(lines, list)
+    assert lines[0]["line"] == "export JAVA_HOME=/opt/java"
+
+
+def test_cluster_config_template_result_returns_json_template() -> None:
+    result = cluster_config_template_result()
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {"template": "cluster.config"}
+    assert data["filename"] == "cluster-config.json"
+    assert data["target_commands"] == [
+        "dsctl cluster create --name NAME --config-file cluster-config.json",
+        "dsctl cluster update CLUSTER --config-file cluster-config.json",
+    ]
+    assert data["source_options"] == ["--config TEXT", "--config-file PATH"]
+    payload = data["payload"]
+    assert isinstance(payload, dict)
+    assert json.loads(data["config"]) == payload
+    assert set(payload) == {"k8s", "yarn"}
+    assert "apiVersion: v1" in payload["k8s"]
+    assert data["rows"] == data["fields"]
+
+
+def test_datasource_template_result_returns_json_payload_template() -> None:
+    result = datasource_template_result("mysql")
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {
+        "view": "template",
+        "datasource_type": "MYSQL",
+    }
+    assert data["type"] == "MYSQL"
+    assert data["target_commands"] == [
+        "dsctl datasource create --file FILE",
+        "dsctl datasource update DATASOURCE --file FILE",
+    ]
+    assert data["source_option"] == "--file"
+    payload = data["payload"]
+    assert isinstance(payload, dict)
+    assert payload == json.loads(data["json"])
+    assert data["rows"] == data["fields"]
+    assert payload["type"] == "MYSQL"
+    assert payload["port"] == 3306
+    assert payload["other"] == {"serverTimezone": "UTC"}
+    assert "payload_schema" not in data
+    type_fields = [
+        field
+        for field in data["fields"]
+        if isinstance(field, dict) and field.get("name") == "type"
+    ]
+    assert type_fields
+    assert "choices" not in type_fields[0]
+
+
+def test_datasource_template_result_handles_type_specific_payload() -> None:
+    result = datasource_template_result("k8s")
+    data = result.data
+
+    assert isinstance(data, dict)
+    payload = data["payload"]
+    assert isinstance(payload, dict)
+    assert payload["type"] == "K8S"
+    assert payload["kubeConfig"] == "change-me"
+    assert payload["namespace"] == "default"
+    assert "host" not in payload
+    field_names = {
+        field["name"]
+        for field in data["fields"]
+        if isinstance(field, dict) and isinstance(field.get("name"), str)
+    }
+    assert "kubeConfig" in field_names
+    assert "namespace" in field_names
+
+
+def test_datasource_template_result_rejects_unsupported_type() -> None:
+    with pytest.raises(UserInputError, match="Unsupported datasource type"):
+        datasource_template_result("UNKNOWN")
+
+
 @pytest.mark.parametrize(
     ("task_type", "expected_key", "expected_kind", "expected_category"),
     [
@@ -135,6 +258,7 @@ def test_task_template_result_returns_valid_yaml_for_supported_types(
     assert result.resolved["task_category"] == expected_category
     yaml_text = data["yaml"]
     assert isinstance(yaml_text, str)
+    assert data["rows"][0]["line"].startswith("# Task template")
     document = yaml.safe_load(yaml_text)
 
     assert "# Optional task runtime controls:" in yaml_text
@@ -145,8 +269,14 @@ def test_task_template_result_returns_valid_yaml_for_supported_types(
 
 
 def test_task_template_result_rejects_unsupported_type() -> None:
-    with pytest.raises(UserInputError, match="Unsupported task template type"):
+    with pytest.raises(UserInputError, match="Unsupported task template type") as exc:
         task_template_result("SPARK_SQL")
+
+    assert exc.value.details == {
+        "task_type": "SPARK_SQL",
+        "available_task_types_count": len(supported_task_template_types()),
+        "discovery_command": "dsctl template task --list",
+    }
 
 
 def test_task_template_types_result_lists_supported_types() -> None:
@@ -154,12 +284,14 @@ def test_task_template_types_result_lists_supported_types() -> None:
     data = result.data
 
     assert isinstance(data, dict)
+    assert result.resolved == {"mode": "list"}
     assert data["count"] == len(upstream_default_task_types())
     assert data["task_types"] == list(upstream_default_task_types())
     assert data["typed_task_types"] == list(typed_task_template_types())
     assert data["generic_task_types"] == list(generic_task_template_types())
     assert "Universal" in data["task_types_by_category"]
     assert "Logic" in data["task_types_by_category"]
+    assert data["rows"][0]["task_type"] == "SHELL"
     assert data["task_templates"]["SHELL"]["variants"] == [
         "minimal",
         "params",
@@ -224,8 +356,17 @@ def test_task_template_result_renders_discoverable_variants(
 
 
 def test_task_template_result_rejects_unsupported_variant() -> None:
-    with pytest.raises(UserInputError, match="Unsupported task template variant"):
+    with pytest.raises(
+        UserInputError, match="Unsupported task template variant"
+    ) as exc:
         task_template_result("SHELL", variant="post-json")
+
+    assert exc.value.details == {
+        "task_type": "SHELL",
+        "variant": "post-json",
+        "available_variants": ["minimal", "params", "resource"],
+        "discovery_command": "dsctl template task --list",
+    }
 
 
 @pytest.mark.parametrize(

@@ -21,6 +21,10 @@ alert_group_app = typer.Typer(
     no_args_is_help=True,
 )
 
+ALERT_GROUP_HELP = (
+    "Alert-group name or numeric id. Run `dsctl alert-group list` to discover values."
+)
+
 
 def register_alert_group_commands(app: typer.Typer) -> None:
     """Register the `alert-group` command group."""
@@ -82,7 +86,7 @@ def get_command(
     ctx: typer.Context,
     alert_group: Annotated[
         str,
-        typer.Argument(help="Alert-group name or numeric id."),
+        typer.Argument(help=ALERT_GROUP_HELP),
     ],
 ) -> None:
     """Get one alert group by name or id."""
@@ -110,7 +114,10 @@ def create_command(
         typer.Option(
             "--instance-id",
             min=1,
-            help="Alert plugin instance id to bind to this group. Repeat as needed.",
+            help=(
+                "Alert plugin instance id to bind to this group. Repeat as "
+                "needed; run `dsctl alert-plugin list` to discover ids."
+            ),
         ),
     ] = None,
     description: Annotated[
@@ -140,7 +147,7 @@ def update_command(
     ctx: typer.Context,
     alert_group: Annotated[
         str,
-        typer.Argument(help="Alert-group name or numeric id."),
+        typer.Argument(help=ALERT_GROUP_HELP),
     ],
     *,
     name: Annotated[
@@ -155,7 +162,10 @@ def update_command(
         typer.Option(
             "--instance-id",
             min=1,
-            help="Alert plugin instance id to bind to this group. Repeat as needed.",
+            help=(
+                "Alert plugin instance id to bind to this group. Repeat as "
+                "needed; run `dsctl alert-plugin list` to discover ids."
+            ),
         ),
     ] = None,
     clear_instance_ids: Annotated[
@@ -225,7 +235,7 @@ def delete_command(
     ctx: typer.Context,
     alert_group: Annotated[
         str,
-        typer.Argument(help="Alert-group name or numeric id."),
+        typer.Argument(help=ALERT_GROUP_HELP),
     ],
     *,
     force: Annotated[

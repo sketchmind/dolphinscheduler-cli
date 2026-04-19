@@ -28,7 +28,10 @@ def list_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
 ) -> None:
@@ -52,14 +55,20 @@ def set_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
     worker_groups: Annotated[
         list[str] | None,
         typer.Option(
             "--worker-group",
-            help="Worker group to keep assigned to this project. Repeat as needed.",
+            help=(
+                "Worker group to keep assigned to this project. Repeat as "
+                "needed; run `dsctl worker-group list` to discover values."
+            ),
         ),
     ] = None,
 ) -> None:
@@ -84,7 +93,10 @@ def clear_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
     force: Annotated[

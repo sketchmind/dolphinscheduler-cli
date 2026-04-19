@@ -11,6 +11,11 @@ def enum_group() -> dict[str, object]:
         summary="Discover generated DolphinScheduler enums.",
         commands=[
             command(
+                "names",
+                action="enum.names",
+                summary="List supported generated enum discovery names.",
+            ),
+            command(
                 "list",
                 action="enum.list",
                 summary="List the members of one supported generated enum.",
@@ -20,9 +25,10 @@ def enum_group() -> dict[str, object]:
                         value_type="string",
                         description="Stable enum discovery name.",
                         choices=supported_enum_choices(),
+                        discovery_command="dsctl enum names",
                     )
                 ],
-            )
+            ),
         ],
     )
 
@@ -31,12 +37,18 @@ def task_type_group() -> dict[str, object]:
     """Build the task-type command group schema."""
     return group(
         "task-type",
-        summary="Discover DolphinScheduler task types for the current runtime.",
+        summary=(
+            "List live DS task-type catalog for the configured cluster and "
+            "current user."
+        ),
         commands=[
             command(
                 "list",
                 action="task-type.list",
-                summary=("List DS task types plus the current user's favourite flags."),
+                summary=(
+                    "List live DS task types, categories, favourite flags, and "
+                    "CLI authoring coverage."
+                ),
             )
         ],
     )

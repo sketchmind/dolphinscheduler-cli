@@ -27,14 +27,22 @@ def audit_group() -> dict[str, object]:
                     option(
                         "model-type",
                         value_type="string",
-                        description="Audit model type filter. Repeat as needed.",
+                        description=(
+                            "Audit model type filter. Repeat as needed; run "
+                            "`dsctl audit model-types` to discover values."
+                        ),
                         multiple=True,
+                        discovery_command="dsctl audit model-types",
                     ),
                     option(
                         "operation-type",
                         value_type="string",
-                        description=("Audit operation type filter. Repeat as needed."),
+                        description=(
+                            "Audit operation type filter. Repeat as needed; run "
+                            "`dsctl audit operation-types` to discover values."
+                        ),
                         multiple=True,
+                        discovery_command="dsctl audit operation-types",
                     ),
                     option(
                         "start",
@@ -159,19 +167,65 @@ def workflow_instance_group() -> dict[str, object]:
                     option(
                         "project",
                         value_type="string",
-                        description="Filter by project name.",
-                        selector="opaque_name",
+                        description=(
+                            "Project name or code for project-scoped filters. "
+                            "Run `dsctl project list` to discover values."
+                        ),
+                        selector="name_or_code",
+                        discovery_command="dsctl project list",
                     ),
                     option(
                         "workflow",
                         value_type="string",
-                        description="Filter by workflow name.",
+                        description=(
+                            "Workflow name or code filter. With --project, "
+                            "resolved inside that project; run `dsctl workflow "
+                            "list` to discover values."
+                        ),
                         selector="opaque_name",
+                        discovery_command="dsctl workflow list",
+                    ),
+                    option(
+                        "search",
+                        value_type="string",
+                        description=(
+                            "Filter workflow instances by upstream searchVal; "
+                            "requires --project."
+                        ),
+                    ),
+                    option(
+                        "executor",
+                        value_type="string",
+                        description="Filter by executor user name; requires --project.",
+                    ),
+                    option(
+                        "host",
+                        value_type="string",
+                        description="Filter by workflow instance host.",
+                    ),
+                    option(
+                        "start",
+                        value_type="string",
+                        description=(
+                            "Start datetime in DS format 'YYYY-MM-DD HH:MM:SS'."
+                        ),
+                    ),
+                    option(
+                        "end",
+                        value_type="string",
+                        description=(
+                            "End datetime in DS format 'YYYY-MM-DD HH:MM:SS'."
+                        ),
                     ),
                     option(
                         "state",
                         value_type="string",
-                        description="Filter by DS workflow execution status name.",
+                        description=(
+                            "Filter by DS workflow execution status name. Run "
+                            "`dsctl enum list workflow-execution-status` to "
+                            "discover values."
+                        ),
+                        discovery_command="dsctl enum list workflow-execution-status",
                     ),
                 ],
             ),
@@ -183,8 +237,12 @@ def workflow_instance_group() -> dict[str, object]:
                     argument(
                         "workflow_instance",
                         value_type="integer",
-                        description="Workflow instance id.",
+                        description=(
+                            "Workflow instance id. Run `dsctl workflow-instance "
+                            "list` to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -198,8 +256,12 @@ def workflow_instance_group() -> dict[str, object]:
                     argument(
                         "sub_workflow_instance",
                         value_type="integer",
-                        description="Sub-workflow instance id.",
+                        description=(
+                            "Sub-workflow instance id. Run `dsctl "
+                            "workflow-instance list` to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -211,8 +273,12 @@ def workflow_instance_group() -> dict[str, object]:
                     argument(
                         "workflow_instance",
                         value_type="integer",
-                        description="Workflow instance id.",
+                        description=(
+                            "Workflow instance id. Run `dsctl workflow-instance "
+                            "list` to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -224,8 +290,12 @@ def workflow_instance_group() -> dict[str, object]:
                     argument(
                         "workflow_instance",
                         value_type="integer",
-                        description="Finished workflow instance id.",
+                        description=(
+                            "Finished workflow instance id. Run `dsctl "
+                            "workflow-instance list` to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
                 options=[
@@ -263,8 +333,12 @@ def workflow_instance_group() -> dict[str, object]:
                     argument(
                         "workflow_instance",
                         value_type="integer",
-                        description="Workflow instance id.",
+                        description=(
+                            "Workflow instance id. Run `dsctl workflow-instance "
+                            "list` to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
                 options=[
@@ -292,8 +366,12 @@ def workflow_instance_group() -> dict[str, object]:
                     argument(
                         "workflow_instance",
                         value_type="integer",
-                        description="Workflow instance id.",
+                        description=(
+                            "Workflow instance id. Run `dsctl workflow-instance "
+                            "list` to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -305,8 +383,12 @@ def workflow_instance_group() -> dict[str, object]:
                     argument(
                         "workflow_instance",
                         value_type="integer",
-                        description="Workflow instance id.",
+                        description=(
+                            "Workflow instance id. Run `dsctl workflow-instance "
+                            "list` to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -318,8 +400,12 @@ def workflow_instance_group() -> dict[str, object]:
                     argument(
                         "workflow_instance",
                         value_type="integer",
-                        description="Workflow instance id.",
+                        description=(
+                            "Workflow instance id. Run `dsctl workflow-instance "
+                            "list` to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -331,8 +417,12 @@ def workflow_instance_group() -> dict[str, object]:
                     argument(
                         "workflow_instance",
                         value_type="integer",
-                        description="Workflow instance id.",
+                        description=(
+                            "Workflow instance id. Run `dsctl workflow-instance "
+                            "list` to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
                 options=[
@@ -340,10 +430,17 @@ def workflow_instance_group() -> dict[str, object]:
                         "task",
                         value_type="string",
                         description=(
-                            "Task name or task code within the workflow definition."
+                            "Task name or task code within the workflow "
+                            "instance. Run `dsctl task-instance list "
+                            "--workflow-instance WORKFLOW_INSTANCE` to discover "
+                            "values."
                         ),
                         required=True,
                         selector="name_or_code",
+                        discovery_command=(
+                            "dsctl task-instance list --workflow-instance "
+                            "WORKFLOW_INSTANCE"
+                        ),
                     ),
                     option(
                         "scope",
@@ -367,16 +464,34 @@ def task_instance_group() -> dict[str, object]:
             command(
                 "list",
                 action="task-instance.list",
-                summary="List task instances inside one workflow instance.",
+                summary="List task instances with project-scoped runtime filters.",
                 options=[
                     option(
                         "workflow-instance",
                         value_type="integer",
                         description=(
-                            "Workflow instance id used to scope the "
-                            "task-instance query."
+                            "Workflow instance id used to narrow the "
+                            "task-instance query. Run `dsctl workflow-instance "
+                            "list` to discover ids."
                         ),
-                        required=True,
+                        discovery_command="dsctl workflow-instance list",
+                    ),
+                    option(
+                        "project",
+                        value_type="string",
+                        description=(
+                            "Project name or code for the project-scoped query. "
+                            "Run `dsctl project list` to discover values; "
+                            "required via flag or context when "
+                            "--workflow-instance is omitted."
+                        ),
+                        selector="name_or_code",
+                        discovery_command="dsctl project list",
+                    ),
+                    option(
+                        "workflow-instance-name",
+                        value_type="string",
+                        description="Filter by workflow instance name.",
                     ),
                     option(
                         "page-no",
@@ -399,12 +514,71 @@ def task_instance_group() -> dict[str, object]:
                     option(
                         "search",
                         value_type="string",
-                        description="Filter task instances by upstream searchVal.",
+                        description=(
+                            "Free-text upstream searchVal filter. Use --task for "
+                            "an exact task instance name filter."
+                        ),
+                    ),
+                    option(
+                        "task",
+                        value_type="string",
+                        description="Filter by exact task instance name.",
+                    ),
+                    option(
+                        "task-code",
+                        value_type="integer",
+                        description=(
+                            "Filter by task definition code. Run `dsctl task "
+                            "list` to discover values."
+                        ),
+                        discovery_command="dsctl task list",
+                    ),
+                    option(
+                        "executor",
+                        value_type="string",
+                        description="Filter by executor user name.",
                     ),
                     option(
                         "state",
                         value_type="string",
-                        description="Filter by DS task execution status name.",
+                        description=(
+                            "Filter by DS task execution status name. Run "
+                            "`dsctl enum list task-execution-status` to discover "
+                            "values."
+                        ),
+                        discovery_command="dsctl enum list task-execution-status",
+                    ),
+                    option(
+                        "host",
+                        value_type="string",
+                        description="Filter by worker host.",
+                    ),
+                    option(
+                        "start",
+                        value_type="string",
+                        description=(
+                            "Task start-time lower bound in DS format "
+                            "'YYYY-MM-DD HH:MM:SS'."
+                        ),
+                    ),
+                    option(
+                        "end",
+                        value_type="string",
+                        description=(
+                            "Task start-time upper bound in DS format "
+                            "'YYYY-MM-DD HH:MM:SS'."
+                        ),
+                    ),
+                    option(
+                        "execute-type",
+                        value_type="string",
+                        description=(
+                            "Filter by DS task execute type: BATCH or STREAM. "
+                            "Run `dsctl enum list task-execute-type` to discover "
+                            "values."
+                        ),
+                        choices=["BATCH", "STREAM"],
+                        discovery_command="dsctl enum list task-execute-type",
                     ),
                 ],
             ),
@@ -416,8 +590,12 @@ def task_instance_group() -> dict[str, object]:
                     argument(
                         "task_instance",
                         value_type="integer",
-                        description="Task instance id.",
+                        description=(
+                            "Task instance id. Run `dsctl task-instance list` "
+                            "to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl task-instance list",
                     )
                 ],
                 options=[
@@ -425,9 +603,12 @@ def task_instance_group() -> dict[str, object]:
                         "workflow-instance",
                         value_type="integer",
                         description=(
-                            "Workflow instance id used to resolve the owning project."
+                            "Workflow instance id used to resolve the owning "
+                            "project. Run `dsctl workflow-instance list` to "
+                            "discover ids."
                         ),
                         required=True,
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -439,8 +620,12 @@ def task_instance_group() -> dict[str, object]:
                     argument(
                         "task_instance",
                         value_type="integer",
-                        description="Task instance id.",
+                        description=(
+                            "Task instance id. Run `dsctl task-instance list` "
+                            "to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl task-instance list",
                     )
                 ],
                 options=[
@@ -448,9 +633,12 @@ def task_instance_group() -> dict[str, object]:
                         "workflow-instance",
                         value_type="integer",
                         description=(
-                            "Workflow instance id used to resolve the owning project."
+                            "Workflow instance id used to resolve the owning "
+                            "project. Run `dsctl workflow-instance list` to "
+                            "discover ids."
                         ),
                         required=True,
+                        discovery_command="dsctl workflow-instance list",
                     ),
                     option(
                         "interval-seconds",
@@ -479,8 +667,12 @@ def task_instance_group() -> dict[str, object]:
                     argument(
                         "task_instance",
                         value_type="integer",
-                        description="Task instance id.",
+                        description=(
+                            "Task instance id. Run `dsctl task-instance list` "
+                            "to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl task-instance list",
                     )
                 ],
                 options=[
@@ -489,9 +681,11 @@ def task_instance_group() -> dict[str, object]:
                         value_type="integer",
                         description=(
                             "Workflow instance id used to scope the "
-                            "task-instance relation."
+                            "task-instance relation. Run `dsctl "
+                            "workflow-instance list` to discover ids."
                         ),
                         required=True,
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -503,8 +697,12 @@ def task_instance_group() -> dict[str, object]:
                     argument(
                         "task_instance",
                         value_type="integer",
-                        description="Task instance id.",
+                        description=(
+                            "Task instance id. Run `dsctl task-instance list` "
+                            "to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl task-instance list",
                     )
                 ],
                 options=[
@@ -527,8 +725,12 @@ def task_instance_group() -> dict[str, object]:
                     argument(
                         "task_instance",
                         value_type="integer",
-                        description="Task instance id.",
+                        description=(
+                            "Task instance id. Run `dsctl task-instance list` "
+                            "to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl task-instance list",
                     )
                 ],
                 options=[
@@ -536,9 +738,12 @@ def task_instance_group() -> dict[str, object]:
                         "workflow-instance",
                         value_type="integer",
                         description=(
-                            "Workflow instance id used to resolve the owning project."
+                            "Workflow instance id used to resolve the owning "
+                            "project. Run `dsctl workflow-instance list` to "
+                            "discover ids."
                         ),
                         required=True,
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -550,8 +755,12 @@ def task_instance_group() -> dict[str, object]:
                     argument(
                         "task_instance",
                         value_type="integer",
-                        description="Task instance id.",
+                        description=(
+                            "Task instance id. Run `dsctl task-instance list` "
+                            "to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl task-instance list",
                     )
                 ],
                 options=[
@@ -559,9 +768,12 @@ def task_instance_group() -> dict[str, object]:
                         "workflow-instance",
                         value_type="integer",
                         description=(
-                            "Workflow instance id used to resolve the owning project."
+                            "Workflow instance id used to resolve the owning "
+                            "project. Run `dsctl workflow-instance list` to "
+                            "discover ids."
                         ),
                         required=True,
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),
@@ -573,8 +785,12 @@ def task_instance_group() -> dict[str, object]:
                     argument(
                         "task_instance",
                         value_type="integer",
-                        description="Task instance id.",
+                        description=(
+                            "Task instance id. Run `dsctl task-instance list` "
+                            "to discover ids."
+                        ),
                         selector="id",
+                        discovery_command="dsctl task-instance list",
                     )
                 ],
                 options=[
@@ -582,9 +798,12 @@ def task_instance_group() -> dict[str, object]:
                         "workflow-instance",
                         value_type="integer",
                         description=(
-                            "Workflow instance id used to resolve the owning project."
+                            "Workflow instance id used to resolve the owning "
+                            "project. Run `dsctl workflow-instance list` to "
+                            "discover ids."
                         ),
                         required=True,
+                        discovery_command="dsctl workflow-instance list",
                     )
                 ],
             ),

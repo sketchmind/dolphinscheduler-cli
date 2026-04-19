@@ -17,6 +17,8 @@ access_token_app = typer.Typer(
     no_args_is_help=True,
 )
 
+ACCESS_ID_HELP = "Access-token id. Run `dsctl access-token list` to discover values."
+
 
 def register_access_token_commands(app: typer.Typer) -> None:
     """Register the `access-token` command group."""
@@ -78,7 +80,7 @@ def get_command(
     ctx: typer.Context,
     access_token: Annotated[
         int,
-        typer.Argument(help="Access-token id."),
+        typer.Argument(help=ACCESS_ID_HELP),
     ],
 ) -> None:
     """Get one access token by numeric id."""
@@ -98,14 +100,14 @@ def create_command(
         str,
         typer.Option(
             "--user",
-            help="User name or numeric id.",
+            help="User name or numeric id. Run `dsctl user list` to discover values.",
         ),
     ],
     expire_time: Annotated[
         str,
         typer.Option(
             "--expire-time",
-            help="Token expiration time.",
+            help="Token expiration time, for example '2027-01-01 00:00:00'.",
         ),
     ],
     token: Annotated[
@@ -135,21 +137,24 @@ def update_command(
     ctx: typer.Context,
     access_token: Annotated[
         int,
-        typer.Argument(help="Access-token id."),
+        typer.Argument(help=ACCESS_ID_HELP),
     ],
     *,
     user: Annotated[
         str | None,
         typer.Option(
             "--user",
-            help="Updated user name or numeric id.",
+            help=(
+                "Updated user name or numeric id. Run `dsctl user list` to "
+                "discover values."
+            ),
         ),
     ] = None,
     expire_time: Annotated[
         str | None,
         typer.Option(
             "--expire-time",
-            help="Updated token expiration time.",
+            help=("Updated token expiration time, for example '2027-01-01 00:00:00'."),
         ),
     ] = None,
     token: Annotated[
@@ -188,7 +193,7 @@ def delete_command(
     ctx: typer.Context,
     access_token: Annotated[
         int,
-        typer.Argument(help="Access-token id."),
+        typer.Argument(help=ACCESS_ID_HELP),
     ],
     *,
     force: Annotated[
@@ -220,14 +225,14 @@ def generate_command(
         str,
         typer.Option(
             "--user",
-            help="User name or numeric id.",
+            help="User name or numeric id. Run `dsctl user list` to discover values.",
         ),
     ],
     expire_time: Annotated[
         str,
         typer.Option(
             "--expire-time",
-            help="Token expiration time.",
+            help="Token expiration time, for example '2027-01-01 00:00:00'.",
         ),
     ],
 ) -> None:

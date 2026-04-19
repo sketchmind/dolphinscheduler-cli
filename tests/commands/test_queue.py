@@ -63,6 +63,14 @@ def test_queue_get_command_resolves_name() -> None:
     assert payload["data"]["queue"] == "root.default"
 
 
+def test_queue_selector_help_points_to_list_discovery() -> None:
+    result = runner.invoke(app, ["queue", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "queue" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_queue_create_command_returns_created_queue() -> None:
     result = runner.invoke(
         app,
@@ -81,6 +89,15 @@ def test_queue_create_command_returns_created_queue() -> None:
     assert payload["action"] == "queue.create"
     assert payload["data"]["queueName"] == "ops"
     assert payload["data"]["queue"] == "root.ops"
+
+
+def test_queue_create_help_distinguishes_name_and_value() -> None:
+    result = runner.invoke(app, ["queue", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "selector" in result.stdout
+    assert "label" in result.stdout
+    assert "YARN queue value" in result.stdout
 
 
 def test_queue_update_command_returns_updated_queue() -> None:

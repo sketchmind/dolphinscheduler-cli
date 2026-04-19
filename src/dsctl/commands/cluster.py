@@ -1,4 +1,5 @@
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, cast
 
 import typer
 
@@ -18,6 +19,10 @@ from dsctl.services.cluster import (
 cluster_app = typer.Typer(
     help="Manage DolphinScheduler clusters.",
     no_args_is_help=True,
+)
+
+CLUSTER_HELP = (
+    "Cluster name or numeric code. Run `dsctl cluster list` to discover values."
 )
 
 
@@ -81,7 +86,7 @@ def get_command(
     ctx: typer.Context,
     cluster: Annotated[
         str,
-        typer.Argument(help="Cluster name or numeric code."),
+        typer.Argument(help=CLUSTER_HELP),
     ],
 ) -> None:
     """Get one cluster by name or code."""
@@ -105,12 +110,31 @@ def create_command(
         ),
     ],
     config: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--config",
-            help="Cluster config payload.",
+            help=(
+                "Inline DS cluster config JSON. Prefer --config-file for "
+                "multiline Kubernetes configs; run `dsctl template cluster` "
+                "for an example."
+            ),
         ),
-    ],
+    ] = None,
+    config_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-file",
+            dir_okay=False,
+            exists=True,
+            file_okay=True,
+            help=(
+                "Path to one DS cluster config JSON file. Run "
+                "`dsctl template cluster` for an example."
+            ),
+            readable=True,
+            resolve_path=True,
+        ),
+    ] = None,
     description: Annotated[
         str | None,
         typer.Option(
@@ -119,14 +143,21 @@ def create_command(
         ),
     ] = None,
 ) -> None:
-    """Create one cluster."""
+    """Create one cluster; pass --config or --config-file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "cluster.create",
         lambda: create_cluster_result(
             name=name,
-            config=config,
+            config=cast(
+                "str",
+                _cluster_config_from_options(
+                    config=config,
+                    config_file=config_file,
+                    required=True,
+                ),
+            ),
             description=description,
             env_file=env_file,
         ),
@@ -138,7 +169,7 @@ def update_command(
     ctx: typer.Context,
     cluster: Annotated[
         str,
-        typer.Argument(help="Cluster name or numeric code."),
+        typer.Argument(help=CLUSTER_HELP),
     ],
     *,
     name: Annotated[
@@ -152,7 +183,25 @@ def update_command(
         str | None,
         typer.Option(
             "--config",
-            help="Updated cluster config. Omit to keep the current config.",
+            help=(
+                "Updated inline DS cluster config JSON. Omit to keep the current "
+                "config; prefer --config-file for multiline Kubernetes configs."
+            ),
+        ),
+    ] = None,
+    config_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-file",
+            dir_okay=False,
+            exists=True,
+            file_okay=True,
+            help=(
+                "Path to an updated DS cluster config JSON file. Omit both "
+                "config options to keep the current config."
+            ),
+            readable=True,
+            resolve_path=True,
         ),
     ] = None,
     description: Annotated[
@@ -170,7 +219,7 @@ def update_command(
         ),
     ] = False,
 ) -> None:
-    """Update one cluster."""
+    """Update one cluster; config may come from --config-file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
@@ -188,7 +237,11 @@ def update_command(
         return update_cluster_result(
             cluster,
             name=name,
-            config=config,
+            config=_cluster_config_from_options(
+                config=config,
+                config_file=config_file,
+                required=False,
+            ),
             description=description_update,
             env_file=env_file,
         )
@@ -201,7 +254,7 @@ def delete_command(
     ctx: typer.Context,
     cluster: Annotated[
         str,
-        typer.Argument(help="Cluster name or numeric code."),
+        typer.Argument(help=CLUSTER_HELP),
     ],
     *,
     force: Annotated[
@@ -223,3 +276,33 @@ def delete_command(
             env_file=env_file,
         ),
     )
+
+
+def _cluster_config_from_options(
+    *,
+    config: str | None,
+    config_file: Path | None,
+    required: bool,
+) -> str | None:
+    if config is not None and config_file is not None:
+        message = "--config and --config-file are mutually exclusive"
+        raise UserInputError(
+            message,
+            suggestion=(
+                "Pass inline config with --config or read it from --config-file."
+            ),
+        )
+    if config_file is not None:
+        return config_file.read_text(encoding="utf-8")
+    if config is not None:
+        return config
+    if required:
+        message = "Cluster config is required"
+        raise UserInputError(
+            message,
+            suggestion=(
+                "Pass --config TEXT or --config-file PATH. Run "
+                "`dsctl template cluster` for an example JSON config."
+            ),
+        )
+    return None

@@ -60,3 +60,15 @@ def test_task_type_list_command_returns_remote_discovery_payload() -> None:
     }
     assert "SPARK" in payload["data"]["cliCoverage"]["genericTaskTemplateTypes"]
     assert payload["data"]["cliCoverage"]["untemplatedTaskTypes"] == ["CUSTOM_PLUGIN"]
+
+
+def test_task_type_help_distinguishes_live_catalog_from_template_catalog() -> None:
+    group_result = runner.invoke(app, ["task-type", "--help"])
+    list_result = runner.invoke(app, ["task-type", "list", "--help"])
+
+    assert group_result.exit_code == 0
+    assert list_result.exit_code == 0
+    assert "live DS task-type catalog" in group_result.stdout
+    assert "configured cluster and current user" in group_result.stdout
+    assert "CLI authoring" in list_result.stdout
+    assert "coverage" in list_result.stdout

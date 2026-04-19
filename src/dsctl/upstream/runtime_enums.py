@@ -115,6 +115,11 @@ def task_execution_status_value(name: str) -> str:
     return _task_execution_status_value(name)
 
 
+def task_execute_type_value(name: str) -> str:
+    """Return the DS task execute-type wire value for one enum name."""
+    return TaskExecuteType[name].value
+
+
 def _enum_wire_value(value: StringEnumValue | str | None) -> str | None:
     if isinstance(value, str):
         return value
@@ -134,6 +139,7 @@ __all__ = [
     "WORKFLOW_EXECUTION_FAILURE_STATE",
     "WORKFLOW_EXECUTION_STOP_STATE",
     "WorkflowExecutionStatusInfo",
+    "task_execute_type_value",
     "task_execution_status_value",
     "workflow_execution_status_info",
     "workflow_execution_status_is_final",

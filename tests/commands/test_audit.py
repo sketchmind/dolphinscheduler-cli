@@ -58,6 +58,14 @@ def test_audit_list_command_returns_paginated_payload() -> None:
     assert payload["data"]["totalList"][0]["modelName"] == "daily-etl"
 
 
+def test_audit_list_help_points_to_filter_discovery_commands() -> None:
+    result = runner.invoke(app, ["audit", "list", "--help"])
+
+    assert result.exit_code == 0
+    assert "audit model-types" in result.stdout
+    assert "audit operation-types" in result.stdout
+
+
 def test_audit_model_types_command_returns_tree() -> None:
     result = runner.invoke(app, ["audit", "model-types"])
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.cli_surface import (
     AUDIT_RESOURCE,
@@ -64,6 +64,16 @@ TOP_LEVEL_COMMAND_SUMMARIES: dict[str, str] = {
     "schema": "Return the stable machine-readable schema for the current CLI surface.",
     "capabilities": "Return stable version and surface capability discovery.",
 }
+
+
+class SelfDescriptionData(TypedDict):
+    """Machine-readable self-description capabilities emitted by the CLI."""
+
+    schema: bool
+    template: bool
+    capabilities: bool
+    command_invocation_source: str
+    capabilities_scope: str
 
 
 def selection_schema_data() -> dict[str, object]:
@@ -133,6 +143,10 @@ def error_capabilities_data() -> dict[str, object]:
 def output_schema_data() -> dict[str, object]:
     """Return the schema-scoped standard output envelope contract."""
     return {
+        "formats": ["json", "table", "tsv"],
+        "default_format": "json",
+        "format_option": "--output-format",
+        "columns_option": "--columns",
         "success_fields": list(OUTPUT_SUCCESS_FIELDS),
         "error_fields": list(OUTPUT_ERROR_FIELDS),
         "ok_values": {
@@ -140,6 +154,8 @@ def output_schema_data() -> dict[str, object]:
             "error": False,
         },
         "warning_details_aligned": True,
+        "data_shape_metadata": True,
+        "json_column_projection": True,
     }
 
 
@@ -147,6 +163,11 @@ def output_capabilities_data() -> dict[str, object]:
     """Return the capabilities-scoped standard output support flags."""
     return {
         "standard_envelope": True,
+        "formats": ["json", "table", "tsv"],
+        "default_format": "json",
+        "data_shape_metadata": True,
+        "display_columns": True,
+        "json_column_projection": True,
         "resolved_metadata": True,
         "warnings": True,
         "warning_details_alignment": True,
@@ -154,12 +175,14 @@ def output_capabilities_data() -> dict[str, object]:
     }
 
 
-def self_description_data() -> dict[str, bool]:
+def self_description_data() -> SelfDescriptionData:
     """Return stable self-description capability flags."""
     return {
         "schema": True,
         "template": True,
         "capabilities": True,
+        "command_invocation_source": "schema",
+        "capabilities_scope": "feature_discovery",
     }
 
 

@@ -21,6 +21,32 @@ task_instance_app = typer.Typer(
     no_args_is_help=True,
 )
 
+TASK_INSTANCE_HELP = "Task instance id. Run `dsctl task-instance list` to discover ids."
+WORKFLOW_INSTANCE_OPTION_HELP = (
+    "Workflow instance id used to resolve the owning project. Run `dsctl "
+    "workflow-instance list` to discover ids."
+)
+WORKFLOW_INSTANCE_FILTER_HELP = (
+    "Workflow instance id used to narrow the project-scoped task-instance query. "
+    "Run `dsctl workflow-instance list` to discover ids."
+)
+PROJECT_FILTER_HELP = (
+    "Project name or code for the project-scoped query. Run `dsctl project list` "
+    "to discover values; required via flag or context when --workflow-instance "
+    "is omitted."
+)
+TASK_STATE_HELP = (
+    "Filter by DS task execution status name. Run `dsctl enum list "
+    "task-execution-status` to discover values."
+)
+TASK_CODE_HELP = (
+    "Filter by task definition code. Run `dsctl task list` to discover values."
+)
+TASK_EXECUTE_TYPE_HELP = (
+    "Filter by DS task execute type: BATCH or STREAM. Run `dsctl enum list "
+    "task-execute-type` to discover values."
+)
+
 
 def register_task_instance_commands(app: typer.Typer) -> None:
     """Register the `task-instance` command group."""
@@ -32,12 +58,37 @@ def list_command(
     ctx: typer.Context,
     *,
     workflow_instance: Annotated[
-        int,
+        int | None,
         typer.Option(
             "--workflow-instance",
-            help="Workflow instance id used to scope the task-instance query.",
+            help=WORKFLOW_INSTANCE_FILTER_HELP,
         ),
-    ],
+    ] = None,
+    project: Annotated[
+        str | None,
+        typer.Option(
+            "--project",
+            help=PROJECT_FILTER_HELP,
+        ),
+    ] = None,
+    workflow: Annotated[
+        str | None,
+        typer.Option(
+            "--workflow",
+            help=(
+                "Reserved compatibility option. DS 3.4.1 task-instance list "
+                "does not reliably filter by workflow definition."
+            ),
+            hidden=True,
+        ),
+    ] = None,
+    workflow_instance_name: Annotated[
+        str | None,
+        typer.Option(
+            "--workflow-instance-name",
+            help="Filter by workflow instance name.",
+        ),
+    ] = None,
     page_no: Annotated[
         int,
         typer.Option("--page-no", help="Remote page number."),
@@ -57,29 +108,91 @@ def list_command(
         str | None,
         typer.Option(
             "--search",
-            help="Filter task instances by upstream searchVal.",
+            help=(
+                "Free-text upstream searchVal filter. Use --task for an exact "
+                "task instance name filter."
+            ),
+        ),
+    ] = None,
+    task: Annotated[
+        str | None,
+        typer.Option(
+            "--task",
+            help="Filter by exact task instance name.",
+        ),
+    ] = None,
+    task_code: Annotated[
+        int | None,
+        typer.Option(
+            "--task-code",
+            help=TASK_CODE_HELP,
+        ),
+    ] = None,
+    executor: Annotated[
+        str | None,
+        typer.Option(
+            "--executor",
+            help="Filter by executor user name.",
         ),
     ] = None,
     state: Annotated[
         str | None,
         typer.Option(
             "--state",
-            help="Filter by DS task execution status name.",
+            help=TASK_STATE_HELP,
+        ),
+    ] = None,
+    host: Annotated[
+        str | None,
+        typer.Option(
+            "--host",
+            help="Filter by worker host.",
+        ),
+    ] = None,
+    start: Annotated[
+        str | None,
+        typer.Option(
+            "--start",
+            help="Task start-time lower bound, e.g. '2026-04-11 10:00:00'.",
+        ),
+    ] = None,
+    end: Annotated[
+        str | None,
+        typer.Option(
+            "--end",
+            help="Task start-time upper bound, e.g. '2026-04-11 11:00:00'.",
+        ),
+    ] = None,
+    execute_type: Annotated[
+        str | None,
+        typer.Option(
+            "--execute-type",
+            help=TASK_EXECUTE_TYPE_HELP,
         ),
     ] = None,
 ) -> None:
-    """List task instances inside one workflow instance."""
+    """List task instances with project-scoped runtime filters."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "task-instance.list",
         lambda: list_task_instances_result(
             workflow_instance=workflow_instance,
+            project=project,
+            workflow=workflow,
+            workflow_instance_name=workflow_instance_name,
             page_no=page_no,
             page_size=page_size,
             all_pages=all_pages,
             search=search,
+            task=task,
+            task_code=task_code,
+            executor=executor,
             state=state,
+            host=host,
+            start=start,
+            end=end,
+            execute_type=execute_type,
             env_file=env_file,
         ),
     )
@@ -90,14 +203,14 @@ def get_command(
     ctx: typer.Context,
     task_instance: Annotated[
         int,
-        typer.Argument(help="Task instance id."),
+        typer.Argument(help=TASK_INSTANCE_HELP),
     ],
     *,
     workflow_instance: Annotated[
         int,
         typer.Option(
             "--workflow-instance",
-            help="Workflow instance id used to resolve the owning project.",
+            help=WORKFLOW_INSTANCE_OPTION_HELP,
         ),
     ],
 ) -> None:
@@ -119,14 +232,14 @@ def watch_command(
     ctx: typer.Context,
     task_instance: Annotated[
         int,
-        typer.Argument(help="Task instance id."),
+        typer.Argument(help=TASK_INSTANCE_HELP),
     ],
     *,
     workflow_instance: Annotated[
         int,
         typer.Option(
             "--workflow-instance",
-            help="Workflow instance id used to resolve the owning project.",
+            help=WORKFLOW_INSTANCE_OPTION_HELP,
         ),
     ],
     interval_seconds: Annotated[
@@ -164,14 +277,14 @@ def sub_workflow_command(
     ctx: typer.Context,
     task_instance: Annotated[
         int,
-        typer.Argument(help="Task instance id."),
+        typer.Argument(help=TASK_INSTANCE_HELP),
     ],
     *,
     workflow_instance: Annotated[
         int,
         typer.Option(
             "--workflow-instance",
-            help="Workflow instance id used to scope the task-instance relation.",
+            help=WORKFLOW_INSTANCE_OPTION_HELP,
         ),
     ],
 ) -> None:
@@ -193,7 +306,7 @@ def log_command(
     ctx: typer.Context,
     task_instance: Annotated[
         int,
-        typer.Argument(help="Task instance id."),
+        typer.Argument(help=TASK_INSTANCE_HELP),
     ],
     *,
     tail: Annotated[
@@ -222,14 +335,14 @@ def force_success_command(
     ctx: typer.Context,
     task_instance: Annotated[
         int,
-        typer.Argument(help="Task instance id."),
+        typer.Argument(help=TASK_INSTANCE_HELP),
     ],
     *,
     workflow_instance: Annotated[
         int,
         typer.Option(
             "--workflow-instance",
-            help="Workflow instance id used to resolve the owning project.",
+            help=WORKFLOW_INSTANCE_OPTION_HELP,
         ),
     ],
 ) -> None:
@@ -251,14 +364,14 @@ def savepoint_command(
     ctx: typer.Context,
     task_instance: Annotated[
         int,
-        typer.Argument(help="Task instance id."),
+        typer.Argument(help=TASK_INSTANCE_HELP),
     ],
     *,
     workflow_instance: Annotated[
         int,
         typer.Option(
             "--workflow-instance",
-            help="Workflow instance id used to resolve the owning project.",
+            help=WORKFLOW_INSTANCE_OPTION_HELP,
         ),
     ],
 ) -> None:
@@ -280,14 +393,14 @@ def stop_command(
     ctx: typer.Context,
     task_instance: Annotated[
         int,
-        typer.Argument(help="Task instance id."),
+        typer.Argument(help=TASK_INSTANCE_HELP),
     ],
     *,
     workflow_instance: Annotated[
         int,
         typer.Option(
             "--workflow-instance",
-            help="Workflow instance id used to resolve the owning project.",
+            help=WORKFLOW_INSTANCE_OPTION_HELP,
         ),
     ],
 ) -> None:

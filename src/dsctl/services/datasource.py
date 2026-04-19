@@ -22,6 +22,10 @@ from dsctl.services._validation import (
     require_non_empty_text,
     require_positive_int,
 )
+from dsctl.services.datasource_payload import (
+    DATASOURCE_PAYLOAD_REVIEW_SUGGESTION,
+    require_datasource_payload_type,
+)
 from dsctl.services.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_AUTO_EXHAUST_PAGES,
@@ -40,10 +44,6 @@ if TYPE_CHECKING:
 
 
 MASKED_PASSWORD = "*" * 6
-_DATASOURCE_PAYLOAD_REVIEW_SUGGESTION = (
-    "Review the DS-native JSON payload, then retry. A good baseline is the "
-    "output of `dsctl datasource get DATASOURCE`."
-)
 
 DATASOURCE_EXISTS = 10015
 CREATE_DATASOURCE_ERROR = 10033
@@ -127,7 +127,7 @@ def create_datasource_result(
     """Create one datasource from one DS-native JSON payload file."""
     payload = _load_datasource_payload_or_error(file)
     _require_datasource_name(payload, operation="create")
-    _require_datasource_type(payload, operation="create")
+    payload["type"] = _require_datasource_type(payload, operation="create")
     if "id" in payload:
         message = "Datasource create payload must not include id"
         raise UserInputError(
@@ -163,7 +163,7 @@ def update_datasource_result(
     """Update one datasource from one DS-native JSON payload file."""
     payload = _load_datasource_payload_or_error(file)
     _require_datasource_name(payload, operation="update")
-    _require_datasource_type(payload, operation="update")
+    payload["type"] = _require_datasource_type(payload, operation="update")
 
     return run_with_service_runtime(
         env_file,
@@ -434,8 +434,9 @@ def _load_datasource_payload_or_error(path: Path) -> dict[str, object]:
             message,
             details={"file": str(path)},
             suggestion=(
-                "Fix the JSON syntax, or regenerate a DS-native payload with "
-                "`dsctl datasource get DATASOURCE`."
+                "Fix the JSON syntax, or run `dsctl template datasource` to choose "
+                "a type and `dsctl template datasource --type TYPE` to regenerate "
+                "a payload skeleton."
             ),
         ) from exc
     return dict(require_json_object(parsed, label="datasource payload"))
@@ -506,7 +507,7 @@ def _require_datasource_name(
         message = f"Datasource {operation} payload requires string field 'name'"
         raise UserInputError(
             message,
-            suggestion=_DATASOURCE_PAYLOAD_REVIEW_SUGGESTION,
+            suggestion=DATASOURCE_PAYLOAD_REVIEW_SUGGESTION,
         )
     return require_non_empty_text(name, label="datasource name")
 
@@ -521,9 +522,10 @@ def _require_datasource_type(
         message = f"Datasource {operation} payload requires string field 'type'"
         raise UserInputError(
             message,
-            suggestion=_DATASOURCE_PAYLOAD_REVIEW_SUGGESTION,
+            suggestion=DATASOURCE_PAYLOAD_REVIEW_SUGGESTION,
         )
-    return require_non_empty_text(datasource_type, label="datasource type")
+    normalized_type = require_non_empty_text(datasource_type, label="datasource type")
+    return require_datasource_payload_type(normalized_type)
 
 
 def _payload_json(payload: Mapping[str, object]) -> str:
@@ -594,7 +596,7 @@ def _translate_datasource_api_error(
         return UserInputError(
             error.message,
             details=details,
-            suggestion=_DATASOURCE_PAYLOAD_REVIEW_SUGGESTION,
+            suggestion=DATASOURCE_PAYLOAD_REVIEW_SUGGESTION,
         )
     return error
 

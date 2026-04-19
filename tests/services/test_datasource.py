@@ -162,6 +162,53 @@ def test_create_datasource_result_returns_created_detail(
     assert data["password"] == payload["password"]
 
 
+def test_create_datasource_result_normalizes_datasource_type(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    payload = {
+        "name": "warehouse",
+        "type": "mysql",
+        "host": "db.example",
+        "port": 3306,
+        "database": "warehouse",
+        "userName": "etl",
+        "password": "secret",
+    }
+    adapter = FakeDataSourceAdapter(datasources=[])
+    _install_datasource_service_fakes(monkeypatch, adapter)
+    file = _write_json(tmp_path / "warehouse.json", payload)
+
+    result = datasource_service.create_datasource_result(file=file)
+
+    resolved_datasource = _mapping(result.resolved["datasource"])
+    assert resolved_datasource["type"] == "MYSQL"
+
+
+def test_create_datasource_result_rejects_unknown_datasource_type(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    adapter = FakeDataSourceAdapter(datasources=[])
+    _install_datasource_service_fakes(monkeypatch, adapter)
+    file = _write_json(
+        tmp_path / "unknown.json",
+        {
+            "name": "warehouse",
+            "type": "UNKNOWN",
+            "password": "secret",
+        },
+    )
+
+    with pytest.raises(UserInputError, match="Unsupported datasource type") as exc_info:
+        datasource_service.create_datasource_result(file=file)
+
+    assert exc_info.value.suggestion == (
+        "Run `dsctl template datasource` to choose a supported datasource type, "
+        "then `dsctl template datasource --type TYPE`."
+    )
+
+
 def test_create_datasource_result_maps_duplicate_name_to_conflict(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -303,8 +350,9 @@ def test_create_datasource_result_rejects_invalid_json_payload(
         datasource_service.create_datasource_result(file=file)
 
     assert exc_info.value.suggestion == (
-        "Fix the JSON syntax, or regenerate a DS-native payload with `dsctl "
-        "datasource get DATASOURCE`."
+        "Fix the JSON syntax, or run `dsctl template datasource` to choose a "
+        "type and `dsctl template datasource --type TYPE` to regenerate a "
+        "payload skeleton."
     )
 
 

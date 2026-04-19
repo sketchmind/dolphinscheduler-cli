@@ -10,6 +10,16 @@ task_app = typer.Typer(
     no_args_is_help=True,
 )
 
+PROJECT_HELP = (
+    "Project name or code. Run `dsctl project list` to discover values; falls "
+    "back to stored project context."
+)
+TASK_HELP = "Task name or numeric code. Use `dsctl task list` to discover values."
+WORKFLOW_HELP = (
+    "Workflow name or code. Run `dsctl workflow list` in the selected project "
+    "to discover values; falls back to workflow context."
+)
+
 
 def register_task_commands(app: typer.Typer) -> None:
     """Register the `task` command group."""
@@ -24,14 +34,14 @@ def list_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     workflow: Annotated[
         str | None,
         typer.Option(
             "--workflow",
-            help="Workflow name or code. Falls back to workflow context.",
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     search: Annotated[
@@ -63,21 +73,21 @@ def get_command(
     ctx: typer.Context,
     task: Annotated[
         str,
-        typer.Argument(help="Task name or numeric code."),
+        typer.Argument(help=TASK_HELP),
     ],
     *,
     project: Annotated[
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     workflow: Annotated[
         str | None,
         typer.Option(
             "--workflow",
-            help="Workflow name or code. Falls back to workflow context.",
+            help=WORKFLOW_HELP,
         ),
     ] = None,
 ) -> None:
@@ -100,21 +110,21 @@ def update_command(
     ctx: typer.Context,
     task: Annotated[
         str,
-        typer.Argument(help="Task name or numeric code."),
+        typer.Argument(help=TASK_HELP),
     ],
     *,
     project: Annotated[
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     workflow: Annotated[
         str | None,
         typer.Option(
             "--workflow",
-            help="Workflow name or code. Falls back to workflow context.",
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     set_values: Annotated[
@@ -123,7 +133,8 @@ def update_command(
             "--set",
             help=(
                 "Inline task update in KEY=VALUE form. Repeat for multiple "
-                "fields. Inspect `dsctl schema` for supported keys and examples."
+                "fields. Inspect `dsctl schema --command task.update` for "
+                "supported keys and examples."
             ),
         ),
     ] = None,

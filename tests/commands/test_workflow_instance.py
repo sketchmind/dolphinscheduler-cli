@@ -85,6 +85,7 @@ def patch_workflow_instance_service(monkeypatch: pytest.MonkeyPatch) -> None:
                 state_value=FakeEnumValue("RUNNING_EXECUTION"),
                 run_times_value=1,
                 name="daily-sync-901",
+                host="master-1",
                 executor_id_value=11,
                 executor_name_value="alice",
                 worker_group_value="default",
@@ -98,6 +99,7 @@ def patch_workflow_instance_service(monkeypatch: pytest.MonkeyPatch) -> None:
                 state_value=FakeEnumValue("SUCCESS"),
                 run_times_value=1,
                 name="child-workflow-903",
+                host="master-2",
                 executor_id_value=12,
                 executor_name_value="bob",
                 worker_group_value="default",
@@ -166,6 +168,35 @@ def test_workflow_instance_list_command_supports_all_pages() -> None:
     assert len(payload["data"]["totalList"]) == 2
 
 
+def test_workflow_instance_list_command_accepts_project_scoped_filters() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "workflow-instance",
+            "list",
+            "--project",
+            "etl-prod",
+            "--search",
+            "daily",
+            "--executor",
+            "alice",
+            "--host",
+            "master",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "workflow-instance.list"
+    assert payload["resolved"]["project"] == "etl-prod"
+    assert payload["resolved"]["project_code"] == 7
+    assert payload["resolved"]["search"] == "daily"
+    assert payload["resolved"]["executor"] == "alice"
+    assert payload["resolved"]["host"] == "master"
+    assert payload["data"]["total"] == 1
+    assert payload["data"]["totalList"][0]["id"] == 901
+
+
 def test_workflow_instance_list_command_reports_supported_state_names() -> None:
     result = runner.invoke(
         app,
@@ -180,9 +211,27 @@ def test_workflow_instance_list_command_reports_supported_state_names() -> None:
         "Workflow instance state must be one of the DS execution status names"
     )
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl enum list workflow_execution_status` to inspect the "
+        "Run `dsctl enum list workflow-execution-status` to inspect the "
         "supported state names."
     )
+
+
+def test_workflow_instance_list_help_points_to_filter_discovery() -> None:
+    result = runner.invoke(app, ["workflow-instance", "list", "--help"])
+
+    assert result.exit_code == 0
+    assert "project" in result.stdout
+    assert "workflow" in result.stdout
+    assert "workflow-execution-status" in result.stdout
+    assert "list" in result.stdout
+
+
+def test_workflow_instance_get_help_points_to_instance_discovery() -> None:
+    result = runner.invoke(app, ["workflow-instance", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "workflow-instance" in result.stdout
+    assert "list" in result.stdout
 
 
 def test_workflow_instance_get_command_returns_one_instance() -> None:
@@ -753,3 +802,12 @@ def test_workflow_instance_execute_task_command_reports_scope_choices() -> None:
     assert payload["error"]["suggestion"] == (
         "Pass `--scope self`, `--scope pre`, or `--scope post`."
     )
+
+
+def test_workflow_instance_execute_task_help_points_to_task_discovery() -> None:
+    result = runner.invoke(app, ["workflow-instance", "execute-task", "--help"])
+
+    assert result.exit_code == 0
+    assert "task-instance" in result.stdout
+    assert "workflow-instance" in result.stdout
+    assert "list" in result.stdout

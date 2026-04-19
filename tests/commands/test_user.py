@@ -213,6 +213,14 @@ def test_user_get_command_resolves_name() -> None:
     assert payload["data"]["timeZone"] == "Asia/Shanghai"
 
 
+def test_user_get_help_points_to_list_for_selector() -> None:
+    result = runner.invoke(app, ["user", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "user" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_user_create_command_returns_created_user() -> None:
     result = runner.invoke(
         app,
@@ -237,6 +245,14 @@ def test_user_create_command_returns_created_user() -> None:
     assert payload["action"] == "user.create"
     assert payload["data"]["userName"] == "carol"
     assert payload["data"]["tenantId"] == 11
+
+
+def test_user_create_help_points_to_tenant_and_queue_lists() -> None:
+    result = runner.invoke(app, ["user", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "dsctl tenant list" in result.stdout
+    assert "dsctl queue list" in result.stdout
 
 
 def test_user_create_command_reports_upstream_input_suggestion(
@@ -340,6 +356,15 @@ def test_user_grant_project_command_returns_confirmation() -> None:
     assert payload["resolved"]["project"]["code"] == 701
 
 
+def test_user_grant_project_help_points_to_user_and_project_lists() -> None:
+    result = runner.invoke(app, ["user", "grant", "project", "--help"])
+
+    assert result.exit_code == 0
+    assert "user" in result.stdout
+    assert "list" in result.stdout
+    assert "project" in result.stdout
+
+
 def test_user_revoke_project_command_returns_confirmation() -> None:
     result = runner.invoke(app, ["user", "revoke", "project", "alice", "etl-prod"])
 
@@ -370,6 +395,14 @@ def test_user_grant_datasource_command_returns_confirmation() -> None:
     assert payload["action"] == "user.grant.datasource"
     assert payload["data"]["granted"] is True
     assert [item["id"] for item in payload["data"]["datasources"]] == [7, 9]
+
+
+def test_user_grant_datasource_help_points_to_datasource_list() -> None:
+    result = runner.invoke(app, ["user", "grant", "datasource", "--help"])
+
+    assert result.exit_code == 0
+    assert "datasource" in result.stdout
+    assert "list" in result.stdout
 
 
 def test_user_revoke_datasource_command_returns_confirmation() -> None:
@@ -412,6 +445,13 @@ def test_user_grant_namespace_command_returns_confirmation() -> None:
     assert payload["action"] == "user.grant.namespace"
     assert payload["data"]["granted"] is True
     assert [item["id"] for item in payload["data"]["namespaces"]] == [21, 22]
+
+
+def test_user_grant_namespace_help_points_to_namespace_list() -> None:
+    result = runner.invoke(app, ["user", "grant", "namespace", "--help"])
+
+    assert result.exit_code == 0
+    assert "dsctl namespace list" in result.stdout
 
 
 def test_user_revoke_namespace_command_returns_confirmation() -> None:

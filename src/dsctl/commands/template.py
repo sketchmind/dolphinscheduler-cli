@@ -4,7 +4,11 @@ import typer
 
 from dsctl.cli_runtime import emit_result
 from dsctl.services.template import (
+    cluster_config_template_result,
+    datasource_template_result,
+    environment_config_template_result,
     parameter_syntax_result,
+    supported_datasource_types,
     supported_parameter_syntax_topics,
     task_template_result,
     task_template_types_result,
@@ -12,7 +16,7 @@ from dsctl.services.template import (
 )
 
 template_app = typer.Typer(
-    help="Emit stable YAML templates for workflow authoring.",
+    help="Emit stable templates for workflow authoring and DS-native payloads.",
     no_args_is_help=True,
 )
 
@@ -57,12 +61,49 @@ def params_command(
     emit_result("template.params", lambda: parameter_syntax_result(topic=topic))
 
 
+@template_app.command("environment")
+def environment_command() -> None:
+    """Emit a DS environment shell/export config template."""
+    emit_result("template.environment", environment_config_template_result)
+
+
+@template_app.command("cluster")
+def cluster_command() -> None:
+    """Emit a DS cluster config JSON template."""
+    emit_result("template.cluster", cluster_config_template_result)
+
+
+@template_app.command("datasource")
+def datasource_command(
+    datasource_type: Annotated[
+        str | None,
+        typer.Option(
+            "--type",
+            help=(
+                "Datasource type to template. Omit for compact type discovery. "
+                "Run `dsctl template datasource` or `dsctl enum list db-type` "
+                "for all values. Common: "
+                f"{', '.join(supported_datasource_types()[:6])}."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Emit datasource JSON payload-template type discovery or one template."""
+    emit_result(
+        "template.datasource",
+        lambda: datasource_template_result(datasource_type=datasource_type),
+    )
+
+
 @template_app.command("task")
 def task_command(
     task_type: Annotated[
         str | None,
         typer.Argument(
-            help="Task type to template, for example SHELL, PYTHON, SQL, or HTTP.",
+            help=(
+                "Task type to template. Required unless --list. Run "
+                "`dsctl template task --list` to inspect supported values."
+            ),
         ),
     ] = None,
     list_types: Annotated[
@@ -77,15 +118,18 @@ def task_command(
         typer.Option(
             "--variant",
             help=(
-                "Task template scenario, for example minimal, resource, "
-                "post-json, or branching."
+                "Task template scenario. Valid choices depend on the selected "
+                "task type. Known variants include minimal, params, resource, "
+                "post-json, pre-post-statements, branching, condition-routing, "
+                "workflow-dependency, child-workflow, and datasource; inspect "
+                "per-type values with `dsctl template task --list`."
             ),
         ),
     ] = None,
 ) -> None:
-    """Emit one task YAML template."""
+    """Emit one task YAML template or list supported task types."""
     if list_types:
-        emit_result("template.task_types", task_template_types_result)
+        emit_result("template.task", task_template_types_result)
         return
     emit_result(
         "template.task",

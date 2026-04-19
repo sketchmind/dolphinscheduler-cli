@@ -38,7 +38,9 @@ ALERT_PLUGIN_SCHEMA = json.dumps(
             "field": "url",
             "name": "url",
             "type": "input",
+            "value": None,
             "props": {"placeholder": "Webhook URL"},
+            "validate": [{"required": True}],
         }
     ],
     ensure_ascii=False,
@@ -81,7 +83,7 @@ def fake_ui_plugin_adapter() -> FakeUiPluginAdapter:
             FakePluginDefine(
                 id=3,
                 plugin_name_value="Slack",
-                plugin_type_value="ALERT",
+                plugin_type_value="alert",
                 plugin_params_value=ALERT_PLUGIN_SCHEMA,
             )
         ]
@@ -189,10 +191,73 @@ def test_get_alert_plugin_schema_result_returns_plugin_definition(
         "pluginDefine": {
             "id": 3,
             "pluginName": "Slack",
-            "pluginType": "ALERT",
+            "pluginType": "alert",
         }
     }
-    assert _mapping(result.data)["pluginParams"] == ALERT_PLUGIN_SCHEMA
+    data = _mapping(result.data)
+    assert data["pluginParams"] == ALERT_PLUGIN_SCHEMA
+    assert data["pluginParamFields"] == [
+        {
+            "field": "url",
+            "name": "url",
+            "title": None,
+            "type": "input",
+            "required": True,
+            "defaultValue": None,
+            "options": None,
+        }
+    ]
+
+
+def test_list_alert_plugin_definitions_result_returns_supported_definitions(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_ui_plugin_adapter: FakeUiPluginAdapter,
+    fake_alert_plugin_adapter: FakeAlertPluginAdapter,
+) -> None:
+    _install_alert_plugin_service_fakes(
+        monkeypatch,
+        ui_plugin_adapter=fake_ui_plugin_adapter,
+        alert_plugin_adapter=fake_alert_plugin_adapter,
+    )
+
+    result = alert_plugin_service.list_alert_plugin_definitions_result()
+
+    assert result.resolved == {
+        "pluginDefinitions": {
+            "pluginType": "ALERT",
+            "source": "ui-plugins/query-by-type",
+        }
+    }
+    data = _mapping(result.data)
+    assert data["count"] == 1
+    assert data["schema_command"] == "alert-plugin schema PLUGIN"
+    assert data["definitions"] == [
+        {
+            "id": 3,
+            "pluginName": "Slack",
+            "pluginType": "alert",
+            "createTime": None,
+            "updateTime": None,
+        }
+    ]
+
+
+def test_get_alert_plugin_schema_result_accepts_id_and_case_insensitive_name(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_ui_plugin_adapter: FakeUiPluginAdapter,
+    fake_alert_plugin_adapter: FakeAlertPluginAdapter,
+) -> None:
+    _install_alert_plugin_service_fakes(
+        monkeypatch,
+        ui_plugin_adapter=fake_ui_plugin_adapter,
+        alert_plugin_adapter=fake_alert_plugin_adapter,
+    )
+
+    by_id = alert_plugin_service.get_alert_plugin_schema_result("3")
+    by_name = alert_plugin_service.get_alert_plugin_schema_result("slack")
+
+    assert _mapping(by_id.data)["pluginParams"] == ALERT_PLUGIN_SCHEMA
+    assert _mapping(by_name.data)["pluginName"] == "Slack"
 
 
 def test_create_alert_plugin_result_returns_refreshed_payload(
@@ -222,10 +287,34 @@ def test_create_alert_plugin_result_returns_refreshed_payload(
         "pluginDefine": {
             "id": 3,
             "pluginName": "Slack",
-            "pluginType": "ALERT",
+            "pluginType": "alert",
         },
     }
     assert _mapping(result.data)["instanceName"] == "slack-nightly"
+
+
+def test_create_alert_plugin_result_builds_params_from_inline_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_ui_plugin_adapter: FakeUiPluginAdapter,
+    fake_alert_plugin_adapter: FakeAlertPluginAdapter,
+) -> None:
+    _install_alert_plugin_service_fakes(
+        monkeypatch,
+        ui_plugin_adapter=fake_ui_plugin_adapter,
+        alert_plugin_adapter=fake_alert_plugin_adapter,
+    )
+
+    result = alert_plugin_service.create_alert_plugin_result(
+        name="slack-nightly",
+        plugin="slack",
+        params=["URL=https://hooks.example.test/nightly"],
+    )
+
+    data = _mapping(result.data)
+    params = json.loads(str(data["pluginInstanceParams"]))
+    assert data["instanceName"] == "slack-nightly"
+    assert params[0]["field"] == "url"
+    assert params[0]["value"] == "https://hooks.example.test/nightly"
 
 
 def test_create_alert_plugin_result_rejects_non_array_params_payload(
@@ -285,6 +374,47 @@ def test_update_alert_plugin_result_preserves_omitted_params(
     data = _mapping(result.data)
     assert data["instanceName"] == "slack-ops-renamed"
     assert data["pluginInstanceParams"] == ALERT_PLUGIN_PARAMS
+
+
+def test_update_alert_plugin_result_overlays_inline_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_ui_plugin_adapter: FakeUiPluginAdapter,
+    fake_alert_plugin_adapter: FakeAlertPluginAdapter,
+) -> None:
+    _install_alert_plugin_service_fakes(
+        monkeypatch,
+        ui_plugin_adapter=fake_ui_plugin_adapter,
+        alert_plugin_adapter=fake_alert_plugin_adapter,
+    )
+
+    result = alert_plugin_service.update_alert_plugin_result(
+        "slack-ops",
+        params=["url=https://hooks.example.test/updated"],
+    )
+
+    data = _mapping(result.data)
+    params = json.loads(str(data["pluginInstanceParams"]))
+    assert data["instanceName"] == "slack-ops"
+    assert params[0]["value"] == "https://hooks.example.test/updated"
+
+
+def test_create_alert_plugin_result_requires_inline_required_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_ui_plugin_adapter: FakeUiPluginAdapter,
+    fake_alert_plugin_adapter: FakeAlertPluginAdapter,
+) -> None:
+    _install_alert_plugin_service_fakes(
+        monkeypatch,
+        ui_plugin_adapter=fake_ui_plugin_adapter,
+        alert_plugin_adapter=fake_alert_plugin_adapter,
+    )
+
+    with pytest.raises(UserInputError, match="missing required fields"):
+        alert_plugin_service.create_alert_plugin_result(
+            name="slack-nightly",
+            plugin="Slack",
+            params=["url="],
+        )
 
 
 def test_delete_alert_plugin_result_requires_force(

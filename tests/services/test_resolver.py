@@ -165,7 +165,7 @@ def test_environment_resolver_uses_cli_resource_slug_in_not_found_details() -> N
     with pytest.raises(NotFoundError) as exc_info:
         resolver_service.environment("missing", adapter=adapter)
 
-    assert exc_info.value.details["resource"] == "env"
+    assert exc_info.value.details["resource"] == "environment"
 
 
 def test_environment_resolver_uses_search_pages_instead_of_full_scan(

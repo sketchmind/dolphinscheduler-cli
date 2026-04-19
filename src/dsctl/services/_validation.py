@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from time import strptime, struct_time
+
 from dsctl.errors import UserInputError
 from dsctl.support.quartz import (
     QUARTZ_CRON_FIELD_COUNTS,
@@ -7,6 +9,8 @@ from dsctl.support.quartz import (
     quartz_cron_field_count,
     quartz_cron_suggestion,
 )
+
+DS_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def require_non_empty_text(value: str, *, label: str) -> str:
@@ -42,6 +46,55 @@ def require_quartz_cron_text(value: str, *, label: str) -> str:
             details=details,
             suggestion=quartz_cron_suggestion(field_count),
         ) from exc
+
+
+def optional_ds_datetime(value: str | None, *, label: str) -> str | None:
+    """Normalize one optional DS datetime string."""
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    try:
+        parse_ds_datetime(normalized)
+    except ValueError as error:
+        message = f"{label} must match DS datetime format {DS_DATETIME_FORMAT!r}"
+        raise UserInputError(
+            message,
+            suggestion=(
+                f"Pass --{label} in '{DS_DATETIME_FORMAT}' format, for "
+                "example '2026-04-11 10:00:00'."
+            ),
+        ) from error
+    return normalized
+
+
+def validate_ds_datetime_range(
+    start: str | None,
+    end: str | None,
+    *,
+    start_label: str = "start",
+    end_label: str = "end",
+) -> None:
+    """Require an optional DS datetime range to be ordered when both ends exist."""
+    if start is None or end is None:
+        return
+    start_value = parse_ds_datetime(start)
+    end_value = parse_ds_datetime(end)
+    if end_value < start_value:
+        message = f"{end_label} must be greater than or equal to {start_label}"
+        raise UserInputError(
+            message,
+            suggestion=(
+                f"Pass an --{end_label} value that is later than or equal "
+                f"to --{start_label}."
+            ),
+        )
+
+
+def parse_ds_datetime(value: str) -> struct_time:
+    """Parse one DS datetime string using the CLI-supported wire format."""
+    return strptime(value, DS_DATETIME_FORMAT)
 
 
 def require_positive_int(value: int, *, label: str) -> int:

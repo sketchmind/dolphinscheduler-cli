@@ -65,10 +65,16 @@ dsctl project list
 dsctl use project etl-prod
 dsctl workflow list
 dsctl workflow get daily-etl
+dsctl template datasource --type MYSQL
 dsctl workflow run daily-etl --project etl-prod
 dsctl workflow-instance digest <workflow_instance_id>
 dsctl task-instance list --workflow-instance <workflow_instance_id>
+dsctl task-instance list --project etl-prod --state FAILURE
 dsctl task-instance log <task_instance_id>
+dsctl --columns id,name,state workflow-instance list --project etl-prod
+dsctl --output-format table workflow-instance list --project etl-prod
+dsctl --output-format tsv --columns id,name,state task-instance list --workflow-instance <workflow_instance_id>
+dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <workflow_instance_id>
 ```
 
 ## Command Surface
@@ -80,10 +86,11 @@ Stable user-facing commands today:
 - `dsctl doctor`
 - `dsctl schema`
 - `dsctl capabilities`
+- `dsctl enum names`
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
 - `dsctl task-type list`
-- `dsctl env list|get|create|update|delete`
+- `dsctl environment list|get|create|update|delete`
 - `dsctl cluster list|get|create|update|delete`
 - `dsctl datasource list|get|create|update|delete|test`
 - `dsctl namespace list|get|available|create|delete`
@@ -93,6 +100,7 @@ Stable user-facing commands today:
 - `dsctl task-group list|get|create|update|close|start`
 - `dsctl task-group queue list|force-start|set-priority`
 - `dsctl alert-plugin list|get|schema|create|update|delete|test`
+- `dsctl alert-plugin definition list`
 - `dsctl alert-group list|get|create|update|delete`
 - `dsctl tenant list|get|create|update|delete`
 - `dsctl user list|get|create|update|delete`
@@ -107,7 +115,7 @@ Stable user-facing commands today:
 - `dsctl project-preference get|update|enable|disable`
 - `dsctl project-worker-group list|set|clear`
 - `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|params|task`
+- `dsctl template workflow|params|environment|cluster|datasource|task`
 - `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
 - `dsctl workflow lineage list|get|dependent-tasks`
 - `dsctl workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task`

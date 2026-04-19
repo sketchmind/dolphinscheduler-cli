@@ -16,6 +16,10 @@ namespace_app = typer.Typer(
     no_args_is_help=True,
 )
 
+NAMESPACE_HELP = (
+    "Namespace name or numeric id. Run `dsctl namespace list` to discover values."
+)
+
 
 def register_namespace_commands(app: typer.Typer) -> None:
     """Register the `namespace` command group."""
@@ -77,7 +81,7 @@ def get_command(
     ctx: typer.Context,
     namespace: Annotated[
         str,
-        typer.Argument(help="Namespace name or numeric id."),
+        typer.Argument(help=NAMESPACE_HELP),
     ],
 ) -> None:
     """Get one namespace by name or id."""
@@ -116,7 +120,7 @@ def create_command(
         typer.Option(
             "--cluster-code",
             min=1,
-            help="Owning cluster code.",
+            help="Owning cluster code. Run `dsctl cluster list` to discover codes.",
         ),
     ],
 ) -> None:
@@ -138,7 +142,7 @@ def delete_command(
     ctx: typer.Context,
     namespace: Annotated[
         str,
-        typer.Argument(help="Namespace name or numeric id."),
+        typer.Argument(help=NAMESPACE_HELP),
     ],
     *,
     force: Annotated[

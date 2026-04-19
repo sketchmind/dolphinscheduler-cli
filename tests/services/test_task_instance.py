@@ -17,6 +17,7 @@ from dsctl.errors import (
     ApiResultError,
     InvalidStateError,
     NotFoundError,
+    TaskNotDispatchedError,
     UserInputError,
     WaitTimeoutError,
 )
@@ -102,8 +103,12 @@ def fake_task_instance_adapter() -> FakeTaskInstanceAdapter:
                 project_code_value=7,
                 task_code_value=201,
                 task_definition_version_value=1,
+                process_definition_name_value="daily-sync",
                 state_value=FakeEnumValue("RUNNING_EXECUTION"),
+                start_time_value="2026-04-11 10:00:00",
                 host="worker-1",
+                executor_name_value="alice",
+                task_execute_type_value=FakeEnumValue("BATCH"),
             ),
             FakeTaskInstance(
                 id=3002,
@@ -114,8 +119,12 @@ def fake_task_instance_adapter() -> FakeTaskInstanceAdapter:
                 project_code_value=7,
                 task_code_value=202,
                 task_definition_version_value=1,
+                process_definition_name_value="daily-sync",
                 state_value=FakeEnumValue("FAILURE"),
+                start_time_value="2026-04-11 10:05:00",
                 host="worker-1",
+                executor_name_value="bob",
+                task_execute_type_value=FakeEnumValue("BATCH"),
             ),
             FakeTaskInstance(
                 id=3003,
@@ -126,7 +135,11 @@ def fake_task_instance_adapter() -> FakeTaskInstanceAdapter:
                 project_code_value=7,
                 task_code_value=203,
                 task_definition_version_value=1,
+                process_definition_name_value="daily-sync",
                 state_value=FakeEnumValue("SUCCESS"),
+                start_time_value="2026-04-11 10:10:00",
+                executor_name_value="alice",
+                task_execute_type_value=FakeEnumValue("BATCH"),
             ),
         ],
         log_messages_by_task_instance_id={
@@ -184,6 +197,76 @@ def test_list_task_instances_result_can_auto_exhaust_pages(
     assert result.resolved["all"] is True
     assert data["total"] == 2
     assert len(items) == 2
+
+
+def test_list_task_instances_result_supports_project_scoped_filters(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    result = task_instance_service.list_task_instances_result(
+        project="etl-prod",
+        host="worker-1",
+        executor="bob",
+        start="2026-04-11 10:00:00",
+        end="2026-04-11 10:10:00",
+        execute_type="BATCH",
+    )
+    data = _mapping(result.data)
+    items = _sequence(data["totalList"])
+
+    assert _mapping(result.resolved["project"])["code"] == 7
+    assert result.resolved["host"] == "worker-1"
+    assert result.resolved["executor"] == "bob"
+    assert data["total"] == 1
+    assert _mapping(items[0])["id"] == 3002
+
+
+def test_list_task_instances_result_requires_project_without_workflow_instance(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(UserInputError, match="Project is required"):
+        task_instance_service.list_task_instances_result()
+
+
+def test_list_task_instances_result_rejects_workflow_definition_filter() -> None:
+    with pytest.raises(UserInputError, match="cannot reliably filter") as exc_info:
+        task_instance_service.list_task_instances_result(
+            project="etl-prod",
+            workflow="daily-sync",
+        )
+
+    assert exc_info.value.details["upstream_filter"] == "workflowDefinitionName"
+    assert "workflow-instance list" in (exc_info.value.suggestion or "")
+
+
+def test_list_task_instances_result_rejects_redundant_workflow_with_instance() -> None:
+    with pytest.raises(UserInputError, match="does not accept --workflow") as exc_info:
+        task_instance_service.list_task_instances_result(
+            workflow_instance=901,
+            workflow="daily-sync",
+        )
+
+    assert exc_info.value.details["workflow_instance_id"] == 901
+    assert "--workflow-instance already scopes" in (exc_info.value.suggestion or "")
 
 
 def test_get_task_instance_result_returns_one_payload(
@@ -296,6 +379,43 @@ def test_get_task_instance_log_result_returns_tail_lines(
 
     assert data["lineCount"] == 2
     assert data["text"] == "line-3\nline-4"
+
+
+def test_get_task_instance_log_result_translates_not_dispatched(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    def not_dispatched_log(
+        *,
+        task_instance_id: int,
+        skip_line_num: int,
+        limit: int,
+    ) -> None:
+        del task_instance_id, skip_line_num, limit
+        raise ApiResultError(
+            result_code=10103,
+            result_message=(
+                "TaskInstanceLogPath is empty, maybe the taskInstance doesn't "
+                "be dispatched"
+            ),
+        )
+
+    monkeypatch.setattr(fake_task_instance_adapter, "log_chunk", not_dispatched_log)
+
+    with pytest.raises(TaskNotDispatchedError) as exc_info:
+        task_instance_service.get_task_instance_log_result(3001)
+
+    assert exc_info.value.details["result_code"] == 10103
+    assert "workflow-instance digest" in (exc_info.value.suggestion or "")
 
 
 def test_get_task_instance_result_reports_missing_instance(
@@ -654,8 +774,36 @@ def test_list_task_instances_result_reports_supported_state_names(
         )
 
     assert exc_info.value.suggestion == (
-        "Run `dsctl enum list task_execution_status` to inspect the supported DS "
+        "Run `dsctl enum list task-execution-status` to inspect the supported DS "
         "task-instance states."
+    )
+
+
+def test_list_task_instances_result_reports_supported_execute_types(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(
+        UserInputError,
+        match="Task execute type must be one of the DS task execute-type names",
+    ) as exc_info:
+        task_instance_service.list_task_instances_result(
+            workflow_instance=901,
+            execute_type="not-real",
+        )
+
+    assert exc_info.value.suggestion == (
+        "Run `dsctl enum list task-execute-type` to inspect the supported DS "
+        "task execute-type names."
     )
 
 

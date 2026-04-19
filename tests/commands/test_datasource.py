@@ -80,6 +80,29 @@ def test_datasource_get_command_resolves_name() -> None:
     assert payload["data"]["host"] == "db.example"
 
 
+def test_datasource_mutating_selector_help_points_to_list() -> None:
+    for command in ("delete", "test"):
+        result = runner.invoke(app, ["datasource", command, "--help"])
+
+        assert result.exit_code == 0
+        assert "datasource" in result.stdout
+        assert "list" in result.stdout
+
+
+def test_datasource_payload_file_help_points_to_template_flow() -> None:
+    create_result = runner.invoke(app, ["datasource", "create", "--help"])
+    update_result = runner.invoke(app, ["datasource", "update", "--help"])
+
+    assert create_result.exit_code == 0
+    assert "Start with `dsctl template datasource`" in create_result.stdout
+    assert "pass the saved" in create_result.stdout
+    assert "write data.json to this file" not in create_result.stdout
+    assert update_result.exit_code == 0
+    assert "Start from `dsctl datasource get DATASOURCE`" in update_result.stdout
+    assert "pass" in update_result.stdout
+    assert "the saved JSON path here" in update_result.stdout
+
+
 def test_datasource_create_command_returns_created_payload(tmp_path: Path) -> None:
     file = _write_json(
         tmp_path / "create.json",
@@ -97,6 +120,28 @@ def test_datasource_create_command_returns_created_payload(tmp_path: Path) -> No
     assert payload["action"] == "datasource.create"
     assert payload["data"]["name"] == "analytics"
     assert payload["resolved"]["datasource"]["id"] == 8
+
+
+def test_datasource_create_command_rejects_unknown_type(tmp_path: Path) -> None:
+    file = _write_json(
+        tmp_path / "unknown.json",
+        {
+            "name": "analytics",
+            "type": "UNKNOWN",
+            "password": "secret",
+        },
+    )
+
+    result = runner.invoke(app, ["datasource", "create", "--file", str(file)])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "datasource.create"
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["suggestion"] == (
+        "Run `dsctl template datasource` to choose a supported datasource type, "
+        "then `dsctl template datasource --type TYPE`."
+    )
 
 
 def test_datasource_create_command_rejects_payload_with_id(tmp_path: Path) -> None:

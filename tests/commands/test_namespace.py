@@ -82,6 +82,14 @@ def test_namespace_get_command_resolves_name() -> None:
     assert payload["data"]["clusterCode"] == 9001
 
 
+def test_namespace_selector_help_points_to_list_discovery() -> None:
+    result = runner.invoke(app, ["namespace", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "namespace" in result.stdout
+    assert "list" in result.stdout
+
+
 def test_namespace_available_command_returns_current_user_visible_set() -> None:
     result = runner.invoke(app, ["namespace", "available"])
 
@@ -110,6 +118,13 @@ def test_namespace_create_command_returns_created_namespace() -> None:
     assert payload["action"] == "namespace.create"
     assert payload["data"]["namespace"] == "etl-ops"
     assert payload["resolved"]["namespace"]["id"] == 23
+
+
+def test_namespace_create_help_points_to_cluster_discovery() -> None:
+    result = runner.invoke(app, ["namespace", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "dsctl cluster list" in result.stdout
 
 
 def test_namespace_create_command_reports_upstream_input_suggestion(

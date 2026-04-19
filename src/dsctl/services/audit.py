@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from time import strptime, struct_time
 from typing import TypeAlias
 
 from dsctl.cli_surface import AUDIT_RESOURCE
@@ -13,7 +12,11 @@ from dsctl.services._serialization import (
     serialize_audit_model_type,
     serialize_audit_operation_type,
 )
-from dsctl.services._validation import require_positive_int
+from dsctl.services._validation import (
+    optional_ds_datetime,
+    require_positive_int,
+    validate_ds_datetime_range,
+)
 from dsctl.services.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_AUTO_EXHAUST_PAGES,
@@ -22,7 +25,6 @@ from dsctl.services.pagination import (
 )
 from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
 
-AUDIT_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 AuditPageData: TypeAlias = PageData[AuditData]
 
 
@@ -45,9 +47,9 @@ def list_audit_logs_result(
         operation_types,
         label="operation type",
     )
-    normalized_start = _audit_datetime(start, label="start")
-    normalized_end = _audit_datetime(end, label="end")
-    _validate_audit_range(normalized_start, normalized_end)
+    normalized_start = optional_ds_datetime(start, label="start")
+    normalized_end = optional_ds_datetime(end, label="end")
+    validate_ds_datetime_range(normalized_start, normalized_end)
     return run_with_service_runtime(
         env_file,
         _list_audit_logs_result,
@@ -180,41 +182,6 @@ def _filter_values(
         seen.add(normalized)
         normalized_values.append(normalized)
     return tuple(normalized_values)
-
-
-def _audit_datetime(value: str | None, *, label: str) -> str | None:
-    normalized = optional_text(value)
-    if normalized is None:
-        return None
-    try:
-        _parse_audit_datetime(normalized)
-    except ValueError as error:
-        message = f"{label} must match DS datetime format {AUDIT_DATETIME_FORMAT!r}"
-        raise UserInputError(
-            message,
-            suggestion=(
-                f"Pass --{label} in '{AUDIT_DATETIME_FORMAT}' format, for "
-                "example '2026-04-11 10:00:00'."
-            ),
-        ) from error
-    return normalized
-
-
-def _validate_audit_range(start: str | None, end: str | None) -> None:
-    if start is None or end is None:
-        return
-    start_value = _parse_audit_datetime(start)
-    end_value = _parse_audit_datetime(end)
-    if end_value < start_value:
-        message = "end must be greater than or equal to start"
-        raise UserInputError(
-            message,
-            suggestion="Pass an --end value that is later than or equal to --start.",
-        )
-
-
-def _parse_audit_datetime(value: str) -> struct_time:
-    return strptime(value, AUDIT_DATETIME_FORMAT)
 
 
 __all__ = [

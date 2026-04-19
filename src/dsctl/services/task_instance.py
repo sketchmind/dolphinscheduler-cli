@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from collections import deque
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 from dsctl.cli_surface import TASK_INSTANCE_RESOURCE
 from dsctl.errors import (
@@ -10,6 +10,7 @@ from dsctl.errors import (
     InvalidStateError,
     NotFoundError,
     PermissionDeniedError,
+    TaskNotDispatchedError,
     UserInputError,
     WaitTimeoutError,
 )
@@ -25,17 +26,34 @@ from dsctl.services._serialization import (
     optional_text,
     serialize_task_instance,
 )
-from dsctl.services._validation import require_non_negative_int, require_positive_int
+from dsctl.services._validation import (
+    optional_ds_datetime,
+    require_non_negative_int,
+    require_positive_int,
+    validate_ds_datetime_range,
+)
 from dsctl.services.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_AUTO_EXHAUST_PAGES,
     PageData,
     requested_page_data,
 )
+from dsctl.services.resolver import (
+    ResolvedProject,
+    ResolvedWorkflow,
+)
+from dsctl.services.resolver import project as resolve_project
+from dsctl.services.resolver import workflow as resolve_workflow
 from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.services.selection import (
+    SelectedValue,
+    require_project_selection,
+    with_selection_source,
+)
 from dsctl.upstream.runtime_enums import (
     TASK_EXECUTION_FINISHED_STATES,
     TASK_EXECUTION_FORCE_SUCCESS_ALLOWED_STATES,
+    task_execute_type_value,
     task_execution_status_value,
     workflow_execution_status_is_final,
 )
@@ -43,12 +61,18 @@ from dsctl.upstream.runtime_enums import (
 if TYPE_CHECKING:
     from dsctl.upstream.protocol import TaskInstanceRecord, WorkflowInstanceRecord
 
+ResolvedMetadataValue: TypeAlias = int | str | None
+ResolvedMetadata: TypeAlias = dict[str, ResolvedMetadataValue]
+TaskInstanceListResolvedValue: TypeAlias = int | str | bool | None | ResolvedMetadata
+TaskInstanceListResolvedData: TypeAlias = dict[str, TaskInstanceListResolvedValue]
+
 
 LOG_CHUNK_SIZE = 1000
 MAX_LOG_CHUNKS = 200
 DEFAULT_TASK_INSTANCE_WATCH_INTERVAL_SECONDS = 5
 DEFAULT_TASK_INSTANCE_WATCH_TIMEOUT_SECONDS = 600
 TASK_INSTANCE_NOT_FOUND = 10008
+TASK_INSTANCE_LOG_PATH_EMPTY = 10103
 TASK_INSTANCE_NOT_SUB_WORKFLOW_INSTANCE = 10021
 TASK_INSTANCE_STATE_OPERATION_ERROR = 10166
 TASK_SAVEPOINT_ERROR = 10196
@@ -70,6 +94,43 @@ def _task_instance_get_command(
 
 def _workflow_instance_get_command(workflow_instance_id: int) -> str:
     return f"dsctl workflow-instance get {workflow_instance_id}"
+
+
+def _unsupported_task_instance_workflow_filter(
+    *,
+    workflow: str,
+    workflow_instance_id: int | None,
+) -> UserInputError:
+    if workflow_instance_id is not None:
+        message = "`task-instance list` does not accept --workflow"
+        suggestion = (
+            "Drop --workflow; --workflow-instance already scopes the "
+            "task-instance query to one workflow run."
+        )
+    else:
+        message = (
+            "`task-instance list` cannot reliably filter by workflow definition "
+            "in DolphinScheduler 3.4.1"
+        )
+        suggestion = (
+            "Run `dsctl workflow-instance list --project <project> --workflow "
+            f"{workflow}` to find workflow instance ids, then run `dsctl "
+            "task-instance list --workflow-instance <workflow_instance_id>`."
+        )
+    return UserInputError(
+        message,
+        details={
+            "resource": TASK_INSTANCE_RESOURCE,
+            "workflow": workflow,
+            "workflow_instance_id": workflow_instance_id,
+            "upstream_filter": "workflowDefinitionName",
+            "reason": (
+                "DS 3.4.1 ignores workflowDefinitionName for regular BATCH "
+                "task-instance paging queries."
+            ),
+        },
+        suggestion=suggestion,
+    )
 
 
 class WorkflowInstanceSelectionData(TypedDict):
@@ -102,32 +163,76 @@ TaskInstancePageData = PageData[TaskInstanceData]
 
 def list_task_instances_result(
     *,
-    workflow_instance: int,
+    workflow_instance: int | None = None,
+    project: str | None = None,
+    workflow: str | None = None,
+    workflow_instance_name: str | None = None,
     page_no: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
     all_pages: bool = False,
     search: str | None = None,
+    task: str | None = None,
+    task_code: int | None = None,
+    executor: str | None = None,
     state: str | None = None,
+    host: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    execute_type: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
-    """List task instances inside one workflow instance."""
-    normalized_workflow_instance = require_positive_int(
-        workflow_instance,
-        label="workflow_instance",
+    """List task instances with project-scoped DS runtime filters."""
+    normalized_workflow_instance = (
+        None
+        if workflow_instance is None
+        else require_positive_int(
+            workflow_instance,
+            label="workflow_instance",
+        )
     )
     normalized_page_no = require_positive_int(page_no, label="page_no")
     normalized_page_size = require_positive_int(page_size, label="page_size")
+    normalized_project = optional_text(project)
+    normalized_workflow = optional_text(workflow)
+    if normalized_workflow is not None:
+        raise _unsupported_task_instance_workflow_filter(
+            workflow=normalized_workflow,
+            workflow_instance_id=normalized_workflow_instance,
+        )
+    normalized_workflow_instance_name = optional_text(workflow_instance_name)
     normalized_search = optional_text(search)
+    normalized_task = optional_text(task)
+    normalized_task_code = (
+        None
+        if task_code is None
+        else require_positive_int(task_code, label="task_code")
+    )
+    normalized_executor = optional_text(executor)
     normalized_state = _normalized_task_instance_state(state)
+    normalized_host = optional_text(host)
+    normalized_start = optional_ds_datetime(start, label="start")
+    normalized_end = optional_ds_datetime(end, label="end")
+    validate_ds_datetime_range(normalized_start, normalized_end)
+    normalized_execute_type = _normalized_task_execute_type(execute_type)
     return run_with_service_runtime(
         env_file,
         _list_task_instances_result,
         workflow_instance_id=normalized_workflow_instance,
+        project=normalized_project,
+        workflow=normalized_workflow,
+        workflow_instance_name=normalized_workflow_instance_name,
         page_no=normalized_page_no,
         page_size=normalized_page_size,
         all_pages=all_pages,
         search=normalized_search,
+        task=normalized_task,
+        task_code=normalized_task_code,
+        executor=normalized_executor,
         state=normalized_state,
+        host=normalized_host,
+        start=normalized_start,
+        end=normalized_end,
+        execute_type=normalized_execute_type,
     )
 
 
@@ -304,30 +409,53 @@ def stop_task_instance_result(
 def _list_task_instances_result(
     runtime: ServiceRuntime,
     *,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
+    project: str | None,
+    workflow: str | None,
+    workflow_instance_name: str | None,
     page_no: int,
     page_size: int,
     all_pages: bool,
     search: str | None,
+    task: str | None,
+    task_code: int | None,
+    executor: str | None,
     state: str | None,
+    host: str | None,
+    start: str | None,
+    end: str | None,
+    execute_type: str | None,
 ) -> CommandResult:
-    workflow_instance = get_workflow_instance(
-        runtime,
-        workflow_instance_id=workflow_instance_id,
+    resolved_project, selected_project, resolved_workflow = (
+        _resolve_task_instance_list_scope(
+            runtime,
+            workflow_instance_id=workflow_instance_id,
+            project=project,
+            workflow=workflow,
+        )
     )
-    project_code = require_workflow_instance_project_code(
-        workflow_instance.projectCode,
+    workflow_definition_name = (
+        None if resolved_workflow is None else resolved_workflow.name
     )
     data = require_json_object(
         requested_page_data(
             lambda current_page_no, current_page_size: (
                 runtime.upstream.task_instances.list(
+                    project_code=resolved_project.code,
                     workflow_instance_id=workflow_instance_id,
-                    project_code=project_code,
+                    workflow_instance_name=workflow_instance_name,
+                    workflow_definition_name=workflow_definition_name,
                     page_no=current_page_no,
                     page_size=current_page_size,
                     search=search,
+                    task_name=task,
+                    task_code=task_code,
+                    executor=executor,
                     state=state,
+                    host=host,
+                    start_time=start,
+                    end_time=end,
+                    task_execute_type=execute_type,
                 )
             ),
             page_no=page_no,
@@ -339,23 +467,170 @@ def _list_task_instances_result(
         ),
         label="task-instance list data",
     )
-    resolved: dict[str, int | str | None] = {
-        "workflow_instance": workflow_instance_id,
+    return CommandResult(
+        data=data,
+        resolved=require_json_object(
+            _task_instance_list_resolved(
+                resolved_project=resolved_project,
+                selected_project=selected_project,
+                resolved_workflow=resolved_workflow,
+                workflow_instance_id=workflow_instance_id,
+                workflow_instance_name=workflow_instance_name,
+                page_no=page_no,
+                page_size=page_size,
+                all_pages=all_pages,
+                search=search,
+                task=task,
+                task_code=task_code,
+                executor=executor,
+                state=state,
+                host=host,
+                start=start,
+                end=end,
+                execute_type=execute_type,
+            ),
+            label="task-instance list resolved",
+        ),
+    )
+
+
+def _resolve_task_instance_list_scope(
+    runtime: ServiceRuntime,
+    *,
+    workflow_instance_id: int | None,
+    project: str | None,
+    workflow: str | None,
+) -> tuple[ResolvedProject, SelectedValue | None, ResolvedWorkflow | None]:
+    if workflow_instance_id is not None:
+        workflow_instance = get_workflow_instance(
+            runtime,
+            workflow_instance_id=workflow_instance_id,
+        )
+        project_code = require_workflow_instance_project_code(
+            workflow_instance.projectCode,
+        )
+        resolved_project = resolve_project(
+            str(project_code),
+            adapter=runtime.upstream.projects,
+        )
+        selected_project: SelectedValue | None = None
+        if project is not None:
+            explicit_project = resolve_project(
+                project,
+                adapter=runtime.upstream.projects,
+            )
+            if explicit_project.code != project_code:
+                message = (
+                    "Selected project does not match the workflow instance project"
+                )
+                raise UserInputError(
+                    message,
+                    details={
+                        "project": project,
+                        "project_code": explicit_project.code,
+                        "workflow_instance_id": workflow_instance_id,
+                        "workflow_instance_project_code": project_code,
+                    },
+                    suggestion=(
+                        "Use the project that owns the workflow instance, or omit "
+                        "--project when --workflow-instance is already provided."
+                    ),
+                )
+            resolved_project = explicit_project
+            selected_project = SelectedValue(value=project, source="flag")
+        resolved_workflow = (
+            None
+            if workflow is None
+            else resolve_workflow(
+                workflow,
+                adapter=runtime.upstream.workflows,
+                project_code=resolved_project.code,
+            )
+        )
+        return resolved_project, selected_project, resolved_workflow
+
+    selected_project = require_project_selection(project, runtime=runtime)
+    resolved_project = resolve_project(
+        selected_project.value,
+        adapter=runtime.upstream.projects,
+    )
+    resolved_workflow = (
+        None
+        if workflow is None
+        else resolve_workflow(
+            workflow,
+            adapter=runtime.upstream.workflows,
+            project_code=resolved_project.code,
+        )
+    )
+    return resolved_project, selected_project, resolved_workflow
+
+
+def _task_instance_list_resolved(
+    *,
+    resolved_project: ResolvedProject,
+    selected_project: SelectedValue | None,
+    resolved_workflow: ResolvedWorkflow | None,
+    workflow_instance_id: int | None,
+    workflow_instance_name: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
+    search: str | None,
+    task: str | None,
+    task_code: int | None,
+    executor: str | None,
+    state: str | None,
+    host: str | None,
+    start: str | None,
+    end: str | None,
+    execute_type: str | None,
+) -> TaskInstanceListResolvedData:
+    project_data = _project_metadata(resolved_project)
+    if selected_project is not None:
+        project_data = dict(with_selection_source(project_data, selected_project))
+    resolved: TaskInstanceListResolvedData = {
+        "project": project_data,
         "page_no": page_no,
         "page_size": page_size,
         "all": all_pages,
     }
-    if search is not None:
-        resolved["search"] = search
-    if state is not None:
-        resolved["state"] = state
-    return CommandResult(
-        data=data,
-        resolved=require_json_object(
-            resolved,
-            label="task-instance list resolved",
+    optional_fields: dict[str, TaskInstanceListResolvedValue] = {
+        "workflow_instance": workflow_instance_id,
+        "workflow_instance_name": workflow_instance_name,
+        "workflow": (
+            None if resolved_workflow is None else _workflow_metadata(resolved_workflow)
         ),
+        "search": search,
+        "task": task,
+        "task_code": task_code,
+        "executor": executor,
+        "state": state,
+        "host": host,
+        "start": start,
+        "end": end,
+        "execute_type": execute_type,
+    }
+    resolved.update(
+        {key: value for key, value in optional_fields.items() if value is not None}
     )
+    return resolved
+
+
+def _project_metadata(project: ResolvedProject) -> ResolvedMetadata:
+    return {
+        "code": project.code,
+        "name": project.name,
+        "description": project.description,
+    }
+
+
+def _workflow_metadata(workflow: ResolvedWorkflow) -> ResolvedMetadata:
+    return {
+        "code": workflow.code,
+        "name": workflow.name,
+        "version": workflow.version,
+    }
 
 
 def _get_task_instance_result(
@@ -506,11 +781,17 @@ def _get_task_instance_log_result(
     lines: deque[str] = deque(maxlen=tail)
     skip_line_num = 0
     for _ in range(MAX_LOG_CHUNKS):
-        chunk = runtime.upstream.task_instances.log_chunk(
-            task_instance_id=task_instance_id,
-            skip_line_num=skip_line_num,
-            limit=LOG_CHUNK_SIZE,
-        )
+        try:
+            chunk = runtime.upstream.task_instances.log_chunk(
+                task_instance_id=task_instance_id,
+                skip_line_num=skip_line_num,
+                limit=LOG_CHUNK_SIZE,
+            )
+        except ApiResultError as exc:
+            raise _task_instance_log_error(
+                exc,
+                task_instance_id=task_instance_id,
+            ) from exc
         chunk_lines = (chunk.message or "").splitlines()
         lines.extend(chunk_lines)
         if chunk.lineNum < LOG_CHUNK_SIZE:
@@ -737,8 +1018,27 @@ def _normalized_task_instance_state(value: str | None) -> str | None:
             message,
             details={"state": value},
             suggestion=(
-                "Run `dsctl enum list task_execution_status` to inspect the "
+                "Run `dsctl enum list task-execution-status` to inspect the "
                 "supported DS task-instance states."
+            ),
+        ) from exc
+
+
+def _normalized_task_execute_type(value: str | None) -> str | None:
+    normalized = optional_text(value)
+    if normalized is None:
+        return None
+    candidate = normalized.upper()
+    try:
+        return task_execute_type_value(candidate)
+    except KeyError as exc:
+        message = "Task execute type must be one of the DS task execute-type names"
+        raise UserInputError(
+            message,
+            details={"execute_type": value},
+            suggestion=(
+                "Run `dsctl enum list task-execute-type` to inspect the "
+                "supported DS task execute-type names."
             ),
         ) from exc
 
@@ -954,6 +1254,31 @@ def _task_instance_action_error(
             details=details,
         )
     return error
+
+
+def _task_instance_log_error(
+    error: ApiResultError,
+    *,
+    task_instance_id: int,
+) -> ApiResultError | TaskNotDispatchedError:
+    if error.result_code != TASK_INSTANCE_LOG_PATH_EMPTY:
+        return error
+    return TaskNotDispatchedError(
+        "Task instance log is not available because the task has not been dispatched.",
+        details={
+            "resource": TASK_INSTANCE_RESOURCE,
+            "id": task_instance_id,
+            "result_code": error.result_code,
+            "result_message": error.result_message,
+        },
+        source=error.source,
+        suggestion=(
+            "Inspect the task instance state with `task-instance list "
+            "--workflow-instance <workflow_instance_id>` or run "
+            "`workflow-instance digest <workflow_instance_id>` to confirm "
+            "whether DolphinScheduler has dispatched the task."
+        ),
+    )
 
 
 def _task_instance_sub_workflow_error(

@@ -19,6 +19,11 @@ project_parameter_app = typer.Typer(
     no_args_is_help=True,
 )
 
+PROJECT_PARAMETER_HELP = (
+    "Project parameter name or numeric code. Run `dsctl project-parameter list` "
+    "in the selected project to discover values."
+)
+
 
 def register_project_parameter_commands(app: typer.Typer) -> None:
     """Register the `project-parameter` command group."""
@@ -33,7 +38,10 @@ def list_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
     search: Annotated[
@@ -47,7 +55,10 @@ def list_command(
         str | None,
         typer.Option(
             "--data-type",
-            help="Filter project parameters by DS projectParameterDataType.",
+            help=(
+                "Filter by DS projectParameterDataType. Run `dsctl enum list "
+                "data-type` to discover values."
+            ),
         ),
     ] = None,
     page_no: Annotated[
@@ -96,14 +107,17 @@ def get_command(
     ctx: typer.Context,
     project_parameter: Annotated[
         str,
-        typer.Argument(help="Project parameter name or numeric code."),
+        typer.Argument(help=PROJECT_PARAMETER_HELP),
     ],
     *,
     project: Annotated[
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
 ) -> None:
@@ -128,7 +142,10 @@ def create_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
     name: Annotated[
@@ -149,7 +166,10 @@ def create_command(
         str,
         typer.Option(
             "--data-type",
-            help="DS projectParameterDataType value.",
+            help=(
+                "DS projectParameterDataType value. Run `dsctl enum list "
+                "data-type` to discover values."
+            ),
         ),
     ] = "VARCHAR",
 ) -> None:
@@ -173,14 +193,17 @@ def update_command(
     ctx: typer.Context,
     project_parameter: Annotated[
         str,
-        typer.Argument(help="Project parameter name or numeric code."),
+        typer.Argument(help=PROJECT_PARAMETER_HELP),
     ],
     *,
     project: Annotated[
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
     name: Annotated[
@@ -201,7 +224,10 @@ def update_command(
         str | None,
         typer.Option(
             "--data-type",
-            help="Updated DS projectParameterDataType value.",
+            help=(
+                "Updated DS projectParameterDataType value. Run `dsctl enum "
+                "list data-type` to discover values."
+            ),
         ),
     ] = None,
 ) -> None:
@@ -228,14 +254,17 @@ def delete_command(
     ctx: typer.Context,
     project_parameter: Annotated[
         str,
-        typer.Argument(help="Project parameter name or numeric code."),
+        typer.Argument(help=PROJECT_PARAMETER_HELP),
     ],
     *,
     project: Annotated[
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=(
+                "Project name or code. Run `dsctl project list` to discover "
+                "values; falls back to stored project context."
+            ),
         ),
     ] = None,
     force: Annotated[

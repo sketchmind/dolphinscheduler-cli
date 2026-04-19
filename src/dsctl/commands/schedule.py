@@ -20,6 +20,16 @@ schedule_app = typer.Typer(
     no_args_is_help=True,
 )
 
+PROJECT_HELP = (
+    "Project name or code. Run `dsctl project list` to discover values; falls "
+    "back to stored project context."
+)
+SCHEDULE_ID_HELP = "Schedule id. Use `dsctl schedule list` to discover values."
+WORKFLOW_HELP = (
+    "Workflow name or code. Run `dsctl workflow list` in the selected project "
+    "to discover values; falls back to workflow context."
+)
+
 
 def register_schedule_commands(app: typer.Typer) -> None:
     """Register the `schedule` command group."""
@@ -34,14 +44,18 @@ def list_command(
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     workflow: Annotated[
         str | None,
         typer.Option(
             "--workflow",
-            help="Exact workflow name or code to narrow the project schedule list.",
+            help=(
+                "Exact workflow name or code to narrow the project schedule "
+                "list. Run `dsctl workflow list` in the selected project to "
+                "discover values."
+            ),
         ),
     ] = None,
     search: Annotated[
@@ -100,7 +114,7 @@ def get_command(
     ctx: typer.Context,
     schedule_id: Annotated[
         int,
-        typer.Argument(help="Schedule id."),
+        typer.Argument(help=SCHEDULE_ID_HELP),
     ],
 ) -> None:
     """Get one schedule by id."""
@@ -117,14 +131,19 @@ def preview_command(
     ctx: typer.Context,
     schedule_id: Annotated[
         int | None,
-        typer.Argument(help="Existing schedule id to preview."),
+        typer.Argument(
+            help=(
+                "Existing schedule id to preview. Use `dsctl schedule list` to "
+                "discover values."
+            )
+        ),
     ] = None,
     *,
     project: Annotated[
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     cron: Annotated[
@@ -181,7 +200,12 @@ def explain_command(
     ctx: typer.Context,
     schedule_id: Annotated[
         int | None,
-        typer.Argument(help="Existing schedule id to explain as an update."),
+        typer.Argument(
+            help=(
+                "Existing schedule id to explain as an update. Use `dsctl "
+                "schedule list` to discover values."
+            )
+        ),
     ] = None,
     *,
     workflow: Annotated[
@@ -189,8 +213,9 @@ def explain_command(
         typer.Option(
             "--workflow",
             help=(
-                "Workflow name or code. Falls back to workflow context for "
-                "create explain."
+                "Workflow name or code. Run `dsctl workflow list` in the "
+                "selected project to discover values; falls back to workflow "
+                "context for create explain."
             ),
         ),
     ] = None,
@@ -198,10 +223,7 @@ def explain_command(
         str | None,
         typer.Option(
             "--project",
-            help=(
-                "Project name or code. Falls back to stored project context for "
-                "create explain."
-            ),
+            help=PROJECT_HELP,
         ),
     ] = None,
     cron: Annotated[
@@ -254,7 +276,8 @@ def explain_command(
             help=(
                 "Warning group id for create explain or updated value for "
                 "update explain. Create explain can also inherit enabled "
-                "project preference when omitted."
+                "project preference when omitted; run `dsctl alert-group list` "
+                "to discover ids."
             ),
         ),
     ] = None,
@@ -272,7 +295,8 @@ def explain_command(
             help=(
                 "Worker group for create explain or updated value for update "
                 "explain. Create explain can also inherit enabled project "
-                "preference when omitted."
+                "preference when omitted; run `dsctl worker-group list` to "
+                "discover values."
             ),
         ),
     ] = None,
@@ -282,7 +306,8 @@ def explain_command(
             "--tenant-code",
             help=(
                 "Tenant code for create explain. Create explain can also "
-                "inherit enabled project preference when omitted."
+                "inherit enabled project preference when omitted; run `dsctl "
+                "tenant list` to discover values."
             ),
         ),
     ] = None,
@@ -294,7 +319,8 @@ def explain_command(
             help=(
                 "Environment code for create explain or updated value for "
                 "update explain. Create explain can also inherit enabled "
-                "project preference when omitted."
+                "project preference when omitted; run `dsctl environment list` "
+                "to discover values."
             ),
         ),
     ] = None,
@@ -332,14 +358,14 @@ def create_command(
         str | None,
         typer.Option(
             "--workflow",
-            help="Workflow name or code. Falls back to workflow context.",
+            help=WORKFLOW_HELP,
         ),
     ] = None,
     project: Annotated[
         str | None,
         typer.Option(
             "--project",
-            help="Project name or code. Falls back to stored project context.",
+            help=PROJECT_HELP,
         ),
     ] = None,
     cron: Annotated[
@@ -391,7 +417,8 @@ def create_command(
             min=0,
             help=(
                 "Warning group id. Omit to keep the CLI fallback chain, "
-                "including enabled project preference."
+                "including enabled project preference; run `dsctl alert-group "
+                "list` to discover ids."
             ),
         ),
     ] = None,
@@ -406,14 +433,20 @@ def create_command(
         str | None,
         typer.Option(
             "--worker-group",
-            help="Worker group. Omit to allow enabled project preference.",
+            help=(
+                "Worker group. Omit to allow enabled project preference; run "
+                "`dsctl worker-group list` to discover values."
+            ),
         ),
     ] = None,
     tenant_code: Annotated[
         str | None,
         typer.Option(
             "--tenant-code",
-            help="Tenant code. Omit to allow enabled project preference.",
+            help=(
+                "Tenant code. Omit to allow enabled project preference; run "
+                "`dsctl tenant list` to discover values."
+            ),
         ),
     ] = None,
     environment_code: Annotated[
@@ -423,7 +456,8 @@ def create_command(
             min=0,
             help=(
                 "Environment code. Omit to keep the CLI fallback chain, "
-                "including enabled project preference."
+                "including enabled project preference; run `dsctl environment "
+                "list` to discover values."
             ),
         ),
     ] = None,
@@ -465,7 +499,7 @@ def update_command(
     ctx: typer.Context,
     schedule_id: Annotated[
         int,
-        typer.Argument(help="Schedule id."),
+        typer.Argument(help=SCHEDULE_ID_HELP),
     ],
     *,
     cron: Annotated[
@@ -518,7 +552,10 @@ def update_command(
         typer.Option(
             "--warning-group-id",
             min=0,
-            help="Updated warning group id. Omit to keep the current value.",
+            help=(
+                "Updated warning group id. Run `dsctl alert-group list` to "
+                "discover ids; omit to keep the current value."
+            ),
         ),
     ] = None,
     priority: Annotated[
@@ -532,7 +569,10 @@ def update_command(
         str | None,
         typer.Option(
             "--worker-group",
-            help="Updated worker group. Omit to keep the current value.",
+            help=(
+                "Updated worker group. Run `dsctl worker-group list` to "
+                "discover values; omit to keep the current value."
+            ),
         ),
     ] = None,
     environment_code: Annotated[
@@ -540,7 +580,10 @@ def update_command(
         typer.Option(
             "--environment-code",
             min=0,
-            help="Updated environment code. Omit to keep the current value.",
+            help=(
+                "Updated environment code. Run `dsctl environment list` to "
+                "discover values; omit to keep the current value."
+            ),
         ),
     ] = None,
     confirm_risk: Annotated[
@@ -579,7 +622,7 @@ def delete_command(
     ctx: typer.Context,
     schedule_id: Annotated[
         int,
-        typer.Argument(help="Schedule id."),
+        typer.Argument(help=SCHEDULE_ID_HELP),
     ],
     *,
     force: Annotated[
@@ -608,7 +651,7 @@ def online_command(
     ctx: typer.Context,
     schedule_id: Annotated[
         int,
-        typer.Argument(help="Schedule id."),
+        typer.Argument(help=SCHEDULE_ID_HELP),
     ],
 ) -> None:
     """Bring one schedule online."""
@@ -625,7 +668,7 @@ def offline_command(
     ctx: typer.Context,
     schedule_id: Annotated[
         int,
-        typer.Argument(help="Schedule id."),
+        typer.Argument(help=SCHEDULE_ID_HELP),
     ],
 ) -> None:
     """Bring one schedule offline."""

@@ -67,6 +67,13 @@ def test_project_preference_get_command_returns_payload() -> None:
     assert payload["resolved"]["project"]["source"] == "context"
 
 
+def test_project_preference_get_help_points_to_project_list() -> None:
+    result = runner.invoke(app, ["project-preference", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "project list" in result.stdout
+
+
 def test_project_preference_update_command_accepts_inline_json() -> None:
     result = runner.invoke(
         app,

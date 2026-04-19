@@ -19,7 +19,7 @@ from tests.fakes import (
     FakeWorkflowTaskRelation,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -122,6 +122,14 @@ def test_task_list_command_returns_filtered_tasks() -> None:
     assert payload["data"] == [{"code": 201, "name": "extract", "version": 1}]
 
 
+def test_task_list_help_points_to_project_and_workflow_discovery() -> None:
+    result = runner.invoke(app, ["task", "list", "--help"])
+
+    assert result.exit_code == 0
+    assert "project list" in result.stdout
+    assert "workflow list" in result.stdout
+
+
 def test_task_get_command_returns_task_payload() -> None:
     result = runner.invoke(app, ["task", "get", "extract"])
 
@@ -130,6 +138,22 @@ def test_task_get_command_returns_task_payload() -> None:
     assert payload["action"] == "task.get"
     assert payload["data"]["code"] == 201
     assert payload["data"]["taskType"] == "SHELL"
+
+
+def test_task_get_help_points_to_task_list() -> None:
+    result = runner.invoke(app, ["task", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "task list" in result.stdout
+
+
+def test_task_update_help_points_to_command_schema() -> None:
+    result = runner.invoke(app, ["task", "update", "--help"])
+
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout)
+    assert "schema --command" in help_text
+    assert "task.update" in help_text
 
 
 def test_task_update_command_can_dry_run_native_update() -> None:

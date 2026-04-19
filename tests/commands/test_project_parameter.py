@@ -75,6 +75,17 @@ def test_project_parameter_list_command_returns_paginated_payload() -> None:
     assert payload["resolved"]["project"]["source"] == "context"
 
 
+def test_project_parameter_list_help_points_to_project_and_data_type_discovery() -> (
+    None
+):
+    result = runner.invoke(app, ["project-parameter", "list", "--help"])
+
+    assert result.exit_code == 0
+    assert "project list" in result.stdout
+    assert "enum list" in result.stdout
+    assert "data-type" in result.stdout
+
+
 def test_project_parameter_get_command_reports_not_found_suggestion() -> None:
     result = runner.invoke(app, ["project-parameter", "get", "missing"])
 
@@ -86,6 +97,15 @@ def test_project_parameter_get_command_reports_not_found_suggestion() -> None:
         "Retry with `project-parameter list` in the selected project to inspect "
         "available values, or pass the numeric code if known."
     )
+
+
+def test_project_parameter_get_help_points_to_selected_project_list() -> None:
+    result = runner.invoke(app, ["project-parameter", "get", "--help"])
+
+    assert result.exit_code == 0
+    assert "project-parameter" in result.stdout
+    assert "list" in result.stdout
+    assert "selected project" in result.stdout
 
 
 def test_project_parameter_create_command_returns_created_parameter() -> None:
