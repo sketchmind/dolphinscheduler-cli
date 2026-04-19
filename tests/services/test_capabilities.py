@@ -4,6 +4,7 @@ from dsctl.cli_surface import SURFACE_PLANES
 from dsctl.errors import UserInputError
 from dsctl.models import supported_typed_task_types
 from dsctl.services.capabilities import get_capabilities_result
+from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.template import parameter_syntax_index_data, task_template_metadata
 from dsctl.upstream import (
     upstream_default_task_types,
@@ -25,6 +26,7 @@ EXPECTED_GENERIC_TEMPLATE_TASK_TYPES = [
 EXPECTED_UNTEMPLATED_UPSTREAM_TASK_TYPES: list[str] = []
 EXPECTED_TASK_TEMPLATE_METADATA = task_template_metadata()
 EXPECTED_PARAMETER_SYNTAX = parameter_syntax_index_data()
+EXPECTED_DATASOURCE_TEMPLATE_INDEX = datasource_template_index_data()
 EXPECTED_VERSION_METADATA = [
     {
         "server_version": "3.3.2",
@@ -119,6 +121,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     assert data["resources"]["groups"]["template"]["commands"] == [
         "workflow",
         "params",
+        "datasource",
         "task",
     ]
     assert data["resources"]["groups"]["env"]["commands"] == [
@@ -297,6 +300,10 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "workflow_schedule_block": True,
         "workflow_dry_run": True,
         "parameter_syntax": EXPECTED_PARAMETER_SYNTAX,
+        "datasource_payload_templates": True,
+        "datasource_template_types": EXPECTED_DATASOURCE_TEMPLATE_INDEX[
+            "supported_types"
+        ],
         "task_template_types": EXPECTED_TEMPLATE_TASK_TYPES,
         "task_templates": EXPECTED_TASK_TEMPLATE_METADATA,
         "typed_task_specs": EXPECTED_TYPED_TASK_TYPES,

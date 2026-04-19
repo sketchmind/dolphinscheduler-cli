@@ -45,7 +45,7 @@ Current stable commands:
 - `dsctl project-preference get|update|enable|disable`
 - `dsctl project-worker-group list|set|clear`
 - `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|params|task`
+- `dsctl template workflow|params|datasource|task`
 - `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
 - `dsctl workflow lineage list|get|dependent-tasks`
 - `dsctl workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task`
@@ -240,6 +240,15 @@ Field rules:
 - all stable warnings emitted by the CLI include aligned `warning_details`
 - every dry-run result includes one standard warning detail with code
   `dry_run_no_request_sent`
+- `resolved` records facts selected or adopted by this command invocation, such
+  as resolved resource identities, normalized selectors, applied filters, or
+  the active output view
+- `resolved.view`, when present, is reserved for commands whose single stable
+  action can return more than one `data` shape; it is not required for commands
+  whose `action` already uniquely identifies the output shape
+- discovery candidates and allowed values do not belong in `resolved`; expose
+  them through command `data`, schema `choices`, `discovery_command`, enum
+  commands, capabilities, or structured error `details`
 - command schema entries may include `data_shape` metadata with a stable
   low-entropy row/object model for renderers, JSON projection, and AI agents
 
@@ -1041,9 +1050,14 @@ Current datasource list item fields:
 - `note`
 - `type`
 - `userId`
-- `userName`
+- `userName` — DS datasource owner/creator user, not the datasource
+  connection username
 - `createTime`
 - `updateTime`
+
+`datasource list` keeps DS-native field names. For connection credentials, use
+`datasource get DATASOURCE`; in that detail payload, `userName` is the
+datasource connection username accepted by datasource create/update payloads.
 
 ## `dsctl datasource get DATASOURCE`
 
@@ -1074,8 +1088,12 @@ Rules:
 
 - the file must contain one JSON object
 - the payload must include string fields `name` and `type`
+- `type` is normalized against the generated DS `DbType` enum; discover values
+  with `dsctl enum list db-type`
 - the payload must not include `id`
 - masked password placeholders such as `******` are rejected for create
+- run `dsctl template datasource` to choose a supported type, then
+  `dsctl template datasource --type TYPE` and write `data.json` to the file
 
 ## `dsctl datasource update DATASOURCE`
 
@@ -1090,9 +1108,13 @@ Rules:
 - `DATASOURCE` may be a datasource name or numeric id
 - the file must contain one JSON object
 - the payload must include string fields `name` and `type`
+- `type` is normalized against the generated DS `DbType` enum; discover values
+  with `dsctl enum list db-type`
 - if the payload includes `id`, it must match the selected datasource id
 - if the payload contains `password: "******"` from a prior `datasource get`,
   the CLI sends an empty password so DS preserves the existing secret
+- start from `dsctl datasource get DATASOURCE` or
+  `dsctl template datasource --type TYPE` when preparing an update file
 - when that warning is present, the aligned `warning_details[]` item uses code
   `datasource_update_preserved_existing_password`
 
@@ -3081,6 +3103,54 @@ Rules:
   `${setValue(name=value)}` or `#{setValue(name=value)}` to task logs
 - SQL tasks can publish result columns whose names match OUT parameter `prop`
   values
+
+## `dsctl template datasource`
+
+Returns datasource JSON payload-template type discovery when `--type` is
+omitted, or one DS-native datasource JSON payload template when `--type TYPE`
+is passed.
+
+Options:
+
+- `--type TYPE`
+
+Default index fields:
+
+- `data.default_type`
+- `data.template_command`
+- `data.template_command_pattern`
+- `data.target_commands`
+- `data.type_enum`
+- `data.type_discovery_command`
+- `data.supported_types`
+
+`resolved.view` is `list` for the default output. The supported type list lives
+in `data.supported_types`; `resolved` does not duplicate it.
+
+Typed template fields:
+
+- `data.type`
+- `data.target_commands`
+- `data.source_option`
+- `data.payload`
+- `data.json`
+- `data.fields`
+- `data.rules`
+
+`resolved.view` is `template` and `resolved.datasource_type` is the normalized
+DS `DbType` value selected by `--type`.
+
+Rules:
+
+- `type` matching is case-insensitive and accepts common generated `DbType`
+  aliases such as `mysql` and `aliyun-serverless-spark`
+- `data.payload` is the object shape accepted by `datasource create --file`
+- `data.json` is the same payload rendered as pretty JSON
+- `data.fields` is grounded in generated `BaseDataSourceParamDTO` plus known
+  plugin-specific JSON fields for the selected datasource type only
+- typed template output does not repeat global `type` choices; the selected
+  value is `data.type` and `resolved.datasource_type`, while full type
+  discovery lives in the default index and `dsctl enum list db-type`
 
 ## `dsctl template task TASK_TYPE`
 

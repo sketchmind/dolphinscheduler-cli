@@ -4,7 +4,9 @@ import typer
 
 from dsctl.cli_runtime import emit_result
 from dsctl.services.template import (
+    datasource_template_result,
     parameter_syntax_result,
+    supported_datasource_types,
     supported_parameter_syntax_topics,
     task_template_result,
     task_template_types_result,
@@ -12,7 +14,7 @@ from dsctl.services.template import (
 )
 
 template_app = typer.Typer(
-    help="Emit stable YAML templates for workflow authoring.",
+    help="Emit stable templates for workflow authoring and DS-native payloads.",
     no_args_is_help=True,
 )
 
@@ -55,6 +57,26 @@ def params_command(
 ) -> None:
     """Emit stable DS parameter syntax metadata and examples."""
     emit_result("template.params", lambda: parameter_syntax_result(topic=topic))
+
+
+@template_app.command("datasource")
+def datasource_command(
+    datasource_type: Annotated[
+        str | None,
+        typer.Option(
+            "--type",
+            help=(
+                "Datasource type to template. Omit for compact type discovery. "
+                f"Common: {', '.join(supported_datasource_types()[:6])}."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Emit datasource JSON payload-template type discovery or one template."""
+    emit_result(
+        "template.datasource",
+        lambda: datasource_template_result(datasource_type=datasource_type),
+    )
 
 
 @template_app.command("task")

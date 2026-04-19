@@ -23,6 +23,7 @@ from dsctl.services._surface_metadata import (
     selection_capabilities_data,
     self_description_data,
 )
+from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.enums import enum_capabilities_data
 from dsctl.services.monitor import MONITOR_SERVER_TYPE_CHOICES
 from dsctl.services.template import (
@@ -88,6 +89,8 @@ AUTHORING_SUMMARY_KEYS = (
     "workflow_schedule_block",
     "workflow_dry_run",
     "task_template_types",
+    "datasource_payload_templates",
+    "datasource_template_types",
     "typed_task_specs",
     "generic_task_template_types",
     "untemplated_upstream_task_types",
@@ -159,6 +162,7 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
                 "with_schedule_option": True,
             },
             "parameters": parameter_syntax_index_data(),
+            "datasource": datasource_template_index_data(),
             "task": {
                 "supported_types": task_types,
                 "typed_types": typed_task_specs,
@@ -173,6 +177,10 @@ def schema_capabilities_data(*, ds_version: str | None = None) -> dict[str, obje
             "workflow_digest": True,
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
+            "datasource_payload_templates": True,
+            "datasource_template_types": datasource_template_index_data()[
+                "supported_types"
+            ],
             "typed_task_specs": typed_task_specs,
             "generic_task_template_types": generic_task_templates,
             "upstream_default_task_types": upstream_task_types,
@@ -237,6 +245,10 @@ def _capabilities_data(support: VersionSupport) -> dict[str, object]:
             "workflow_dry_run": True,
             "parameter_syntax": parameter_syntax_index_data(),
             "task_template_types": task_types,
+            "datasource_payload_templates": True,
+            "datasource_template_types": datasource_template_index_data()[
+                "supported_types"
+            ],
             "task_templates": task_template_metadata(),
             "typed_task_specs": typed_task_specs,
             "generic_task_template_types": generic_task_templates,

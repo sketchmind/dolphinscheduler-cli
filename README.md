@@ -65,6 +65,7 @@ dsctl project list
 dsctl use project etl-prod
 dsctl workflow list
 dsctl workflow get daily-etl
+dsctl template datasource --type MYSQL
 dsctl workflow run daily-etl --project etl-prod
 dsctl workflow-instance digest <workflow_instance_id>
 dsctl task-instance list --workflow-instance <workflow_instance_id>
@@ -113,7 +114,7 @@ Stable user-facing commands today:
 - `dsctl project-preference get|update|enable|disable`
 - `dsctl project-worker-group list|set|clear`
 - `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|params|task`
+- `dsctl template workflow|params|datasource|task`
 - `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
 - `dsctl workflow lineage list|get|dependent-tasks`
 - `dsctl workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task`

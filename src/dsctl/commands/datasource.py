@@ -14,7 +14,10 @@ from dsctl.services.datasource import (
 )
 
 datasource_app = typer.Typer(
-    help="Manage DolphinScheduler datasources.",
+    help=(
+        "Manage DolphinScheduler datasources. Create/update use DS-native JSON "
+        "payload files."
+    ),
     no_args_is_help=True,
 )
 
@@ -59,7 +62,7 @@ def list_command(
         ),
     ] = False,
 ) -> None:
-    """List datasources with optional filtering and pagination controls."""
+    """List datasource identities and summary fields."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -79,7 +82,9 @@ def get_command(
     ctx: typer.Context,
     datasource: Annotated[
         str,
-        typer.Argument(help="Datasource name or numeric id."),
+        typer.Argument(
+            help="Datasource name or numeric id. Use list to discover values.",
+        ),
     ],
 ) -> None:
     """Get one datasource by name or id."""
@@ -102,7 +107,12 @@ def create_command(
             dir_okay=False,
             exists=True,
             file_okay=True,
-            help="Path to one DS-native datasource JSON payload file.",
+            help=(
+                "Path to one DS-native datasource JSON payload file. Run "
+                "`dsctl template datasource` to choose a type, then "
+                "`dsctl template datasource --type TYPE` and write data.json "
+                "to this file."
+            ),
             readable=True,
             resolve_path=True,
         ),
@@ -122,7 +132,9 @@ def update_command(
     ctx: typer.Context,
     datasource: Annotated[
         str,
-        typer.Argument(help="Datasource name or numeric id."),
+        typer.Argument(
+            help="Datasource name or numeric id. Use list to discover values.",
+        ),
     ],
     *,
     file: Annotated[
@@ -132,7 +144,12 @@ def update_command(
             dir_okay=False,
             exists=True,
             file_okay=True,
-            help="Path to one DS-native datasource JSON payload file.",
+            help=(
+                "Path to one DS-native datasource JSON payload file. Start from "
+                "`dsctl datasource get DATASOURCE` or "
+                "`dsctl template datasource --type TYPE`; masked password "
+                "****** preserves the existing password."
+            ),
             readable=True,
             resolve_path=True,
         ),
@@ -167,7 +184,7 @@ def delete_command(
         ),
     ] = False,
 ) -> None:
-    """Delete one datasource."""
+    """Delete one datasource by name or id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -188,7 +205,7 @@ def test_command(
         typer.Argument(help="Datasource name or numeric id."),
     ],
 ) -> None:
-    """Run one datasource connection test."""
+    """Run one datasource connection test after create or update."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

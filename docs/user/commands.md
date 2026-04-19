@@ -42,6 +42,7 @@ dsctl enum list WorkflowExecutionStatus
 dsctl project list
 dsctl env list
 dsctl datasource list
+dsctl template datasource --type MYSQL
 dsctl resource list /
 dsctl worker-group list
 dsctl alert-group list

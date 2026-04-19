@@ -13,6 +13,7 @@ LOCAL_ONLY_COMMANDS = {
     "enum list",
     "lint workflow",
     "schema",
+    "template datasource",
     "template params",
     "template task",
     "template workflow",

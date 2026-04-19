@@ -5,7 +5,11 @@ from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.models import supported_typed_task_types
-from dsctl.services.template import parameter_syntax_index_data, task_template_metadata
+from dsctl.services.datasource_payload import datasource_template_index_data
+from dsctl.services.template import (
+    parameter_syntax_index_data,
+    task_template_metadata,
+)
 from dsctl.upstream import upstream_default_task_types
 
 runner = CliRunner()
@@ -54,6 +58,9 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "generic_types": expected_generic_types,
         "templates_by_type": task_template_metadata(),
     }
+    assert payload["data"]["capabilities"]["templates"]["datasource"] == (
+        datasource_template_index_data()
+    )
     assert payload["data"]["capabilities"]["templates"]["parameters"] == (
         parameter_syntax_index_data()
     )
@@ -177,6 +184,37 @@ def test_schema_command_returns_command_scope() -> None:
     assert [item["action"] for item in commands[0]["commands"]] == [
         "task-instance.list"
     ]
+
+
+def test_schema_command_datasource_create_uses_payload_reference() -> None:
+    result = runner.invoke(app, ["schema", "--command", "datasource.create"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    commands = payload["data"]["commands"]
+    datasource_create = commands[0]["commands"][0]
+    assert "payload_schema" not in datasource_create
+    assert datasource_create["payload"]["template_command"] == (
+        "dsctl template datasource --type MYSQL"
+    )
+    assert datasource_create["payload"]["template_command_pattern"] == (
+        "dsctl template datasource --type TYPE"
+    )
+    assert datasource_create["payload"]["template_json_path"] == "data.json"
+    assert datasource_create["payload"]["template_discovery_command"] == (
+        "dsctl template datasource"
+    )
+
+
+def test_schema_command_datasource_create_table_output_is_compact() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "schema", "--command", "datasource.create"],
+    )
+
+    assert result.exit_code == 0
+    assert "dsctl template datasource --type MYSQL" in result.stdout
+    assert "additional_fields_by_type" not in result.stdout
 
 
 def test_schema_command_rejects_conflicting_scope_options() -> None:

@@ -77,6 +77,43 @@ def test_emit_result_can_render_table_rows(
         set_app_state(AppState(env_file=None))
 
 
+def test_emit_result_uses_datasource_list_defaults_without_owner_user_name(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    set_app_state(
+        AppState(
+            env_file=None,
+            render_options=RenderOptions(output_format="table"),
+        )
+    )
+
+    def builder() -> CommandResult:
+        return CommandResult(
+            data={
+                "totalList": [
+                    {
+                        "id": 7,
+                        "name": "warehouse",
+                        "type": "MYSQL",
+                        "userName": "admin",
+                        "createTime": "2026-04-19 10:00:00",
+                    }
+                ],
+                "total": 1,
+            }
+        )
+
+    try:
+        emit_result("datasource.list", builder)
+        assert capsys.readouterr().out == (
+            "id | name      | type  | createTime\n"
+            "---+-----------+-------+--------------------\n"
+            "7  | warehouse | MYSQL | 2026-04-19 10:00:00\n"
+        )
+    finally:
+        set_app_state(AppState(env_file=None))
+
+
 def test_emit_result_columns_wildcard_renders_all_row_fields(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

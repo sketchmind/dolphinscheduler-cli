@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from dsctl.support.yaml_io import JsonObject, JsonValue
 
 
 def use_target_options(*, clear_help: str) -> list[dict[str, object]]:
@@ -83,16 +85,23 @@ def command(
     summary: str,
     arguments: list[dict[str, object]] | None = None,
     options: list[dict[str, object]] | None = None,
+    payload: JsonObject | None = None,
+    payload_schema: JsonObject | None = None,
 ) -> dict[str, object]:
     """Build one schema command payload."""
-    return {
+    data: JsonObject = {
         "kind": "command",
         "name": name,
         "action": action,
         "summary": summary,
-        "arguments": arguments or [],
-        "options": options or [],
+        "arguments": cast("JsonValue", arguments or []),
+        "options": cast("JsonValue", options or []),
     }
+    if payload is not None:
+        data["payload"] = payload
+    if payload_schema is not None:
+        data["payload_schema"] = payload_schema
+    return cast("dict[str, object]", data)
 
 
 def argument(

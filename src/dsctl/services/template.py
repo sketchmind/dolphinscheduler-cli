@@ -8,6 +8,12 @@ from dsctl.models.common import DataType, Direct
 from dsctl.models.task_spec import canonical_task_type
 from dsctl.output import CommandResult, require_json_object
 from dsctl.services import _task_templates
+from dsctl.services.datasource_payload import (
+    datasource_template_data,
+    datasource_template_index_data,
+    require_datasource_payload_type,
+    supported_datasource_template_types,
+)
 
 if TYPE_CHECKING:
     from dsctl.services._task_templates import TaskTemplateMetadata
@@ -603,6 +609,11 @@ def supported_task_template_types() -> tuple[str, ...]:
     return _task_templates.supported_task_template_types()
 
 
+def supported_datasource_types() -> tuple[str, ...]:
+    """Return datasource types supported by local payload templates."""
+    return supported_datasource_template_types()
+
+
 def typed_task_template_types() -> tuple[str, ...]:
     """Return task types backed by typed `task_params` models."""
     return _task_templates.typed_task_template_types()
@@ -626,6 +637,29 @@ def workflow_template_result(*, with_schedule: bool = False) -> CommandResult:
             label="workflow template data",
         ),
         resolved={"with_schedule": with_schedule},
+    )
+
+
+def datasource_template_result(datasource_type: str | None = None) -> CommandResult:
+    """Return datasource payload-template discovery or one JSON template."""
+    if datasource_type is None:
+        return CommandResult(
+            data=require_json_object(
+                datasource_template_index_data(),
+                label="datasource template index data",
+            ),
+            resolved={"view": "list"},
+        )
+    normalized_type = require_datasource_payload_type(datasource_type)
+    return CommandResult(
+        data=require_json_object(
+            datasource_template_data(normalized_type),
+            label="datasource template data",
+        ),
+        resolved={
+            "view": "template",
+            "datasource_type": normalized_type,
+        },
     )
 
 

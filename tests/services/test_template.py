@@ -9,9 +9,11 @@ from dsctl.models import WorkflowSpec, supported_typed_task_types
 from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services.template import (
     ParameterSyntaxIndexData,
+    datasource_template_result,
     generic_task_template_types,
     parameter_syntax_data,
     parameter_syntax_result,
+    supported_datasource_types,
     supported_task_template_types,
     task_template_metadata,
     task_template_result,
@@ -103,6 +105,81 @@ def test_parameter_syntax_result_can_expand_specific_topics() -> None:
     assert "${setValue(name=value)}" in [
         item["syntax"] for item in output_details["output_syntax"]
     ]
+
+
+def test_datasource_template_result_returns_discovery_without_type() -> None:
+    result = datasource_template_result()
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {"view": "list"}
+    assert data["default_type"] == "MYSQL"
+    assert data["template_command"] == "dsctl template datasource --type MYSQL"
+    assert data["template_command_pattern"] == "dsctl template datasource --type TYPE"
+    assert data["target_commands"] == [
+        "dsctl datasource create --file FILE",
+        "dsctl datasource update DATASOURCE --file FILE",
+    ]
+    assert data["type_discovery_command"] == "dsctl enum list db-type"
+    assert data["supported_types"] == list(supported_datasource_types())
+    assert "fields" not in data
+    assert "rules" not in data
+
+
+def test_datasource_template_result_returns_json_payload_template() -> None:
+    result = datasource_template_result("mysql")
+    data = result.data
+
+    assert isinstance(data, dict)
+    assert result.resolved == {
+        "view": "template",
+        "datasource_type": "MYSQL",
+    }
+    assert data["type"] == "MYSQL"
+    assert data["target_commands"] == [
+        "dsctl datasource create --file FILE",
+        "dsctl datasource update DATASOURCE --file FILE",
+    ]
+    assert data["source_option"] == "--file"
+    payload = data["payload"]
+    assert isinstance(payload, dict)
+    assert payload == json.loads(data["json"])
+    assert payload["type"] == "MYSQL"
+    assert payload["port"] == 3306
+    assert payload["other"] == {"serverTimezone": "UTC"}
+    assert "payload_schema" not in data
+    type_fields = [
+        field
+        for field in data["fields"]
+        if isinstance(field, dict) and field.get("name") == "type"
+    ]
+    assert type_fields
+    assert "choices" not in type_fields[0]
+
+
+def test_datasource_template_result_handles_type_specific_payload() -> None:
+    result = datasource_template_result("k8s")
+    data = result.data
+
+    assert isinstance(data, dict)
+    payload = data["payload"]
+    assert isinstance(payload, dict)
+    assert payload["type"] == "K8S"
+    assert payload["kubeConfig"] == "change-me"
+    assert payload["namespace"] == "default"
+    assert "host" not in payload
+    field_names = {
+        field["name"]
+        for field in data["fields"]
+        if isinstance(field, dict) and isinstance(field.get("name"), str)
+    }
+    assert "kubeConfig" in field_names
+    assert "namespace" in field_names
+
+
+def test_datasource_template_result_rejects_unsupported_type() -> None:
+    with pytest.raises(UserInputError, match="Unsupported datasource type"):
+        datasource_template_result("UNKNOWN")
 
 
 @pytest.mark.parametrize(

@@ -4,13 +4,17 @@ import pytest
 
 from dsctl.errors import UserInputError
 from dsctl.models import supported_typed_task_types
+from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 from dsctl.services.schema import get_schema_result
 from dsctl.services.task_instance import (
     DEFAULT_TASK_INSTANCE_WATCH_INTERVAL_SECONDS,
     DEFAULT_TASK_INSTANCE_WATCH_TIMEOUT_SECONDS,
 )
-from dsctl.services.template import parameter_syntax_index_data, task_template_metadata
+from dsctl.services.template import (
+    parameter_syntax_index_data,
+    task_template_metadata,
+)
 from dsctl.services.workflow_instance import (
     DEFAULT_WATCH_INTERVAL_SECONDS,
     DEFAULT_WATCH_TIMEOUT_SECONDS,
@@ -231,6 +235,16 @@ def test_schema_result_describes_current_stable_surface() -> None:
     assert isinstance(variant_choices, list)
     assert "resource" in variant_choices
     assert "post-json" in variant_choices
+    datasource_template_command = _find_command(
+        template_group["commands"],
+        "datasource",
+    )
+    datasource_template_options = _require_list(datasource_template_command["options"])
+    datasource_type_option = _find_option(datasource_template_options, "type")
+    assert (
+        datasource_type_option["choices"]
+        == datasource_template_index_data()["supported_types"]
+    )
 
     enum_group = _find_group(commands, "enum")
     enum_command_names = [
@@ -294,6 +308,41 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "delete",
         "test",
     ]
+    datasource_create = _find_command(datasource_group["commands"], "create")
+    datasource_payload = _require_dict(datasource_create["payload"])
+    assert "payload_schema" not in datasource_create
+    assert datasource_payload == {
+        "format": "json",
+        "source_option": "--file",
+        "target_commands": [
+            "dsctl datasource create --file FILE",
+            "dsctl datasource update DATASOURCE --file FILE",
+        ],
+        "ds_model": "BaseDataSourceParamDTO",
+        "upstream_request_shape": "DataSourceController request body String jsonStr",
+        "template_command": "dsctl template datasource --type MYSQL",
+        "template_command_pattern": "dsctl template datasource --type TYPE",
+        "template_discovery_command": "dsctl template datasource",
+        "template_json_path": "data.json",
+        "template_payload_path": "data.payload",
+        "type_enum": "db-type",
+        "type_discovery_command": "dsctl enum list db-type",
+        "rules": [
+            "Create payloads must not include id; DS assigns it.",
+            "Update payloads may omit id or set it to the selected datasource id.",
+            "Create payloads must include the real password when the type uses one.",
+            (
+                "Update payloads may use the masked password ****** to preserve "
+                "the stored password."
+            ),
+            "Use DS-native field names exactly, including userName and type.",
+            "Use `dsctl datasource test DATASOURCE` after create or update.",
+        ],
+    }
+    datasource_update = _find_command(datasource_group["commands"], "update")
+    assert _require_dict(datasource_update["payload"])["template_command"] == (
+        "dsctl template datasource --type MYSQL"
+    )
 
     schedule_group = _find_group(commands, "schedule")
     schedule_command_names = [
@@ -716,6 +765,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "templates": {
             "workflow": {"with_schedule_option": True},
             "parameters": EXPECTED_PARAMETER_SYNTAX,
+            "datasource": datasource_template_index_data(),
             "task": {
                 "supported_types": EXPECTED_TEMPLATE_TASK_TYPES,
                 "typed_types": EXPECTED_TYPED_TASK_TYPES,
@@ -730,6 +780,10 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "workflow_digest": True,
             "workflow_schedule_block": True,
             "workflow_dry_run": True,
+            "datasource_payload_templates": True,
+            "datasource_template_types": datasource_template_index_data()[
+                "supported_types"
+            ],
             "typed_task_specs": EXPECTED_TYPED_TASK_TYPES,
             "generic_task_template_types": EXPECTED_GENERIC_TEMPLATE_TASK_TYPES,
             "upstream_default_task_types": EXPECTED_UPSTREAM_TASK_TYPES,
@@ -886,6 +940,19 @@ def test_schema_result_can_return_one_command() -> None:
             "duration",
             "host",
         ],
+        "column_discovery": "runtime_row_keys",
+    }
+
+    datasource_list_result = get_schema_result(command_action="datasource.list")
+    datasource_list_data = _require_dict(datasource_list_result.data)
+    datasource_group = _require_dict(_require_list(datasource_list_data["commands"])[0])
+    datasource_list_command = _require_dict(
+        _require_list(datasource_group["commands"])[0]
+    )
+    assert datasource_list_command["data_shape"] == {
+        "kind": "page",
+        "row_path": "data.totalList",
+        "default_columns": ["id", "name", "type", "createTime"],
         "column_discovery": "runtime_row_keys",
     }
 

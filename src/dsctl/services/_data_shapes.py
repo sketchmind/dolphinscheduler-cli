@@ -41,7 +41,7 @@ PAGE_LIST_DEFAULTS: dict[str, tuple[str, ...]] = {
     "alert-plugin.list": ("id", "pluginInstanceName", "pluginDefineName"),
     "audit.list": ("id", "modelName", "operationType", "userName", "createTime"),
     "cluster.list": ("code", "name", "config"),
-    "datasource.list": ("id", "name", "type", "userName"),
+    "datasource.list": ("id", "name", "type", "createTime"),
     "env.list": ("code", "name", "workerGroups", "description"),
     "namespace.list": ("id", "namespace", "clusterName"),
     "project-parameter.list": ("code", "paramName", "paramValue", "paramDataType"),

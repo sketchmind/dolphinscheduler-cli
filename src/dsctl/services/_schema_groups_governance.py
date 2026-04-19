@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dsctl.services._schema_primitives import argument, command, group, option
+from dsctl.services.datasource_payload import datasource_payload_command_data
 from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 
 
@@ -318,14 +319,15 @@ def datasource_group() -> dict[str, object]:
     """Build the datasource command group schema."""
     return group(
         "datasource",
-        summary="Manage DolphinScheduler datasources.",
+        summary=(
+            "Manage DolphinScheduler datasources. Create/update use DS-native "
+            "JSON payload files."
+        ),
         commands=[
             command(
                 "list",
                 action="datasource.list",
-                summary=(
-                    "List datasources with optional filtering and pagination controls."
-                ),
+                summary="List datasource identities and summary fields.",
                 options=[
                     option(
                         "search",
@@ -363,7 +365,10 @@ def datasource_group() -> dict[str, object]:
                     argument(
                         "datasource",
                         value_type="string",
-                        description="Datasource name or numeric id.",
+                        description=(
+                            "Datasource name or numeric id. Use list to discover "
+                            "values."
+                        ),
                         selector="name_or_id",
                     )
                 ],
@@ -372,12 +377,16 @@ def datasource_group() -> dict[str, object]:
                 "create",
                 action="datasource.create",
                 summary="Create one datasource from a JSON payload file.",
+                payload=datasource_payload_command_data(),
                 options=[
                     option(
                         "file",
                         value_type="path",
                         description=(
-                            "Path to one DS-native datasource JSON payload file."
+                            "Path to one DS-native datasource JSON payload file. "
+                            "Run `dsctl template datasource` to choose a type, "
+                            "then `dsctl template datasource --type TYPE` and "
+                            "write data.json to this file."
                         ),
                         required=True,
                         value_name="PATH",
@@ -388,11 +397,15 @@ def datasource_group() -> dict[str, object]:
                 "update",
                 action="datasource.update",
                 summary="Update one datasource from a JSON payload file.",
+                payload=datasource_payload_command_data(),
                 arguments=[
                     argument(
                         "datasource",
                         value_type="string",
-                        description="Datasource name or numeric id.",
+                        description=(
+                            "Datasource name or numeric id. Use list to discover "
+                            "values."
+                        ),
                         selector="name_or_id",
                     )
                 ],
@@ -401,7 +414,10 @@ def datasource_group() -> dict[str, object]:
                         "file",
                         value_type="path",
                         description=(
-                            "Path to one DS-native datasource JSON payload file."
+                            "Path to one DS-native datasource JSON payload file. "
+                            "Start from `dsctl datasource get DATASOURCE` or "
+                            "`dsctl template datasource --type TYPE`; masked "
+                            "password ****** preserves the existing password."
                         ),
                         required=True,
                         value_name="PATH",
@@ -416,7 +432,10 @@ def datasource_group() -> dict[str, object]:
                     argument(
                         "datasource",
                         value_type="string",
-                        description="Datasource name or numeric id.",
+                        description=(
+                            "Datasource name or numeric id. Use list to discover "
+                            "values."
+                        ),
                         selector="name_or_id",
                     )
                 ],
@@ -432,12 +451,15 @@ def datasource_group() -> dict[str, object]:
             command(
                 "test",
                 action="datasource.test",
-                summary="Run one datasource connection test by name or id.",
+                summary="Run one datasource connection test after create or update.",
                 arguments=[
                     argument(
                         "datasource",
                         value_type="string",
-                        description="Datasource name or numeric id.",
+                        description=(
+                            "Datasource name or numeric id. Use list to discover "
+                            "values."
+                        ),
                         selector="name_or_id",
                     )
                 ],

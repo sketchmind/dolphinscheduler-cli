@@ -65,6 +65,51 @@ def test_template_params_command_rejects_unknown_topic() -> None:
     )
 
 
+def test_template_datasource_command_returns_discovery() -> None:
+    result = runner.invoke(app, ["template", "datasource"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "template.datasource"
+    assert payload["resolved"] == {"view": "list"}
+    assert payload["data"]["default_type"] == "MYSQL"
+    assert payload["data"]["template_command"] == (
+        "dsctl template datasource --type MYSQL"
+    )
+    assert payload["data"]["template_command_pattern"] == (
+        "dsctl template datasource --type TYPE"
+    )
+    assert "POSTGRESQL" in payload["data"]["supported_types"]
+    assert "fields" not in payload["data"]
+
+
+def test_template_datasource_command_returns_payload_for_type() -> None:
+    result = runner.invoke(app, ["template", "datasource", "--type", "mysql"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "template.datasource"
+    assert payload["resolved"]["view"] == "template"
+    assert payload["resolved"]["datasource_type"] == "MYSQL"
+    assert payload["data"]["type"] == "MYSQL"
+    assert payload["data"]["payload"]["type"] == "MYSQL"
+    assert payload["data"]["payload"]["port"] == 3306
+    assert json.loads(payload["data"]["json"]) == payload["data"]["payload"]
+    assert "payload_schema" not in payload["data"]
+
+
+def test_template_datasource_command_rejects_unknown_type() -> None:
+    result = runner.invoke(app, ["template", "datasource", "--type", "unknown"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["suggestion"] == (
+        "Run `dsctl template datasource` to choose a supported datasource type, "
+        "then `dsctl template datasource --type TYPE`."
+    )
+
+
 def test_template_task_command_normalizes_task_type() -> None:
     result = runner.invoke(app, ["template", "task", "shell"])
 

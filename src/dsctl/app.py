@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 
@@ -73,7 +73,7 @@ def main_callback(
     if normalized_format not in OUTPUT_FORMAT_CHOICES:
         message = f"Unsupported output format: {output_format}"
         raise typer.BadParameter(message)
-    format_choice: OutputFormat = normalized_format
+    format_choice: OutputFormat = cast("OutputFormat", normalized_format)
     try:
         parsed_columns = parse_columns(columns)
     except UserInputError as exc:

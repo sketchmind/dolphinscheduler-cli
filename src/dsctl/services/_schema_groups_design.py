@@ -11,6 +11,7 @@ from dsctl.services._schema_primitives import (
 )
 from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 from dsctl.services.template import (
+    supported_datasource_types,
     supported_parameter_syntax_topics,
     supported_task_template_variants,
 )
@@ -441,7 +442,7 @@ def template_group(task_types: list[str]) -> dict[str, object]:
     """Build the template command group schema."""
     return group(
         "template",
-        summary="Emit stable YAML templates for workflow authoring.",
+        summary="Emit stable templates for workflow authoring and DS-native payloads.",
         commands=[
             command(
                 "workflow",
@@ -471,6 +472,25 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                             "Parameter syntax topic. Omit for compact discovery."
                         ),
                         choices=supported_parameter_syntax_topics(),
+                    )
+                ],
+            ),
+            command(
+                "datasource",
+                action="template.datasource",
+                summary=(
+                    "Emit datasource JSON payload-template type discovery or one "
+                    "template."
+                ),
+                options=[
+                    option(
+                        "type",
+                        value_type="string",
+                        description=(
+                            "Datasource type to template. Omit for compact type "
+                            "discovery."
+                        ),
+                        choices=supported_datasource_types(),
                     )
                 ],
             ),

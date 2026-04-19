@@ -4,6 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from dsctl.app import app
+from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.template import parameter_syntax_index_data
 
 runner = CliRunner()
@@ -66,6 +67,7 @@ def test_capabilities_command_returns_surface_discovery() -> None:
     assert payload["data"]["resources"]["groups"]["template"]["commands"] == [
         "workflow",
         "params",
+        "datasource",
         "task",
     ]
     assert payload["data"]["resources"]["groups"]["monitor"]["commands"] == [
@@ -110,6 +112,11 @@ def test_capabilities_command_returns_surface_discovery() -> None:
     }
     assert payload["data"]["authoring"]["parameter_syntax"] == (
         parameter_syntax_index_data()
+    )
+    assert payload["data"]["authoring"]["datasource_payload_templates"] is True
+    assert (
+        payload["data"]["authoring"]["datasource_template_types"]
+        == (datasource_template_index_data()["supported_types"])
     )
     assert payload["data"]["enums"]["discovery"] is True
     assert "priority" in payload["data"]["enums"]["names"]

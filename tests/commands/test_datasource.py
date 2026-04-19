@@ -99,6 +99,28 @@ def test_datasource_create_command_returns_created_payload(tmp_path: Path) -> No
     assert payload["resolved"]["datasource"]["id"] == 8
 
 
+def test_datasource_create_command_rejects_unknown_type(tmp_path: Path) -> None:
+    file = _write_json(
+        tmp_path / "unknown.json",
+        {
+            "name": "analytics",
+            "type": "UNKNOWN",
+            "password": "secret",
+        },
+    )
+
+    result = runner.invoke(app, ["datasource", "create", "--file", str(file)])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "datasource.create"
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["suggestion"] == (
+        "Run `dsctl template datasource` to choose a supported datasource type, "
+        "then `dsctl template datasource --type TYPE`."
+    )
+
+
 def test_datasource_create_command_rejects_payload_with_id(tmp_path: Path) -> None:
     file = _write_json(
         tmp_path / "with-id.json",
