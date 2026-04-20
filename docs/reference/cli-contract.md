@@ -18,7 +18,7 @@ Current stable commands:
 - `dsctl enum names`
 - `dsctl enum list ENUM`
 - `dsctl lint workflow FILE`
-- `dsctl task-type list`
+- `dsctl task-type list|get|schema`
 - `dsctl environment list|get|create|update|delete`
 - `dsctl cluster list|get|create|update|delete`
 - `dsctl datasource list|get|create|update|delete|test`
@@ -46,10 +46,10 @@ Current stable commands:
 - `dsctl project-preference get|update|enable|disable`
 - `dsctl project-worker-group list|set|clear`
 - `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|params|environment|cluster|datasource|task`
-- `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
+- `dsctl template workflow|workflow-patch|workflow-instance-patch|params|environment|cluster|datasource|task`
+- `dsctl workflow list|get|export|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
 - `dsctl workflow lineage list|get|dependent-tasks`
-- `dsctl workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task`
+- `dsctl workflow-instance list|get|export|parent|digest|edit|watch|stop|rerun|recover-failed|execute-task`
 - `dsctl task list|get|update`
 - `dsctl task-instance list|get|watch|sub-workflow|log|force-success|savepoint|stop`
 
@@ -276,7 +276,7 @@ Example:
   "action": "version",
   "resolved": {},
   "data": {
-    "cli": "0.1.0",
+    "cli": "0.2.0",
     "ds": "3.4.1",
     "selected_ds_version": "3.4.1",
     "contract_version": "3.4.1",
@@ -590,7 +590,7 @@ Rules:
   user's `isCollection` favourite flag
 - unlike `capabilities`, this payload depends on the configured cluster and
   authenticated user
-- unlike `template task --list`, this is not the local YAML template catalog
+- unlike `template task`, this is not the local YAML template catalog
 - `resolved.source` is always `favourite/taskTypes`
 
 `data.taskTypes` projects the DS `FavTaskDto` records and keeps DS-native field
@@ -608,6 +608,47 @@ The full stable payload also includes:
 - `data.cliCoverage.typedTaskSpecs`
 - `data.cliCoverage.genericTaskTemplateTypes`
 - `data.cliCoverage.untemplatedTaskTypes`
+
+## `dsctl task-type get TASK_TYPE`
+
+Returns the local task authoring summary for one DS task type. This command is
+local and does not call DolphinScheduler.
+
+Rules:
+
+- task type matching is case-insensitive and accepts supported local aliases
+- `resolved.task_type` is the normalized DS-native task type
+- `data.template_command` points to the default YAML fragment
+- `data.raw_template_command` points to the copyable raw YAML fragment
+- `data.schema_command` points to the full authoring contract
+- `data.required_paths[]` lists fields required by the local authoring model
+- `data.choice_sources[]` lists commands or local sources for discoverable
+  values
+- `data.rows[]` is the compact table/tsv view of next commands and variants
+- generic task types emit warning code `generic_task_template`
+
+## `dsctl task-type schema TASK_TYPE`
+
+Returns the full local authoring contract for one DS task type. This command is
+local and does not call DolphinScheduler.
+
+Rules:
+
+- `data.schema` is a JSON-Schema-style authoring contract with `x-dsctl`
+  metadata
+- `data.fields[]` is the canonical row model for table/tsv and `--columns`
+- `data.fields[].choice_source` records the command or local source for
+  discoverable values; `data.fields[].related_commands[]` records adjacent
+  inspection or creation commands when useful
+- `data.state_rules[]` describes task-type conditionals such as SQL
+  `sqlType`
+- `data.choice_sources[]` records how to discover valid external values
+  and which returned field to use, such as resource `fullName`, datasource
+  `id`, workflow `code`, or a task name in the same YAML file
+- `data.compile_mappings[]` records how authoring YAML maps to DS REST form
+  payload fields
+- the schema is for authoring workflow YAML, not for representing every raw DS
+  database column
 
 ## `dsctl project list`
 
@@ -2810,10 +2851,24 @@ Selection rules:
 - workflow selection: positional argument, then context workflow
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
-Formats:
+Output:
 
-- `--format json` returns the workflow payload
-- `--format yaml` returns YAML inside the standard envelope as `data.yaml`
+- default output returns the workflow payload in the standard JSON envelope
+
+## `dsctl workflow export`
+
+Exports one workflow by name or numeric code as an editable YAML document.
+
+Selection rules:
+
+- project selection: `flag > context`
+- workflow selection: positional argument, then context workflow
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
+
+Output:
+
+- writes only the workflow YAML document
+- use it as the starting point for `workflow edit --file`
 
 ## `dsctl workflow describe`
 
@@ -2850,7 +2905,7 @@ Current guarantees:
   and adds compact graph links (`upstreamTasks`, `downstreamTasks`)
 - omits verbose task payload fields such as `taskParams` and retry/timeout
   details to reduce context size before a caller decides whether to fetch the
-  full `workflow describe` or `workflow get --format yaml` view
+  full `workflow describe` or `workflow export` view
 
 ## `dsctl workflow create`
 
@@ -2865,7 +2920,10 @@ Options:
 
 Rules:
 
-- use `dsctl template workflow` to start a workflow YAML file
+- use `dsctl template workflow --raw` to start a workflow YAML file
+- use `dsctl template task` to discover task template variants
+- use `dsctl task-type schema TYPE` to inspect full task fields, choices,
+  related discovery commands, and state rules before writing `task_params`
 - use `dsctl project list` to discover project names and codes for `--project`
 - project selection precedence is:
   - explicit `--project`
@@ -2954,30 +3012,121 @@ Current dependency rules are intentionally narrow:
 
 ## `dsctl workflow edit`
 
-Edits one existing workflow definition from a minimal YAML patch.
+Edits one existing workflow definition from either a minimal YAML patch or a
+full desired-state workflow YAML file.
 
 Options:
 
-- positional `WORKFLOW` is optional and falls back to workflow context
-- `--patch PATH` (required)
+- positional `WORKFLOW` selects the current workflow for `--file`; for
+  `--patch`, it is optional and falls back to workflow context
+- exactly one of `--patch PATH` or `--file PATH` is required
 - `--project PROJECT`
 - `--dry-run`
+- `--confirm-risk TOKEN`
 
 Rules:
 
-- selection precedence matches other workflow commands:
+- `--patch` is a delta edit:
+  - the patch is applied against the current live workflow YAML export, then
+    compiled back into one legacy whole-definition update payload
+  - patch YAML is a CLI delta document rooted at `patch:`, not a REST `PATCH`
+    request
+  - start new patch files with `dsctl template workflow-patch --raw`
+- `--file` is a full desired-state edit:
+  - the YAML uses the same full workflow shape as `workflow create --file`
+  - the full file's `tasks:` list is the desired complete task set
+  - same-name tasks preserve live DS `code + version`
+  - tasks present in the YAML but absent from the live workflow are created
+  - live tasks absent from the YAML are deleted and require `--confirm-risk`
+  - full-file edit does not infer task renames; use `--patch` with
+    `tasks.rename[]` when task identity must survive a name change
+  - workflow rename and same-name task type changes also require
+    `--confirm-risk`
+  - `schedule:` is rejected; use schedule commands for schedule lifecycle
+- target workflow selection for `--patch`:
   - explicit positional `WORKFLOW`
   - then workflow context
-- project selection precedence remains `flag > context`
+- target workflow selection for `--file`:
+  - explicit positional `WORKFLOW` is required, so workflow rename intent is
+    explicit
+- project selection for `--patch` is `flag > context`
+- project selection for `--file` is `flag > workflow.project > context`; if
+  `--project` and `workflow.project` both exist and disagree, the command fails
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
-- the patch is applied against the current live workflow YAML export, then
-  compiled back into one legacy whole-definition update payload
 - current stable patch operations are:
   - `patch.workflow.set`
   - `patch.tasks.create`
   - `patch.tasks.update`
   - `patch.tasks.rename`
   - `patch.tasks.delete`
+- patch YAML is a CLI delta document rooted at `patch:`, not a REST `PATCH`
+  request
+- start new patch files with `dsctl template workflow-patch --raw`
+- `patch.tasks.create[]` uses the same task item shape as full workflow YAML;
+  use `dsctl template task TYPE --raw` and `dsctl task-type schema TYPE` to
+  discover valid type-specific `task_params`
+- `patch.tasks.update[].match.name` matches the live task name before the patch
+  is applied
+- `patch.tasks.update[].set` is a partial task object; omitted fields preserve
+  the live value
+- `patch.tasks.rename[]` is the only stable way to preserve task identity while
+  changing a task name; the CLI does not guess rename intent from delete/create
+  pairs
+- `patch.tasks.delete[]` contains live task names to remove
+
+Full-file example:
+
+```yaml
+workflow:
+  name: daily-sync
+  project: etl-prod
+  description: Daily ETL workflow
+  timeout: 3600
+  global_params:
+    bizdate: "${system.biz.date}"
+  execution_type: PARALLEL
+  release_state: OFFLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: |
+      echo extract
+  - name: load
+    type: SHELL
+    command: |
+      echo load
+    depends_on:
+      - extract
+```
+
+Patch example:
+
+```yaml
+patch:
+  workflow:
+    set:
+      description: "Updated workflow description"
+      timeout: 3600
+  tasks:
+    create:
+      - name: transform
+        type: SHELL
+        command: |
+          echo transform
+        depends_on:
+          - extract
+    update:
+      - match:
+          name: load
+        set:
+          depends_on:
+            - transform
+    rename:
+      - from: old-load
+        to: load
+    delete:
+      - obsolete
+```
 - current stable `patch.tasks.update[].set` fields are:
   - `type`
   - `description`
@@ -3020,9 +3169,9 @@ Rules:
   - `data.schedule_impact_details`
   - `data.no_change`
 - apply requires the live workflow to already be offline
-- applying a no-op patch returns the current workflow payload, emits one warning
-  with aligned `warning_details[]` code `workflow_edit_no_persistent_change`,
-  and sends no update request
+- applying a no-op patch or full file returns the current workflow payload,
+  emits one warning with aligned `warning_details[]` code
+  `workflow_edit_no_persistent_change`, and sends no update request
 - when apply emits attached-schedule impact warnings, the aligned
   `warning_details[]` items reuse the same codes as
   `data.schedule_impact_details[].code`
@@ -3222,6 +3371,17 @@ Returns the current stable workflow YAML template inside `data.yaml`.
 `data.lines[]` provides the same template as row-oriented `line_no` and `line`
 values for table and tsv output.
 
+Use `--raw` when redirecting the template to a YAML file:
+
+```bash
+dsctl template workflow --raw > workflow.yaml
+```
+
+Options:
+
+- `--with-schedule`
+- `--raw`
+
 Rules:
 
 - the template matches the stable `workflow create --file ...` YAML surface
@@ -3234,6 +3394,70 @@ Rules:
 - `dsctl template workflow --with-schedule` includes one minimal optional
   `schedule:` block and returns `resolved.with_schedule=true`
 - the optional `schedule.cron` example uses DolphinScheduler Quartz cron syntax
+- `--raw` prints only the workflow YAML; it does not print the standard success
+  envelope
+
+## `dsctl template workflow-patch`
+
+Returns a workflow edit patch YAML starting point inside `data.yaml`.
+`data.lines[]` provides the same template as row-oriented `line_no` and `line`
+values for table and tsv output.
+
+Use `--raw` when redirecting the template to a YAML file:
+
+```bash
+dsctl template workflow-patch --raw > patch.yaml
+dsctl workflow edit WORKFLOW --patch patch.yaml --dry-run
+```
+
+Options:
+
+- `--raw`
+
+Rules:
+
+- the template matches the stable `workflow edit --patch ...` delta surface
+- the YAML root is always `patch:`
+- the active default patch changes workflow metadata only, so the file remains
+  valid before task names are customized
+- task create/update/rename/delete examples are included as comments; uncomment
+  only the operations needed for the current edit
+- `tasks.create[]` uses full task fragments from `dsctl template task TYPE --raw`
+- `tasks.update[].set` uses partial task fields discoverable with
+  `dsctl task-type schema TYPE`
+- run `workflow edit --dry-run` before mutating the workflow definition
+
+## `dsctl template workflow-instance-patch`
+
+Returns a finished workflow-instance edit patch YAML starting point inside
+`data.yaml`. `data.lines[]` provides the same template as row-oriented `line_no`
+and `line` values for table and tsv output.
+
+Use `--raw` when redirecting the template to a YAML file:
+
+```bash
+dsctl template workflow-instance-patch --raw > instance-patch.yaml
+dsctl workflow-instance edit WORKFLOW_INSTANCE --patch instance-patch.yaml --dry-run
+```
+
+Options:
+
+- `--raw`
+
+Rules:
+
+- the template matches the stable `workflow-instance edit --patch ...` delta
+  surface
+- the YAML root is always `patch:`
+- `workflow-instance edit` only accepts `workflow.set.global_params` and
+  `workflow.set.timeout` inside the workflow block
+- task create/update/rename/delete examples are included as comments; uncomment
+  only the operations needed for the repair
+- `tasks.create[]` uses full task fragments from `dsctl template task TYPE --raw`
+- `tasks.update[].set` uses partial task fields discoverable with
+  `dsctl task-type schema TYPE`
+- use `--sync-definition` only when the repaired instance DAG should also be
+  written back to the current workflow definition
 
 ## `dsctl template params`
 
@@ -3394,16 +3618,17 @@ Rules:
   value is `data.type` and `resolved.datasource_type`, while full type
   discovery lives in the default index and `dsctl enum list db-type`
 
-## `dsctl template task TASK_TYPE`
+## `dsctl template task [TASK_TYPE]`
 
-Returns one task YAML template inside `data.yaml`. `data.rows[]` provides the
-row-oriented table/tsv view: line rows for a concrete template, and compact
-task-type rows for `--list`.
+Returns a compact local task-template catalog when `TASK_TYPE` is omitted.
+Returns one task YAML template inside `data.yaml` when `TASK_TYPE` is provided.
+`data.rows[]` provides the row-oriented table/tsv view: task-type rows for the
+catalog, and line rows for a concrete template.
 
 Options:
 
-- `--list`
 - `--variant VARIANT`
+- `--raw`
 
 Current stable task template coverage includes every DS 3.4.1 upstream default
 task type.
@@ -3425,35 +3650,31 @@ The remaining upstream default task types return generic templates with raw
 
 Rules:
 
+- omitting `TASK_TYPE` keeps the stable action `template.task` and returns
+  `resolved.mode=index`
 - task type matching is case-insensitive
-- `--list` keeps the stable action `template.task` and returns
-  `resolved.mode=list`
 - the normalized type is returned as `resolved.task_type`
 - `resolved.task_category` reports the upstream DS category
 - `resolved.template_kind` is `typed` or `generic`
 - `resolved.variant` reports the selected template scenario
-- `resolved.available_variants` lists valid scenarios for the selected task type
+- `data.template.variants` lists valid scenarios for the selected task type
 - every task template includes commented optional runtime-control fields for
   `flag`, `environment_code`, `task_group_id`, `task_group_priority`,
   `timeout_notify_strategy`, `cpu_quota`, and `memory_max`
-- `dsctl template task --list` returns:
+- `--raw` prints only the YAML task fragment; it does not print the standard
+  success envelope
+- `dsctl template task` returns:
   - `data.task_types`
   - `data.typed_task_types`
   - `data.generic_task_types`
   - `data.task_types_by_category`
-  - `data.task_templates`
+  - `data.default_task_type`
+  - `data.next_command`
   - `data.rows`
-
-`data.task_templates.TYPE` exposes:
-
-- `kind`
-- `category`
-- `default_variant`
-- `variants`
-- `variant_summaries`
-- `payload_modes`
-- `parameter_fields`
-- `resource_fields`
+- `data.rows[].next_command` points to `dsctl task-type get TYPE`
+- detailed per-type fields, variants, state rules, choices, and compile
+  mappings live in `dsctl task-type get TYPE` and
+  `dsctl task-type schema TYPE`
 
 Stable typed task variants include:
 
@@ -3479,6 +3700,10 @@ the DS `Property` shape: `prop`, `direct`, `type`, and optional `value`.
 `FLOAT`, `DOUBLE`, `DATE`, `TIME`, `TIMESTAMP`, `BOOLEAN`, `LIST`, and `FILE`.
 Script-like tasks can emit output parameters through log lines matching
 `${setValue(name=value)}` or `#{setValue(name=value)}`.
+
+SQL templates and the SQL typed payload normalizer keep `localParams`,
+`varPool`, `preStatements`, and `postStatements` as non-null lists when omitted
+or empty, because DS SQL task execution expects list values for those fields.
 
 For end-to-end YAML authoring guidance, see `docs/user/workflow-authoring.md`.
 
@@ -3749,7 +3974,9 @@ Selection rules:
 
 ## `dsctl task update`
 
-Updates one task definition inside one workflow using inline `--set` mutations.
+Updates one existing task definition inside one workflow using inline `--set`
+mutations. This is the lightweight path for small single-task definition edits,
+not a workflow patch replacement.
 
 Options:
 
@@ -3783,8 +4010,13 @@ Rules:
 - selection precedence matches `task get`
 - use `dsctl task list` inside the selected workflow to discover task names and
   codes
+- inspect the current task with `dsctl task get TASK --workflow WORKFLOW` before
+  editing when the current value matters
 - use `dsctl schema --command task.update` to discover supported `--set` keys,
   examples, and machine-readable metadata
+- use `workflow edit --patch|--file` for structural definition changes such as
+  create, delete, rename, task type changes, or multi-task DAG edits
+- use `workflow-instance edit --patch|--file` for finished instance repair
 - the CLI compiles the update into the DS native
   `updateTaskWithUpstream` form request
 - `command` updates are supported only for `SHELL`, `PYTHON`, and
@@ -3801,6 +4033,9 @@ Rules:
   CLI uses DS's default `WARN` notify strategy
 - task rename and task-type changes remain `workflow edit` operations, not
   inline task updates
+- task-specific complex `task_params` authoring remains under the workflow YAML
+  and `task-type schema` path; `task update` intentionally exposes only the
+  stable common inline keys above
 - `--dry-run` returns the native request plus:
   - `data.updated_fields`
   - `data.no_change`
@@ -4105,6 +4340,26 @@ Selection rules:
 - workflow-instance resources are id-first and do not consume project/workflow
   context
 - discover workflow-instance ids with `dsctl workflow-instance list`
+- default output returns the stable DS runtime projection in the standard JSON
+  envelope
+
+## `dsctl workflow-instance export`
+
+Exports one workflow instance DAG as an editable YAML document.
+
+Selection rules:
+
+- workflow-instance resources are id-first and do not consume project/workflow
+  context
+- discover workflow-instance ids with `dsctl workflow-instance list`
+
+Output:
+
+- writes only the workflow-instance YAML document
+- exports the instance DAG as the same workflow YAML authoring
+  shape used by `workflow create` and `workflow edit --file`; use it as the
+  starting point for `workflow-instance edit --file`
+- requires `dagData` on the workflow-instance payload
 
 ## `dsctl workflow-instance parent`
 
@@ -4159,16 +4414,17 @@ Current guarantees:
 - highlighted task lists are compact task-instance views rather than the full
   `task-instance get` payload
 
-## `dsctl workflow-instance update`
+## `dsctl workflow-instance edit`
 
-Edits one finished workflow instance DAG from a minimal YAML patch and then
-returns the refreshed workflow-instance payload.
+Edits one finished workflow instance DAG from a YAML patch or full workflow YAML
+file and then returns the refreshed workflow-instance payload.
 
 Options:
 
-- `--patch PATH` (required)
+- exactly one of `--patch PATH` or `--file PATH`
 - `--sync-definition`
 - `--dry-run`
+- `--confirm-risk TOKEN`
 
 Rules:
 
@@ -4177,26 +4433,39 @@ Rules:
 - discover workflow-instance ids with `dsctl workflow-instance list`
 - the workflow instance must already be in one DS final state
 - the CLI requires `dagData` from the workflow-instance payload and rebuilds a
-  live workflow spec snapshot from that instance DAG before applying the patch
+  live workflow spec snapshot from that instance DAG before applying the edit
+- start new patch files with `dsctl template workflow-instance-patch --raw`
+- start full-file repairs with
+  `dsctl workflow-instance export WORKFLOW_INSTANCE`
 - patch grammar reuses the same stable task patch operations as `workflow edit`:
   `patch.tasks.create`, `patch.tasks.update`, `patch.tasks.rename`, and
   `patch.tasks.delete`
+- full-file edit treats the YAML as the desired complete instance DAG:
+  same-name tasks preserve DS task identity, YAML-only tasks are created, and
+  live-only tasks are deleted after `--confirm-risk`
+- full-file edit does not infer renames; use `--patch` with `tasks.rename[]`
+  when the task name changes and the existing task identity must be preserved
 - current stable `patch.workflow.set` support is intentionally narrower than
   `workflow edit`; only `global_params` and `timeout` are accepted for
-  workflow-instance updates
+  workflow-instance edits
 - definition-only workflow fields such as `name`, `description`,
   `execution_type`, and `release_state` are rejected as `user_input`
+- full-file edit follows the same field rule: only workflow-level
+  `global_params` and `timeout` may change; `workflow.project`, when present,
+  must match the instance project
+- full-file edit rejects `schedule:` blocks; schedule lifecycle remains under
+  `dsctl schedule`
 - `--sync-definition` forwards DS `syncDefine=true` so the saved DAG is also
   synchronized back to the current workflow definition
-- without `--sync-definition`, the CLI still updates the finished workflow
-  instance but does not request current-definition synchronization
-- `resolved` includes `workflowInstance`, `project`, `workflow`, `patch_file`,
-  and `syncDefine`
+- without `--sync-definition`, the CLI still edits the finished workflow
+  instance DAG but does not request current-definition synchronization
+- `resolved` includes `workflowInstance`, `project`, `workflow`, `input_mode`,
+  one of `patch_file` or `file`, and `syncDefine`
 - `--dry-run` returns the compiled DS form payload plus `diff`, `no_change`,
   and `syncDefine`
-- applying a no-op patch returns the current workflow-instance payload, emits
-  one warning, and the aligned `warning_details[]` item uses code
-  `workflow_instance_update_no_persistent_change`
+- applying a no-op edit returns the current workflow-instance payload, emits one
+  warning, and the aligned `warning_details[]` item uses code
+  `workflow_instance_edit_no_persistent_change`
 
 ## `dsctl workflow-instance stop`
 
@@ -4455,6 +4724,8 @@ Selection rules:
   chunks by task-instance id
 - `--tail` means “keep the last N lines” and is implemented by chunking the DS
   logger API until exhaustion
+- `--raw` prints only `data.text`; errors still use the standard structured
+  error envelope
 - DS result code `10103` for an empty task log path is translated to stable
   error type `task_not_dispatched`
 

@@ -24,6 +24,7 @@ from tests.support import make_profile
 
 from dsctl.errors import (
     ApiResultError,
+    ConfirmationRequiredError,
     InvalidStateError,
     NotFoundError,
     UserInputError,
@@ -366,6 +367,26 @@ def test_get_workflow_instance_result_returns_one_payload(
     assert result.resolved == {"workflowInstance": {"id": 901}}
     assert data["state"] == "RUNNING_EXECUTION"
     assert data["projectCode"] == 7
+
+
+def test_export_workflow_instance_yaml_result_exports_yaml_for_editing(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    result = workflow_instance_service.export_workflow_instance_yaml_result(902)
+    data = _mapping(result.data)
+
+    assert result.resolved == {"workflowInstance": {"id": 902}}
+    assert "workflow:" in str(data["yaml"])
+    assert "project: etl-prod" in str(data["yaml"])
+    assert "name: extract" in str(data["yaml"])
 
 
 def test_get_parent_workflow_instance_result_returns_parent_relation(
@@ -1136,7 +1157,7 @@ def test_execute_task_in_workflow_instance_result_reports_scope_choices(
     )
 
 
-def test_update_workflow_instance_result_dry_run_compiles_patch(
+def test_edit_workflow_instance_result_dry_run_compiles_patch(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
@@ -1164,7 +1185,7 @@ patch:
         encoding="utf-8",
     )
 
-    result = workflow_instance_service.update_workflow_instance_result(
+    result = workflow_instance_service.edit_workflow_instance_result(
         902,
         patch=patch_file,
         dry_run=True,
@@ -1182,7 +1203,7 @@ patch:
     assert _mapping(result.resolved["workflow"])["code"] == 101
 
 
-def test_update_workflow_instance_result_updates_finished_instance(
+def test_edit_workflow_instance_result_updates_finished_instance(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
@@ -1211,7 +1232,7 @@ patch:
         encoding="utf-8",
     )
 
-    result = workflow_instance_service.update_workflow_instance_result(
+    result = workflow_instance_service.edit_workflow_instance_result(
         902,
         patch=patch_file,
         sync_definition=True,
@@ -1253,7 +1274,118 @@ patch:
     assert _mapping(result.resolved["workflow"])["version"] == 2
 
 
-def test_update_workflow_instance_result_rejects_non_final_state(
+def test_edit_workflow_instance_result_dry_run_compiles_full_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+    workflow_file = tmp_path / "workflow-instance.yaml"
+    workflow_file.write_text(
+        """
+workflow:
+  name: daily-sync
+  project: etl-prod
+  timeout: 45
+  global_params:
+    env: prod
+    region: cn
+  execution_type: PARALLEL
+  release_state: OFFLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract-v2
+  - name: verify
+    type: SHELL
+    command: echo verify
+    depends_on:
+      - extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = workflow_instance_service.edit_workflow_instance_result(
+        902,
+        file=workflow_file,
+        dry_run=True,
+    )
+    data = _mapping(result.data)
+    diff = _mapping(data["diff"])
+    form = _mapping(_mapping(data["request"])["form"])
+    definition_payload = json.loads(str(form["taskDefinitionJson"]))
+
+    assert data["dry_run"] is True
+    assert data["no_change"] is False
+    assert result.resolved["input_mode"] == "file"
+    assert result.resolved["file"] == str(workflow_file)
+    assert diff["added_tasks"] == ["verify"]
+    assert diff["deleted_tasks"] == ["load"]
+    assert diff["updated_tasks"] == ["extract"]
+    assert diff["workflow_updated_fields"] == ["timeout", "global_params"]
+    assert [item["name"] for item in definition_payload] == ["extract", "verify"]
+    assert form["timeout"] == 45
+
+
+def test_edit_workflow_instance_result_full_file_requires_confirmation_for_deletion(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+    workflow_file = tmp_path / "workflow-instance.yaml"
+    workflow_file.write_text(
+        """
+workflow:
+  name: daily-sync
+  project: etl-prod
+  timeout: 30
+  execution_type: PARALLEL
+  release_state: OFFLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfirmationRequiredError) as captured:
+        workflow_instance_service.edit_workflow_instance_result(
+            902,
+            file=workflow_file,
+        )
+
+    assert captured.value.details["risk_type"] == (
+        "workflow_instance_full_edit_destructive_change"
+    )
+    assert captured.value.details["deleted_tasks"] == ["load"]
+    confirmation = str(captured.value.details["confirmation_token"])
+
+    result = workflow_instance_service.edit_workflow_instance_result(
+        902,
+        file=workflow_file,
+        confirm_risk=confirmation,
+    )
+    task_payload = json.loads(
+        str(fake_workflow_instance_adapter.update_calls[0]["task_definition_json"])
+    )
+
+    assert _mapping(result.data)["workflowDefinitionVersion"] == 2
+    assert [item["name"] for item in task_payload] == ["extract"]
+
+
+def test_edit_workflow_instance_result_rejects_non_final_state(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
@@ -1277,19 +1409,19 @@ patch:
 
     with pytest.raises(
         InvalidStateError,
-        match="final state before update",
+        match="final state before edit",
     ) as exc_info:
-        workflow_instance_service.update_workflow_instance_result(
+        workflow_instance_service.edit_workflow_instance_result(
             901,
             patch=patch_file,
         )
     assert exc_info.value.suggestion == (
         "Wait for the workflow instance to reach a final state, then retry "
-        "`dsctl workflow-instance update ID --patch PATCH`."
+        "`dsctl workflow-instance edit ID --patch PATCH`."
     )
 
 
-def test_update_workflow_instance_result_rejects_unsupported_workflow_fields(
+def test_edit_workflow_instance_result_rejects_unsupported_workflow_fields(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
@@ -1312,7 +1444,7 @@ patch:
     )
 
     with pytest.raises(UserInputError, match="only supports") as exc_info:
-        workflow_instance_service.update_workflow_instance_result(
+        workflow_instance_service.edit_workflow_instance_result(
             902,
             patch=patch_file,
         )
@@ -1320,3 +1452,146 @@ patch:
         "Use `dsctl workflow edit --patch ...` for definition-level fields "
         "such as name, description, or release_state."
     )
+
+
+def test_edit_workflow_instance_result_rejects_full_file_definition_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+    workflow_file = tmp_path / "workflow-instance.yaml"
+    workflow_file.write_text(
+        """
+workflow:
+  name: renamed-workflow
+  project: etl-prod
+  timeout: 30
+  execution_type: PARALLEL
+  release_state: OFFLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+  - name: load
+    type: SHELL
+    command: echo load
+    depends_on:
+      - extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(UserInputError, match="only supports") as exc_info:
+        workflow_instance_service.edit_workflow_instance_result(
+            902,
+            file=workflow_file,
+            dry_run=True,
+        )
+
+    assert exc_info.value.details["unsupported_fields"] == ["name"]
+    assert exc_info.value.suggestion == (
+        "Use `dsctl workflow edit --file ...` for definition-level fields "
+        "such as name, description, execution_type, or release_state."
+    )
+
+
+def test_edit_workflow_instance_result_rejects_full_file_project_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+    workflow_file = tmp_path / "workflow-instance.yaml"
+    workflow_file.write_text(
+        """
+workflow:
+  name: daily-sync
+  project: other-project
+  timeout: 30
+  execution_type: PARALLEL
+  release_state: OFFLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+  - name: load
+    type: SHELL
+    command: echo load
+    depends_on:
+      - extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(UserInputError, match="project does not match"):
+        workflow_instance_service.edit_workflow_instance_result(
+            902,
+            file=workflow_file,
+            dry_run=True,
+        )
+
+
+def test_edit_workflow_instance_result_rejects_full_file_schedule_block(
+    tmp_path: Path,
+) -> None:
+    workflow_file = tmp_path / "workflow-instance.yaml"
+    workflow_file.write_text(
+        """
+workflow:
+  name: daily-sync
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+schedule:
+  cron: "0 0 0 * * ?"
+  timezone: Asia/Shanghai
+  start: "2026-04-11 00:00:00"
+  end: "2026-04-12 00:00:00"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(UserInputError, match="does not mutate schedule blocks"):
+        workflow_instance_service.edit_workflow_instance_result(
+            902,
+            file=workflow_file,
+            dry_run=True,
+        )
+
+
+def test_edit_workflow_instance_result_requires_one_input_file(
+    tmp_path: Path,
+) -> None:
+    patch_file = tmp_path / "workflow-instance.patch.yaml"
+    workflow_file = tmp_path / "workflow-instance.yaml"
+    patch_file.write_text("patch: {}\n", encoding="utf-8")
+    workflow_file.write_text(
+        """
+workflow:
+  name: daily-sync
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(UserInputError, match="exactly one"):
+        workflow_instance_service.edit_workflow_instance_result(
+            902,
+            patch=patch_file,
+            file=workflow_file,
+        )

@@ -10,21 +10,37 @@ Use the command output as the first source of truth when generating YAML:
 dsctl capabilities
 dsctl schema
 dsctl task-type list
+dsctl template task
+dsctl task-type get SQL
+dsctl task-type schema SQL
 dsctl template params
-dsctl template task --list
-dsctl template task SHELL --variant resource
+dsctl template task SHELL --variant resource --raw
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --dry-run
+dsctl template workflow-patch --raw > patch.yaml
+dsctl workflow edit WORKFLOW --patch patch.yaml --dry-run
 ```
 
 ## Discovery Flow
 
 Use `dsctl task-type list` when you need the live DS task-type catalog for the
-configured cluster and current user. Use `dsctl template task --list` when you
-need the local YAML template catalog and per-task template variants.
+configured cluster and current user. Use `dsctl template task` when you need
+the compact local template catalog. Then use `dsctl task-type get TYPE` for the
+per-type authoring summary and `dsctl task-type schema TYPE` for full fields,
+state rules, choices, discovery commands, related commands, and compile
+mappings.
 
-`dsctl template workflow` returns a minimal full workflow. It is intentionally
-small so generated files do not include unrelated optional fields.
+`dsctl template workflow` returns a minimal full workflow inside the standard
+JSON envelope. Use `dsctl template workflow --raw > workflow.yaml` when you want
+only the YAML file content. The template is intentionally small so generated
+files do not include unrelated optional fields.
+
+Use `dsctl template workflow-patch --raw > patch.yaml` before
+`workflow edit --patch`. Use
+`dsctl template workflow-instance-patch --raw > instance-patch.yaml` before
+`workflow-instance edit --patch`. These patch templates keep the active YAML
+valid and put optional task operations in comments, so agents can discover the
+shape without accidentally targeting placeholder task names.
 
 `dsctl template params` returns a compact parameter-topic index. Expand only the
 topic needed for the current authoring task:
@@ -37,19 +53,18 @@ dsctl template params --topic context
 dsctl template params --topic output
 ```
 
-`dsctl template task --list` returns machine-readable task template metadata:
+`dsctl template task` returns compact machine-readable task-template rows:
 
-- `task_templates.TYPE.kind`
-- `task_templates.TYPE.category`
-- `task_templates.TYPE.default_variant`
-- `task_templates.TYPE.variants`
-- `task_templates.TYPE.variant_summaries`
-- `task_templates.TYPE.payload_modes`
-- `task_templates.TYPE.parameter_fields`
-- `task_templates.TYPE.resource_fields`
+- `rows[].task_type`
+- `rows[].kind`
+- `rows[].category`
+- `rows[].default_variant`
+- `rows[].variants`
+- `rows[].next_command`
 
 `dsctl template task TYPE --variant VARIANT` returns a task-level YAML fragment
-for one concrete authoring scenario. Copy the fragment under `tasks:` in a
+for one concrete authoring scenario. Add `--raw` when you want only the YAML
+fragment without the JSON envelope. Copy the fragment under `tasks:` in a
 workflow YAML file, then run `dsctl lint workflow` and `workflow create
 --dry-run`.
 
@@ -142,6 +157,12 @@ year; uppercase `YYYY` is week-based year. `dsctl lint workflow` and
 `$[yyyyww]` so callers can choose calendar-year, week-year, or
 `year_week(...)` deliberately.
 
+For SQL tasks, `sqlType: 0` means query SQL that returns rows; `sqlType: 1`
+means non-query SQL such as DDL or DML. Run `dsctl task-type schema SQL` to see
+the `sqlType` state rules. SQL task payloads keep `localParams`, `varPool`,
+`preStatements`, and `postStatements` as lists so copied templates stay
+compatible with DS SQL task execution.
+
 Use task template parameter variants for concrete examples:
 
 ```bash
@@ -152,6 +173,7 @@ dsctl template task PYTHON --variant params
 dsctl template task SQL --variant params
 dsctl template task HTTP --variant params
 dsctl template task SWITCH --variant params
+dsctl task-type schema SQL
 ```
 
 ## Typed Task Templates
@@ -193,6 +215,99 @@ dsctl template task REMOTESHELL --variant params
 
 Unknown or not-yet-typed DS task types still accept raw `task_params: {}`
 templates so exported workflows can round-trip while typed coverage grows.
+
+## Workflow Patch YAML
+
+`workflow edit` accepts two input modes:
+
+- `--patch`: a small delta document rooted at `patch:`
+- `--file`: a full desired-state workflow YAML document
+
+Patch YAML is not a REST `PATCH` request; the CLI applies the delta to a live
+DAG snapshot, validates the merged workflow, then compiles the whole DS-native
+form payload. Use patch YAML for precise changes, especially task rename/delete
+flows and finished-instance repair.
+
+Full-file edit treats the YAML as the desired complete workflow definition:
+same-name tasks preserve DS task identity, YAML-only tasks are created, and
+live-only tasks are deleted after `--confirm-risk`. Full-file edit does not
+infer task renames. Use patch `tasks.rename[]` when a task name changes and the
+DS task `code + version` must be preserved.
+
+`workflow edit --file` rejects `schedule:` blocks. Use
+`schedule update|online|offline` for schedule lifecycle changes.
+
+Start from the matching patch template:
+
+```bash
+dsctl template workflow-patch --raw > patch.yaml
+dsctl template workflow-instance-patch --raw > instance-patch.yaml
+```
+
+Use full-file edit when the entire definition should be reconciled:
+
+```bash
+dsctl workflow export WORKFLOW > workflow.yaml
+# edit workflow.yaml and remove schedule: if present
+dsctl workflow edit WORKFLOW --file workflow.yaml --dry-run
+dsctl workflow edit WORKFLOW --file workflow.yaml
+```
+
+For a finished workflow instance repair, export the instance DAG instead of the
+current workflow definition:
+
+```bash
+dsctl workflow-instance export WORKFLOW_INSTANCE > instance.yaml
+# edit the failed instance DAG
+dsctl workflow-instance edit WORKFLOW_INSTANCE --file instance.yaml --dry-run
+dsctl workflow-instance edit WORKFLOW_INSTANCE --file instance.yaml
+```
+
+`workflow-instance edit --file` uses the same task YAML shape as workflow
+authoring, but it is intentionally narrower at the workflow level: only
+`workflow.global_params` and `workflow.timeout` may change. Keep
+`workflow.project` matching the instance project. Remove `schedule:` blocks;
+instance repair does not manage schedule lifecycle.
+
+```yaml
+patch:
+  workflow:
+    set:
+      description: "Updated workflow description"
+      timeout: 3600
+  tasks:
+    create:
+      - name: transform
+        type: SHELL
+        command: |
+          echo transform
+        depends_on:
+          - extract
+    update:
+      - match:
+          name: load
+        set:
+          depends_on:
+            - transform
+    rename:
+      - from: old-load
+        to: load
+    delete:
+      - obsolete
+```
+
+`tasks.create[]` uses the same task item shape as full workflow YAML. Start
+from `dsctl template task TYPE --raw` and inspect full task fields with
+`dsctl task-type schema TYPE`. `tasks.update[].match.name` matches the live
+task name before the patch is applied; `tasks.update[].set` is a partial task
+object and omitted fields keep their live values.
+
+Use `tasks.rename[]` when a task name changes and task identity should be
+preserved. The CLI does not guess rename intent from delete/create pairs.
+
+`workflow-instance edit` intentionally accepts only instance-safe workflow
+fields: `global_params` and `timeout`. Definition fields such as name,
+description, execution type, and release state belong to `workflow edit`.
 
 ## Validation
 

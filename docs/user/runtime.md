@@ -55,7 +55,7 @@ Inspect task logs:
 ```bash
 dsctl task-instance list --workflow-instance <workflow_instance_id>
 dsctl task-instance list --project etl-prod --state FAILURE --start "2026-04-11 00:00:00" --end "2026-04-11 23:59:59"
-dsctl task-instance log <task_instance_id>
+dsctl task-instance log <task_instance_id> --raw
 ```
 
 `task-instance list` uses the project-scoped DS task-instance paging query. Use
@@ -76,5 +76,20 @@ dsctl workflow-instance rerun <workflow_instance_id>
 dsctl workflow-instance recover-failed <workflow_instance_id>
 dsctl task-instance force-success <task_instance_id> --workflow-instance <workflow_instance_id>
 ```
+
+Repair a finished instance DAG:
+
+```bash
+dsctl workflow-instance export <workflow_instance_id> > instance.yaml
+# edit the task graph, then inspect the diff
+dsctl workflow-instance edit <workflow_instance_id> --file instance.yaml --dry-run
+dsctl workflow-instance edit <workflow_instance_id> --file instance.yaml
+```
+
+Use `--patch` with `dsctl template workflow-instance-patch --raw` for small
+targeted changes, especially task renames. Use `--file` when the exported
+instance DAG should be reconciled as the desired complete DAG. Instance edits
+only allow workflow-level `global_params` and `timeout`; definition metadata and
+schedule lifecycle belong to `workflow` and `schedule` commands.
 
 High-impact mutations may require an explicit confirmation token.

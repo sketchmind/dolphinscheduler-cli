@@ -203,7 +203,7 @@ def test_list_workflows_result_uses_project_context_and_filters(
     ]
 
 
-def test_get_workflow_result_can_render_yaml_export(
+def test_export_workflow_yaml_result_can_render_yaml_export(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
     fake_workflow_adapter: FakeWorkflowAdapter,
@@ -217,7 +217,7 @@ def test_get_workflow_result_can_render_yaml_export(
         context=SessionContext(project="etl-prod", workflow="daily-sync"),
     )
 
-    result = workflow_service.get_workflow_result(None, output_format="yaml")
+    result = workflow_service.export_workflow_yaml_result(None)
     data = _mapping(result.data)
     document = yaml.safe_load(str(data["yaml"]))
 
@@ -228,32 +228,7 @@ def test_get_workflow_result_can_render_yaml_export(
     assert all("version" not in task for task in document["tasks"])
 
 
-def test_get_workflow_result_reports_supported_output_formats(
-    monkeypatch: pytest.MonkeyPatch,
-    fake_project_adapter: FakeProjectAdapter,
-    fake_workflow_adapter: FakeWorkflowAdapter,
-    fake_task_adapter: FakeTaskAdapter,
-) -> None:
-    _install_workflow_service_fakes(
-        monkeypatch,
-        project_adapter=fake_project_adapter,
-        workflow_adapter=fake_workflow_adapter,
-        task_adapter=fake_task_adapter,
-    )
-
-    with pytest.raises(
-        UserInputError,
-        match="Workflow output format must be 'json' or 'yaml'",
-    ) as exc_info:
-        workflow_service.get_workflow_result(
-            "daily-sync",
-            project="etl-prod",
-            output_format="table",
-        )
-    assert exc_info.value.suggestion == "Pass `--format json` or `--format yaml`."
-
-
-def test_get_workflow_result_yaml_rewrites_logical_branch_codes_to_task_names(
+def test_export_workflow_yaml_result_rewrites_logical_branch_codes_to_task_names(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
     fake_task_adapter: FakeTaskAdapter,
@@ -330,10 +305,9 @@ def test_get_workflow_result_yaml_rewrites_logical_branch_codes_to_task_names(
         task_adapter=fake_task_adapter,
     )
 
-    result = workflow_service.get_workflow_result(
+    result = workflow_service.export_workflow_yaml_result(
         "route-workflow",
         project="etl-prod",
-        output_format="yaml",
     )
     data = _mapping(result.data)
     document = yaml.safe_load(str(data["yaml"]))
@@ -344,7 +318,7 @@ def test_get_workflow_result_yaml_rewrites_logical_branch_codes_to_task_names(
     assert switch_params["nextBranch"] == "task-a"
 
 
-def test_get_workflow_result_yaml_round_trips_generic_task_params(
+def test_export_workflow_yaml_result_round_trips_generic_task_params(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
     fake_task_adapter: FakeTaskAdapter,
@@ -389,7 +363,7 @@ def test_get_workflow_result_yaml_round_trips_generic_task_params(
         context=SessionContext(project="etl-prod", workflow="spark-workflow"),
     )
 
-    result = workflow_service.get_workflow_result(None, output_format="yaml")
+    result = workflow_service.export_workflow_yaml_result(None)
     data = _mapping(result.data)
     document = yaml.safe_load(str(data["yaml"]))
     spec = WorkflowSpec.model_validate(document)
@@ -1465,7 +1439,7 @@ tasks:
     ]
 
 
-def test_get_workflow_result_yaml_exports_task_group_settings(
+def test_export_workflow_yaml_result_exports_task_group_settings(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
     fake_task_adapter: FakeTaskAdapter,
@@ -1504,7 +1478,7 @@ def test_get_workflow_result_yaml_exports_task_group_settings(
         context=SessionContext(project="etl-prod", workflow="grouped-workflow"),
     )
 
-    result = workflow_service.get_workflow_result(None, output_format="yaml")
+    result = workflow_service.export_workflow_yaml_result(None)
     data = _mapping(result.data)
     document = yaml.safe_load(str(data["yaml"]))
 
@@ -1512,7 +1486,7 @@ def test_get_workflow_result_yaml_exports_task_group_settings(
     assert document["tasks"][0]["task_group_priority"] == 3
 
 
-def test_get_workflow_result_yaml_exports_extended_task_execution_fields(
+def test_export_workflow_yaml_result_exports_extended_task_execution_fields(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
     fake_task_adapter: FakeTaskAdapter,
@@ -1557,7 +1531,7 @@ def test_get_workflow_result_yaml_exports_extended_task_execution_fields(
         context=SessionContext(project="etl-prod", workflow="runtime-workflow"),
     )
 
-    result = workflow_service.get_workflow_result(None, output_format="yaml")
+    result = workflow_service.export_workflow_yaml_result(None)
     data = _mapping(result.data)
     document = yaml.safe_load(str(data["yaml"]))
 
@@ -2792,6 +2766,222 @@ patch:
     ]
 
 
+def test_edit_workflow_result_full_file_dry_run_reconciles_desired_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    codes = iter([8101])
+    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+    )
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(
+        """
+workflow:
+  name: daily-sync
+  project: etl-prod
+  description: Daily ETL workflow v2
+  timeout: 30
+  global_params:
+    env: prod
+  execution_type: PARALLEL
+  release_state: ONLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract v2
+  - name: verify
+    type: SHELL
+    command: echo verify
+    depends_on: [extract]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = workflow_service.edit_workflow_result(
+        "daily-sync",
+        file=workflow_path,
+        project="etl-prod",
+        dry_run=True,
+    )
+    data = _mapping(result.data)
+    request = _mapping(data["request"])
+    form = _mapping(request["form"])
+    diff = _mapping(data["diff"])
+
+    assert data["dry_run"] is True
+    assert result.resolved["input_mode"] == "file"
+    assert result.resolved["file"] == str(workflow_path)
+    assert diff["workflow_updated_fields"] == ["description"]
+    assert diff["added_tasks"] == ["verify"]
+    assert diff["updated_tasks"] == ["extract"]
+    assert diff["renamed_tasks"] == []
+    assert diff["deleted_tasks"] == ["load"]
+    assert diff["added_edges"] == [
+        {
+            "from_task": "extract",
+            "to_task": "verify",
+        }
+    ]
+    assert diff["removed_edges"] == [
+        {
+            "from_task": "extract",
+            "to_task": "load",
+        }
+    ]
+    task_definitions = json.loads(str(form["taskDefinitionJson"]))
+    assert [
+        (item["name"], item["code"], item["version"]) for item in task_definitions
+    ] == [
+        ("extract", 201, 1),
+        ("verify", 8101, 1),
+    ]
+    assert form["releaseState"] == "ONLINE"
+
+
+def test_edit_workflow_result_full_file_requires_confirmation_for_deletion(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    offline_workflow = replace(
+        fake_workflow_adapter.workflows[0],
+        release_state_value=FakeEnumValue("OFFLINE"),
+        schedule_release_state_value=FakeEnumValue("OFFLINE"),
+    )
+    workflow_adapter = replace(
+        fake_workflow_adapter,
+        workflows=[offline_workflow],
+        dags={
+            **fake_workflow_adapter.dags,
+            101: replace(
+                fake_workflow_adapter.dags[101],
+                workflow_definition_value=offline_workflow,
+            ),
+        },
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=fake_task_adapter,
+    )
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(
+        """
+workflow:
+  name: daily-sync
+  project: etl-prod
+  description: Daily ETL workflow
+  timeout: 30
+  execution_type: PARALLEL
+  release_state: OFFLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfirmationRequiredError) as captured:
+        workflow_service.edit_workflow_result(
+            "daily-sync",
+            file=workflow_path,
+            project="etl-prod",
+        )
+
+    assert captured.value.details["risk_type"] == (
+        "workflow_full_edit_destructive_change"
+    )
+    assert captured.value.details["deleted_tasks"] == ["load"]
+    confirmation = str(captured.value.details["confirmation_token"])
+
+    result = workflow_service.edit_workflow_result(
+        "daily-sync",
+        file=workflow_path,
+        project="etl-prod",
+        confirm_risk=confirmation,
+    )
+
+    assert _mapping(result.data)["description"] == "Daily ETL workflow"
+    assert len(workflow_adapter.update_calls) == 1
+    task_definitions = json.loads(
+        str(workflow_adapter.update_calls[0]["task_definition_json"])
+    )
+    assert [(item["name"], item["code"]) for item in task_definitions] == [
+        ("extract", 201)
+    ]
+
+
+def test_edit_workflow_result_full_file_rejects_schedule_block(
+    tmp_path: Path,
+) -> None:
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(
+        """
+workflow:
+  name: daily-sync
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+schedule:
+  cron: 0 0 2 * * ?
+  timezone: UTC
+  start: "2026-01-01 00:00:00"
+  end: "2026-12-31 23:59:59"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(UserInputError, match="does not mutate schedule blocks"):
+        workflow_service.edit_workflow_result(
+            "daily-sync",
+            file=workflow_path,
+            project="etl-prod",
+            dry_run=True,
+        )
+
+
+def test_edit_workflow_result_requires_exactly_one_input_file(
+    tmp_path: Path,
+) -> None:
+    patch_path = tmp_path / "workflow.patch.yaml"
+    patch_path.write_text("patch:\n  workflow:\n    set:\n      timeout: 10\n")
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(
+        "\n".join(
+            [
+                "workflow:",
+                "  name: daily-sync",
+                "tasks:",
+                "  - name: extract",
+                "    type: SHELL",
+                "    command: echo extract",
+                "",
+            ]
+        )
+    )
+
+    with pytest.raises(UserInputError, match="exactly one"):
+        workflow_service.edit_workflow_result(
+            "daily-sync",
+            patch=patch_path,
+            file=workflow_path,
+            project="etl-prod",
+        )
+
+
 def test_edit_workflow_result_dry_run_warns_on_risky_time_parameter_format(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -3514,10 +3704,9 @@ patch:
         project="etl-prod",
     )
     data = _mapping(result.data)
-    yaml_result = workflow_service.get_workflow_result(
+    yaml_result = workflow_service.export_workflow_yaml_result(
         "301",
         project="etl-prod",
-        output_format="yaml",
     )
     yaml_data = _mapping(yaml_result.data)
     document = yaml.safe_load(str(yaml_data["yaml"]))
@@ -3604,10 +3793,9 @@ patch:
         project="etl-prod",
     )
     data = _mapping(result.data)
-    yaml_result = workflow_service.get_workflow_result(
+    yaml_result = workflow_service.export_workflow_yaml_result(
         "spark-workflow",
         project="etl-prod",
-        output_format="yaml",
     )
     yaml_data = _mapping(yaml_result.data)
     document = yaml.safe_load(str(yaml_data["yaml"]))
@@ -3690,10 +3878,9 @@ tasks:
     created_data = _mapping(created.data)
     assert created_data["name"] == "roundtrip-flow"
 
-    exported = workflow_service.get_workflow_result(
+    exported = workflow_service.export_workflow_yaml_result(
         "roundtrip-flow",
         project="etl-prod",
-        output_format="yaml",
     )
     exported_data = _mapping(exported.data)
     exported_document = yaml.safe_load(str(exported_data["yaml"]))
@@ -3770,10 +3957,9 @@ patch:
     updated_data = _mapping(updated.data)
     assert updated_data["name"] == "roundtrip-flow"
 
-    updated_export = workflow_service.get_workflow_result(
+    updated_export = workflow_service.export_workflow_yaml_result(
         "roundtrip-flow",
         project="etl-prod",
-        output_format="yaml",
     )
     updated_document = yaml.safe_load(str(_mapping(updated_export.data)["yaml"]))
     updated_spec = WorkflowSpec.model_validate(updated_document)

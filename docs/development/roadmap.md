@@ -40,7 +40,7 @@ the upstream adapter compiles, and `dsctl version` works end to end.
 **Done when:**
 ```bash
 dsctl version
-# → {"ok": true, "action": "version", "data": {"cli": "0.1.0", "ds": "3.4.1"}}
+# → {"ok": true, "action": "version", "data": {"cli": "0.2.0", "ds": "3.4.1"}}
 
 dsctl context
 # → {"ok": true, "action": "context", "data": {"api_url": "...", "project": null, "workflow": null, ...}}
@@ -91,7 +91,7 @@ query side of the two most important resources.
 - [x] `src/dsctl/services/task.py` — list, get
 - [x] Resolver: add workflow and task name resolution
 - [x] `src/dsctl/support/yaml_io.py` — YAML rendering
-- [x] `dsctl workflow get --format yaml` returns roundtrip-able YAML in `data.yaml`
+- [x] `dsctl workflow export` returns roundtrip-able workflow YAML
 - [x] Tests for all of the above
 
 **Done when:**
@@ -99,7 +99,7 @@ query side of the two most important resources.
 dsctl use project etl-prod
 dsctl workflow list                        # uses context
 dsctl workflow get daily-etl               # uses context
-dsctl workflow get daily-etl --format yaml # YAML output
+dsctl workflow export daily-etl         # YAML output
 dsctl use workflow daily-etl
 dsctl task list                            # uses project + workflow context
 dsctl task get extract                     # single task detail
@@ -123,8 +123,8 @@ dsctl use --clear
 - [x] `--dry-run` support
 - [x] `tests/models/test_workflow_spec.py` — YAML parsing tests
 - [x] `tests/services/test_workflow.py` — create workflow tests
-- [x] `dsctl template workflow`, `dsctl template environment`, `dsctl template cluster`, and
-      `dsctl template task SHELL|SQL|HTTP|...`
+- [x] `dsctl template workflow`, workflow patch templates, `dsctl template environment`,
+      `dsctl template cluster`, and `dsctl template task SHELL|SQL|HTTP|...`
 - [x] YAML `schedule:` block support during `workflow create`
 - [x] extend task-type coverage for DS logical/compound nodes:
       `SUB_WORKFLOW`, `DEPENDENT`, `SWITCH`, `CONDITIONS`
@@ -137,7 +137,9 @@ dsctl workflow create --file workflow.yaml --dry-run
 dsctl workflow create --file workflow.yaml --confirm-risk TOKEN
 
 # Template discovery
-dsctl template workflow       # → full YAML template with comments
+dsctl template workflow --raw # → full YAML template with comments
+dsctl template workflow-patch --raw # → workflow edit patch template
+dsctl template workflow-instance-patch --raw # → instance edit patch template
 dsctl template task SHELL     # → SHELL task template
 
 # The created workflow appears in DS UI and can be triggered.
@@ -171,6 +173,7 @@ stable dry-run diff before apply.
 # Patch workflow
 dsctl workflow edit --patch patch.yaml
 dsctl workflow edit --patch patch.yaml --dry-run
+dsctl workflow edit WORKFLOW --file workflow.yaml --dry-run
 # → {"data": {"diff": {"added_tasks": [...], "removed_edges": [...]}}}
 
 # Inline task update
@@ -189,7 +192,7 @@ instance-oriented resources.
 
 - current stable slice:
   - `workflow online|offline|run|run-task|backfill WORKFLOW`
-  - `workflow-instance list|get|parent|update|watch|stop|rerun|recover-failed|execute-task`
+  - `workflow-instance list|get|parent|edit|watch|stop|rerun|recover-failed|execute-task`
   - `task-instance list|get|sub-workflow|log|force-success|savepoint|stop`
 
 **Grounding:**
@@ -218,7 +221,7 @@ instance-oriented resources.
 - [x] Workflow online/offline returns refreshed workflow payloads and keeps the
       attached-schedule lifecycle explicit
 - [x] Runtime selector rule: workflow-instance and task-instance are id-first
-- [x] `workflow-instance update` compiles a DAG patch against finished-instance
+- [x] `workflow-instance edit` compiles a DAG patch against finished-instance
       `dagData` and can optionally sync the saved DAG back to the current
       workflow definition
 - [x] `workflow-instance watch` blocks until DS reaches a final execution state
@@ -243,8 +246,8 @@ dsctl workflow backfill daily-etl --start "2026-04-01 00:00:00" --end "2026-04-0
 dsctl workflow-instance list --state RUNNING
 dsctl workflow-instance get 123
 dsctl workflow-instance parent 456
-dsctl workflow-instance update 123 --patch instance-patch.yaml
-dsctl workflow-instance update 123 --patch instance-patch.yaml --sync-definition
+dsctl workflow-instance edit 123 --patch instance-patch.yaml
+dsctl workflow-instance edit 123 --patch instance-patch.yaml --sync-definition
 dsctl workflow-instance stop 123
 dsctl workflow-instance rerun 123
 dsctl workflow-instance recover-failed 123
@@ -366,6 +369,8 @@ surface.
 - [x] `dsctl schema` — JSON tool definition output for the current stable surface
 - [x] `dsctl enum names`, `dsctl enum list <enum>` — enum value discovery
 - [x] `dsctl task-type list` — live DS task-type discovery with favourite flags
+- [x] `dsctl task-type get|schema` — local task authoring summaries, field
+      contracts, state rules, choices, and compile mappings
 - [x] audit log inspection and audit filter metadata discovery
 - [x] workflow lineage inspection and dependent-task discovery
 - [ ] `--non-interactive` mode (never prompt stdin)

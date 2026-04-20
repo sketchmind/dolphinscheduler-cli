@@ -20,6 +20,10 @@ LOCAL_ONLY_COMMANDS = {
     "template params",
     "template task",
     "template workflow",
+    "template workflow-instance-patch",
+    "template workflow-patch",
+    "task-type get",
+    "task-type schema",
     "use project",
     "use workflow",
     "version",
@@ -27,6 +31,7 @@ LOCAL_ONLY_COMMANDS = {
 
 LIVE_COMMAND_HELPERS = {
     "run_dsctl",
+    "run_dsctl_raw",
     "wait_for_result",
 }
 

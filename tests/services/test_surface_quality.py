@@ -106,10 +106,6 @@ SUGGESTION_GOVERNED_SERVICE_MODULES = (
     "user.py",
 )
 STABLE_COMMAND_DOC_BLOCKS = {
-    "README.md": (
-        "Stable user-facing commands today:",
-        "## Documentation",
-    ),
     "docs/development/architecture.md": (
         "The current stable CLI surface is:",
         "Everything else remains roadmap work.",

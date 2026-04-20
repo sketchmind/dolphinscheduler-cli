@@ -232,6 +232,17 @@ def test_workflow_instance_get_help_points_to_instance_discovery() -> None:
     assert result.exit_code == 0
     assert "workflow-instance" in result.stdout
     assert "list" in result.stdout
+    assert "--raw" not in result.stdout
+    assert "--format" not in result.stdout
+
+
+def test_workflow_instance_export_help_points_to_instance_discovery() -> None:
+    result = runner.invoke(app, ["workflow-instance", "export", "--help"])
+
+    assert result.exit_code == 0
+    assert "workflow-instance" in result.stdout
+    assert "list" in result.stdout
+    assert "--raw" not in result.stdout
 
 
 def test_workflow_instance_get_command_returns_one_instance() -> None:
@@ -241,6 +252,15 @@ def test_workflow_instance_get_command_returns_one_instance() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow-instance.get"
     assert payload["data"]["state"] == "RUNNING_EXECUTION"
+
+
+def test_workflow_instance_export_command_exports_yaml() -> None:
+    result = runner.invoke(app, ["workflow-instance", "export", "903"])
+
+    assert result.exit_code == 0
+    assert result.stdout.startswith("workflow:\n")
+    assert "project: etl-prod" in result.stdout
+    assert "tasks:" in result.stdout
 
 
 def test_workflow_instance_parent_command_returns_parent_relation() -> None:
@@ -357,7 +377,7 @@ def test_workflow_instance_digest_command_returns_runtime_summary() -> None:
     ]
 
 
-def test_workflow_instance_update_command_supports_dry_run(tmp_path: Path) -> None:
+def test_workflow_instance_edit_command_supports_dry_run(tmp_path: Path) -> None:
     patch_file = tmp_path / "workflow-instance.patch.yaml"
     patch_file.write_text(
         """
@@ -379,7 +399,7 @@ patch:
         app,
         [
             "workflow-instance",
-            "update",
+            "edit",
             "903",
             "--patch",
             str(patch_file),
@@ -389,13 +409,13 @@ patch:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["action"] == "workflow-instance.update"
+    assert payload["action"] == "workflow-instance.edit"
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["request"]["path"] == "/projects/7/workflow-instances/903"
     assert payload["resolved"]["syncDefine"] is False
 
 
-def test_workflow_instance_update_command_updates_finished_instance(
+def test_workflow_instance_edit_command_updates_finished_instance(
     tmp_path: Path,
 ) -> None:
     patch_file = tmp_path / "workflow-instance.patch.yaml"
@@ -417,7 +437,7 @@ patch:
         app,
         [
             "workflow-instance",
-            "update",
+            "edit",
             "903",
             "--patch",
             str(patch_file),
@@ -427,13 +447,94 @@ patch:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["action"] == "workflow-instance.update"
+    assert payload["action"] == "workflow-instance.edit"
     assert payload["data"]["workflowDefinitionVersion"] == 2
     assert payload["data"]["timeout"] == 45
     assert payload["resolved"]["syncDefine"] is True
 
 
-def test_workflow_instance_update_command_suggests_workflow_edit_for_definition_fields(
+def test_workflow_instance_edit_command_supports_full_file_dry_run(
+    tmp_path: Path,
+) -> None:
+    workflow_file = tmp_path / "workflow-instance.yaml"
+    workflow_file.write_text(
+        """
+workflow:
+  name: daily-sync
+  project: etl-prod
+  timeout: 45
+  execution_type: PARALLEL
+  release_state: OFFLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract-v2
+  - name: load
+    type: SHELL
+    command: echo load
+    depends_on:
+      - extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "workflow-instance",
+            "edit",
+            "903",
+            "--file",
+            str(workflow_file),
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "workflow-instance.edit"
+    assert payload["data"]["dry_run"] is True
+    assert payload["resolved"]["input_mode"] == "file"
+    assert payload["resolved"]["file"] == str(workflow_file.resolve())
+    assert payload["data"]["diff"]["updated_tasks"] == ["extract"]
+
+
+def test_workflow_instance_edit_command_requires_one_input(
+    tmp_path: Path,
+) -> None:
+    workflow_file = tmp_path / "workflow-instance.yaml"
+    workflow_file.write_text(
+        """
+workflow:
+  name: daily-sync
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "workflow-instance",
+            "edit",
+            "903",
+            "--file",
+            str(workflow_file),
+            "--patch",
+            str(workflow_file),
+        ],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["message"] == "Pass exactly one of --patch or --file."
+
+
+def test_workflow_instance_edit_command_suggests_workflow_edit_for_definition_fields(
     tmp_path: Path,
 ) -> None:
     patch_file = tmp_path / "workflow-instance.patch.yaml"
@@ -451,7 +552,7 @@ patch:
         app,
         [
             "workflow-instance",
-            "update",
+            "edit",
             "903",
             "--patch",
             str(patch_file),

@@ -6,7 +6,7 @@ from collections.abc import Callable
 import typer
 
 from dsctl.app import app
-from dsctl.cli_runtime import emit_result
+from dsctl.cli_runtime import emit_raw_result, emit_result
 from dsctl.cli_surface import (
     COMMAND_GROUPS,
     RESOURCE_COMMAND_TREE,
@@ -46,7 +46,9 @@ def test_registered_command_callbacks_use_shared_json_emitter() -> None:
             and isinstance(node.func.value, ast.Name)
         }
 
-        assert "emit_result" in call_names, path
+        assert "emit_result" in call_names or "emit_raw_result" in call_names, path
+        if "emit_raw_result" in call_names:
+            assert callback.__globals__.get("emit_raw_result") is emit_raw_result, path
         assert "print_json" not in call_names, path
         assert "success_payload" not in call_names, path
         assert "error_payload" not in call_names, path

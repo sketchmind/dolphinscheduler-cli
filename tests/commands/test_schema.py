@@ -23,7 +23,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "schema"
     assert payload["data"]["schema_version"] == 1
-    assert payload["data"]["cli"] == {"name": "dsctl", "version": "0.1.0"}
+    assert payload["data"]["cli"] == {"name": "dsctl", "version": "0.2.0"}
     command_names = [item["name"] for item in payload["data"]["commands"]]
     assert command_names[:18] == [
         "version",
@@ -53,11 +53,34 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         for task_type in expected_supported_types
         if task_type not in expected_typed_types
     ]
+    assert payload["data"]["capabilities"]["templates"]["workflow"] == {
+        "with_schedule_option": True,
+        "raw_template_command": "dsctl template workflow --raw",
+        "export_command": "dsctl workflow export WORKFLOW",
+    }
+    assert payload["data"]["capabilities"]["templates"]["workflow_patch"] == {
+        "raw_template_command": "dsctl template workflow-patch --raw",
+        "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+    }
+    assert payload["data"]["capabilities"]["templates"]["workflow_instance_patch"] == {
+        "raw_template_command": "dsctl template workflow-instance-patch --raw",
+        "target_command": (
+            "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+        ),
+        "file_source_command": ("dsctl workflow-instance export WORKFLOW_INSTANCE"),
+        "file_target_command": (
+            "dsctl workflow-instance edit WORKFLOW_INSTANCE --file FILE"
+        ),
+    }
     assert payload["data"]["capabilities"]["templates"]["task"] == {
         "supported_types": expected_supported_types,
         "typed_types": expected_typed_types,
         "generic_types": expected_generic_types,
         "templates_by_type": task_template_metadata(),
+        "index_command": "dsctl template task",
+        "summary_command_pattern": "dsctl task-type get TYPE",
+        "schema_command_pattern": "dsctl task-type schema TYPE",
+        "raw_template_command_pattern": "dsctl template task TYPE --raw",
     }
     assert payload["data"]["capabilities"]["templates"]["datasource"] == (
         datasource_template_index_data()

@@ -88,6 +88,8 @@ def _task_patch_set(
                 "groupId": 0,
                 "title": "",
                 "limit": 0,
+                "localParams": [],
+                "varPool": [],
             }
         }
     if task_type == "HTTP":

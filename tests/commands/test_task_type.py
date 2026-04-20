@@ -68,7 +68,52 @@ def test_task_type_help_distinguishes_live_catalog_from_template_catalog() -> No
 
     assert group_result.exit_code == 0
     assert list_result.exit_code == 0
-    assert "live DS task-type catalog" in group_result.stdout
-    assert "configured cluster and current user" in group_result.stdout
+    assert "local task authoring contracts" in group_result.stdout
+    assert "schema" in group_result.stdout
     assert "CLI authoring" in list_result.stdout
     assert "coverage" in list_result.stdout
+
+
+def test_task_type_get_command_returns_local_authoring_summary() -> None:
+    result = runner.invoke(app, ["task-type", "get", "sql"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "task-type.get"
+    assert payload["resolved"] == {"task_type": "SQL"}
+    assert payload["data"]["task_type"] == "SQL"
+    assert payload["data"]["schema_command"] == "dsctl task-type schema SQL"
+    assert payload["data"]["raw_template_command"] == "dsctl template task SQL --raw"
+    assert "task_params.sql" in payload["data"]["required_paths"]
+
+
+def test_task_type_schema_command_returns_field_contract() -> None:
+    result = runner.invoke(app, ["task-type", "schema", "SQL"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "task-type.schema"
+    field_paths = [field["path"] for field in payload["data"]["fields"]]
+    assert "task_params.sqlType" in field_paths
+    assert payload["data"]["state_rules"][1]["when"] == "task_params.sqlType == 1"
+    assert payload["data"]["schema"]["x-dsctl"]["template_command"] == (
+        "dsctl template task SQL"
+    )
+
+
+def test_task_type_schema_command_returns_choice_sources_for_fields() -> None:
+    result = runner.invoke(app, ["task-type", "schema", "SHELL"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    resource_field = next(
+        field
+        for field in payload["data"]["fields"]
+        if field["path"] == "task_params.resourceList[].resourceName"
+    )
+    assert resource_field["choice_source"] == "dsctl resource list --dir DIR"
+    assert resource_field["related_commands"] == [
+        "dsctl resource list",
+        "dsctl resource upload --file FILE",
+        "dsctl resource view RESOURCE",
+    ]

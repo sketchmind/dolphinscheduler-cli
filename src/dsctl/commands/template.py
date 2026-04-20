@@ -2,7 +2,9 @@ from typing import Annotated
 
 import typer
 
-from dsctl.cli_runtime import emit_result
+from dsctl.cli_runtime import emit_raw_result, emit_result
+from dsctl.errors import UserInputError
+from dsctl.output import CommandResult
 from dsctl.services.template import (
     cluster_config_template_result,
     datasource_template_result,
@@ -12,6 +14,8 @@ from dsctl.services.template import (
     supported_parameter_syntax_topics,
     task_template_result,
     task_template_types_result,
+    workflow_instance_patch_template_result,
+    workflow_patch_template_result,
     workflow_template_result,
 )
 
@@ -35,11 +39,76 @@ def workflow_command(
             help="Include one optional schedule block in the emitted template.",
         ),
     ] = None,
+    raw: Annotated[
+        bool | None,
+        typer.Option(
+            "--raw",
+            help="Print only the workflow YAML template, without the JSON envelope.",
+        ),
+    ] = None,
 ) -> None:
     """Emit the stable workflow YAML template."""
+    if raw:
+        emit_raw_result(
+            "template.workflow",
+            lambda: workflow_template_result(with_schedule=bool(with_schedule)),
+            _template_yaml,
+        )
+        return
     emit_result(
         "template.workflow",
         lambda: workflow_template_result(with_schedule=bool(with_schedule)),
+    )
+
+
+@template_app.command("workflow-patch")
+def workflow_patch_command(
+    raw: Annotated[
+        bool | None,
+        typer.Option(
+            "--raw",
+            help=(
+                "Print only the workflow patch YAML template, without the JSON "
+                "envelope."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Emit the stable workflow edit patch YAML template."""
+    if raw:
+        emit_raw_result(
+            "template.workflow-patch",
+            workflow_patch_template_result,
+            _template_yaml,
+        )
+        return
+    emit_result("template.workflow-patch", workflow_patch_template_result)
+
+
+@template_app.command("workflow-instance-patch")
+def workflow_instance_patch_command(
+    raw: Annotated[
+        bool | None,
+        typer.Option(
+            "--raw",
+            help=(
+                "Print only the workflow-instance patch YAML template, "
+                "without the JSON envelope."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Emit the stable workflow-instance edit patch YAML template."""
+    if raw:
+        emit_raw_result(
+            "template.workflow-instance-patch",
+            workflow_instance_patch_template_result,
+            _template_yaml,
+        )
+        return
+    emit_result(
+        "template.workflow-instance-patch",
+        workflow_instance_patch_template_result,
     )
 
 
@@ -101,16 +170,9 @@ def task_command(
         str | None,
         typer.Argument(
             help=(
-                "Task type to template. Required unless --list. Run "
-                "`dsctl template task --list` to inspect supported values."
+                "Task type to template. Omit for a compact template catalog. "
+                "Run `dsctl task-type get TYPE` for per-type guidance."
             ),
-        ),
-    ] = None,
-    list_types: Annotated[
-        bool | None,
-        typer.Option(
-            "--list",
-            help="List supported stable task template types instead of emitting YAML.",
         ),
     ] = None,
     variant: Annotated[
@@ -122,16 +184,57 @@ def task_command(
                 "task type. Known variants include minimal, params, resource, "
                 "post-json, pre-post-statements, branching, condition-routing, "
                 "workflow-dependency, child-workflow, and datasource; inspect "
-                "per-type values with `dsctl template task --list`."
+                "per-type values with `dsctl task-type get TYPE`."
             ),
+        ),
+    ] = None,
+    raw: Annotated[
+        bool | None,
+        typer.Option(
+            "--raw",
+            help="Print only the YAML task fragment, without the JSON envelope.",
         ),
     ] = None,
 ) -> None:
     """Emit one task YAML template or list supported task types."""
-    if list_types:
+    if task_type is None:
+        if raw:
+            emit_result("template.task", _task_template_raw_requires_type)
+            return
         emit_result("template.task", task_template_types_result)
+        return
+    if raw:
+        emit_raw_result(
+            "template.task",
+            lambda: task_template_result(task_type, variant=variant),
+            _template_yaml,
+        )
         return
     emit_result(
         "template.task",
-        lambda: task_template_result(task_type or "", variant=variant),
+        lambda: task_template_result(task_type, variant=variant),
     )
+
+
+def _task_template_raw_requires_type() -> CommandResult:
+    message = "--raw requires TASK_TYPE."
+    raise UserInputError(
+        message,
+        details={"discovery_command": "dsctl template task"},
+        suggestion=(
+            "Run `dsctl template task` to choose a task type, then "
+            "`dsctl template task TYPE --raw`."
+        ),
+    )
+
+
+def _template_yaml(result: CommandResult) -> str:
+    data = result.data
+    if not isinstance(data, dict):
+        message = "template result data must be an object"
+        raise TypeError(message)
+    yaml_text = data.get("yaml")
+    if not isinstance(yaml_text, str):
+        message = "template result data is missing yaml"
+        raise TypeError(message)
+    return yaml_text

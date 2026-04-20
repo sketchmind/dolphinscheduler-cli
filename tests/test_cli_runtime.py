@@ -214,7 +214,7 @@ def test_emit_result_projects_json_columns_for_object_data(
     def builder() -> CommandResult:
         return CommandResult(
             data={
-                "cli": "0.1.0",
+                "cli": "0.2.0",
                 "ds": "3.4.1",
                 "family": "workflow-3.3-plus",
             }
@@ -223,7 +223,7 @@ def test_emit_result_projects_json_columns_for_object_data(
     try:
         emit_result("version", builder)
         payload = json.loads(capsys.readouterr().out)
-        assert payload["data"] == {"cli": "0.1.0", "ds": "3.4.1"}
+        assert payload["data"] == {"cli": "0.2.0", "ds": "3.4.1"}
     finally:
         set_app_state(AppState(env_file=None))
 

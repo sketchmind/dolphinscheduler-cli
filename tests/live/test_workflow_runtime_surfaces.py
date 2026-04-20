@@ -15,6 +15,7 @@ from tests.live.support import (
     require_text_value,
     result_error_code,
     run_dsctl,
+    run_dsctl_raw,
     wait_for_result,
 )
 from tests.live.workflow_support import (
@@ -574,31 +575,19 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             label="renamed task rawScript",
         )
 
-        workflow_yaml_payload = require_ok_payload(
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "get",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                    "--format",
-                    "yaml",
-                ],
-                env_file=live_etl_env_file,
-            ),
-            expected_action="workflow.get",
-            label="workflow get yaml after edit",
+        workflow_yaml_result = run_dsctl_raw(
+            live_repo_root,
+            [
+                "workflow",
+                "export",
+                workflow_name,
+                "--project",
+                project_name,
+            ],
+            env_file=live_etl_env_file,
         )
-        workflow_yaml_data = require_mapping(
-            workflow_yaml_payload["data"],
-            label="workflow get yaml after edit data",
-        )
-        workflow_yaml_text = require_text_value(
-            workflow_yaml_data.get("yaml"),
-            label="workflow yaml after edit",
-        )
+        assert workflow_yaml_result.exit_code == 0, workflow_yaml_result.stderr
+        workflow_yaml_text = workflow_yaml_result.stdout
         workflow_yaml_document = yaml.safe_load(workflow_yaml_text)
         workflow_yaml_tasks = workflow_yaml_document["tasks"]
         assert all("code" not in task for task in workflow_yaml_tasks)
@@ -811,6 +800,15 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
         )
         assert workflow_instance_get_data["workflowDefinitionCode"] == workflow_code
         assert workflow_instance_get_data["state"] == "SUCCESS"
+
+        workflow_instance_yaml_result = run_dsctl_raw(
+            live_repo_root,
+            ["workflow-instance", "export", str(workflow_instance_id)],
+            env_file=live_etl_env_file,
+        )
+        assert workflow_instance_yaml_result.exit_code == 0
+        assert workflow_instance_yaml_result.stdout.startswith("workflow:\n")
+        assert "tasks:" in workflow_instance_yaml_result.stdout
 
         workflow_instance_digest_result = wait_for_result(
             live_repo_root,
@@ -1142,7 +1140,7 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             )
 
 
-def test_workflow_instance_update_respects_sync_definition_flag(
+def test_workflow_instance_edit_respects_sync_definition_flag(
     live_repo_root: Path,
     live_etl_env_file: Path,
     live_name_factory: Callable[[str], str],
@@ -1182,7 +1180,7 @@ def test_workflow_instance_update_respects_sync_definition_flag(
                     "--name",
                     project_name,
                     "--description",
-                    "live workflow-instance update project",
+                    "live workflow-instance edit project",
                 ],
                 env_file=live_etl_env_file,
             ),
@@ -1290,29 +1288,29 @@ def test_workflow_instance_update_respects_sync_definition_flag(
                 live_repo_root,
                 [
                     "workflow-instance",
-                    "update",
+                    "edit",
                     str(workflow_instance_id),
                     "--patch",
                     str(no_sync_patch),
                 ],
                 env_file=live_etl_env_file,
             ),
-            expected_action="workflow-instance.update",
-            label="workflow-instance update without sync-definition",
+            expected_action="workflow-instance.edit",
+            label="workflow-instance edit without sync-definition",
         )
         no_sync_update_resolved = require_mapping(
             no_sync_update_payload["resolved"],
-            label="workflow-instance update resolved",
+            label="workflow-instance edit resolved",
         )
         no_sync_update_data = require_mapping(
             no_sync_update_payload["data"],
-            label="workflow-instance update data",
+            label="workflow-instance edit data",
         )
         assert no_sync_update_resolved["syncDefine"] is False
         assert no_sync_update_data["id"] == workflow_instance_id
         no_sync_version = require_int_value(
             no_sync_update_data.get("workflowDefinitionVersion"),
-            label="workflow-instance version after no-sync update",
+            label="workflow-instance version after no-sync edit",
         )
 
         task_list_after_no_sync_payload = require_ok_payload(
@@ -1329,11 +1327,11 @@ def test_workflow_instance_update_respects_sync_definition_flag(
                 env_file=live_etl_env_file,
             ),
             expected_action="task.list",
-            label="task list after no-sync workflow-instance update",
+            label="task list after no-sync workflow-instance edit",
         )
         task_rows_after_no_sync = require_list(
             task_list_after_no_sync_payload["data"],
-            label="task list after no-sync workflow-instance update data",
+            label="task list after no-sync workflow-instance edit data",
         )
         assert set(_task_rows_by_name(task_rows_after_no_sync)) == {"extract", "load"}
 
@@ -1342,7 +1340,7 @@ def test_workflow_instance_update_respects_sync_definition_flag(
                 live_repo_root,
                 [
                     "workflow-instance",
-                    "update",
+                    "edit",
                     str(workflow_instance_id),
                     "--patch",
                     str(sync_patch),
@@ -1350,23 +1348,23 @@ def test_workflow_instance_update_respects_sync_definition_flag(
                 ],
                 env_file=live_etl_env_file,
             ),
-            expected_action="workflow-instance.update",
-            label="workflow-instance update with sync-definition",
+            expected_action="workflow-instance.edit",
+            label="workflow-instance edit with sync-definition",
         )
         sync_update_resolved = require_mapping(
             sync_update_payload["resolved"],
-            label="workflow-instance sync update resolved",
+            label="workflow-instance sync edit resolved",
         )
         sync_update_data = require_mapping(
             sync_update_payload["data"],
-            label="workflow-instance sync update data",
+            label="workflow-instance sync edit data",
         )
         assert sync_update_resolved["syncDefine"] is True
         assert sync_update_data["id"] == workflow_instance_id
         assert (
             require_int_value(
                 sync_update_data.get("workflowDefinitionVersion"),
-                label="workflow-instance version after sync-definition update",
+                label="workflow-instance version after sync-definition edit",
             )
             > no_sync_version
         )
@@ -1385,11 +1383,11 @@ def test_workflow_instance_update_respects_sync_definition_flag(
                 env_file=live_etl_env_file,
             ),
             expected_action="task.list",
-            label="task list after sync-definition workflow-instance update",
+            label="task list after sync-definition workflow-instance edit",
         )
         task_rows_after_sync = require_list(
             task_list_after_sync_payload["data"],
-            label="task list after sync-definition workflow-instance update data",
+            label="task list after sync-definition workflow-instance edit data",
         )
         assert set(_task_rows_by_name(task_rows_after_sync)) == {
             "extract-synced",

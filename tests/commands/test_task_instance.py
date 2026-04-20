@@ -362,6 +362,17 @@ def test_task_instance_log_command_returns_tail_lines() -> None:
     assert payload["data"]["text"] == "line-2\nline-3"
 
 
+def test_task_instance_log_command_can_emit_raw_text() -> None:
+    result = runner.invoke(
+        app,
+        ["task-instance", "log", "3001", "--tail", "2", "--raw"],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout == "line-2\nline-3"
+    assert '"ok": true' not in result.stdout
+
+
 def test_task_instance_force_success_command_returns_forced_success_payload() -> None:
     result = runner.invoke(
         app,

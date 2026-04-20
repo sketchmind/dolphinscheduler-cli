@@ -154,6 +154,8 @@ def test_task_update_help_points_to_command_schema() -> None:
     help_text = normalize_cli_help(result.stdout)
     assert "schema --command" in help_text
     assert "task.update" in help_text
+    assert "single task" in help_text
+    assert "workflow-instance edit" in help_text
 
 
 def test_task_update_command_can_dry_run_native_update() -> None:
@@ -253,9 +255,10 @@ def test_task_update_command_reports_schema_suggestion_for_unsupported_set_key()
     payload = json.loads(result.stdout)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl schema` and inspect task.update option set.supported_keys. "
-        "For structural task changes such as rename, type changes, or add/remove, "
-        "use `dsctl workflow edit --patch ...`."
+        "Run `dsctl schema --command task.update` and inspect "
+        "set.supported_keys. For structural definition changes, use `dsctl "
+        "workflow edit --patch|--file`; for finished instance repair, use "
+        "`dsctl workflow-instance edit --patch|--file`."
     )
 
 
@@ -278,9 +281,10 @@ def test_task_update_command_suggests_schema_for_invalid_timeout_notify_strategy
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "timeout_notify_strategy requires timeout > 0"
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl schema` and inspect task.update option set.supported_keys. "
-        "For structural task changes such as rename, type changes, or add/remove, "
-        "use `dsctl workflow edit --patch ...`."
+        "Run `dsctl schema --command task.update` and inspect "
+        "set.supported_keys. For structural definition changes, use `dsctl "
+        "workflow edit --patch|--file`; for finished instance repair, use "
+        "`dsctl workflow-instance edit --patch|--file`."
     )
 
 
@@ -396,9 +400,10 @@ def test_task_update_command_reports_schema_suggestion_for_remote_no_change_erro
         "Task update did not change any persisted fields"
     )
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl schema` and inspect task.update option set.supported_keys. "
-        "For structural task changes such as rename, type changes, or add/remove, "
-        "use `dsctl workflow edit --patch ...`."
+        "Run `dsctl schema --command task.update` and inspect "
+        "set.supported_keys. For structural definition changes, use `dsctl "
+        "workflow edit --patch|--file`; for finished instance repair, use "
+        "`dsctl workflow-instance edit --patch|--file`."
     )
 
 
