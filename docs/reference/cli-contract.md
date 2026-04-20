@@ -47,9 +47,9 @@ Current stable commands:
 - `dsctl project-worker-group list|set|clear`
 - `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
 - `dsctl template workflow|workflow-patch|workflow-instance-patch|params|environment|cluster|datasource|task`
-- `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
+- `dsctl workflow list|get|export|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
 - `dsctl workflow lineage list|get|dependent-tasks`
-- `dsctl workflow-instance list|get|parent|digest|edit|watch|stop|rerun|recover-failed|execute-task`
+- `dsctl workflow-instance list|get|export|parent|digest|edit|watch|stop|rerun|recover-failed|execute-task`
 - `dsctl task list|get|update`
 - `dsctl task-instance list|get|watch|sub-workflow|log|force-success|savepoint|stop`
 
@@ -2851,10 +2851,24 @@ Selection rules:
 - workflow selection: positional argument, then context workflow
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
-Formats:
+Output:
 
-- `--format json` returns the workflow payload
-- `--format yaml` returns YAML inside the standard envelope as `data.yaml`
+- default output returns the workflow payload in the standard JSON envelope
+
+## `dsctl workflow export`
+
+Exports one workflow by name or numeric code as an editable YAML document.
+
+Selection rules:
+
+- project selection: `flag > context`
+- workflow selection: positional argument, then context workflow
+- use `dsctl project list` and `dsctl workflow list` to discover selectors
+
+Output:
+
+- writes only the workflow YAML document
+- use it as the starting point for `workflow edit --file`
 
 ## `dsctl workflow describe`
 
@@ -2891,7 +2905,7 @@ Current guarantees:
   and adds compact graph links (`upstreamTasks`, `downstreamTasks`)
 - omits verbose task payload fields such as `taskParams` and retry/timeout
   details to reduce context size before a caller decides whether to fetch the
-  full `workflow describe` or `workflow get --format yaml` view
+  full `workflow describe` or `workflow export` view
 
 ## `dsctl workflow create`
 
@@ -2998,24 +3012,47 @@ Current dependency rules are intentionally narrow:
 
 ## `dsctl workflow edit`
 
-Edits one existing workflow definition from a minimal YAML patch.
+Edits one existing workflow definition from either a minimal YAML patch or a
+full desired-state workflow YAML file.
 
 Options:
 
-- positional `WORKFLOW` is optional and falls back to workflow context
-- `--patch PATH` (required)
+- positional `WORKFLOW` selects the current workflow for `--file`; for
+  `--patch`, it is optional and falls back to workflow context
+- exactly one of `--patch PATH` or `--file PATH` is required
 - `--project PROJECT`
 - `--dry-run`
+- `--confirm-risk TOKEN`
 
 Rules:
 
-- selection precedence matches other workflow commands:
+- `--patch` is a delta edit:
+  - the patch is applied against the current live workflow YAML export, then
+    compiled back into one legacy whole-definition update payload
+  - patch YAML is a CLI delta document rooted at `patch:`, not a REST `PATCH`
+    request
+  - start new patch files with `dsctl template workflow-patch --raw`
+- `--file` is a full desired-state edit:
+  - the YAML uses the same full workflow shape as `workflow create --file`
+  - the full file's `tasks:` list is the desired complete task set
+  - same-name tasks preserve live DS `code + version`
+  - tasks present in the YAML but absent from the live workflow are created
+  - live tasks absent from the YAML are deleted and require `--confirm-risk`
+  - full-file edit does not infer task renames; use `--patch` with
+    `tasks.rename[]` when task identity must survive a name change
+  - workflow rename and same-name task type changes also require
+    `--confirm-risk`
+  - `schedule:` is rejected; use schedule commands for schedule lifecycle
+- target workflow selection for `--patch`:
   - explicit positional `WORKFLOW`
   - then workflow context
-- project selection precedence remains `flag > context`
+- target workflow selection for `--file`:
+  - explicit positional `WORKFLOW` is required, so workflow rename intent is
+    explicit
+- project selection for `--patch` is `flag > context`
+- project selection for `--file` is `flag > workflow.project > context`; if
+  `--project` and `workflow.project` both exist and disagree, the command fails
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
-- the patch is applied against the current live workflow YAML export, then
-  compiled back into one legacy whole-definition update payload
 - current stable patch operations are:
   - `patch.workflow.set`
   - `patch.tasks.create`
@@ -3037,7 +3074,32 @@ Rules:
   pairs
 - `patch.tasks.delete[]` contains live task names to remove
 
-Example:
+Full-file example:
+
+```yaml
+workflow:
+  name: daily-sync
+  project: etl-prod
+  description: Daily ETL workflow
+  timeout: 3600
+  global_params:
+    bizdate: "${system.biz.date}"
+  execution_type: PARALLEL
+  release_state: OFFLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: |
+      echo extract
+  - name: load
+    type: SHELL
+    command: |
+      echo load
+    depends_on:
+      - extract
+```
+
+Patch example:
 
 ```yaml
 patch:
@@ -3107,9 +3169,9 @@ patch:
   - `data.schedule_impact_details`
   - `data.no_change`
 - apply requires the live workflow to already be offline
-- applying a no-op patch returns the current workflow payload, emits one warning
-  with aligned `warning_details[]` code `workflow_edit_no_persistent_change`,
-  and sends no update request
+- applying a no-op patch or full file returns the current workflow payload,
+  emits one warning with aligned `warning_details[]` code
+  `workflow_edit_no_persistent_change`, and sends no update request
 - when apply emits attached-schedule impact warnings, the aligned
   `warning_details[]` items reuse the same codes as
   `data.schedule_impact_details[].code`
@@ -3912,7 +3974,9 @@ Selection rules:
 
 ## `dsctl task update`
 
-Updates one task definition inside one workflow using inline `--set` mutations.
+Updates one existing task definition inside one workflow using inline `--set`
+mutations. This is the lightweight path for small single-task definition edits,
+not a workflow patch replacement.
 
 Options:
 
@@ -3946,8 +4010,13 @@ Rules:
 - selection precedence matches `task get`
 - use `dsctl task list` inside the selected workflow to discover task names and
   codes
+- inspect the current task with `dsctl task get TASK --workflow WORKFLOW` before
+  editing when the current value matters
 - use `dsctl schema --command task.update` to discover supported `--set` keys,
   examples, and machine-readable metadata
+- use `workflow edit --patch|--file` for structural definition changes such as
+  create, delete, rename, task type changes, or multi-task DAG edits
+- use `workflow-instance edit --patch|--file` for finished instance repair
 - the CLI compiles the update into the DS native
   `updateTaskWithUpstream` form request
 - `command` updates are supported only for `SHELL`, `PYTHON`, and
@@ -3964,6 +4033,9 @@ Rules:
   CLI uses DS's default `WARN` notify strategy
 - task rename and task-type changes remain `workflow edit` operations, not
   inline task updates
+- task-specific complex `task_params` authoring remains under the workflow YAML
+  and `task-type schema` path; `task update` intentionally exposes only the
+  stable common inline keys above
 - `--dry-run` returns the native request plus:
   - `data.updated_fields`
   - `data.no_change`
@@ -4268,6 +4340,26 @@ Selection rules:
 - workflow-instance resources are id-first and do not consume project/workflow
   context
 - discover workflow-instance ids with `dsctl workflow-instance list`
+- default output returns the stable DS runtime projection in the standard JSON
+  envelope
+
+## `dsctl workflow-instance export`
+
+Exports one workflow instance DAG as an editable YAML document.
+
+Selection rules:
+
+- workflow-instance resources are id-first and do not consume project/workflow
+  context
+- discover workflow-instance ids with `dsctl workflow-instance list`
+
+Output:
+
+- writes only the workflow-instance YAML document
+- exports the instance DAG as the same workflow YAML authoring
+  shape used by `workflow create` and `workflow edit --file`; use it as the
+  starting point for `workflow-instance edit --file`
+- requires `dagData` on the workflow-instance payload
 
 ## `dsctl workflow-instance parent`
 
@@ -4324,14 +4416,15 @@ Current guarantees:
 
 ## `dsctl workflow-instance edit`
 
-Edits one finished workflow instance DAG from a minimal YAML patch and then
-returns the refreshed workflow-instance payload.
+Edits one finished workflow instance DAG from a YAML patch or full workflow YAML
+file and then returns the refreshed workflow-instance payload.
 
 Options:
 
-- `--patch PATH` (required)
+- exactly one of `--patch PATH` or `--file PATH`
 - `--sync-definition`
 - `--dry-run`
+- `--confirm-risk TOKEN`
 
 Rules:
 
@@ -4340,26 +4433,38 @@ Rules:
 - discover workflow-instance ids with `dsctl workflow-instance list`
 - the workflow instance must already be in one DS final state
 - the CLI requires `dagData` from the workflow-instance payload and rebuilds a
-  live workflow spec snapshot from that instance DAG before applying the patch
+  live workflow spec snapshot from that instance DAG before applying the edit
 - start new patch files with `dsctl template workflow-instance-patch --raw`
+- start full-file repairs with
+  `dsctl workflow-instance export WORKFLOW_INSTANCE`
 - patch grammar reuses the same stable task patch operations as `workflow edit`:
   `patch.tasks.create`, `patch.tasks.update`, `patch.tasks.rename`, and
   `patch.tasks.delete`
+- full-file edit treats the YAML as the desired complete instance DAG:
+  same-name tasks preserve DS task identity, YAML-only tasks are created, and
+  live-only tasks are deleted after `--confirm-risk`
+- full-file edit does not infer renames; use `--patch` with `tasks.rename[]`
+  when the task name changes and the existing task identity must be preserved
 - current stable `patch.workflow.set` support is intentionally narrower than
   `workflow edit`; only `global_params` and `timeout` are accepted for
   workflow-instance edits
 - definition-only workflow fields such as `name`, `description`,
   `execution_type`, and `release_state` are rejected as `user_input`
+- full-file edit follows the same field rule: only workflow-level
+  `global_params` and `timeout` may change; `workflow.project`, when present,
+  must match the instance project
+- full-file edit rejects `schedule:` blocks; schedule lifecycle remains under
+  `dsctl schedule`
 - `--sync-definition` forwards DS `syncDefine=true` so the saved DAG is also
   synchronized back to the current workflow definition
 - without `--sync-definition`, the CLI still edits the finished workflow
   instance DAG but does not request current-definition synchronization
-- `resolved` includes `workflowInstance`, `project`, `workflow`, `patch_file`,
-  and `syncDefine`
+- `resolved` includes `workflowInstance`, `project`, `workflow`, `input_mode`,
+  one of `patch_file` or `file`, and `syncDefine`
 - `--dry-run` returns the compiled DS form payload plus `diff`, `no_change`,
   and `syncDefine`
-- applying a no-op patch returns the current workflow-instance payload, emits
-  one warning, and the aligned `warning_details[]` item uses code
+- applying a no-op edit returns the current workflow-instance payload, emits one
+  warning, and the aligned `warning_details[]` item uses code
   `workflow_instance_edit_no_persistent_change`
 
 ## `dsctl workflow-instance stop`

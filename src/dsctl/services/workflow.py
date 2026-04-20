@@ -66,7 +66,11 @@ from dsctl.services._workflow_digest import (
     digest_workflow as _digest_workflow,
 )
 from dsctl.services._workflow_mutation import (
+    WorkflowFileEditRiskData,
+    WorkflowMutationPlan,
+    compile_workflow_file_mutation_plan,
     compile_workflow_mutation_plan,
+    load_workflow_edit_spec_or_error,
     load_workflow_patch_or_error,
 )
 from dsctl.services._workflow_render import (
@@ -88,6 +92,7 @@ from dsctl.services._workflow_render import (
 from dsctl.services._workflow_validation import (
     require_schedule_block_create_compatible,
 )
+from dsctl.services.confirmation import require_confirmation
 from dsctl.services.resolver import ResolvedProject, ResolvedTask, ResolvedWorkflow
 from dsctl.services.resolver import project as resolve_project
 from dsctl.services.resolver import task as resolve_task
@@ -110,10 +115,10 @@ if TYPE_CHECKING:
     from dsctl.services.selection import SelectionData
     from dsctl.support.yaml_io import JsonObject
     from dsctl.upstream.protocol import (
+        WorkflowDagRecord,
         WorkflowPayloadRecord,
     )
 
-WorkflowOutputFormat = Literal["json", "yaml"]
 WorkflowRunTaskScope = Literal["self", "pre", "post"]
 WorkflowBackfillTimeMode = Literal["range", "dates"]
 INTERNAL_SERVER_ERROR_ARGS = 10000
@@ -297,17 +302,29 @@ def get_workflow_result(
     workflow: str | None,
     *,
     project: str | None = None,
-    output_format: str = "json",
     env_file: str | None = None,
 ) -> CommandResult:
     """Get one workflow by context-aware name or code."""
-    normalized_output_format = _normalized_output_format(output_format)
     return run_with_service_runtime(
         env_file,
         _get_workflow_result,
         workflow=workflow,
         project=project,
-        output_format=normalized_output_format,
+    )
+
+
+def export_workflow_yaml_result(
+    workflow: str | None,
+    *,
+    project: str | None = None,
+    env_file: str | None = None,
+) -> CommandResult:
+    """Export one workflow as a stable YAML authoring document."""
+    return run_with_service_runtime(
+        env_file,
+        _export_workflow_yaml_result,
+        workflow=workflow,
+        project=project,
     )
 
 
@@ -365,21 +382,63 @@ def create_workflow_result(
 def edit_workflow_result(
     workflow: str | None,
     *,
-    patch: Path,
+    patch: Path | None = None,
+    file: Path | None = None,
     project: str | None = None,
     dry_run: bool = False,
+    confirm_risk: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
-    """Edit one workflow definition from a YAML patch file."""
-    workflow_patch = load_workflow_patch_or_error(patch)
+    """Edit one workflow definition from a YAML patch or full YAML file."""
+    if (patch is None) == (file is None):
+        message = "Pass exactly one of --patch or --file."
+        raise UserInputError(
+            message,
+            details={"patch": patch is not None, "file": file is not None},
+            suggestion=(
+                "Use `--patch PATCH.yaml` for a delta edit or `--file "
+                "workflow.yaml` for a full desired-state edit."
+            ),
+        )
+    if patch is not None:
+        workflow_patch = load_workflow_patch_or_error(patch)
+        return run_with_service_runtime(
+            env_file,
+            _edit_workflow_result,
+            workflow=workflow,
+            patch_file=patch,
+            patch=workflow_patch,
+            file=None,
+            spec=None,
+            project=project,
+            dry_run=dry_run,
+            confirm_risk=confirm_risk,
+        )
+    if file is None:
+        message = "Workflow edit file is required."
+        raise RuntimeError(message)
+    if workflow is None:
+        message = "WORKFLOW is required when editing from a full workflow YAML file."
+        raise UserInputError(
+            message,
+            details={"file": str(file)},
+            suggestion=(
+                "Pass the current workflow name or code, for example "
+                "`dsctl workflow edit WORKFLOW --file workflow.yaml --dry-run`."
+            ),
+        )
+    workflow_spec = load_workflow_edit_spec_or_error(file)
     return run_with_service_runtime(
         env_file,
         _edit_workflow_result,
         workflow=workflow,
-        patch_file=patch,
-        patch=workflow_patch,
+        patch_file=None,
+        patch=None,
+        file=file,
+        spec=workflow_spec,
         project=project,
         dry_run=dry_run,
+        confirm_risk=confirm_risk,
     )
 
 
@@ -614,33 +673,17 @@ def _get_workflow_result(
     *,
     workflow: str | None,
     project: str | None,
-    output_format: WorkflowOutputFormat,
 ) -> CommandResult:
     target = _resolve_workflow_target(
         runtime,
         workflow=workflow,
         project=project,
     )
-    if output_format == "yaml":
-        dag = runtime.upstream.workflows.describe(
-            project_code=target.resolved_project.code,
-            code=target.resolved_workflow.code,
-        )
-        data = require_json_object(
-            WorkflowYamlExportData(
-                yaml=_workflow_yaml_document(
-                    dag,
-                    project=target.resolved_project,
-                )
-            ),
-            label="workflow yaml export",
-        )
-    else:
-        payload = runtime.upstream.workflows.get(code=target.resolved_workflow.code)
-        data = require_json_object(
-            _serialize_workflow(payload),
-            label="workflow data",
-        )
+    payload = runtime.upstream.workflows.get(code=target.resolved_workflow.code)
+    data = require_json_object(
+        _serialize_workflow(payload),
+        label="workflow data",
+    )
 
     return CommandResult(
         data=data,
@@ -653,7 +696,45 @@ def _get_workflow_result(
                 target.resolved_workflow,
                 target.selected_workflow,
             ),
-            "format": output_format,
+        },
+    )
+
+
+def _export_workflow_yaml_result(
+    runtime: ServiceRuntime,
+    *,
+    workflow: str | None,
+    project: str | None,
+) -> CommandResult:
+    target = _resolve_workflow_target(
+        runtime,
+        workflow=workflow,
+        project=project,
+    )
+    dag = runtime.upstream.workflows.describe(
+        project_code=target.resolved_project.code,
+        code=target.resolved_workflow.code,
+    )
+    data = require_json_object(
+        WorkflowYamlExportData(
+            yaml=_workflow_yaml_document(
+                dag,
+                project=target.resolved_project,
+            )
+        ),
+        label="workflow yaml export",
+    )
+    return CommandResult(
+        data=data,
+        resolved={
+            "project": _resolved_project_selection(
+                target.resolved_project,
+                target.selected_project,
+            ),
+            "workflow": _resolved_workflow_selection(
+                target.resolved_workflow,
+                target.selected_workflow,
+            ),
         },
     )
 
@@ -819,28 +900,32 @@ def _edit_workflow_result(
     runtime: ServiceRuntime,
     *,
     workflow: str | None,
-    patch_file: Path,
-    patch: WorkflowPatchSpec,
+    patch_file: Path | None,
+    patch: WorkflowPatchSpec | None,
+    file: Path | None,
+    spec: WorkflowSpec | None,
     project: str | None,
     dry_run: bool,
+    confirm_risk: str | None,
 ) -> CommandResult:
-    target = _resolve_workflow_target(
+    target = _resolve_workflow_edit_target(
         runtime,
         workflow=workflow,
         project=project,
+        spec=spec,
     )
     dag = runtime.upstream.workflows.describe(
         project_code=target.resolved_project.code,
         code=target.resolved_workflow.code,
     )
     live_payload = runtime.upstream.workflows.get(code=target.resolved_workflow.code)
-    desired_release_state = _workflow_edit_release_state(patch)
-    mutation = compile_workflow_mutation_plan(
-        dag,
+    mutation = _compile_workflow_edit_mutation(
+        dag=dag,
         project=target.resolved_project,
         patch=patch,
-        release_state=desired_release_state,
+        spec=spec,
     )
+    desired_release_state = mutation.payload["releaseState"]
     payload = mutation.payload
     merged_spec = mutation.merged_spec
     diff = mutation.diff
@@ -871,7 +956,11 @@ def _edit_workflow_result(
                 name=merged_spec.workflow.name,
                 selection=target.selected_workflow,
             ),
-            "patch_file": str(patch_file),
+            "input_mode": mutation.input_mode,
+            **_workflow_edit_resolved_file_data(
+                patch_file=patch_file,
+                file=file,
+            ),
         },
         label="workflow edit resolved",
     )
@@ -893,9 +982,7 @@ def _edit_workflow_result(
         )
 
     if not has_changes:
-        no_change_warning = (
-            "patch produced no persistent workflow change; no update request was sent"
-        )
+        no_change_warning = _workflow_edit_no_change_message(mutation.input_mode)
         return CommandResult(
             data=require_json_object(
                 _serialize_workflow(live_payload),
@@ -930,6 +1017,13 @@ def _edit_workflow_result(
             workflow_state_constraint_details=workflow_state_constraint_details,
         )
 
+    _require_workflow_file_edit_confirmation(
+        mutation,
+        confirmation=confirm_risk,
+        project_code=target.resolved_project.code,
+        workflow_code=target.resolved_workflow.code,
+    )
+
     _update_remote_workflow(
         runtime,
         project=target.resolved_project,
@@ -951,6 +1045,90 @@ def _edit_workflow_result(
             *_workflow_edit_schedule_impact_warning_details(schedule_impact_details),
             *_parameter_expression_warning_json_details(parameter_warning_details),
         ],
+    )
+
+
+def _compile_workflow_edit_mutation(
+    *,
+    dag: WorkflowDagRecord,
+    project: ResolvedProject,
+    patch: WorkflowPatchSpec | None,
+    spec: WorkflowSpec | None,
+) -> WorkflowMutationPlan:
+    if patch is not None:
+        return compile_workflow_mutation_plan(
+            dag,
+            project=project,
+            patch=patch,
+            release_state=_workflow_edit_release_state(patch),
+        )
+    if spec is None:
+        message = "Workflow edit requires either a patch or full workflow spec."
+        raise RuntimeError(message)
+    return compile_workflow_file_mutation_plan(
+        dag,
+        project=project,
+        desired=spec,
+        release_state=spec.workflow.release_state.value,
+    )
+
+
+def _workflow_edit_resolved_file_data(
+    *,
+    patch_file: Path | None,
+    file: Path | None,
+) -> JsonObject:
+    if patch_file is not None:
+        return {"patch_file": str(patch_file)}
+    if file is not None:
+        return {"file": str(file)}
+    return {}
+
+
+def _require_workflow_file_edit_confirmation(
+    mutation: WorkflowMutationPlan,
+    *,
+    confirmation: str | None,
+    project_code: int,
+    workflow_code: int,
+) -> None:
+    if mutation.input_mode != "file" or mutation.confirmation is None:
+        return
+    confirmation_details = mutation.confirmation
+    require_confirmation(
+        action="workflow.edit",
+        confirmation=confirmation,
+        payload=_workflow_file_edit_confirmation_payload(
+            project_code=project_code,
+            workflow_code=workflow_code,
+            confirmation_details=confirmation_details,
+        ),
+        message=(
+            "This full workflow YAML edit deletes tasks, renames the workflow, "
+            "or changes task types and requires explicit confirmation."
+        ),
+        details=confirmation_details,
+    )
+
+
+def _workflow_file_edit_confirmation_payload(
+    *,
+    project_code: int,
+    workflow_code: int,
+    confirmation_details: WorkflowFileEditRiskData,
+) -> JsonObject:
+    return require_json_object(
+        {
+            "project_code": project_code,
+            "workflow_code": workflow_code,
+            "risk_type": confirmation_details["risk_type"],
+            "deleted_tasks": confirmation_details["deleted_tasks"],
+            "renamed_workflow": confirmation_details["renamed_workflow"],
+            "old_workflow_name": confirmation_details["old_workflow_name"],
+            "new_workflow_name": confirmation_details["new_workflow_name"],
+            "task_type_changes": confirmation_details["task_type_changes"],
+        },
+        label="workflow full edit confirmation payload",
     )
 
 
@@ -2451,6 +2629,93 @@ def _resolve_workflow_target(
     )
 
 
+def _resolve_workflow_edit_target(
+    runtime: ServiceRuntime,
+    *,
+    workflow: str | None,
+    project: str | None,
+    spec: WorkflowSpec | None,
+) -> _ResolvedWorkflowTarget:
+    if spec is None:
+        return _resolve_workflow_target(
+            runtime,
+            workflow=workflow,
+            project=project,
+        )
+    selected_project = _resolve_workflow_file_project_selection(
+        runtime,
+        project=project,
+        spec=spec,
+    )
+    resolved_project = resolve_project(
+        selected_project.value,
+        adapter=runtime.upstream.projects,
+    )
+    _validate_workflow_file_project(
+        explicit_project=project,
+        resolved_project=resolved_project,
+        spec=spec,
+    )
+    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    resolved_workflow = resolve_workflow(
+        selected_workflow.value,
+        adapter=runtime.upstream.workflows,
+        project_code=resolved_project.code,
+    )
+    return _ResolvedWorkflowTarget(
+        selected_project=selected_project,
+        resolved_project=resolved_project,
+        selected_workflow=selected_workflow,
+        resolved_workflow=resolved_workflow,
+    )
+
+
+def _resolve_workflow_file_project_selection(
+    runtime: ServiceRuntime,
+    *,
+    project: str | None,
+    spec: WorkflowSpec,
+) -> SelectedValue:
+    if project is not None:
+        return require_project_selection(project, runtime=runtime)
+    if spec.workflow.project is not None:
+        return SelectedValue(
+            value=spec.workflow.project,
+            source="file",
+        )
+    return require_project_selection(None, runtime=runtime)
+
+
+def _validate_workflow_file_project(
+    *,
+    explicit_project: str | None,
+    resolved_project: ResolvedProject,
+    spec: WorkflowSpec,
+) -> None:
+    if explicit_project is None or spec.workflow.project is None:
+        return
+    if str(resolved_project.code) == spec.workflow.project:
+        return
+    if resolved_project.name == spec.workflow.project:
+        return
+    message = (
+        "workflow edit --file cannot target a different project than "
+        "workflow.project in the YAML file."
+    )
+    raise UserInputError(
+        message,
+        details={
+            "project": resolved_project.name,
+            "project_code": resolved_project.code,
+            "workflow_project": spec.workflow.project,
+        },
+        suggestion=(
+            "Use matching --project and workflow.project values; moving a "
+            "workflow between projects is not supported by edit."
+        ),
+    )
+
+
 def _resolved_workflow_selection(
     workflow: ResolvedWorkflow,
     selection: SelectedValue,
@@ -2469,20 +2734,6 @@ def _resolved_selected_workflow_data(
     selection: SelectedValue,
 ) -> dict[str, int | str | None]:
     return with_selection_source({"code": code, "name": name}, selection)
-
-
-def _normalized_output_format(value: str) -> WorkflowOutputFormat:
-    normalized = value.strip().lower()
-    if normalized == "json":
-        return "json"
-    if normalized == "yaml":
-        return "yaml"
-    message = "Workflow output format must be 'json' or 'yaml'"
-    raise UserInputError(
-        message,
-        details={"format": value},
-        suggestion="Pass `--format json` or `--format yaml`.",
-    )
 
 
 def _normalized_task_run_scope(value: str) -> WorkflowRunTaskScope:
@@ -2913,6 +3164,13 @@ def _workflow_edit_schedule_impact_warning_details(
         )
         for impact in impacts
     ]
+
+
+def _workflow_edit_no_change_message(input_mode: str) -> str:
+    source = "workflow file" if input_mode == "file" else "patch"
+    return (
+        f"{source} produced no persistent workflow change; no update request was sent"
+    )
 
 
 def _parameter_expression_warning_json_details(

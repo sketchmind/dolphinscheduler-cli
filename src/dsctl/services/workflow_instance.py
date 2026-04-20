@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Literal, NotRequired, TypeAlias, TypedDict
 
 from dsctl.cli_surface import TASK_RESOURCE, WORKFLOW_INSTANCE_RESOURCE
 from dsctl.errors import (
@@ -36,9 +36,15 @@ from dsctl.services._workflow_instance_digest import (
     digest_workflow_instance as _digest_workflow_instance,
 )
 from dsctl.services._workflow_mutation import (
+    WorkflowFileEditRiskData,
+    WorkflowMutationPlan,
+    compile_workflow_file_mutation_plan,
     compile_workflow_mutation_plan,
+    load_workflow_instance_edit_spec_or_error,
     load_workflow_patch_or_error,
 )
+from dsctl.services._workflow_render import workflow_yaml_document
+from dsctl.services.confirmation import require_confirmation
 from dsctl.services.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_AUTO_EXHAUST_PAGES,
@@ -68,10 +74,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from dsctl.models.workflow_patch import WorkflowPatchSpec
+    from dsctl.models.workflow_spec import WorkflowSpec
     from dsctl.services._workflow_compile import WorkflowUpdatePayload
     from dsctl.services._workflow_patch import WorkflowPatchDiffData
     from dsctl.support.yaml_io import JsonObject
-    from dsctl.upstream.protocol import StringEnumValue
+    from dsctl.upstream.protocol import StringEnumValue, WorkflowDagRecord
 
 
 class WorkflowInstanceSelectionData(TypedDict):
@@ -94,6 +101,7 @@ WORKFLOW_NODE_HAS_CYCLE = 50019
 WORKFLOW_NODE_S_PARAMETER_INVALID = 50020
 CHECK_WORKFLOW_TASK_RELATION_ERROR = 50036
 QUERY_WORKFLOW_INSTANCE_LIST_PAGING_ERROR = 10113
+WorkflowInstanceEditInputMode = Literal["patch", "file"]
 WORKFLOW_INSTANCE_PATCH_SUPPORTED_WORKFLOW_FIELDS = frozenset(
     {"global_params", "timeout"}
 )
@@ -130,8 +138,16 @@ class WorkflowInstanceEditResolved(TypedDict):
     workflowInstance: WorkflowInstanceSelectionData
     project: ResolvedProjectData
     workflow: JsonObject
-    patch_file: str
+    input_mode: WorkflowInstanceEditInputMode
+    patch_file: NotRequired[str]
+    file: NotRequired[str]
     syncDefine: bool
+
+
+class WorkflowInstanceYamlExportData(TypedDict):
+    """YAML workflow document exported from one workflow instance DAG."""
+
+    yaml: str
 
 
 class WorkflowInstanceEditNoChangeWarningDetail(TypedDict):
@@ -208,6 +224,23 @@ def get_workflow_instance_result(
     return run_with_service_runtime(
         env_file,
         _get_workflow_instance_result,
+        workflow_instance_id=normalized_workflow_instance_id,
+    )
+
+
+def export_workflow_instance_yaml_result(
+    workflow_instance_id: int,
+    *,
+    env_file: str | None = None,
+) -> CommandResult:
+    """Export one workflow instance DAG as a stable YAML authoring document."""
+    normalized_workflow_instance_id = require_positive_int(
+        workflow_instance_id,
+        label="workflow_instance_id",
+    )
+    return run_with_service_runtime(
+        env_file,
+        _export_workflow_instance_yaml_result,
         workflow_instance_id=normalized_workflow_instance_id,
     )
 
@@ -352,26 +385,58 @@ def execute_task_in_workflow_instance_result(
 def edit_workflow_instance_result(
     workflow_instance_id: int,
     *,
-    patch: Path,
+    patch: Path | None = None,
+    file: Path | None = None,
     sync_definition: bool = False,
     dry_run: bool = False,
+    confirm_risk: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
-    """Edit one finished workflow instance DAG from a YAML patch file."""
+    """Edit one finished workflow instance DAG from a YAML patch or full file."""
     normalized_workflow_instance_id = require_positive_int(
         workflow_instance_id,
         label="workflow_instance_id",
     )
-    workflow_patch = load_workflow_patch_or_error(patch)
-    _validate_workflow_instance_patch_support(workflow_patch)
+    if (patch is None) == (file is None):
+        message = "Pass exactly one of --patch or --file."
+        raise UserInputError(
+            message,
+            details={"patch": patch is not None, "file": file is not None},
+            suggestion=(
+                "Use `--patch PATCH.yaml` for a delta repair or `--file "
+                "workflow.yaml` for a full desired-state instance DAG edit."
+            ),
+        )
+    if patch is not None:
+        workflow_patch = load_workflow_patch_or_error(patch)
+        _validate_workflow_instance_patch_support(workflow_patch)
+        return run_with_service_runtime(
+            env_file,
+            _edit_workflow_instance_result,
+            workflow_instance_id=normalized_workflow_instance_id,
+            patch_file=patch,
+            patch=workflow_patch,
+            file=None,
+            spec=None,
+            sync_definition=sync_definition,
+            dry_run=dry_run,
+            confirm_risk=confirm_risk,
+        )
+    if file is None:
+        message = "Workflow instance edit file is required."
+        raise RuntimeError(message)
+    workflow_spec = load_workflow_instance_edit_spec_or_error(file)
     return run_with_service_runtime(
         env_file,
         _edit_workflow_instance_result,
         workflow_instance_id=normalized_workflow_instance_id,
-        patch_file=patch,
-        patch=workflow_patch,
+        patch_file=None,
+        patch=None,
+        file=file,
+        spec=workflow_spec,
         sync_definition=sync_definition,
         dry_run=dry_run,
+        confirm_risk=confirm_risk,
     )
 
 
@@ -565,11 +630,54 @@ def _get_workflow_instance_result(
         runtime,
         workflow_instance_id=workflow_instance_id,
     )
+    data = require_json_object(
+        serialize_workflow_instance(payload),
+        label="workflow-instance data",
+    )
     return CommandResult(
-        data=require_json_object(
-            serialize_workflow_instance(payload),
-            label="workflow-instance data",
+        data=data,
+        resolved=require_json_object(
+            _workflow_instance_resolved(workflow_instance_id),
+            label="workflow-instance resolved",
         ),
+    )
+
+
+def _export_workflow_instance_yaml_result(
+    runtime: ServiceRuntime,
+    *,
+    workflow_instance_id: int,
+) -> CommandResult:
+    payload = get_workflow_instance(
+        runtime,
+        workflow_instance_id=workflow_instance_id,
+    )
+    dag = payload.dagData
+    if dag is None:
+        message = "Workflow instance payload was missing dagData"
+        raise ApiTransportError(
+            message,
+            details={
+                "resource": WORKFLOW_INSTANCE_RESOURCE,
+                "id": workflow_instance_id,
+            },
+        )
+    project_code = require_workflow_instance_project_code(payload.projectCode)
+    resolved_project = resolve_project(
+        str(project_code),
+        adapter=runtime.upstream.projects,
+    )
+    data = require_json_object(
+        WorkflowInstanceYamlExportData(
+            yaml=workflow_yaml_document(
+                dag,
+                project=resolved_project,
+            )
+        ),
+        label="workflow-instance yaml export",
+    )
+    return CommandResult(
+        data=data,
         resolved=require_json_object(
             _workflow_instance_resolved(workflow_instance_id),
             label="workflow-instance resolved",
@@ -730,6 +838,14 @@ def _workflow_instance_action_command(action: str) -> str:
     if action == "execute-task":
         return "dsctl workflow-instance execute-task ID --task TASK"
     return f"dsctl workflow-instance {action} ID"
+
+
+def _workflow_instance_edit_retry_command(
+    input_mode: WorkflowInstanceEditInputMode,
+) -> str:
+    if input_mode == "file":
+        return "dsctl workflow-instance edit ID --file FILE"
+    return "dsctl workflow-instance edit ID --patch PATCH"
 
 
 def _rerun_workflow_instance_result(
@@ -939,15 +1055,19 @@ def _edit_workflow_instance_result(
     runtime: ServiceRuntime,
     *,
     workflow_instance_id: int,
-    patch_file: Path,
-    patch: WorkflowPatchSpec,
+    patch_file: Path | None,
+    patch: WorkflowPatchSpec | None,
+    file: Path | None,
+    spec: WorkflowSpec | None,
     sync_definition: bool,
     dry_run: bool,
+    confirm_risk: str | None,
 ) -> CommandResult:
     payload = get_workflow_instance(
         runtime,
         workflow_instance_id=workflow_instance_id,
     )
+    input_mode: WorkflowInstanceEditInputMode = "file" if spec is not None else "patch"
     status = _workflow_execution_status(payload.state)
     if status is None or not status.final_state:
         message = "This workflow instance must be in a final state before edit."
@@ -959,7 +1079,7 @@ def _edit_workflow_instance_result(
                 "state": enum_value(payload.state),
             },
             suggestion=_wait_for_final_state_suggestion(
-                "dsctl workflow-instance edit ID --patch PATCH"
+                _workflow_instance_edit_retry_command(input_mode)
             ),
         )
     dag = payload.dagData
@@ -977,11 +1097,15 @@ def _edit_workflow_instance_result(
         str(project_code),
         adapter=runtime.upstream.projects,
     )
-    mutation = compile_workflow_mutation_plan(
-        dag,
+    _validate_workflow_instance_file_project(
+        spec,
+        project=resolved_project,
+    )
+    mutation = _compile_workflow_instance_edit_mutation(
+        dag=dag,
         project=resolved_project,
         patch=patch,
-        release_state=None,
+        spec=spec,
     )
     compiled_payload = mutation.payload
     merged_spec = mutation.merged_spec
@@ -1000,7 +1124,9 @@ def _edit_workflow_instance_result(
             workflow_name=merged_spec.workflow.name,
             workflow_version=payload.workflowDefinitionVersion,
         ),
-        patch_file=str(patch_file),
+        input_mode=mutation.input_mode,
+        patch_file=patch_file,
+        file=file,
         sync_definition=sync_definition,
     )
     has_changes = mutation.has_changes
@@ -1016,9 +1142,8 @@ def _edit_workflow_instance_result(
         )
 
     if not has_changes:
-        no_change_warning = (
-            "patch produced no persistent workflow instance change; no edit "
-            "request was sent"
+        no_change_warning = _workflow_instance_edit_no_change_message(
+            mutation.input_mode
         )
         return CommandResult(
             data=require_json_object(
@@ -1042,6 +1167,15 @@ def _edit_workflow_instance_result(
                 )
             ],
         )
+
+    _require_workflow_instance_file_edit_confirmation(
+        mutation,
+        confirmation=confirm_risk,
+        project_code=project_code,
+        workflow_instance_id=workflow_instance_id,
+        workflow_code=require_workflow_definition_code(payload.workflowDefinitionCode),
+        sync_definition=sync_definition,
+    )
 
     try:
         saved_workflow = runtime.upstream.workflow_instances.update(
@@ -1072,7 +1206,9 @@ def _edit_workflow_instance_result(
             workflow_name=saved_workflow.name,
             workflow_version=saved_workflow.version,
         ),
-        patch_file=str(patch_file),
+        input_mode=mutation.input_mode,
+        patch_file=patch_file,
+        file=file,
         sync_definition=sync_definition,
     )
     return CommandResult(
@@ -1376,6 +1512,65 @@ def _normalized_execute_task_scope(value: str) -> str:
     )
 
 
+def _compile_workflow_instance_edit_mutation(
+    *,
+    dag: WorkflowDagRecord,
+    project: ResolvedProject,
+    patch: WorkflowPatchSpec | None,
+    spec: WorkflowSpec | None,
+) -> WorkflowMutationPlan:
+    if patch is not None:
+        return compile_workflow_mutation_plan(
+            dag,
+            project=project,
+            patch=patch,
+            release_state=None,
+        )
+    if spec is None:
+        message = (
+            "Workflow instance edit requires either a patch or full workflow spec."
+        )
+        raise RuntimeError(message)
+    mutation = compile_workflow_file_mutation_plan(
+        dag,
+        project=project,
+        desired=spec,
+        release_state=None,
+        risk_type="workflow_instance_full_edit_destructive_change",
+    )
+    _validate_workflow_instance_file_patch_support(mutation.diff)
+    return mutation
+
+
+def _validate_workflow_instance_file_project(
+    spec: WorkflowSpec | None,
+    *,
+    project: ResolvedProject,
+) -> None:
+    if spec is None or spec.workflow.project is None:
+        return
+    requested_project = spec.workflow.project
+    if requested_project in {project.name, str(project.code)}:
+        return
+    message = (
+        "workflow-instance edit --file project does not match the instance project"
+    )
+    raise UserInputError(
+        message,
+        details={
+            "file_project": requested_project,
+            "instance_project": {
+                "code": project.code,
+                "name": project.name,
+            },
+        },
+        suggestion=(
+            "Export the target instance with `dsctl workflow-instance export ID`, "
+            "edit that file, and keep workflow.project unchanged."
+        ),
+    )
+
+
 def _validate_workflow_instance_patch_support(patch: WorkflowPatchSpec) -> None:
     workflow_patch = patch.workflow
     if workflow_patch is None:
@@ -1402,6 +1597,35 @@ def _validate_workflow_instance_patch_support(patch: WorkflowPatchSpec) -> None:
         suggestion=(
             "Use `dsctl workflow edit --patch ...` for definition-level fields "
             "such as name, description, or release_state."
+        ),
+    )
+
+
+def _validate_workflow_instance_file_patch_support(
+    diff: WorkflowPatchDiffData,
+) -> None:
+    unsupported_fields = sorted(
+        field_name
+        for field_name in diff["workflow_updated_fields"]
+        if field_name not in WORKFLOW_INSTANCE_PATCH_SUPPORTED_WORKFLOW_FIELDS
+    )
+    if not unsupported_fields:
+        return
+    message = (
+        "workflow-instance edit --file only supports workflow.global_params and "
+        "workflow.timeout changes"
+    )
+    raise UserInputError(
+        message,
+        details={
+            "unsupported_fields": unsupported_fields,
+            "supported_fields": sorted(
+                WORKFLOW_INSTANCE_PATCH_SUPPORTED_WORKFLOW_FIELDS
+            ),
+        },
+        suggestion=(
+            "Use `dsctl workflow edit --file ...` for definition-level fields "
+            "such as name, description, execution_type, or release_state."
         ),
     )
 
@@ -1442,16 +1666,23 @@ def _workflow_instance_edit_resolved(
     workflow_instance_id: int,
     project: ResolvedProjectData,
     workflow: JsonObject,
-    patch_file: str,
+    input_mode: WorkflowInstanceEditInputMode,
+    patch_file: Path | None,
+    file: Path | None,
     sync_definition: bool,
 ) -> WorkflowInstanceEditResolved:
-    return WorkflowInstanceEditResolved(
+    resolved = WorkflowInstanceEditResolved(
         workflowInstance=WorkflowInstanceSelectionData(id=workflow_instance_id),
         project=project,
         workflow=workflow,
-        patch_file=patch_file,
+        input_mode=input_mode,
         syncDefine=sync_definition,
     )
+    if patch_file is not None:
+        resolved["patch_file"] = str(patch_file)
+    if file is not None:
+        resolved["file"] = str(file)
+    return resolved
 
 
 def _workflow_instance_edit_dry_run_result(
@@ -1466,9 +1697,8 @@ def _workflow_instance_edit_dry_run_result(
     warnings: list[str] = []
     warning_details: list[JsonObject] = []
     if no_change:
-        no_change_warning = (
-            "patch produced no persistent workflow instance change; no edit "
-            "request was sent"
+        no_change_warning = _workflow_instance_edit_no_change_message(
+            resolved["input_mode"]
         )
         warnings.append(no_change_warning)
         warning_details.append(
@@ -1503,6 +1733,68 @@ def _workflow_instance_edit_dry_run_result(
             "no_change": no_change,
             "syncDefine": resolved["syncDefine"],
         },
+    )
+
+
+def _workflow_instance_edit_no_change_message(
+    input_mode: WorkflowInstanceEditInputMode,
+) -> str:
+    source = "workflow file" if input_mode == "file" else "patch"
+    return (
+        f"{source} produced no persistent workflow instance change; no edit "
+        "request was sent"
+    )
+
+
+def _require_workflow_instance_file_edit_confirmation(
+    mutation: WorkflowMutationPlan,
+    *,
+    confirmation: str | None,
+    project_code: int,
+    workflow_instance_id: int,
+    workflow_code: int,
+    sync_definition: bool,
+) -> None:
+    if mutation.input_mode != "file" or mutation.confirmation is None:
+        return
+    confirmation_details = mutation.confirmation
+    require_confirmation(
+        action="workflow-instance.edit",
+        confirmation=confirmation,
+        payload=_workflow_instance_file_edit_confirmation_payload(
+            project_code=project_code,
+            workflow_instance_id=workflow_instance_id,
+            workflow_code=workflow_code,
+            sync_definition=sync_definition,
+            confirmation_details=confirmation_details,
+        ),
+        message=(
+            "This full workflow-instance YAML edit deletes tasks or changes task "
+            "types and requires explicit confirmation."
+        ),
+        details=confirmation_details,
+    )
+
+
+def _workflow_instance_file_edit_confirmation_payload(
+    *,
+    project_code: int,
+    workflow_instance_id: int,
+    workflow_code: int,
+    sync_definition: bool,
+    confirmation_details: WorkflowFileEditRiskData,
+) -> JsonObject:
+    return require_json_object(
+        {
+            "project_code": project_code,
+            "workflow_instance_id": workflow_instance_id,
+            "workflow_code": workflow_code,
+            "syncDefine": sync_definition,
+            "risk_type": confirmation_details["risk_type"],
+            "deleted_tasks": confirmation_details["deleted_tasks"],
+            "task_type_changes": confirmation_details["task_type_changes"],
+        },
+        label="workflow-instance full edit confirmation payload",
     )
 
 

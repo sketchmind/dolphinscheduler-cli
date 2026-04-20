@@ -91,7 +91,7 @@ query side of the two most important resources.
 - [x] `src/dsctl/services/task.py` — list, get
 - [x] Resolver: add workflow and task name resolution
 - [x] `src/dsctl/support/yaml_io.py` — YAML rendering
-- [x] `dsctl workflow get --format yaml` returns roundtrip-able YAML in `data.yaml`
+- [x] `dsctl workflow export` returns roundtrip-able workflow YAML
 - [x] Tests for all of the above
 
 **Done when:**
@@ -99,7 +99,7 @@ query side of the two most important resources.
 dsctl use project etl-prod
 dsctl workflow list                        # uses context
 dsctl workflow get daily-etl               # uses context
-dsctl workflow get daily-etl --format yaml # YAML output
+dsctl workflow export daily-etl         # YAML output
 dsctl use workflow daily-etl
 dsctl task list                            # uses project + workflow context
 dsctl task get extract                     # single task detail
@@ -173,6 +173,7 @@ stable dry-run diff before apply.
 # Patch workflow
 dsctl workflow edit --patch patch.yaml
 dsctl workflow edit --patch patch.yaml --dry-run
+dsctl workflow edit WORKFLOW --file workflow.yaml --dry-run
 # → {"data": {"diff": {"added_tasks": [...], "removed_edges": [...]}}}
 
 # Inline task update

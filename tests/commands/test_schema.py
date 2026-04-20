@@ -56,6 +56,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
     assert payload["data"]["capabilities"]["templates"]["workflow"] == {
         "with_schedule_option": True,
         "raw_template_command": "dsctl template workflow --raw",
+        "export_command": "dsctl workflow export WORKFLOW",
     }
     assert payload["data"]["capabilities"]["templates"]["workflow_patch"] == {
         "raw_template_command": "dsctl template workflow-patch --raw",
@@ -65,6 +66,10 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "raw_template_command": "dsctl template workflow-instance-patch --raw",
         "target_command": (
             "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+        ),
+        "file_source_command": ("dsctl workflow-instance export WORKFLOW_INSTANCE"),
+        "file_target_command": (
+            "dsctl workflow-instance edit WORKFLOW_INSTANCE --file FILE"
         ),
     }
     assert payload["data"]["capabilities"]["templates"]["task"] == {

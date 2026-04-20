@@ -15,6 +15,7 @@ from tests.live.support import (
     require_text_value,
     result_error_code,
     run_dsctl,
+    run_dsctl_raw,
     wait_for_result,
 )
 from tests.live.workflow_support import (
@@ -574,31 +575,19 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             label="renamed task rawScript",
         )
 
-        workflow_yaml_payload = require_ok_payload(
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "get",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                    "--format",
-                    "yaml",
-                ],
-                env_file=live_etl_env_file,
-            ),
-            expected_action="workflow.get",
-            label="workflow get yaml after edit",
+        workflow_yaml_result = run_dsctl_raw(
+            live_repo_root,
+            [
+                "workflow",
+                "export",
+                workflow_name,
+                "--project",
+                project_name,
+            ],
+            env_file=live_etl_env_file,
         )
-        workflow_yaml_data = require_mapping(
-            workflow_yaml_payload["data"],
-            label="workflow get yaml after edit data",
-        )
-        workflow_yaml_text = require_text_value(
-            workflow_yaml_data.get("yaml"),
-            label="workflow yaml after edit",
-        )
+        assert workflow_yaml_result.exit_code == 0, workflow_yaml_result.stderr
+        workflow_yaml_text = workflow_yaml_result.stdout
         workflow_yaml_document = yaml.safe_load(workflow_yaml_text)
         workflow_yaml_tasks = workflow_yaml_document["tasks"]
         assert all("code" not in task for task in workflow_yaml_tasks)
@@ -811,6 +800,15 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
         )
         assert workflow_instance_get_data["workflowDefinitionCode"] == workflow_code
         assert workflow_instance_get_data["state"] == "SUCCESS"
+
+        workflow_instance_yaml_result = run_dsctl_raw(
+            live_repo_root,
+            ["workflow-instance", "export", str(workflow_instance_id)],
+            env_file=live_etl_env_file,
+        )
+        assert workflow_instance_yaml_result.exit_code == 0
+        assert workflow_instance_yaml_result.stdout.startswith("workflow:\n")
+        assert "tasks:" in workflow_instance_yaml_result.stdout
 
         workflow_instance_digest_result = wait_for_result(
             live_repo_root,

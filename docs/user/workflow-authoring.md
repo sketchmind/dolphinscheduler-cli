@@ -218,15 +218,24 @@ templates so exported workflows can round-trip while typed coverage grows.
 
 ## Workflow Patch YAML
 
-`workflow edit --patch` and `workflow-instance edit --patch` consume a CLI
-delta document rooted at `patch:`. It is not a REST `PATCH` request; the CLI
-applies the delta to a live DAG snapshot, validates the merged workflow, then
-compiles the whole DS-native form payload.
+`workflow edit` accepts two input modes:
 
-Use patch YAML for precise changes, especially task rename/delete flows and
-finished-instance repair. The current stable `workflow edit` input is patch
-YAML; full-file workflow definition editing is a separate authoring direction,
-not part of the current stable edit contract.
+- `--patch`: a small delta document rooted at `patch:`
+- `--file`: a full desired-state workflow YAML document
+
+Patch YAML is not a REST `PATCH` request; the CLI applies the delta to a live
+DAG snapshot, validates the merged workflow, then compiles the whole DS-native
+form payload. Use patch YAML for precise changes, especially task rename/delete
+flows and finished-instance repair.
+
+Full-file edit treats the YAML as the desired complete workflow definition:
+same-name tasks preserve DS task identity, YAML-only tasks are created, and
+live-only tasks are deleted after `--confirm-risk`. Full-file edit does not
+infer task renames. Use patch `tasks.rename[]` when a task name changes and the
+DS task `code + version` must be preserved.
+
+`workflow edit --file` rejects `schedule:` blocks. Use
+`schedule update|online|offline` for schedule lifecycle changes.
 
 Start from the matching patch template:
 
@@ -234,6 +243,31 @@ Start from the matching patch template:
 dsctl template workflow-patch --raw > patch.yaml
 dsctl template workflow-instance-patch --raw > instance-patch.yaml
 ```
+
+Use full-file edit when the entire definition should be reconciled:
+
+```bash
+dsctl workflow export WORKFLOW > workflow.yaml
+# edit workflow.yaml and remove schedule: if present
+dsctl workflow edit WORKFLOW --file workflow.yaml --dry-run
+dsctl workflow edit WORKFLOW --file workflow.yaml
+```
+
+For a finished workflow instance repair, export the instance DAG instead of the
+current workflow definition:
+
+```bash
+dsctl workflow-instance export WORKFLOW_INSTANCE > instance.yaml
+# edit the failed instance DAG
+dsctl workflow-instance edit WORKFLOW_INSTANCE --file instance.yaml --dry-run
+dsctl workflow-instance edit WORKFLOW_INSTANCE --file instance.yaml
+```
+
+`workflow-instance edit --file` uses the same task YAML shape as workflow
+authoring, but it is intentionally narrower at the workflow level: only
+`workflow.global_params` and `workflow.timeout` may change. Keep
+`workflow.project` matching the instance project. Remove `schedule:` blocks;
+instance repair does not manage schedule lifecycle.
 
 ```yaml
 patch:
@@ -271,10 +305,9 @@ object and omitted fields keep their live values.
 Use `tasks.rename[]` when a task name changes and task identity should be
 preserved. The CLI does not guess rename intent from delete/create pairs.
 
-`workflow-instance edit --patch` intentionally accepts only
-`patch.workflow.set.global_params` and `patch.workflow.set.timeout`; definition
-fields such as name, description, execution type, and release state belong to
-`workflow edit`.
+`workflow-instance edit` intentionally accepts only instance-safe workflow
+fields: `global_params` and `timeout`. Definition fields such as name,
+description, execution type, and release state belong to `workflow edit`.
 
 ## Validation
 

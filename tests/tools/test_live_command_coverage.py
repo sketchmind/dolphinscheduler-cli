@@ -31,6 +31,7 @@ LOCAL_ONLY_COMMANDS = {
 
 LIVE_COMMAND_HELPERS = {
     "run_dsctl",
+    "run_dsctl_raw",
     "wait_for_result",
 }
 

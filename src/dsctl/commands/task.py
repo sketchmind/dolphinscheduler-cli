@@ -132,9 +132,10 @@ def update_command(
         typer.Option(
             "--set",
             help=(
-                "Inline task update in KEY=VALUE form. Repeat for multiple "
-                "fields. Inspect `dsctl schema --command task.update` for "
-                "supported keys and examples."
+                "Inline KEY=VALUE update for this single task. Repeat as "
+                "needed. Common keys: command, retry.times, timeout, "
+                "depends_on. Run `dsctl schema --command task.update` for all "
+                "supported keys."
             ),
         ),
     ] = None,
@@ -146,7 +147,10 @@ def update_command(
         ),
     ] = False,
 ) -> None:
-    """Update one task definition by name or code."""
+    """Update one task; use workflow edit for DAG changes.
+
+    Use workflow-instance edit for repairs.
+    """
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

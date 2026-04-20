@@ -279,6 +279,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     assert data["resources"]["groups"]["workflow"]["commands"] == [
         "list",
         "get",
+        "export",
         "describe",
         "digest",
         "create",
@@ -294,6 +295,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     assert data["resources"]["groups"]["workflow-instance"]["commands"] == [
         "list",
         "get",
+        "export",
         "parent",
         "digest",
         "edit",
@@ -307,11 +309,13 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "workflow_yaml_create": True,
         "workflow_yaml_export": True,
         "workflow_yaml_lint": True,
+        "workflow_yaml_edit": True,
         "workflow_digest": True,
         "workflow_schedule_block": True,
         "workflow_dry_run": True,
         "workflow_patch_template": True,
         "workflow_instance_patch_template": True,
+        "workflow_instance_yaml_edit": True,
         "parameter_syntax": EXPECTED_PARAMETER_SYNTAX,
         "environment_config_template": True,
         "cluster_config_template": True,
@@ -363,6 +367,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
             "commands": [
                 "list",
                 "get",
+                "export",
                 "parent",
                 "digest",
                 "edit",

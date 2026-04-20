@@ -3,13 +3,15 @@ from typing import Annotated
 
 import typer
 
-from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.cli_runtime import emit_raw_result, emit_result, get_app_state
+from dsctl.output import CommandResult
 from dsctl.services.workflow_instance import (
     DEFAULT_WATCH_INTERVAL_SECONDS,
     DEFAULT_WATCH_TIMEOUT_SECONDS,
     digest_workflow_instance_result,
     edit_workflow_instance_result,
     execute_task_in_workflow_instance_result,
+    export_workflow_instance_yaml_result,
     get_parent_workflow_instance_result,
     get_workflow_instance_result,
     list_workflow_instances_result,
@@ -174,6 +176,27 @@ def get_command(
     )
 
 
+@workflow_instance_app.command("export")
+def export_command(
+    ctx: typer.Context,
+    workflow_instance: Annotated[
+        int,
+        typer.Argument(help=WORKFLOW_INSTANCE_HELP),
+    ],
+) -> None:
+    """Export one workflow instance DAG as an editable YAML document."""
+    state_obj = get_app_state(ctx)
+    env_file = None if state_obj.env_file is None else str(state_obj.env_file)
+    emit_raw_result(
+        "workflow-instance.export",
+        lambda: export_workflow_instance_yaml_result(
+            workflow_instance,
+            env_file=env_file,
+        ),
+        _workflow_instance_yaml,
+    )
+
+
 @workflow_instance_app.command("parent")
 def parent_command(
     ctx: typer.Context,
@@ -223,23 +246,45 @@ def edit_command(
     ],
     *,
     patch: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--patch",
             dir_okay=False,
             exists=True,
             file_okay=True,
             help=(
-                "Path to one workflow-instance patch YAML file. Start from "
-                "`dsctl template workflow-instance-patch --raw`; `tasks.create[]` "
-                "uses full task fragments from `dsctl template task`; "
-                "`tasks.update[].set` uses partial task fields discovered with "
-                "`dsctl task-type schema TYPE`."
+                "Path to one workflow-instance patch YAML file. Use exactly "
+                "one of --patch or --file. Inspect the current instance DAG "
+                "with `dsctl workflow-instance export ID`, then "
+                "write only the intended delta. Start from `dsctl template "
+                "workflow-instance-patch --raw`; `tasks.create[]` uses full "
+                "task fragments from `dsctl template task`; "
+                "`tasks.update[].set` uses partial task fields discovered "
+                "with `dsctl task-type schema TYPE`."
             ),
             readable=True,
             resolve_path=True,
         ),
-    ],
+    ] = None,
+    file: Annotated[
+        Path | None,
+        typer.Option(
+            "--file",
+            dir_okay=False,
+            exists=True,
+            file_okay=True,
+            help=(
+                "Path to one full workflow-instance YAML file describing the "
+                "desired repaired DAG state. Use exactly one of --patch or "
+                "--file. Start from `dsctl workflow-instance export ID`; "
+                "use --dry-run to inspect the compiled diff. Full-file "
+                "edits match task identity by exact task name and do not infer "
+                "renames."
+            ),
+            readable=True,
+            resolve_path=True,
+        ),
+    ] = None,
     sync_definition: Annotated[
         bool,
         typer.Option(
@@ -256,8 +301,18 @@ def edit_command(
             ),
         ),
     ] = False,
+    confirm_risk: Annotated[
+        str | None,
+        typer.Option(
+            "--confirm-risk",
+            help=(
+                "Explicit confirmation token returned by a previous high-risk "
+                "full-file instance edit validation failure."
+            ),
+        ),
+    ] = None,
 ) -> None:
-    """Edit one finished workflow instance from a YAML patch file."""
+    """Edit one finished workflow instance from a YAML patch or full YAML file."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
@@ -265,8 +320,10 @@ def edit_command(
         lambda: edit_workflow_instance_result(
             workflow_instance,
             patch=patch,
+            file=file,
             sync_definition=sync_definition,
             dry_run=dry_run,
+            confirm_risk=confirm_risk,
             env_file=env_file,
         ),
     )
@@ -402,3 +459,15 @@ def execute_task_command(
             env_file=env_file,
         ),
     )
+
+
+def _workflow_instance_yaml(result: CommandResult) -> str:
+    data = result.data
+    if not isinstance(data, dict):
+        message = "workflow-instance result data must be an object"
+        raise TypeError(message)
+    yaml_text = data.get("yaml")
+    if not isinstance(yaml_text, str):
+        message = "workflow-instance result data is missing yaml"
+        raise TypeError(message)
+    return yaml_text

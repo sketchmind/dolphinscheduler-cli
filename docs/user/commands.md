@@ -72,6 +72,7 @@ dsctl template workflow-patch --raw > patch.yaml
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --project etl-prod --dry-run
 dsctl workflow create --file workflow.yaml --project etl-prod
+dsctl workflow edit WORKFLOW --file workflow.yaml --dry-run
 dsctl workflow edit WORKFLOW --patch patch.yaml --dry-run
 ```
 
@@ -80,6 +81,8 @@ dsctl workflow edit WORKFLOW --patch patch.yaml --dry-run
 ```bash
 dsctl workflow run daily-etl --project etl-prod
 dsctl workflow run-task daily-etl --task load --project etl-prod
+dsctl workflow-instance export <workflow_instance_id> > instance.yaml
+dsctl workflow-instance edit <workflow_instance_id> --file instance.yaml --dry-run
 dsctl workflow-instance digest <workflow_instance_id>
 dsctl workflow-instance watch <workflow_instance_id>
 dsctl task-instance list --workflow-instance <workflow_instance_id>

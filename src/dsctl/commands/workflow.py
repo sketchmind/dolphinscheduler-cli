@@ -3,7 +3,8 @@ from typing import Annotated
 
 import typer
 
-from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.cli_runtime import emit_raw_result, emit_result, get_app_state
+from dsctl.output import CommandResult
 from dsctl.services.workflow import (
     backfill_workflow_result,
     create_workflow_result,
@@ -11,6 +12,7 @@ from dsctl.services.workflow import (
     describe_workflow_result,
     digest_workflow_result,
     edit_workflow_result,
+    export_workflow_yaml_result,
     get_workflow_result,
     list_workflows_result,
     offline_workflow_result,
@@ -66,6 +68,11 @@ WORKER_GROUP_HELP = (
 WORKFLOW_HELP = (
     "Workflow name or numeric code. Run `dsctl workflow list` in the selected "
     "project to discover values; falls back to workflow context when omitted."
+)
+WORKFLOW_EDIT_HELP = (
+    "Workflow name or numeric code. Run `dsctl workflow list` in the selected "
+    "project to discover values. Required with --file; with --patch, falls "
+    "back to workflow context when omitted."
 )
 
 
@@ -123,14 +130,6 @@ def get_command(
             help=PROJECT_HELP,
         ),
     ] = None,
-    output_format: Annotated[
-        str,
-        typer.Option(
-            "--format",
-            help="Output format: json or yaml.",
-            case_sensitive=False,
-        ),
-    ] = "json",
 ) -> None:
     """Get one workflow by name or code."""
     state = get_app_state(ctx)
@@ -140,9 +139,40 @@ def get_command(
         lambda: get_workflow_result(
             workflow,
             project=project,
-            output_format=output_format.lower(),
             env_file=env_file,
         ),
+    )
+
+
+@workflow_app.command("export")
+def export_command(
+    ctx: typer.Context,
+    workflow: Annotated[
+        str | None,
+        typer.Argument(
+            help=WORKFLOW_HELP,
+        ),
+    ] = None,
+    *,
+    project: Annotated[
+        str | None,
+        typer.Option(
+            "--project",
+            help=PROJECT_HELP,
+        ),
+    ] = None,
+) -> None:
+    """Export one workflow as an editable YAML document."""
+    state = get_app_state(ctx)
+    env_file = None if state.env_file is None else str(state.env_file)
+    emit_raw_result(
+        "workflow.export",
+        lambda: export_workflow_yaml_result(
+            workflow,
+            project=project,
+            env_file=env_file,
+        ),
+        _workflow_yaml,
     )
 
 
@@ -372,29 +402,51 @@ def edit_command(
     workflow: Annotated[
         str | None,
         typer.Argument(
-            help=WORKFLOW_HELP,
+            help=WORKFLOW_EDIT_HELP,
         ),
     ] = None,
     *,
     patch: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--patch",
             dir_okay=False,
             exists=True,
             file_okay=True,
             help=(
-                "Path to one workflow patch YAML file. Start from `dsctl "
-                "template workflow-patch --raw`; use --dry-run to inspect the "
-                "compiled diff. `tasks.create[]` uses full task fragments from "
-                "`dsctl template task`; "
+                "Path to one workflow patch YAML file. Use exactly one of "
+                "--patch or --file. Inspect the current definition with "
+                "`dsctl workflow export WORKFLOW`, then write only "
+                "the intended delta. Start from `dsctl template workflow-patch "
+                "--raw`; use --dry-run to inspect the compiled diff. "
+                "`tasks.create[]` uses full task fragments from `dsctl "
+                "template task`; "
                 "`tasks.update[].set` uses partial task fields discovered with "
                 "`dsctl task-type schema TYPE`."
             ),
             readable=True,
             resolve_path=True,
         ),
-    ],
+    ] = None,
+    file: Annotated[
+        Path | None,
+        typer.Option(
+            "--file",
+            dir_okay=False,
+            exists=True,
+            file_okay=True,
+            help=(
+                "Path to one full workflow YAML file describing the desired "
+                "definition state. Use exactly one of --patch or --file. Start "
+                "from `dsctl workflow export WORKFLOW` or `dsctl "
+                "template workflow --raw`; use --dry-run to inspect the "
+                "compiled diff. Full-file edits match task identity by exact "
+                "task name and do not infer renames."
+            ),
+            readable=True,
+            resolve_path=True,
+        ),
+    ] = None,
     project: Annotated[
         str | None,
         typer.Option(
@@ -409,8 +461,18 @@ def edit_command(
             help="Compile the merged workflow edit payload without sending it.",
         ),
     ] = False,
+    confirm_risk: Annotated[
+        str | None,
+        typer.Option(
+            "--confirm-risk",
+            help=(
+                "Explicit confirmation token returned by a previous high-risk "
+                "full-file edit validation failure."
+            ),
+        ),
+    ] = None,
 ) -> None:
-    """Edit one workflow definition from a YAML patch file."""
+    """Edit one workflow definition from a YAML patch or full YAML file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -418,8 +480,10 @@ def edit_command(
         lambda: edit_workflow_result(
             workflow,
             patch=patch,
+            file=file,
             project=project,
             dry_run=dry_run,
+            confirm_risk=confirm_risk,
             env_file=env_file,
         ),
     )
@@ -983,3 +1047,15 @@ def delete_command(
             env_file=env_file,
         ),
     )
+
+
+def _workflow_yaml(result: CommandResult) -> str:
+    data = result.data
+    if not isinstance(data, dict):
+        message = "workflow result data must be an object"
+        raise TypeError(message)
+    yaml_text = data.get("yaml")
+    if not isinstance(yaml_text, str):
+        message = "workflow result data is missing yaml"
+        raise TypeError(message)
+    return yaml_text
