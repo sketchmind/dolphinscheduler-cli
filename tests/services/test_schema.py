@@ -81,7 +81,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
 
     assert isinstance(data, dict)
     assert data["schema_version"] == 1
-    assert data["cli"] == {"name": "dsctl", "version": "0.1.0"}
+    assert data["cli"] == {"name": "dsctl", "version": "0.2.0"}
     assert data["supported_ds_versions"] == ["3.3.2", "3.4.0", "3.4.1"]
     assert data["ds_versions"] == EXPECTED_VERSION_METADATA
     assert data["selection"] == {

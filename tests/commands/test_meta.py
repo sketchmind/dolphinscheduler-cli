@@ -16,7 +16,7 @@ def test_version_command_reports_cli_and_ds_versions() -> None:
     assert payload["ok"] is True
     assert payload["action"] == "version"
     assert payload["data"] == {
-        "cli": "0.1.0",
+        "cli": "0.2.0",
         "ds": "3.4.1",
         "selected_ds_version": "3.4.1",
         "contract_version": "3.4.1",
@@ -33,7 +33,7 @@ def test_version_command_can_render_tsv_columns() -> None:
     )
 
     assert result.exit_code == 0
-    assert result.stdout == ("cli\tds\tfamily\n0.1.0\t3.4.1\tworkflow-3.3-plus\n")
+    assert result.stdout == ("cli\tds\tfamily\n0.2.0\t3.4.1\tworkflow-3.3-plus\n")
 
 
 def test_version_command_can_project_json_columns() -> None:
@@ -42,7 +42,7 @@ def test_version_command_can_project_json_columns() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
-    assert payload["data"] == {"cli": "0.1.0", "ds": "3.4.1"}
+    assert payload["data"] == {"cli": "0.2.0", "ds": "3.4.1"}
 
 
 def test_misplaced_root_option_detection() -> None:

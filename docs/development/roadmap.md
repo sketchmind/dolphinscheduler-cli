@@ -40,7 +40,7 @@ the upstream adapter compiles, and `dsctl version` works end to end.
 **Done when:**
 ```bash
 dsctl version
-# → {"ok": true, "action": "version", "data": {"cli": "0.1.0", "ds": "3.4.1"}}
+# → {"ok": true, "action": "version", "data": {"cli": "0.2.0", "ds": "3.4.1"}}
 
 dsctl context
 # → {"ok": true, "action": "context", "data": {"api_url": "...", "project": null, "workflow": null, ...}}

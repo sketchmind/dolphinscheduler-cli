@@ -276,7 +276,7 @@ Example:
   "action": "version",
   "resolved": {},
   "data": {
-    "cli": "0.1.0",
+    "cli": "0.2.0",
     "ds": "3.4.1",
     "selected_ds_version": "3.4.1",
     "contract_version": "3.4.1",

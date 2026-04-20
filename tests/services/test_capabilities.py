@@ -70,7 +70,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     data = result.data
 
     assert isinstance(data, dict)
-    assert data["cli"] == {"name": "dsctl", "version": "0.1.0"}
+    assert data["cli"] == {"name": "dsctl", "version": "0.2.0"}
     assert data["ds"] == EXPECTED_DS_CAPABILITIES
     assert data["selection"] == {
         "precedence": ["flag", "context"],
@@ -402,7 +402,7 @@ def test_capabilities_result_can_return_summary() -> None:
 
     assert isinstance(data, dict)
     assert result.resolved == {"capabilities": {"view": "summary"}}
-    assert data["cli"] == {"name": "dsctl", "version": "0.1.0"}
+    assert data["cli"] == {"name": "dsctl", "version": "0.2.0"}
     assert data["ds"] == EXPECTED_DS_CAPABILITIES
     assert "resources" in data
     assert "runtime" in data
