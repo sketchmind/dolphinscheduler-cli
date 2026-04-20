@@ -1,16 +1,12 @@
 # dolphinscheduler-cli
 
-`dolphinscheduler-cli` is a generated-first, REST-only command-line interface
-for Apache DolphinScheduler.
+`dolphinscheduler-cli` provides `dsctl`, a command-line interface for Apache
+DolphinScheduler.
 
-The CLI is built around DolphinScheduler-native REST contracts and exposes them
-through stable `dsctl` commands for configuration, authoring, runtime
-inspection, and operational repair workflows. It does not use Py4J,
-PyDolphinScheduler, or the Python gateway.
+Use it for configuration, workflow authoring, runtime inspection, and
+operational recovery through DolphinScheduler REST APIs.
 
-This is an independent CLI project for Apache DolphinScheduler. It should not
-be described as an official Apache DolphinScheduler distribution unless that
-status changes explicitly.
+This is an independent CLI project for Apache DolphinScheduler.
 
 ## Install
 
@@ -21,7 +17,7 @@ python -m pip install dolphinscheduler-cli
 dsctl version
 ```
 
-For isolated CLI usage:
+With `pipx`:
 
 ```bash
 pipx install dolphinscheduler-cli
@@ -58,69 +54,117 @@ You can also load connection settings from a dotenv-style file:
 dsctl --env-file cluster.env context
 ```
 
-## Quick Examples
+## Quick Start
 
 ```bash
+dsctl doctor
 dsctl project list
 dsctl use project etl-prod
 dsctl workflow list
-dsctl workflow get daily-etl
-dsctl template datasource --type MYSQL
-dsctl workflow run daily-etl --project etl-prod
+dsctl workflow run daily-etl
+dsctl workflow-instance watch <workflow_instance_id>
 dsctl workflow-instance digest <workflow_instance_id>
 dsctl task-instance list --workflow-instance <workflow_instance_id>
-dsctl task-instance list --project etl-prod --state FAILURE
-dsctl task-instance log <task_instance_id>
-dsctl --columns id,name,state workflow-instance list --project etl-prod
+dsctl task-instance log <task_instance_id> --raw
+```
+
+## Discover Commands
+
+Start with `--help` for human-readable command entry points:
+
+```bash
+dsctl --help
+dsctl workflow --help
+dsctl workflow edit --help
+```
+
+Use `schema` for machine-readable arguments, options, choices, payload hints,
+and output shape metadata:
+
+```bash
+dsctl schema --list-groups
+dsctl schema --list-commands
+dsctl schema --command workflow.edit
+dsctl schema --command task-type.schema
+```
+
+Use `capabilities` for lightweight feature discovery:
+
+```bash
+dsctl capabilities --summary
+dsctl capabilities --section authoring
+```
+
+## Workflow Authoring
+
+Create workflow YAML from templates, lint it locally, then dry-run before
+sending it to DolphinScheduler:
+
+```bash
+dsctl template task SHELL --raw
+dsctl task-type schema SQL
+dsctl template workflow --raw > workflow.yaml
+dsctl lint workflow workflow.yaml
+dsctl workflow create --file workflow.yaml --project etl-prod --dry-run
+dsctl workflow create --file workflow.yaml --project etl-prod
+```
+
+Export an existing workflow, edit the YAML, and apply the full edited document:
+
+```bash
+dsctl workflow export daily-etl --project etl-prod > workflow.yaml
+dsctl workflow edit daily-etl --project etl-prod --file workflow.yaml --dry-run
+dsctl workflow edit daily-etl --project etl-prod --file workflow.yaml
+```
+
+For small changes, start from a patch template:
+
+```bash
+dsctl template workflow-patch --raw > patch.yaml
+dsctl workflow edit daily-etl --project etl-prod --patch patch.yaml --dry-run
+```
+
+## Runtime Operations
+
+```bash
+dsctl workflow run daily-etl --project etl-prod
+dsctl workflow run-task daily-etl --project etl-prod --task load
+dsctl workflow-instance list --project etl-prod
+dsctl workflow-instance digest <workflow_instance_id>
+dsctl workflow-instance watch <workflow_instance_id>
+dsctl workflow-instance recover-failed <workflow_instance_id>
+dsctl task-instance list --workflow-instance <workflow_instance_id>
+dsctl task-instance log <task_instance_id> --raw
+```
+
+Export a workflow instance before editing runtime task definitions:
+
+```bash
+dsctl workflow-instance export <workflow_instance_id> > instance.yaml
+dsctl workflow-instance edit <workflow_instance_id> --file instance.yaml --dry-run
+```
+
+## Output
+
+Commands return a stable JSON envelope by default. Use global output options
+before the command group when a table or pipeline-oriented view is more useful:
+
+```bash
 dsctl --output-format table workflow-instance list --project etl-prod
 dsctl --output-format tsv --columns id,name,state task-instance list --workflow-instance <workflow_instance_id>
+dsctl --columns id,name,state workflow-instance list --project etl-prod
 dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <workflow_instance_id>
 ```
 
-## Command Surface
+`--columns '*'` selects all top-level row fields. Quote `*` so the shell does
+not expand it as a filesystem glob.
 
-Stable user-facing commands today:
+## Project Principles
 
-- `dsctl version`
-- `dsctl context`
-- `dsctl doctor`
-- `dsctl schema`
-- `dsctl capabilities`
-- `dsctl enum names`
-- `dsctl enum list ENUM`
-- `dsctl lint workflow FILE`
-- `dsctl task-type list`
-- `dsctl environment list|get|create|update|delete`
-- `dsctl cluster list|get|create|update|delete`
-- `dsctl datasource list|get|create|update|delete|test`
-- `dsctl namespace list|get|available|create|delete`
-- `dsctl resource list|view|upload|create|mkdir|download|delete`
-- `dsctl queue list|get|create|update|delete`
-- `dsctl worker-group list|get|create|update|delete`
-- `dsctl task-group list|get|create|update|close|start`
-- `dsctl task-group queue list|force-start|set-priority`
-- `dsctl alert-plugin list|get|schema|create|update|delete|test`
-- `dsctl alert-plugin definition list`
-- `dsctl alert-group list|get|create|update|delete`
-- `dsctl tenant list|get|create|update|delete`
-- `dsctl user list|get|create|update|delete`
-- `dsctl user grant project|datasource|namespace`
-- `dsctl user revoke project|datasource|namespace`
-- `dsctl access-token list|get|create|update|delete|generate`
-- `dsctl monitor health|server|database`
-- `dsctl audit list|model-types|operation-types`
-- `dsctl use project|workflow|--clear`
-- `dsctl project list|get|create|update|delete`
-- `dsctl project-parameter list|get|create|update|delete`
-- `dsctl project-preference get|update|enable|disable`
-- `dsctl project-worker-group list|set|clear`
-- `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|params|environment|cluster|datasource|task`
-- `dsctl workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
-- `dsctl workflow lineage list|get|dependent-tasks`
-- `dsctl workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task`
-- `dsctl task list|get|update`
-- `dsctl task-instance list|get|watch|sub-workflow|log|force-success|savepoint|stop`
+- REST-only integration with DolphinScheduler APIs.
+- Generated-first contracts for DS-facing request and response shapes.
+- Stable command names, output envelopes, and error types for scripts and
+  agents.
 
 ## Documentation
 

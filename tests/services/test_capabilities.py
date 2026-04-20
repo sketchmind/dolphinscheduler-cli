@@ -70,7 +70,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     data = result.data
 
     assert isinstance(data, dict)
-    assert data["cli"] == {"name": "dsctl", "version": "0.1.0"}
+    assert data["cli"] == {"name": "dsctl", "version": "0.2.0"}
     assert data["ds"] == EXPECTED_DS_CAPABILITIES
     assert data["selection"] == {
         "precedence": ["flag", "context"],
@@ -120,9 +120,15 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     ]
     assert data["resources"]["groups"]["enum"]["commands"] == ["names", "list"]
     assert data["resources"]["groups"]["lint"]["commands"] == ["workflow"]
-    assert data["resources"]["groups"]["task-type"]["commands"] == ["list"]
+    assert data["resources"]["groups"]["task-type"]["commands"] == [
+        "list",
+        "get",
+        "schema",
+    ]
     assert data["resources"]["groups"]["template"]["commands"] == [
         "workflow",
+        "workflow-patch",
+        "workflow-instance-patch",
         "params",
         "environment",
         "cluster",
@@ -273,6 +279,7 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     assert data["resources"]["groups"]["workflow"]["commands"] == [
         "list",
         "get",
+        "export",
         "describe",
         "digest",
         "create",
@@ -288,9 +295,10 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
     assert data["resources"]["groups"]["workflow-instance"]["commands"] == [
         "list",
         "get",
+        "export",
         "parent",
         "digest",
-        "update",
+        "edit",
         "watch",
         "stop",
         "rerun",
@@ -301,13 +309,19 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
         "workflow_yaml_create": True,
         "workflow_yaml_export": True,
         "workflow_yaml_lint": True,
+        "workflow_yaml_edit": True,
         "workflow_digest": True,
         "workflow_schedule_block": True,
         "workflow_dry_run": True,
+        "workflow_patch_template": True,
+        "workflow_instance_patch_template": True,
+        "workflow_instance_yaml_edit": True,
         "parameter_syntax": EXPECTED_PARAMETER_SYNTAX,
         "environment_config_template": True,
         "cluster_config_template": True,
         "datasource_payload_templates": True,
+        "task_authoring_schema": True,
+        "task_authoring_schema_command_pattern": "dsctl task-type schema TYPE",
         "datasource_template_types": EXPECTED_DATASOURCE_TEMPLATE_INDEX[
             "supported_types"
         ],
@@ -353,9 +367,10 @@ def test_capabilities_result_describes_current_stable_surface() -> None:
             "commands": [
                 "list",
                 "get",
+                "export",
                 "parent",
                 "digest",
-                "update",
+                "edit",
                 "watch",
                 "stop",
                 "rerun",
@@ -387,7 +402,7 @@ def test_capabilities_result_can_return_summary() -> None:
 
     assert isinstance(data, dict)
     assert result.resolved == {"capabilities": {"view": "summary"}}
-    assert data["cli"] == {"name": "dsctl", "version": "0.1.0"}
+    assert data["cli"] == {"name": "dsctl", "version": "0.2.0"}
     assert data["ds"] == EXPECTED_DS_CAPABILITIES
     assert "resources" in data
     assert "runtime" in data

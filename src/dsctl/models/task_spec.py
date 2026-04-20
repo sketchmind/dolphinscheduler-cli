@@ -119,6 +119,10 @@ class TaskParamsSpec(YamlSpecModel):
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
+    def default_payload_field_names(self) -> tuple[str, ...]:
+        """Return defaulted fields that must still be sent to DS."""
+        return ()
+
     def to_payload(self) -> YamlObject:
         """Serialize one validated task params model back to plain YAML data."""
         payload = self.model_dump(
@@ -130,6 +134,10 @@ class TaskParamsSpec(YamlSpecModel):
         if not is_yaml_object(payload):
             message = "Validated task params did not serialize to a YAML object"
             raise TypeError(message)
+        for field_name in self.default_payload_field_names():
+            field = type(self).model_fields[field_name]
+            alias = field.alias or field_name
+            payload.setdefault(alias, getattr(self, field_name))
         return payload
 
 
@@ -212,6 +220,10 @@ class SqlTaskParamsSpec(TaskParamsSpec):
         alias="localParams",
     )
     var_pool: list[GlobalParamSpec] = Field(default_factory=list, alias="varPool")
+
+    def default_payload_field_names(self) -> tuple[str, ...]:
+        """Keep DS SQL task list fields non-null even when YAML omits them."""
+        return ("pre_statements", "post_statements", "local_params", "var_pool")
 
     @field_validator("datasource_type", "sql", "show_type")
     @classmethod
@@ -567,9 +579,14 @@ def supported_typed_task_types() -> tuple[str, ...]:
     return tuple(sorted(_TASK_PARAMS_MODELS))
 
 
+def task_params_model_for_type(task_type: str) -> type[TaskParamsSpec] | None:
+    """Return the typed task_params model for one task type, when available."""
+    return _TASK_PARAMS_MODELS.get(canonical_task_type(task_type))
+
+
 def normalize_task_params(task_type: str, task_params: YamlObject) -> YamlObject:
     """Validate one known task_params block and return a normalized plain object."""
-    model = _TASK_PARAMS_MODELS.get(canonical_task_type(task_type))
+    model = task_params_model_for_type(task_type)
     if model is None:
         return task_params
     try:
@@ -611,4 +628,5 @@ __all__ = [
     "canonical_task_type",
     "normalize_task_params",
     "supported_typed_task_types",
+    "task_params_model_for_type",
 ]

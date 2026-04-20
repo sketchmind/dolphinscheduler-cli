@@ -384,6 +384,8 @@ def _sql_template_yaml() -> str:
               groupId: 0
               title: ""
               limit: 0
+              localParams: []
+              varPool: []
             worker_group: default
             priority: MEDIUM
             retry:
@@ -467,6 +469,8 @@ def _sql_pre_post_template_yaml() -> str:
               groupId: 0
               title: ""
               limit: 0
+              localParams: []
+              varPool: []
             worker_group: default
             priority: MEDIUM
             retry:

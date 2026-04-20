@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from dsctl.services._schema_primitives import argument, command, group, option
+from dsctl.services._schema_primitives import (
+    argument,
+    command,
+    confirm_risk_option,
+    group,
+    option,
+)
 from dsctl.services.monitor import MONITOR_SERVER_TYPE_CHOICES
 from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 from dsctl.services.task_instance import (
@@ -247,6 +253,30 @@ def workflow_instance_group() -> dict[str, object]:
                 ],
             ),
             command(
+                "export",
+                action="workflow-instance.export",
+                summary=(
+                    "Export one workflow instance DAG as an editable YAML document."
+                ),
+                arguments=[
+                    argument(
+                        "workflow_instance",
+                        value_type="integer",
+                        description=(
+                            "Workflow instance id. Run `dsctl workflow-instance "
+                            "list` to discover ids."
+                        ),
+                        selector="id",
+                        discovery_command="dsctl workflow-instance list",
+                    )
+                ],
+                payload={
+                    "format": "yaml",
+                    "output": "raw_document",
+                    "target_command": "dsctl workflow-instance edit ID --file FILE",
+                },
+            ),
+            command(
                 "parent",
                 action="workflow-instance.parent",
                 summary=(
@@ -283,9 +313,12 @@ def workflow_instance_group() -> dict[str, object]:
                 ],
             ),
             command(
-                "update",
-                action="workflow-instance.update",
-                summary="Edit one finished workflow instance from a YAML patch file.",
+                "edit",
+                action="workflow-instance.edit",
+                summary=(
+                    "Edit one finished workflow instance from a YAML patch or "
+                    "full workflow YAML file."
+                ),
                 arguments=[
                     argument(
                         "workflow_instance",
@@ -302,8 +335,32 @@ def workflow_instance_group() -> dict[str, object]:
                     option(
                         "patch",
                         value_type="path",
-                        description="Path to one workflow patch YAML file.",
-                        required=True,
+                        description=(
+                            "Path to one workflow-instance patch YAML file. "
+                            "Use exactly one of --patch or --file. Inspect the "
+                            "current instance DAG with `dsctl workflow-instance "
+                            "export ID`, then write only the intended "
+                            "delta. Start from `dsctl template "
+                            "workflow-instance-patch --raw`; "
+                            "`tasks.create[]` uses full task fragments from "
+                            "`dsctl template task`; `tasks.update[].set` uses "
+                            "partial task fields discovered with `dsctl "
+                            "task-type schema TYPE`."
+                        ),
+                        required=False,
+                    ),
+                    option(
+                        "file",
+                        value_type="path",
+                        description=(
+                            "Path to one full workflow-instance YAML file "
+                            "describing the desired repaired DAG state. Use "
+                            "exactly one of --patch or --file. Start from "
+                            "`dsctl workflow-instance export ID`; "
+                            "use --dry-run to inspect the compiled diff. "
+                            "Full-file edits match task identity by exact task "
+                            "name and do not infer renames."
+                        ),
                     ),
                     option(
                         "sync-definition",
@@ -318,12 +375,25 @@ def workflow_instance_group() -> dict[str, object]:
                         "dry-run",
                         value_type="boolean",
                         description=(
-                            "Compile the merged workflow-instance update payload "
+                            "Compile the merged workflow-instance edit payload "
                             "without sending it."
                         ),
                         default=False,
                     ),
+                    confirm_risk_option(),
                 ],
+                payload={
+                    "format": "yaml",
+                    "source_options": ["--patch PATH", "--file PATH"],
+                    "patch_template_command": (
+                        "dsctl template workflow-instance-patch --raw"
+                    ),
+                    "file_source_command": "dsctl workflow-instance export ID",
+                    "target_commands": [
+                        "dsctl workflow-instance edit ID --patch FILE",
+                        "dsctl workflow-instance edit ID --file FILE",
+                    ],
+                },
             ),
             command(
                 "watch",
@@ -714,8 +784,20 @@ def task_instance_group() -> dict[str, object]:
                             "upstream logger API."
                         ),
                         default=200,
-                    )
+                    ),
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the log text, without the JSON envelope."
+                        ),
+                        default=False,
+                    ),
                 ],
+                payload={
+                    "raw_option": "--raw",
+                    "raw_field": "data.text",
+                },
             ),
             command(
                 "force-success",

@@ -294,7 +294,7 @@ future.
 | enum | `enum names`, `enum list` | No | generated enum metadata |
 | use | `use project|workflow|--clear` | No | local context persistence |
 | lint | `lint workflow FILE` | No | local validation only |
-| template | `template workflow|params|environment|cluster|datasource|task` | No | local template rendering |
+| template | `template workflow|workflow-patch|workflow-instance-patch|params|environment|cluster|datasource|task` | No | local template rendering |
 
 ### Meta And Diagnostics
 
@@ -302,6 +302,7 @@ future.
 | --- | --- | --- | --- | --- |
 | doctor | `doctor` | `admin-bootstrap` and `etl-developer` | Yes | healthy preflight and broken-auth or broken-config variant |
 | task-type | `task-type list` | `etl-developer` | Yes | real task-type discovery and category projection |
+| task-type | `task-type get|schema` | No profile needed | No | local authoring summary and schema contracts |
 | monitor | `monitor health`, `monitor server`, `monitor database` | `admin-bootstrap` | Yes | remote health, server, and database payloads reachable and shaped |
 | audit | `audit list`, `audit model-types`, `audit operation-types` | `admin-bootstrap` or delegated governance user | Yes | remote filter metadata plus list query with real payload shape |
 
@@ -338,7 +339,7 @@ future.
 | workflow | `workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill` | `etl-developer` | Yes | authoring, read-back, release-state transition, run, task-scoped run, backfill dry-run, and dry-run consistency |
 | task | `task list|get|update` | `etl-developer` | Yes | live task projection and safe update reflected by later reads |
 | schedule | `schedule list|get|preview|explain|create|update|delete|online|offline` | `etl-developer` | Yes | preview and explain aligned with create/update, and online schedules produce real workflow instances |
-| workflow-instance | `workflow-instance list|get|parent|digest|update|watch|stop|rerun|recover-failed|execute-task` | `etl-developer` | Yes | instance lifecycle transitions, finished-instance DAG update semantics, runtime control, and parent/sub-workflow relation reads under real runtime conditions |
+| workflow-instance | `workflow-instance list|get|parent|digest|edit|watch|stop|rerun|recover-failed|execute-task` | `etl-developer` | Yes | instance lifecycle transitions, finished-instance DAG edit semantics, runtime control, and parent/sub-workflow relation reads under real runtime conditions |
 | task-instance | `task-instance list|get|watch|sub-workflow|log|force-success|savepoint|stop` | `etl-developer` | Yes | instance inspection, child relation reads, log retrieval, and control actions under real runtime conditions |
 
 ### Notes On Capability-Gated Resources
@@ -454,7 +455,7 @@ live additions.
   that same instance back into `FAILURE` before `workflow-instance rerun`
   returns it to `SUCCESS`. Live assertions should follow the real state machine
   instead of assuming a no-op on finished instances.
-- `workflow-instance update` in DS 3.4.1 is a finished-instance save path, not
+- `workflow-instance edit` in DS 3.4.1 is a finished-instance save path, not
   a live-definition edit path. The server requires final-state instances with
   usable `dagData`; `syncDefine=false` keeps the current workflow definition
   unchanged, while `syncDefine=true` also persists the saved DAG back onto the
@@ -492,7 +493,7 @@ suite should cover more than basic create/list/delete flows.
 ### 4. Runtime Lifecycle
 
 - workflow run and backfill dry-run
-- workflow-instance list/get/digest/update/watch
+- workflow-instance list/get/digest/edit/watch
 - task-instance list/get/log
 - stop, rerun, recover-failed, execute-task
 

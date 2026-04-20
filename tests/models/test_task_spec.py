@@ -85,6 +85,40 @@ tasks:
         load_workflow_spec(spec_path)
 
 
+def test_load_workflow_spec_fills_sql_empty_list_payload_fields(
+    tmp_path: Path,
+) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: sql-workflow
+tasks:
+  - name: query
+    type: SQL
+    task_params:
+      type: MYSQL
+      datasource: 1
+      sql: select 1
+      sqlType: 0
+""".strip(),
+        encoding="utf-8",
+    )
+
+    spec = load_workflow_spec(spec_path)
+
+    assert spec.tasks[0].task_params == {
+        "type": "MYSQL",
+        "datasource": 1,
+        "sql": "select 1",
+        "sqlType": 0,
+        "preStatements": [],
+        "postStatements": [],
+        "localParams": [],
+        "varPool": [],
+    }
+
+
 def test_load_workflow_spec_allows_unknown_task_type_task_params(
     tmp_path: Path,
 ) -> None:

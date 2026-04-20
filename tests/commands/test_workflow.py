@@ -29,7 +29,7 @@ from tests.fakes import (
     FakeWorkflowTaskRelation,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -197,14 +197,13 @@ def test_workflow_list_command_returns_filtered_workflows() -> None:
     assert payload["data"] == [{"code": 101, "name": "daily-sync", "version": 1}]
 
 
-def test_workflow_get_command_can_emit_yaml_inside_json_envelope() -> None:
-    result = runner.invoke(app, ["workflow", "get", "--format", "yaml"])
+def test_workflow_export_command_emits_yaml() -> None:
+    result = runner.invoke(app, ["workflow", "export"])
 
     assert result.exit_code == 0
-    payload = json.loads(result.stdout)
-    assert payload["action"] == "workflow.get"
-    assert payload["resolved"]["format"] == "yaml"
-    assert "workflow:" in payload["data"]["yaml"]
+    assert result.stdout.startswith("workflow:\n")
+    assert "name: daily-sync" in result.stdout
+    assert "tasks:" in result.stdout
 
 
 def test_workflow_list_help_points_to_project_discovery() -> None:
@@ -219,21 +218,18 @@ def test_workflow_get_help_points_to_workflow_discovery() -> None:
 
     assert result.exit_code == 0
     assert "workflow list" in result.stdout
+    assert "--raw" not in result.stdout
+    assert "--format" not in result.stdout
 
 
-def test_workflow_get_command_reports_supported_output_formats() -> None:
-    result = runner.invoke(app, ["workflow", "get", "--format", "table"])
+def test_workflow_export_help_points_to_workflow_discovery() -> None:
+    result = runner.invoke(app, ["workflow", "export", "--help"])
 
-    assert result.exit_code == 1
-    payload = json.loads(result.stdout)
-    assert payload["action"] == "workflow.get"
-    assert payload["error"]["type"] == "user_input_error"
-    assert payload["error"]["message"] == (
-        "Workflow output format must be 'json' or 'yaml'"
-    )
-    assert payload["error"]["suggestion"] == (
-        "Pass `--format json` or `--format yaml`."
-    )
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout)
+    assert "workflow list" in help_text
+    assert "--project" in help_text
+    assert "--raw" not in help_text
 
 
 def test_workflow_digest_command_returns_compact_graph_summary() -> None:
@@ -1147,6 +1143,50 @@ patch:
             "current_schedule_release_state": "ONLINE",
         },
     ]
+
+
+def test_workflow_edit_command_can_dry_run_full_file_diff(tmp_path: Path) -> None:
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(
+        """
+workflow:
+  name: daily-sync
+  project: etl-prod
+  description: Daily ETL workflow v2
+  timeout: 0
+  execution_type: PARALLEL
+  release_state: ONLINE
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        ["workflow", "edit", "daily-sync", "--file", str(workflow_path), "--dry-run"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "workflow.edit"
+    assert payload["resolved"]["input_mode"] == "file"
+    assert payload["resolved"]["file"] == str(workflow_path.resolve())
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["diff"]["deleted_tasks"] == ["load"]
+    assert payload["data"]["diff"]["updated_tasks"] == []
+
+
+def test_workflow_edit_command_requires_one_edit_input() -> None:
+    result = runner.invoke(app, ["workflow", "edit", "daily-sync", "--dry-run"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "workflow.edit"
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["message"] == "Pass exactly one of --patch or --file."
 
 
 def test_workflow_edit_command_suggests_offline_before_apply(tmp_path: Path) -> None:

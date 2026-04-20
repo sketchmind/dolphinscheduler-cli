@@ -67,9 +67,15 @@ def test_capabilities_command_returns_surface_discovery() -> None:
         "names",
         "list",
     ]
-    assert payload["data"]["resources"]["groups"]["task-type"]["commands"] == ["list"]
+    assert payload["data"]["resources"]["groups"]["task-type"]["commands"] == [
+        "list",
+        "get",
+        "schema",
+    ]
     assert payload["data"]["resources"]["groups"]["template"]["commands"] == [
         "workflow",
+        "workflow-patch",
+        "workflow-instance-patch",
         "params",
         "environment",
         "cluster",

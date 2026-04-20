@@ -509,8 +509,71 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                             "template."
                         ),
                         default=False,
-                    )
+                    ),
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the workflow YAML template, without the "
+                            "JSON envelope."
+                        ),
+                        default=False,
+                    ),
                 ],
+                payload={
+                    "format": "yaml",
+                    "raw_option": "--raw",
+                    "template_command": "dsctl template workflow --raw",
+                    "target_command": "dsctl workflow create --file FILE",
+                },
+            ),
+            command(
+                "workflow-patch",
+                action="template.workflow-patch",
+                summary="Emit the stable workflow edit patch YAML template.",
+                options=[
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the workflow patch YAML template, "
+                            "without the JSON envelope."
+                        ),
+                        default=False,
+                    ),
+                ],
+                payload={
+                    "format": "yaml",
+                    "raw_option": "--raw",
+                    "template_command": "dsctl template workflow-patch --raw",
+                    "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+                },
+            ),
+            command(
+                "workflow-instance-patch",
+                action="template.workflow-instance-patch",
+                summary="Emit the stable workflow-instance edit patch YAML template.",
+                options=[
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the workflow-instance patch YAML template, "
+                            "without the JSON envelope."
+                        ),
+                        default=False,
+                    ),
+                ],
+                payload={
+                    "format": "yaml",
+                    "raw_option": "--raw",
+                    "template_command": (
+                        "dsctl template workflow-instance-patch --raw"
+                    ),
+                    "target_command": (
+                        "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+                    ),
+                },
             ),
             command(
                 "params",
@@ -561,27 +624,24 @@ def template_group(task_types: list[str]) -> dict[str, object]:
             command(
                 "task",
                 action="template.task",
-                summary="Emit one task YAML template or list supported task types.",
+                summary=(
+                    "Emit the compact task template catalog, or one task YAML "
+                    "fragment when TASK_TYPE is provided."
+                ),
                 arguments=[
                     argument(
                         "task_type",
                         value_type="string",
-                        description="Task type to template. Required unless --list.",
+                        description=(
+                            "Task type to template. Omit for the compact template "
+                            "catalog."
+                        ),
                         required=False,
                         choices=task_types,
-                        discovery_command="dsctl template task --list",
+                        discovery_command="dsctl template task",
                     )
                 ],
                 options=[
-                    option(
-                        "list",
-                        value_type="boolean",
-                        description=(
-                            "List supported stable task template types instead "
-                            "of emitting YAML."
-                        ),
-                        default=False,
-                    ),
                     option(
                         "variant",
                         value_type="string",
@@ -591,13 +651,28 @@ def template_group(task_types: list[str]) -> dict[str, object]:
                             "minimal, params, resource, post-json, "
                             "pre-post-statements, branching, condition-routing, "
                             "workflow-dependency, child-workflow, and datasource; "
-                            "inspect per-type values with `dsctl template task "
-                            "--list`."
+                            "inspect per-type values with `dsctl task-type get TYPE`."
                         ),
                         choices=supported_task_template_variants(),
-                        discovery_command="dsctl template task --list",
+                        discovery_command="dsctl task-type get TYPE",
+                    ),
+                    option(
+                        "raw",
+                        value_type="boolean",
+                        description=(
+                            "Print only the YAML task fragment, without the JSON "
+                            "envelope."
+                        ),
+                        default=False,
                     ),
                 ],
+                payload={
+                    "format": "yaml",
+                    "raw_option": "--raw",
+                    "template_command_pattern": "dsctl template task TYPE --raw",
+                    "schema_command_pattern": "dsctl task-type schema TYPE",
+                    "paste_into": "workflow YAML tasks[]",
+                },
             ),
         ],
     )
@@ -642,16 +717,31 @@ def workflow_group() -> dict[str, object]:
                         discovery_command="dsctl workflow list",
                     )
                 ],
-                options=[
-                    project_option(),
-                    option(
-                        "format",
+                options=[project_option()],
+            ),
+            command(
+                "export",
+                action="workflow.export",
+                summary="Export one workflow as an editable YAML document.",
+                arguments=[
+                    argument(
+                        "workflow",
                         value_type="string",
-                        description="Output format.",
-                        default="json",
-                        choices=["json", "yaml"],
-                    ),
+                        description=(
+                            "Workflow name or numeric code. Falls back to "
+                            "workflow context when omitted."
+                        ),
+                        required=False,
+                        selector="name_or_code",
+                        discovery_command="dsctl workflow list",
+                    )
                 ],
+                options=[project_option()],
+                payload={
+                    "format": "yaml",
+                    "output": "raw_document",
+                    "target_command": "dsctl workflow edit WORKFLOW --file FILE",
+                },
             ),
             command(
                 "describe",
@@ -662,8 +752,9 @@ def workflow_group() -> dict[str, object]:
                         "workflow",
                         value_type="string",
                         description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
+                            "Workflow name or numeric code. Required with "
+                            "--file; with --patch, falls back to workflow "
+                            "context when omitted."
                         ),
                         required=False,
                         selector="name_or_code",
@@ -701,8 +792,9 @@ def workflow_group() -> dict[str, object]:
                         value_type="path",
                         description=(
                             "Path to one workflow YAML specification file. Start "
-                            "from `dsctl template workflow` when authoring a new "
-                            "file."
+                            "from `dsctl template workflow --raw`; add task "
+                            "fragments with `dsctl template task`, and inspect "
+                            "task fields with `dsctl task-type schema TYPE`."
                         ),
                         required=True,
                     ),
@@ -731,14 +823,18 @@ def workflow_group() -> dict[str, object]:
             command(
                 "edit",
                 action="workflow.edit",
-                summary="Edit one workflow definition from a YAML patch file.",
+                summary=(
+                    "Edit one workflow definition from a YAML patch or full "
+                    "workflow YAML file."
+                ),
                 arguments=[
                     argument(
                         "workflow",
                         value_type="string",
                         description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
+                            "Workflow name or numeric code. Required with "
+                            "--file; with --patch, falls back to workflow "
+                            "context when omitted."
                         ),
                         required=False,
                         selector="name_or_code",
@@ -750,22 +846,55 @@ def workflow_group() -> dict[str, object]:
                         "patch",
                         value_type="path",
                         description=(
-                            "Path to one workflow patch YAML file. Use --dry-run "
-                            "to inspect the compiled diff before apply."
+                            "Path to one workflow patch YAML file. Use exactly "
+                            "one of --patch or --file. Inspect the current "
+                            "definition with `dsctl workflow export WORKFLOW`, "
+                            "then write only the intended "
+                            "delta. Start from `dsctl template workflow-patch "
+                            "--raw`; use --dry-run to inspect the compiled diff. "
+                            "`tasks.create[]` uses full task fragments from "
+                            "`dsctl template task`; `tasks.update[].set` uses "
+                            "partial task fields discovered with `dsctl "
+                            "task-type schema TYPE`."
                         ),
-                        required=True,
+                        required=False,
+                    ),
+                    option(
+                        "file",
+                        value_type="path",
+                        description=(
+                            "Path to one full workflow YAML file describing the "
+                            "desired definition state. Use exactly one of "
+                            "--patch or --file. Start from `dsctl workflow export "
+                            "WORKFLOW` or `dsctl template workflow "
+                            "--raw`; use --dry-run to inspect the compiled diff. "
+                            "Full-file edits match task identity by exact task "
+                            "name and do not infer renames."
+                        ),
                     ),
                     project_option(),
                     option(
                         "dry-run",
                         value_type="boolean",
                         description=(
-                            "Compile the merged workflow update payload without "
+                            "Compile the merged workflow edit payload without "
                             "sending it."
                         ),
                         default=False,
                     ),
+                    confirm_risk_option(),
                 ],
+                payload={
+                    "format": "yaml",
+                    "source_options": ["--patch PATH", "--file PATH"],
+                    "patch_template_command": "dsctl template workflow-patch --raw",
+                    "file_source_command": "dsctl workflow export WORKFLOW",
+                    "file_template_command": "dsctl template workflow --raw",
+                    "target_commands": [
+                        "dsctl workflow edit WORKFLOW --patch FILE",
+                        "dsctl workflow edit WORKFLOW --file FILE",
+                    ],
+                },
             ),
             command(
                 "online",
@@ -1381,7 +1510,10 @@ def task_group() -> dict[str, object]:
             command(
                 "update",
                 action="task.update",
-                summary="Update one task definition by name or code.",
+                summary=(
+                    "Update one task; use workflow edit for DAG changes, "
+                    "workflow-instance edit for repairs."
+                ),
                 arguments=[
                     argument(
                         "task",
@@ -1405,9 +1537,11 @@ def task_group() -> dict[str, object]:
                         "set",
                         value_type="string",
                         description=(
-                            "Inline task update in KEY=VALUE form. Repeat for "
-                            "multiple fields. Inspect `dsctl schema --command "
-                            "task.update` for supported keys and examples."
+                            "Inline KEY=VALUE update for this single task. "
+                            "Repeat as needed. Common keys: command, "
+                            "retry.times, timeout, depends_on. Run `dsctl "
+                            "schema --command task.update` for all supported "
+                            "keys."
                         ),
                         multiple=True,
                         required=True,
@@ -1446,6 +1580,24 @@ def task_group() -> dict[str, object]:
                         default=False,
                     ),
                 ],
+                payload={
+                    "scope": "workflow_definition",
+                    "resource_scope": "single_existing_task",
+                    "input_mode": "inline_set",
+                    "inspect_command": "dsctl task get TASK --workflow WORKFLOW",
+                    "supported_keys_command": "dsctl schema --command task.update",
+                    "target_command": "dsctl task update TASK --set KEY=VALUE",
+                    "use_workflow_edit_for": [
+                        "create_task",
+                        "delete_task",
+                        "rename_task",
+                        "task_type_change",
+                        "multi_task_dag_edit",
+                    ],
+                    "use_workflow_instance_edit_for": [
+                        "finished_instance_repair",
+                    ],
+                },
             ),
         ],
     )

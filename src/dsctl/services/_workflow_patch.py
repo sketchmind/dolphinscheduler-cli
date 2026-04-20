@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from dsctl.errors import UserInputError
 from dsctl.models.common import YamlObject, first_validation_error_message
+from dsctl.models.task_spec import normalize_task_params
 from dsctl.models.workflow_spec import (
     WorkflowMetadataSpec,
     WorkflowSpec,
@@ -170,6 +171,45 @@ def apply_workflow_patch(
     return merged, diff
 
 
+def reconcile_workflow_spec(
+    baseline: WorkflowSpec,
+    desired: WorkflowSpec,
+    *,
+    edge_builder: Callable[[list[WorkflowTaskSpec]], list[tuple[str, str]]],
+) -> tuple[WorkflowSpec, WorkflowPatchDiffData]:
+    """Build a desired-state workflow edit diff against one live baseline.
+
+    Full-file edits intentionally match task identity by exact task name only.
+    Rename preservation remains an explicit `workflow edit --patch` operation.
+    """
+    before_edges = set(edge_builder(baseline.tasks))
+    after_edges = set(edge_builder(desired.tasks))
+    baseline_by_name = {task.name: task for task in baseline.tasks}
+    desired_by_name = {task.name: task for task in desired.tasks}
+    shared_names = set(baseline_by_name) & set(desired_by_name)
+    added_edges = sorted(after_edges - before_edges)
+    removed_edges = sorted(before_edges - after_edges)
+
+    diff: WorkflowPatchDiffData = {
+        "workflow_updated_fields": _desired_workflow_updated_fields(
+            baseline,
+            desired,
+        ),
+        "added_tasks": sorted(set(desired_by_name) - set(baseline_by_name)),
+        "updated_tasks": sorted(
+            name
+            for name in shared_names
+            if _task_dump(baseline_by_name[name]) != _task_dump(desired_by_name[name])
+        ),
+        "renamed_tasks": [],
+        "deleted_tasks": sorted(set(baseline_by_name) - set(desired_by_name)),
+        "added_edges": [_edge_diff_item(edge) for edge in added_edges],
+        "removed_edges": [_edge_diff_item(edge) for edge in removed_edges],
+        "dag_valid": True,
+    }
+    return desired.model_copy(deep=True), diff
+
+
 def patch_has_changes(diff: WorkflowPatchDiffData) -> bool:
     """Return whether one workflow patch diff changes any persistent state."""
     return any(
@@ -183,6 +223,26 @@ def patch_has_changes(diff: WorkflowPatchDiffData) -> bool:
             diff["removed_edges"],
         )
     )
+
+
+def _desired_workflow_updated_fields(
+    baseline: WorkflowSpec,
+    desired: WorkflowSpec,
+) -> list[str]:
+    compared_fields = (
+        "name",
+        "description",
+        "timeout",
+        "global_params",
+        "execution_type",
+        "release_state",
+    )
+    return [
+        field_name
+        for field_name in compared_fields
+        if getattr(baseline.workflow, field_name)
+        != getattr(desired.workflow, field_name)
+    ]
 
 
 def _rename_map(
@@ -490,6 +550,12 @@ def _normalized_original_task(
 
 def _task_dump(task: WorkflowTaskSpec) -> dict[str, object]:
     payload = task.model_dump(mode="python", exclude_none=False)
+    if task.command is not None:
+        payload["task_params"] = normalize_task_params(
+            task.type,
+            {"rawScript": task.command},
+        )
+        payload["command"] = None
     payload["description"] = "" if task.description is None else task.description
     payload["flag"] = task_flag_value(task.flag)
     payload["worker_group"] = (
