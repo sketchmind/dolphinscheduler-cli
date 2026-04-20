@@ -361,7 +361,7 @@ def test_template_task_command_rejects_legacy_list_option() -> None:
     result = runner.invoke(app, ["template", "task", "--list"])
 
     assert result.exit_code == 2
-    assert "No such option: --list" in result.output
+    assert "No such option: --list" in normalize_cli_help(result.output)
 
 
 def test_template_task_help_points_to_type_and_variant_discovery() -> None:

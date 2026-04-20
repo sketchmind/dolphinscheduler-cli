@@ -29,7 +29,7 @@ from tests.fakes import (
     FakeWorkflowTaskRelation,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -226,9 +226,10 @@ def test_workflow_export_help_points_to_workflow_discovery() -> None:
     result = runner.invoke(app, ["workflow", "export", "--help"])
 
     assert result.exit_code == 0
-    assert "workflow list" in result.stdout
-    assert "--project" in result.stdout
-    assert "--raw" not in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "workflow list" in help_text
+    assert "--project" in help_text
+    assert "--raw" not in help_text
 
 
 def test_workflow_digest_command_returns_compact_graph_summary() -> None:
