@@ -7,6 +7,10 @@ from dsctl.models.task_spec import canonical_task_type, supported_typed_task_typ
 from dsctl.output import CommandResult, require_json_object
 from dsctl.services._serialization import require_resource_text
 from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.services.task_authoring import (
+    task_type_schema_result,
+    task_type_summary_result,
+)
 from dsctl.services.template import (
     generic_task_template_types,
     supported_task_template_types,
@@ -122,4 +126,8 @@ def _unique_task_types(task_types: Iterable[str]) -> list[str]:
     return unique_task_types
 
 
-__all__ = ["list_task_types_result"]
+__all__ = [
+    "list_task_types_result",
+    "task_type_schema_result",
+    "task_type_summary_result",
+]

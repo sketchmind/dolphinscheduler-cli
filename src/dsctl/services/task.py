@@ -93,9 +93,10 @@ _NULLABLE_TASK_UPDATE_KEYS = frozenset(
     }
 )
 _TASK_UPDATE_SCHEMA_SUGGESTION = (
-    "Run `dsctl schema` and inspect task.update option set.supported_keys. "
-    "For structural task changes such as rename, type changes, or add/remove, "
-    "use `dsctl workflow edit --patch ...`."
+    "Run `dsctl schema --command task.update` and inspect "
+    "set.supported_keys. For structural definition changes, use `dsctl "
+    "workflow edit --patch|--file`; for finished instance repair, use "
+    "`dsctl workflow-instance edit --patch|--file`."
 )
 _TASK_UPDATE_INVALID_STATE_SUGGESTION = (
     "Inspect the containing workflow definition state; if the workflow is "
@@ -168,7 +169,7 @@ def update_task_result(
     dry_run: bool = False,
     env_file: str | None = None,
 ) -> CommandResult:
-    """Update one task definition using inline `--set key=value` mutations."""
+    """Update one existing task definition using inline KEY=VALUE mutations."""
     update_spec, requested_fields = _load_task_update_set_or_error(set_values)
     return run_with_service_runtime(
         env_file,

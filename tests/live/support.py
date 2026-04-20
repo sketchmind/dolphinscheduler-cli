@@ -177,6 +177,41 @@ def run_dsctl(
     )
 
 
+def run_dsctl_raw(
+    repo_root: Path,
+    argv: list[str],
+    *,
+    env_file: Path | None = None,
+    extra_env: dict[str, str] | None = None,
+    timeout_seconds: float = 60.0,
+) -> DsctlCommandResult:
+    """Run `python -m dsctl` as a black-box subprocess without JSON parsing."""
+    command = [sys.executable, "-m", "dsctl"]
+    if env_file is not None:
+        command.extend(["--env-file", str(env_file)])
+    command.extend(argv)
+    env = _clean_dsctl_subprocess_env(os.environ, env_file=env_file)
+    env["PYTHONPATH"] = _pythonpath(repo_root, env.get("PYTHONPATH"))
+    if extra_env is not None:
+        env.update(extra_env)
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        check=False,
+        cwd=repo_root,
+        env=env,
+        text=True,
+        timeout=timeout_seconds,
+    )
+    return DsctlCommandResult(
+        argv=tuple(command),
+        exit_code=completed.returncode,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+        payload={},
+    )
+
+
 def require_mapping(
     value: object,
     *,

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 This project follows a simple public-release changelog until a stronger
 versioning policy is needed.
 
+## 0.2.0 - 2026-04-20
+
+- Added typed task authoring schema discovery for workflow YAML creation.
+- Added workflow and workflow-instance export commands for editable YAML.
+- Added workflow and workflow-instance full-document edit flows alongside patch
+  edit templates.
+- Improved schema, capabilities, README onboarding, and output-shape
+  documentation for agent and scripted use.
+
 ## 0.1.0 - 2026-04-15
 
 - Generated-first DolphinScheduler REST contract runtime.

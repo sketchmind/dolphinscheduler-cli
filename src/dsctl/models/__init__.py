@@ -41,6 +41,7 @@ from dsctl.models.task_spec import (
     TaskParamsSpec,
     canonical_task_type,
     supported_typed_task_types,
+    task_params_model_for_type,
 )
 from dsctl.models.workflow_patch import (
     WorkflowPatchDocument,
@@ -118,4 +119,5 @@ __all__ = [
     "load_workflow_patch",
     "load_workflow_spec",
     "supported_typed_task_types",
+    "task_params_model_for_type",
 ]

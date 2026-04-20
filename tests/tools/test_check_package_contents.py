@@ -27,7 +27,7 @@ def test_wheel_package_content_check_accepts_runtime_only_wheel(
     tmp_path: Path,
 ) -> None:
     checker = _load_module()
-    wheel_path = tmp_path / "dolphinscheduler_cli-0.1.0-py3-none-any.whl"
+    wheel_path = tmp_path / "dolphinscheduler_cli-0.2.0-py3-none-any.whl"
     _write_zip(
         wheel_path,
         [
@@ -35,9 +35,9 @@ def test_wheel_package_content_check_accepts_runtime_only_wheel(
             "dsctl/app.py",
             "dsctl/generated/versions/ds_3_4_1/__init__.py",
             "dsctl/py.typed",
-            "dolphinscheduler_cli-0.1.0.dist-info/METADATA",
-            "dolphinscheduler_cli-0.1.0.dist-info/entry_points.txt",
-            "dolphinscheduler_cli-0.1.0.dist-info/licenses/LICENSE",
+            "dolphinscheduler_cli-0.2.0.dist-info/METADATA",
+            "dolphinscheduler_cli-0.2.0.dist-info/entry_points.txt",
+            "dolphinscheduler_cli-0.2.0.dist-info/licenses/LICENSE",
         ],
     )
 
@@ -50,7 +50,7 @@ def test_wheel_package_content_check_rejects_development_files(
     tmp_path: Path,
 ) -> None:
     checker = _load_module()
-    wheel_path = tmp_path / "dolphinscheduler_cli-0.1.0-py3-none-any.whl"
+    wheel_path = tmp_path / "dolphinscheduler_cli-0.2.0-py3-none-any.whl"
     _write_zip(
         wheel_path,
         [
@@ -58,9 +58,9 @@ def test_wheel_package_content_check_rejects_development_files(
             "dsctl/app.py",
             "dsctl/generated/versions/ds_3_4_1/__init__.py",
             "dsctl/py.typed",
-            "dolphinscheduler_cli-0.1.0.dist-info/METADATA",
-            "dolphinscheduler_cli-0.1.0.dist-info/entry_points.txt",
-            "dolphinscheduler_cli-0.1.0.dist-info/licenses/LICENSE",
+            "dolphinscheduler_cli-0.2.0.dist-info/METADATA",
+            "dolphinscheduler_cli-0.2.0.dist-info/entry_points.txt",
+            "dolphinscheduler_cli-0.2.0.dist-info/licenses/LICENSE",
             "tools/generate_ds_contract.py",
         ],
     )
@@ -75,7 +75,7 @@ def test_sdist_package_content_check_accepts_reviewable_source_archive(
     tmp_path: Path,
 ) -> None:
     checker = _load_module()
-    sdist_path = tmp_path / "dolphinscheduler_cli-0.1.0.tar.gz"
+    sdist_path = tmp_path / "dolphinscheduler_cli-0.2.0.tar.gz"
     _write_sdist(
         sdist_path,
         [
@@ -100,7 +100,7 @@ def test_sdist_package_content_check_rejects_local_env_files(
     tmp_path: Path,
 ) -> None:
     checker = _load_module()
-    sdist_path = tmp_path / "dolphinscheduler_cli-0.1.0.tar.gz"
+    sdist_path = tmp_path / "dolphinscheduler_cli-0.2.0.tar.gz"
     _write_sdist(
         sdist_path,
         [
@@ -133,6 +133,6 @@ def _write_sdist(path: Path, names: list[str]) -> None:
     with tarfile.open(path, mode="w:gz") as archive:
         for name in names:
             payload = b""
-            item = tarfile.TarInfo(f"dolphinscheduler_cli-0.1.0/{name}")
+            item = tarfile.TarInfo(f"dolphinscheduler_cli-0.2.0/{name}")
             item.size = len(payload)
             archive.addfile(item, io.BytesIO(payload))

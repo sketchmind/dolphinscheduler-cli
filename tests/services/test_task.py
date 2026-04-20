@@ -335,9 +335,10 @@ def test_update_task_result_reports_schema_suggestion_for_unsupported_set_key(
             set_values=["unknown=1"],
         )
     assert exc_info.value.suggestion == (
-        "Run `dsctl schema` and inspect task.update option set.supported_keys. "
-        "For structural task changes such as rename, type changes, or add/remove, "
-        "use `dsctl workflow edit --patch ...`."
+        "Run `dsctl schema --command task.update` and inspect "
+        "set.supported_keys. For structural definition changes, use `dsctl "
+        "workflow edit --patch|--file`; for finished instance repair, use "
+        "`dsctl workflow-instance edit --patch|--file`."
     )
 
 
@@ -364,9 +365,10 @@ def test_update_task_result_suggests_schema_for_invalid_timeout_notify_strategy(
             set_values=["timeout_notify_strategy=FAILED"],
         )
     assert exc_info.value.suggestion == (
-        "Run `dsctl schema` and inspect task.update option set.supported_keys. "
-        "For structural task changes such as rename, type changes, or add/remove, "
-        "use `dsctl workflow edit --patch ...`."
+        "Run `dsctl schema --command task.update` and inspect "
+        "set.supported_keys. For structural definition changes, use `dsctl "
+        "workflow edit --patch|--file`; for finished instance repair, use "
+        "`dsctl workflow-instance edit --patch|--file`."
     )
 
 
@@ -729,7 +731,8 @@ def test_update_task_result_reports_schema_suggestion_for_remote_no_change_error
             set_values=["command=echo load v2"],
         )
     assert exc_info.value.suggestion == (
-        "Run `dsctl schema` and inspect task.update option set.supported_keys. "
-        "For structural task changes such as rename, type changes, or add/remove, "
-        "use `dsctl workflow edit --patch ...`."
+        "Run `dsctl schema --command task.update` and inspect "
+        "set.supported_keys. For structural definition changes, use `dsctl "
+        "workflow edit --patch|--file`; for finished instance repair, use "
+        "`dsctl workflow-instance edit --patch|--file`."
     )

@@ -154,6 +154,23 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
         row_path="data.taskTypes",
         default_columns=("taskType", "taskCategory", "isCollection"),
     ),
+    "task-type.get": DataShape(
+        kind="summary",
+        row_path="data.rows",
+        default_columns=("kind", "name", "summary", "command"),
+    ),
+    "task-type.schema": DataShape(
+        kind="summary",
+        row_path="data.fields",
+        default_columns=(
+            "path",
+            "type",
+            "required",
+            "default",
+            "choice_source",
+            "active_when",
+        ),
+    ),
     "template.environment": DataShape(
         kind="summary",
         row_path="data.lines",
@@ -171,8 +188,25 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
     "template.task": DataShape(
         kind="summary",
         row_path="data.rows",
+        default_columns=(
+            "task_type",
+            "kind",
+            "category",
+            "default_variant",
+            "next_command",
+        ),
     ),
     "template.workflow": DataShape(
+        kind="summary",
+        row_path="data.lines",
+        default_columns=("line_no", "line"),
+    ),
+    "template.workflow-patch": DataShape(
+        kind="summary",
+        row_path="data.lines",
+        default_columns=("line_no", "line"),
+    ),
+    "template.workflow-instance-patch": DataShape(
         kind="summary",
         row_path="data.lines",
         default_columns=("line_no", "line"),

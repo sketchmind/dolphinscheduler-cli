@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 SelectionSource = Literal[
     "flag",
+    "file",
     "context",
     "current_user",
     "project_preference",
