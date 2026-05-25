@@ -13,7 +13,8 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.project import (
     CreateProjectParams,
     QueryProjectListPagingParams,
 )
-from dsctl.upstream.adapters.ds_3_4_1 import DS341Adapter, _GeneratedSessionAdapter
+from dsctl.upstream.adapters.ds_3_4_1 import DS341Adapter
+from dsctl.upstream.generated_session import GeneratedSessionAdapter
 from tests.support import make_profile
 
 
@@ -886,7 +887,7 @@ def test_generated_session_reports_contract_mismatches_as_transport_errors() -> 
         profile,
         transport=httpx.MockTransport(lambda request: httpx.Response(200, json={})),
     )
-    session = _GeneratedSessionAdapter(client, base_url=profile.api_url)
+    session = GeneratedSessionAdapter(client, base_url=profile.api_url)
     unchecked_session = cast("Any", session)
 
     with pytest.raises(ApiTransportError, match="adapter contract") as exc_info:
