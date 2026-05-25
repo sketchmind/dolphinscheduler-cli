@@ -148,4 +148,4 @@ src/dsctl/upstream/adapters/ds_3_4_1.py|_is_http_form_scalar(value)|object
 src/dsctl/upstream/adapters/ds_3_4_1.py|_json_mapping(value)|object
 src/dsctl/upstream/adapters/ds_3_4_1.py|_json_mapping:return|Mapping[str, object]
 src/dsctl/upstream/enums.py|_is_generated_enum_type(candidate)|object
-src/dsctl/upstream/protocol.py|DataSourceOperations.get:return|Mapping[str, object]
+src/dsctl/upstream/protocols/governance.py|DataSourceOperations.get:return|Mapping[str, object]
