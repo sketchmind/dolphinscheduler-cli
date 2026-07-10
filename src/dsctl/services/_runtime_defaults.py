@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dsctl.errors import ConflictError, UserInputError
+from dsctl.errors import ConflictError
 from dsctl.output import require_json_object
 from dsctl.services._serialization import optional_text
 from dsctl.services.selection import SelectedValue
@@ -120,7 +120,7 @@ def load_project_preference_defaults(
             decoded_preferences,
             label="stored project preference",
         )
-    except UserInputError as error:
+    except TypeError as error:
         message = "Stored project preference must be one JSON object"
         raise ConflictError(
             message,

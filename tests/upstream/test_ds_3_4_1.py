@@ -883,9 +883,15 @@ def test_adapter_rejects_transport_and_client_together() -> None:
 
 def test_generated_session_reports_contract_mismatches_as_transport_errors() -> None:
     profile = make_profile()
+    requests_seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_seen.append(request)
+        return httpx.Response(200, json={})
+
     client = DolphinSchedulerClient(
         profile,
-        transport=httpx.MockTransport(lambda request: httpx.Response(200, json={})),
+        transport=httpx.MockTransport(handler),
     )
     session = GeneratedSessionAdapter(client, base_url=profile.api_url)
     unchecked_session = cast("Any", session)
@@ -902,6 +908,7 @@ def test_generated_session_reports_contract_mismatches_as_transport_errors() -> 
         "method": "GET",
         "url": f"{profile.api_url}/projects",
     }
+    assert requests_seen == []
 
 
 def test_adapter_project_methods_use_v2_endpoints() -> None:

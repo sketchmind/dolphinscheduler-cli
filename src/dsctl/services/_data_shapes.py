@@ -38,8 +38,8 @@ class DataShape:
 PAGE_LIST_DEFAULTS: dict[str, tuple[str, ...]] = {
     "access-token.list": ("id", "userName", "expireTime"),
     "alert-group.list": ("id", "groupName", "description"),
-    "alert-plugin.list": ("id", "pluginInstanceName", "pluginDefineName"),
-    "audit.list": ("id", "modelName", "operationType", "userName", "createTime"),
+    "alert-plugin.list": ("id", "instanceName", "alertPluginName"),
+    "audit.list": ("modelType", "modelName", "operation", "userName", "createTime"),
     "cluster.list": ("code", "name", "config"),
     "datasource.list": ("id", "name", "type", "createTime"),
     "environment.list": ("code", "name", "workerGroups", "description"),

@@ -19,7 +19,7 @@ from dsctl.cli_surface import (
     WORKER_GROUP_RESOURCE,
     WORKFLOW_RESOURCE,
 )
-from dsctl.errors import ApiResultError, NotFoundError
+from dsctl.errors import NotFoundError
 from dsctl.services._resolver_kernel import (
     collect_resolution_page_items,
     normalize_identifier,
@@ -99,6 +99,17 @@ if TYPE_CHECKING:
 
 DEFAULT_RESOLUTION_PAGE_SIZE = 100
 MAX_RESOLUTION_PAGES = 20
+PROJECT_NOT_FOUND = 10018
+PROJECT_PARAMETER_NOT_EXISTS = 10219
+QUERY_ENVIRONMENT_BY_CODE_ERROR = 1200009
+QUERY_CLUSTER_BY_CODE_ERROR = 1200028
+RESOURCE_NOT_EXIST = 20004
+ALERT_GROUP_NOT_EXIST = 10011
+USER_NOT_EXIST = 10010
+QUEUE_NOT_EXIST = 10128
+TENANT_NOT_EXIST = 10017
+WORKER_GROUP_NOT_EXIST = 1402001
+WORKFLOW_DEFINITION_NOT_EXIST = 50003
 
 __all__ = [
     "DEFAULT_RESOLUTION_PAGE_SIZE",
@@ -164,6 +175,7 @@ def project(
             project_code,
             load=lambda code: adapter.get(code=code),
             project=resolved_project,
+            not_found_result_codes=(PROJECT_NOT_FOUND,),
             not_found_message=f"Project code {project_code} was not found",
             not_found_details={"resource": PROJECT_RESOURCE, "code": project_code},
         )
@@ -219,13 +231,14 @@ def workflow(
     workflow_code = parse_code(normalized_identifier)
     if workflow_code is not None:
         not_found_message = f"Workflow code {workflow_code} was not found"
-        try:
-            payload = adapter.get(code=workflow_code)
-        except ApiResultError as exc:
-            raise NotFoundError(
-                not_found_message,
-                details={"resource": WORKFLOW_RESOURCE, "code": workflow_code},
-            ) from exc
+        payload = resolve_direct(
+            workflow_code,
+            load=lambda code: adapter.get(code=code),
+            project=lambda record: record,
+            not_found_result_codes=(WORKFLOW_DEFINITION_NOT_EXIST,),
+            not_found_message=not_found_message,
+            not_found_details={"resource": WORKFLOW_RESOURCE, "code": workflow_code},
+        )
         if payload.projectCode != project_code:
             message = (
                 f"Workflow code {workflow_code} was not found in the selected project"
@@ -283,6 +296,7 @@ def project_parameter(
             parameter_code,
             load=lambda code: adapter.get(project_code=project_code, code=code),
             project=resolved_project_parameter,
+            not_found_result_codes=(PROJECT_PARAMETER_NOT_EXISTS,),
             not_found_message=(
                 f"Project parameter code {parameter_code} was not found"
             ),
@@ -354,6 +368,7 @@ def environment(
             environment_code,
             load=lambda code: adapter.get(code=code),
             project=resolved_environment,
+            not_found_result_codes=(QUERY_ENVIRONMENT_BY_CODE_ERROR,),
             not_found_message=f"Environment code {environment_code} was not found",
             not_found_details={"resource": ENV_RESOURCE, "code": environment_code},
         )
@@ -405,6 +420,7 @@ def cluster(
             cluster_code,
             load=lambda code: adapter.get(code=code),
             project=resolved_cluster,
+            not_found_result_codes=(QUERY_CLUSTER_BY_CODE_ERROR,),
             not_found_message=f"Cluster code {cluster_code} was not found",
             not_found_details={"resource": CLUSTER_RESOURCE, "code": cluster_code},
         )
@@ -527,6 +543,7 @@ def task_group(
             task_group_id,
             load=lambda group_id: adapter.get(task_group_id=group_id),
             project=resolved_task_group,
+            not_found_result_codes=(),
             not_found_message=f"Task-group id {task_group_id} was not found",
             not_found_details={
                 "resource": TASK_GROUP_RESOURCE,
@@ -590,6 +607,7 @@ def datasource(
                 payload,
                 fallback_id=datasource_id,
             ),
+            not_found_result_codes=(RESOURCE_NOT_EXIST,),
             not_found_message=f"Datasource id {datasource_id} was not found",
             not_found_details={"resource": DATASOURCE_RESOURCE, "id": datasource_id},
         )
@@ -730,6 +748,7 @@ def alert_group(
             alert_group_id,
             load=lambda resolved_id: adapter.get(alert_group_id=resolved_id),
             project=resolved_alert_group,
+            not_found_result_codes=(ALERT_GROUP_NOT_EXIST,),
             not_found_message=f"Alert group id {alert_group_id} was not found",
             not_found_details={"resource": ALERT_GROUP_RESOURCE, "id": alert_group_id},
         )
@@ -787,6 +806,7 @@ def user(
             user_id,
             load=lambda resolved_id: adapter.get(user_id=resolved_id),
             project=resolved_user,
+            not_found_result_codes=(USER_NOT_EXIST,),
             not_found_message=f"User id {user_id} was not found",
             not_found_details={"resource": USER_RESOURCE, "id": user_id},
         )
@@ -844,6 +864,7 @@ def queue(
             queue_id,
             load=lambda resolved_id: adapter.get(queue_id=resolved_id),
             project=resolved_queue,
+            not_found_result_codes=(QUEUE_NOT_EXIST,),
             not_found_message=f"Queue id {queue_id} was not found",
             not_found_details={"resource": QUEUE_RESOURCE, "id": queue_id},
         )
@@ -895,6 +916,7 @@ def tenant(
             tenant_id,
             load=lambda resolved_id: adapter.get(tenant_id=resolved_id),
             project=resolved_tenant,
+            not_found_result_codes=(TENANT_NOT_EXIST,),
             not_found_message=f"Tenant id {tenant_id} was not found",
             not_found_details={"resource": TENANT_RESOURCE, "id": tenant_id},
         )
@@ -952,6 +974,7 @@ def worker_group(
             worker_group_id,
             load=lambda resolved_id: adapter.get(worker_group_id=resolved_id),
             project=resolved_worker_group,
+            not_found_result_codes=(WORKER_GROUP_NOT_EXIST,),
             not_found_message=f"Worker group id {worker_group_id} was not found",
             not_found_details={
                 "resource": WORKER_GROUP_RESOURCE,

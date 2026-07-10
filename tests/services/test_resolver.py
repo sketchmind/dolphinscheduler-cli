@@ -17,9 +17,11 @@ from tests.fakes import (
     FakeUserAdapter,
     FakeWorkerGroup,
     FakeWorkerGroupAdapter,
+    FakeWorkflow,
+    FakeWorkflowAdapter,
 )
 
-from dsctl.errors import NotFoundError, ResolutionError, UserInputError
+from dsctl.errors import ApiResultError, NotFoundError, ResolutionError, UserInputError
 from dsctl.services import resolver as resolver_service
 from dsctl.services.resolver import (
     alert_group,
@@ -57,6 +59,34 @@ def test_project_resolver_fetches_numeric_codes_directly() -> None:
     assert resolved.name == "batch"
 
 
+def test_project_resolver_preserves_unknown_direct_lookup_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeProjectAdapter(projects=[])
+    upstream_error = ApiResultError(
+        result_code=999999,
+        result_message="unexpected project lookup failure",
+    )
+
+    def fail_get(*, code: int) -> FakeProject:
+        del code
+        raise upstream_error
+
+    monkeypatch.setattr(adapter, "get", fail_get)
+
+    with pytest.raises(ApiResultError) as exc_info:
+        project("7", adapter=adapter)
+
+    assert exc_info.value is upstream_error
+
+
+def test_project_resolver_translates_known_missing_direct_lookup_error() -> None:
+    adapter = FakeProjectAdapter(projects=[])
+
+    with pytest.raises(NotFoundError, match="Project code 7 was not found"):
+        project("7", adapter=adapter)
+
+
 def test_project_resolver_reports_missing_names() -> None:
     adapter = FakeProjectAdapter(projects=[])
     with pytest.raises(NotFoundError, match="was not found") as exc_info:
@@ -68,6 +98,34 @@ def test_project_resolver_reports_missing_names() -> None:
         "Retry with `project list` to inspect available values, or pass the "
         "numeric code if known."
     )
+
+
+def test_workflow_resolver_preserves_permission_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeWorkflowAdapter(workflows=[], dags={})
+    upstream_error = ApiResultError(
+        result_code=30002,
+        result_message="user has no project operation privilege",
+    )
+
+    def fail_get(*, code: int) -> FakeWorkflow:
+        del code
+        raise upstream_error
+
+    monkeypatch.setattr(adapter, "get", fail_get)
+
+    with pytest.raises(ApiResultError) as exc_info:
+        resolver_service.workflow("101", adapter=adapter, project_code=7)
+
+    assert exc_info.value is upstream_error
+
+
+def test_workflow_resolver_translates_known_missing_numeric_code() -> None:
+    adapter = FakeWorkflowAdapter(workflows=[], dags={})
+
+    with pytest.raises(NotFoundError, match="Workflow code 101 was not found"):
+        resolver_service.workflow("101", adapter=adapter, project_code=7)
 
 
 def test_project_resolver_rejects_empty_identifier() -> None:

@@ -92,6 +92,18 @@ def test_alert_plugin_list_command_returns_paginated_payload() -> None:
     assert payload["data"]["totalList"][0]["instanceName"] == "slack-ops"
 
 
+def test_alert_plugin_list_command_uses_projected_fields_for_default_table() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "alert-plugin", "list"],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[0] == "id | instanceName | alertPluginName"
+    assert "slack-ops" in result.stdout
+    assert "Slack" in result.stdout
+
+
 def test_alert_plugin_get_command_resolves_name() -> None:
     result = runner.invoke(app, ["alert-plugin", "get", "slack-ops"])
 
