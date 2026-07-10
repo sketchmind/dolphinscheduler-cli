@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from copy import deepcopy
 from typing import TypeAlias, TypeGuard, cast
 
 from dsctl.errors import UserInputError
@@ -36,24 +35,3 @@ def require_json_object(value: object, *, label: str) -> JsonObject:
         message = f"{label} must contain only JSON-compatible values"
         raise UserInputError(message)
     return cast("JsonObject", value)
-
-
-def merge_json_object(
-    base: Mapping[str, JsonValue],
-    patch: Mapping[str, JsonValue],
-) -> JsonObject:
-    """Recursively merge two JSON objects without mutating the inputs."""
-    merged = deepcopy(dict(base))
-    for key, value in patch.items():
-        current = merged.get(key)
-        if isinstance(current, dict) and isinstance(value, Mapping):
-            merged[key] = merge_json_object(
-                require_json_object(current, label=f"json object merge base.{key}"),
-                require_json_object(
-                    dict(value),
-                    label=f"json object merge patch.{key}",
-                ),
-            )
-            continue
-        merged[key] = deepcopy(value)
-    return merged

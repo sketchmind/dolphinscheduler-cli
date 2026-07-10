@@ -211,12 +211,6 @@ class NotFoundError(ResolutionError):
         )
 
 
-class SearchIndexError(DsctlError):
-    """Raised when a cached search/index view is invalid."""
-
-    error_type = "search_index_error"
-
-
 class ApiTransportError(DsctlError):
     """Raised for transport-layer or response-decoding failures."""
 

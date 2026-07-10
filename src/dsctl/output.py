@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypedDict
-
-import typer
 
 from dsctl.errors import DsctlError
 from dsctl.support.json_types import is_json_value
@@ -54,18 +51,6 @@ class DryRunWarningDetail(TypedDict):
     code: str
     message: str
     request_sent: bool
-
-
-def print_json(payload: JsonValue) -> None:
-    """Render a JSON-safe payload to stdout using the standard CLI format."""
-    typer.echo(
-        json.dumps(
-            require_json_value(payload, label="json payload"),
-            indent=2,
-            sort_keys=True,
-            ensure_ascii=True,
-        )
-    )
 
 
 def success_payload(action: str, result: CommandResult) -> JsonObject:
