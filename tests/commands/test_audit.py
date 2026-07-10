@@ -58,6 +58,27 @@ def test_audit_list_command_returns_paginated_payload() -> None:
     assert payload["data"]["totalList"][0]["modelName"] == "daily-etl"
 
 
+def test_audit_list_command_uses_projected_fields_for_default_table() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--output-format",
+            "table",
+            "audit",
+            "list",
+            "--model-type",
+            "Workflow",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[0] == (
+        "modelType | modelName | operation | userName | createTime"
+    )
+    assert "daily-etl" in result.stdout
+    assert "Create" in result.stdout
+
+
 def test_audit_list_help_points_to_filter_discovery_commands() -> None:
     result = runner.invoke(app, ["audit", "list", "--help"])
 

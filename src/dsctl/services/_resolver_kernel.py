@@ -6,7 +6,7 @@ from dsctl.errors import ApiResultError, NotFoundError, ResolutionError, UserInp
 from dsctl.services.pagination import PageRecord, PageResult, collect_all_pages
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, Mapping, Sequence
+    from collections.abc import Callable, Collection, Hashable, Mapping, Sequence
 
 ResolvedT = TypeVar("ResolvedT")
 RecordT = TypeVar("RecordT")
@@ -38,6 +38,7 @@ def resolve_direct(
     *,
     load: Callable[[int], PayloadT],
     project: Callable[[PayloadT], ResolvedT],
+    not_found_result_codes: Collection[int],
     not_found_message: str,
     not_found_details: Mapping[str, object],
 ) -> ResolvedT:
@@ -45,6 +46,8 @@ def resolve_direct(
     try:
         payload = load(key)
     except ApiResultError as exc:
+        if exc.result_code not in not_found_result_codes:
+            raise
         raise NotFoundError(not_found_message, details=not_found_details) from exc
     return project(payload)
 

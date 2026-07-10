@@ -4297,7 +4297,7 @@ class FakeWorkflowAdapter:
             if workflow.code == code:
                 return workflow
         raise ApiResultError(
-            result_code=10018,
+            result_code=50003,
             result_message=f"workflow code {code} not found",
         )
 
@@ -5305,7 +5305,7 @@ class FakeWorkflowInstanceAdapter:
             if workflow_instance.id == workflow_instance_id:
                 return workflow_instance
         raise ApiResultError(
-            result_code=10211,
+            result_code=50001,
             result_message=f"workflow instance id {workflow_instance_id} not found",
         )
 

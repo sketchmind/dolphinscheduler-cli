@@ -27,6 +27,7 @@ from dsctl.errors import (
     ConfirmationRequiredError,
     InvalidStateError,
     NotFoundError,
+    PermissionDeniedError,
     UserInputError,
     WaitTimeoutError,
 )
@@ -619,6 +620,69 @@ def test_get_workflow_instance_result_reports_missing_instance(
 
     with pytest.raises(NotFoundError, match="was not found"):
         workflow_instance_service.get_workflow_instance_result(999)
+
+
+@pytest.mark.parametrize("result_code", [30001, 30002])
+def test_get_workflow_instance_result_translates_permission_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    result_code: int,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=result_code,
+        result_message="workflow instance lookup failed",
+    )
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_workflow_instance_adapter, "get", fail_get)
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        workflow_instance_service.get_workflow_instance_result(901)
+
+    assert exc_info.value.details == {
+        "resource": "workflow-instance",
+        "id": 901,
+    }
+    assert exc_info.value.suggestion == (
+        "Ask a DolphinScheduler administrator to grant access to the workflow "
+        "instance's project, then retry."
+    )
+
+
+def test_get_workflow_instance_result_preserves_unknown_api_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=999999,
+        result_message="workflow instance lookup failed",
+    )
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_workflow_instance_adapter, "get", fail_get)
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(ApiResultError) as exc_info:
+        workflow_instance_service.get_workflow_instance_result(901)
+
+    assert exc_info.value is upstream_error
 
 
 def test_stop_workflow_instance_result_requests_stop_and_returns_refresh(

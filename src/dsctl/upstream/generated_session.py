@@ -38,17 +38,23 @@ class GeneratedSessionAdapter:
     ) -> JsonValue:
         """Route a generated operation call through the shared HTTP client."""
         try:
+            relative_path = _relative_path(url, base_url=self._base_url)
+            params = _query_params_or_none(kwargs.pop("params", None))
+            json_body = _json_value_or_none(kwargs.pop("json", None))
+            form_data = _request_data_or_none(kwargs.pop("data", None))
+            content = kwargs.pop("content", None)
+            files = _multipart_files_or_none(kwargs.pop("files", None))
+            _reject_unexpected_request_kwargs(kwargs)
             payload = self._client.request_payload(
                 method,
-                _relative_path(url, base_url=self._base_url),
-                params=_query_params_or_none(kwargs.pop("params", None)),
-                json_body=_json_value_or_none(kwargs.pop("json", None)),
-                form_data=_request_data_or_none(kwargs.pop("data", None)),
-                content=kwargs.pop("content", None),
-                files=_multipart_files_or_none(kwargs.pop("files", None)),
+                relative_path,
+                params=params,
+                json_body=json_body,
+                form_data=form_data,
+                content=content,
+                files=files,
                 headers=headers,
             )
-            _reject_unexpected_request_kwargs(kwargs)
         except TypeError as exc:
             message = f"Generated request shape did not match adapter contract: {exc}"
             raise ApiTransportError(
