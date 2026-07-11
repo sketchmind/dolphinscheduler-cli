@@ -26,9 +26,21 @@ _ROOT_OPTION_EXAMPLES = {
     "--compact": "dsctl --compact <command> ...",
 }
 
+_ROOT_HELP = (
+    "Generated-first REST-only DolphinScheduler CLI.\n\n"
+    "Agent path: inspect only the command you will execute next, using its "
+    "leaf `--help` or `dsctl schema --command ACTION`. If the action is "
+    "unknown, inspect one relevant group; do not preload unrelated groups or "
+    "downstream lifecycle actions.\n\n"
+    "Successful JSON may include complete, output-bounded `next_actions` "
+    "commands. When one matches the current goal and is authorized, run that "
+    "command unchanged; never parallelize `mutates=true` with reads that "
+    "depend on that mutation."
+)
+
 app = typer.Typer(
     add_completion=False,
-    help="Generated-first REST-only DolphinScheduler CLI.",
+    help=_ROOT_HELP,
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )

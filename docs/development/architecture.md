@@ -305,6 +305,14 @@ An agent that already knows an action may jump directly to the final step.
 `--full` selects the expanded projection adapter for catalog audits and
 generators. It is not the default representation.
 
+The root help is the routing seam for callers that cannot read repository
+documentation. It directs agents to inspect only the immediate command through
+leaf help or an action-local schema, using one relevant group only when the
+action is unknown and without preloading downstream actions. Successful
+lifecycle results then carry complete, output-bounded `next_actions` commands;
+callers preserve a goal-aligned, authorized selection unchanged and serialize
+mutations before dependent reads.
+
 The canonical bounded JSON contract contains each fact once. In particular,
 action-local JSON owns one `command` object and does not carry duplicate
 renderer rows. The output adapter derives table, TSV, and explicit column
@@ -330,6 +338,8 @@ Self-description quality is evaluated at the task level rather than by response
 size alone: necessary tokens, discovery round trips, retry tokens, and
 ambiguity/misoperation risk all count. Byte-budget tests bound common responses
 without removing information needed to construct the next correct command.
+Layout compaction is secondary: semantic projection and avoiding duplicate
+representations normally save more task tokens than removing JSON whitespace.
 
 ## Dependency Rules
 

@@ -349,7 +349,8 @@ def create_command(
                 "Path to one workflow YAML specification file. Start from "
                 "`dsctl template workflow --raw`; add task fragments with "
                 "`dsctl template task`, and inspect task fields with "
-                "`dsctl task-type schema TYPE`."
+                "`dsctl task-type schema TYPE`. Validate the authored DAG with "
+                "`dsctl lint workflow FILE`."
             ),
             readable=True,
             resolve_path=True,
@@ -369,7 +370,10 @@ def create_command(
         bool,
         typer.Option(
             "--dry-run",
-            help="Compile the workflow payload without sending the create request.",
+            help=(
+                "Compile and print the full DS request without sending it. For "
+                "bounded DAG validation, use `dsctl lint workflow FILE`."
+            ),
         ),
     ] = False,
     confirm_risk: Annotated[

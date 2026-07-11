@@ -1038,6 +1038,19 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "delete",
         "lineage",
     ]
+    workflow_create = _find_command(workflow_group["commands"], "create")
+    workflow_create_options = _require_list(workflow_create["options"])
+    assert "dsctl lint workflow FILE" in _require_str(
+        _find_option(workflow_create_options, "file")["description"]
+    )
+    workflow_create_dry_run = _find_option(
+        workflow_create_options,
+        "dry-run",
+    )
+    assert "full DS request" in _require_str(workflow_create_dry_run["description"])
+    assert "bounded DAG validation" in _require_str(
+        workflow_create_dry_run["description"]
+    )
     workflow_lineage_group = _find_group(workflow_group["commands"], "lineage")
     workflow_lineage_command_names = [
         _require_dict(item)["name"]

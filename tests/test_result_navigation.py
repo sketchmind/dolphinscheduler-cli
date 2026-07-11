@@ -68,6 +68,64 @@ def test_workflow_create_online_and_online_result_suggest_run() -> None:
         )
 
 
+def test_workflow_create_dry_run_suggests_complete_apply_command() -> None:
+    actions = next_actions_for(
+        "workflow.create",
+        resolved={
+            "file": " /workflows/workflow specs/luna.yaml ",
+            "project": {"code": 7},
+            "workflow": {"name": "luna"},
+        },
+        data={"dry_run": True},
+    )
+
+    assert actions == [
+        {
+            "action": "workflow.create",
+            "command": (
+                "dsctl --compact --columns code,name,releaseState workflow create "
+                "--file ' /workflows/workflow specs/luna.yaml ' --project 7"
+            ),
+            "mutates": True,
+        }
+    ]
+    assert shlex.split(actions[0]["command"]) == [
+        "dsctl",
+        "--compact",
+        "--columns",
+        "code,name,releaseState",
+        "workflow",
+        "create",
+        "--file",
+        " /workflows/workflow specs/luna.yaml ",
+        "--project",
+        "7",
+    ]
+
+
+def test_workflow_create_dry_run_preserves_required_confirmation_token() -> None:
+    actions = next_actions_for(
+        "workflow.create",
+        resolved={
+            "file": "/workflows/luna.yaml",
+            "project": {"code": 7},
+        },
+        data={
+            "dry_run": True,
+            "schedule_preview": {"count": 5},
+            "schedule_confirmation": {
+                "required": True,
+                "token": " risk token ",
+            },
+        },
+    )
+
+    assert shlex.split(actions[0]["command"])[-2:] == [
+        "--confirm-risk",
+        " risk token ",
+    ]
+
+
 def test_workflow_run_suggests_watch_only_for_one_instance() -> None:
     expected = [
         {
@@ -251,6 +309,60 @@ def test_task_list_all_success_suggests_only_latest_available_log() -> None:
 def test_navigation_is_fail_closed_for_dry_run_unknown_or_malformed_facts() -> None:
     cases: tuple[tuple[str, JsonObject, JsonValue], ...] = (
         ("workflow.create", {}, {"dry_run": True}),
+        (
+            "workflow.create",
+            {"file": "/workflows/luna.yaml", "project": {"code": 7}},
+            {
+                "dry_run": True,
+                "schedule_preview": {"count": 5},
+                "schedule_confirmation": {"required": True, "token": None},
+            },
+        ),
+        (
+            "workflow.create",
+            {"file": "/workflows/luna.yaml", "project": {"code": 7}},
+            {"dry_run": True, "schedule_preview": {"count": 5}},
+        ),
+        (
+            "workflow.create",
+            {"file": "/workflows/luna.yaml", "project": {"code": 7}},
+            {
+                "dry_run": True,
+                "schedule_confirmation": {"required": False, "token": None},
+            },
+        ),
+        (
+            "workflow.create",
+            {"file": "/workflows/luna.yaml", "project": {"code": 7}},
+            {
+                "dry_run": True,
+                "schedule_preview": {"count": 5},
+                "schedule_confirmation": {},
+            },
+        ),
+        (
+            "workflow.create",
+            {"file": "/workflows/luna.yaml", "project": {"code": 7}},
+            {
+                "dry_run": True,
+                "schedule_preview": {"count": 5},
+                "schedule_confirmation": {"required": 0, "token": None},
+            },
+        ),
+        (
+            "workflow.create",
+            {"file": "/workflows/luna.yaml", "project": {"code": 7}},
+            {
+                "dry_run": True,
+                "schedule_preview": {"count": 5},
+                "schedule_confirmation": "invalid",
+            },
+        ),
+        (
+            "workflow.online",
+            {"project": {"code": 7}, "workflow": {"code": 101}},
+            {"dry_run": True, "releaseState": "ONLINE"},
+        ),
         ("workflow.create", {"project": {"code": 7}}, {"releaseState": "OFFLINE"}),
         ("workflow.run", {}, {"workflowInstanceIds": [True]}),
         ("workflow-instance.watch", {}, {"id": "242", "state": "SUCCESS"}),

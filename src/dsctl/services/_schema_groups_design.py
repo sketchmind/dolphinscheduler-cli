@@ -803,7 +803,9 @@ def workflow_group() -> dict[str, object]:
                             "Path to one workflow YAML specification file. Start "
                             "from `dsctl template workflow --raw`; add task "
                             "fragments with `dsctl template task`, and inspect "
-                            "task fields with `dsctl task-type schema TYPE`."
+                            "task fields with `dsctl task-type schema TYPE`. "
+                            "Validate the authored DAG with `dsctl lint workflow "
+                            "FILE`."
                         ),
                         required=True,
                         discovery_command="dsctl template workflow --raw",
@@ -822,8 +824,9 @@ def workflow_group() -> dict[str, object]:
                         "dry-run",
                         value_type="boolean",
                         description=(
-                            "Compile the workflow payload without sending the "
-                            "create request."
+                            "Compile and print the full DS request without sending "
+                            "it. For bounded DAG validation, use `dsctl lint "
+                            "workflow FILE`."
                         ),
                         default=False,
                     ),

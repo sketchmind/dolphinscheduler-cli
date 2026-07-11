@@ -6,7 +6,7 @@ from dsctl.errors import ConfigError, NotFoundError, ResolutionError
 from dsctl.output import CommandResult, dry_run_result, error_payload, success_payload
 
 if TYPE_CHECKING:
-    from dsctl.support.json_types import JsonValue
+    from dsctl.support.json_types import JsonObject, JsonValue
 else:
     JsonValue = object
 
@@ -108,6 +108,87 @@ def test_dry_run_result_appends_extra_warning_details() -> None:
             "message": "extra warning",
         },
     ]
+
+
+def test_dry_run_result_omits_duplicate_single_request_plan() -> None:
+    request = cast(
+        "JsonObject",
+        {
+            "method": "POST",
+            "path": "/projects/7/workflow-definition",
+            "form": {"name": "luna"},
+        },
+    )
+
+    result = dry_run_result(
+        method="POST",
+        path="/projects/7/workflow-definition",
+        form_data={"name": "luna"},
+        requests=[request],
+    )
+
+    data = cast("JsonObject", result.data)
+    assert data["request"] == request
+    assert "requests" not in data
+
+
+def test_dry_run_result_preserves_ordered_multi_request_plan() -> None:
+    first = cast(
+        "JsonObject",
+        {
+            "method": "POST",
+            "path": "/projects/7/workflow-definition",
+            "form": {"name": "luna"},
+        },
+    )
+    second = cast(
+        "JsonObject",
+        {
+            "method": "POST",
+            "path": "/projects/7/workflow-definition/101/release",
+            "form": {"releaseState": "ONLINE"},
+        },
+    )
+
+    result = dry_run_result(
+        method="POST",
+        path="/projects/7/workflow-definition",
+        form_data={"name": "luna"},
+        requests=[first, second],
+    )
+
+    data = cast("JsonObject", result.data)
+    assert data["request"] == first
+    assert data["requests"] == [first, second]
+
+
+def test_dry_run_result_rejects_request_plan_with_different_first_request() -> None:
+    with pytest.raises(
+        ValueError,
+        match="must begin with the primary request",
+    ):
+        dry_run_result(
+            method="POST",
+            path="/projects/7/workflow-definition",
+            form_data={"name": "luna"},
+            requests=[
+                {
+                    "method": "POST",
+                    "path": "/different",
+                    "form": {"name": "luna"},
+                }
+            ],
+        )
+
+
+def test_dry_run_result_rejects_empty_request_plan() -> None:
+    with pytest.raises(ValueError, match="request plan cannot be empty"):
+        dry_run_result(
+            method="POST",
+            path="/projects/7/workflow-definition",
+            form_data={"name": "luna"},
+            requests=[],
+        )
 
 
 def test_error_payload_includes_exception_class_for_unexpected_errors() -> None:

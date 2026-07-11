@@ -54,6 +54,17 @@ Current stable commands:
 - `dsctl task list|get|update`
 - `dsctl task-instance list|get|watch|sub-workflow|log|force-success|savepoint|stop`
 
+## Discovery Routing
+
+`dsctl --help` is the self-contained first-touch routing surface. Agents should
+inspect only the command they will execute next, using its leaf help or
+`dsctl schema --command ACTION`. When the action is unknown, they inspect one
+relevant group rather than preloading unrelated groups or downstream lifecycle
+actions. The root schema index is for discovering an unknown group.
+
+`dsctl capabilities` answers feature and version questions. It is not required
+to construct syntax for a known command.
+
 ## Naming and Selection Rules
 
 Names are opaque strings.
@@ -247,6 +258,13 @@ remote state. When the current invocation uses `--env-file`, every suggested
 command preserves its resolved path with shell-safe quoting. A suggestion does
 not grant permission to execute a mutation. When facts are missing, malformed,
 or ambiguous, the field is omitted rather than populated with guessed values.
+
+After independently checking current intent and authorization, agent callers
+should preserve a selected provided command unchanged so its bounded page size,
+projection, raw view, and explicit target are retained. Ordering communicates
+recommendation priority, not a requirement to execute every item. A
+`mutates: true` item must complete before a later read that depends on its new
+state.
 
 Error shape:
 
@@ -3139,6 +3157,11 @@ Rules:
 - `--dry-run` returns the compiled legacy DS form request inside the standard
   dry-run envelope; when additional lifecycle steps would run, `data.requests`
   contains the ordered request plan
+- a single-request dry-run omits `data.requests` because it would duplicate
+  `data.request`
+- a successful create dry-run includes a complete, mutating
+  `next_actions[].command` that applies the same file and resolved project; a
+  required schedule confirmation token is preserved in that command
 - dry-run task codes are deterministic preview values and are never sent or
   persisted; applied create first completes the same local compile preflight,
   then obtains persistent task codes from DolphinScheduler's REST API
