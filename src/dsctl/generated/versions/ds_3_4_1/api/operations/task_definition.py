@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ._base import BaseRequestsClient, BaseParamsModel
 
-from pydantic import Field, TypeAdapter
+from pydantic import Field, StrictInt, TypeAdapter
 
 from ...common.enums.release_state import ReleaseState
 from ..contracts.page_info import PageInfoTaskDefinitionLog
@@ -68,7 +68,7 @@ class TaskDefinitionOperations(BaseRequestsClient):
             path,
         params=query_params,
         )
-        return self._validate_payload(payload, TypeAdapter(list[int]))
+        return self._validate_payload(payload, TypeAdapter(list[StrictInt]))
 
     def query_task_definition_detail(
         self,

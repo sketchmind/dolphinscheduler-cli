@@ -252,6 +252,9 @@ class WorkflowInstanceOperations(Protocol):
 class TaskOperations(Protocol):
     """Bound task operations exposed to the service layer."""
 
+    def generate_codes(self, *, project_code: int, count: int) -> Sequence[int]:
+        """Allocate task-definition codes from DolphinScheduler."""
+
     def list(self, *, project_code: int, workflow_code: int) -> Sequence[TaskRecord]:
         """Return tasks belonging to one workflow."""
 

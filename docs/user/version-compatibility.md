@@ -9,19 +9,22 @@
 | Server version | Contract version | Family | Support level | Tested |
 | --- | --- | --- | --- | --- |
 | `3.4.1` | `3.4.1` | `workflow-3.3-plus` | `full` | yes |
-| `3.4.0` | `3.4.1` | `workflow-3.3-plus` | `full` | no |
-| `3.3.2` | `3.4.1` | `workflow-3.3-plus` | `full` | no |
+| `3.4.0` | `3.4.1` | `workflow-3.3-plus` | `experimental` | no |
+| `3.3.2` | `3.4.1` | `workflow-3.3-plus` | `experimental` | no |
 
 `3.3.2` and `3.4.0` currently reuse the `3.4.1` generated contract because
 static upstream controller analysis shows no drift in the stable CLI operation
-surface. If later work needs endpoints that differ between these versions, the
-runtime registry should add an exact generated contract package and adapter.
+surface. They remain experimental until live smoke testing confirms that static
+analysis. If later work needs endpoints that differ between these versions,
+the runtime registry should add an exact generated contract package and
+adapter.
 
 ## Planned Tiers
 
 | Tier | Versions | Policy |
 | --- | --- | --- |
-| Full support | `3.4.1`, `3.4.0`, `3.3.2`; `3.3.1` planned after runtime enum normalization | Stable CLI surface should work without command-level version branches. |
+| Full support | `3.4.1` | Stable CLI surface is backed by generated contracts, an adapter, error translations, and passing live smoke tests. |
+| Experimental | `3.4.0`, `3.3.2`; `3.3.1` planned after runtime enum normalization | Selectable for compatibility testing, but not yet a stable support claim. |
 | Legacy core | `3.2.2` | Adapter translates old `process-*` APIs into the CLI's `workflow` terminology; only core project/workflow/runtime/schedule commands are promised. |
 | Unsupported / future analysis | `<=3.2.1`, `3.1.x`, `3.0.x`, `2.x` | Requires separate scope and live validation before support metadata is added. |
 
@@ -38,7 +41,7 @@ The `version` command reports:
 - generated contract version
 - compatibility family
 - support level
-- supported server versions
+- selectable server versions
 
 ## Compatibility Policy
 
@@ -49,7 +52,9 @@ adapters, not commands or services.
 Static contract analysis is not enough to claim support by itself. A version is
 considered supported only after its generated package, handwritten adapter,
 service-level error translations, and live smoke tests pass for that
-DolphinScheduler release.
+DolphinScheduler release. Registry entries marked `full` or `legacy_core` must
+therefore also be marked tested; untested selectable versions use
+`experimental`.
 
 For developer workflow around contract diffs, see
 [Codegen](../development/codegen.md).

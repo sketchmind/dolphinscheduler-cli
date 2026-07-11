@@ -22,4 +22,5 @@ def make_profile(
 def normalize_cli_help(text: str) -> str:
     """Return Typer/Rich help text in a stable form for substring assertions."""
     plain = ANSI_ESCAPE_PATTERN.sub("", text)
-    return re.sub(r"\s+", " ", plain)
+    without_table_borders = re.sub(r"[\u2500-\u257f]+", " ", plain)
+    return re.sub(r"\s+", " ", without_table_borders)

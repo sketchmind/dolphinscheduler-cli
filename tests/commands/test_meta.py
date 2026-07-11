@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import _misplaced_root_option, app
@@ -53,37 +54,44 @@ def test_misplaced_root_option_detection() -> None:
     assert _misplaced_root_option(["--output-format", "table", "version"]) is None
 
 
-def test_version_command_honors_env_file_ds_version() -> None:
-    with runner.isolated_filesystem():
-        Path("cluster.env").write_text("DS_VERSION=3.3.2\n", encoding="utf-8")
+@pytest.mark.parametrize("ds_version", ["3.3.2", "3.4.0"])
+def test_version_command_marks_untested_versions_experimental(
+    ds_version: str,
+    isolated_cwd: Path,
+) -> None:
+    (isolated_cwd / "cluster.env").write_text(
+        f"DS_VERSION={ds_version}\n",
+        encoding="utf-8",
+    )
 
-        result = runner.invoke(app, ["--env-file", "cluster.env", "version"])
+    result = runner.invoke(app, ["--env-file", "cluster.env", "version"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["data"]["ds"] == "3.3.2"
-    assert payload["data"]["selected_ds_version"] == "3.3.2"
+    assert payload["data"]["ds"] == ds_version
+    assert payload["data"]["selected_ds_version"] == ds_version
     assert payload["data"]["contract_version"] == "3.4.1"
     assert payload["data"]["family"] == "workflow-3.3-plus"
+    assert payload["data"]["support_level"] == "experimental"
 
 
-def test_context_command_reads_env_file_and_project_context() -> None:
-    with runner.isolated_filesystem():
-        Path("cluster.env").write_text(
-            "DS_API_URL=http://example.test/dolphinscheduler\n"
-            "DS_API_TOKEN=secret-token\n",
-            encoding="utf-8",
-        )
-        Path(".dsctl-context.yaml").write_text(
-            "project: etl-prod\nworkflow: daily-etl\n",
-            encoding="utf-8",
-        )
+def test_context_command_reads_env_file_and_project_context(
+    isolated_cwd: Path,
+) -> None:
+    (isolated_cwd / "cluster.env").write_text(
+        "DS_API_URL=http://example.test/dolphinscheduler\nDS_API_TOKEN=secret-token\n",
+        encoding="utf-8",
+    )
+    (isolated_cwd / ".dsctl-context.yaml").write_text(
+        "project: etl-prod\nworkflow: daily-etl\n",
+        encoding="utf-8",
+    )
 
-        result = runner.invoke(
-            app,
-            ["--env-file", "cluster.env", "context"],
-            env={"XDG_CONFIG_HOME": str(Path("xdg").resolve())},
-        )
+    result = runner.invoke(
+        app,
+        ["--env-file", "cluster.env", "context"],
+        env={"XDG_CONFIG_HOME": str(isolated_cwd / "xdg")},
+    )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)

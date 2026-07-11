@@ -29,6 +29,7 @@ from dsctl.config import ClusterProfile
 from dsctl.context import SessionContext
 from dsctl.errors import (
     ApiResultError,
+    ApiTransportError,
     ConfirmationRequiredError,
     ConflictError,
     InvalidStateError,
@@ -36,7 +37,6 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.models import WorkflowSpec
-from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services import runtime as runtime_service
 from dsctl.services import workflow as workflow_service
 
@@ -1007,7 +1007,11 @@ def test_create_workflow_result_can_dry_run_compiled_legacy_request(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7001, 7002])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1165,7 +1169,11 @@ def test_create_workflow_result_dry_run_warns_on_risky_time_parameter_format(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7101])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1212,7 +1220,11 @@ def test_create_workflow_result_compiles_switch_branch_names_to_codes(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7501, 7502, 7503])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1296,7 +1308,11 @@ def test_create_workflow_result_compiles_task_group_settings(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7551])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1369,7 +1385,11 @@ def test_create_workflow_result_compiles_extended_task_execution_fields(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7561])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1554,7 +1574,11 @@ def test_create_workflow_result_compiles_conditions_branch_names_to_codes(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7601, 7602, 7603, 7604])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1679,8 +1703,7 @@ def test_create_workflow_result_creates_and_can_online_workflow(
     fake_task_adapter: FakeTaskAdapter,
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
-    codes = iter([7101])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    fake_task_adapter.generated_codes = [7101]
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1709,8 +1732,61 @@ tasks:
     assert data["name"] == "nightly-sync"
     assert data["releaseState"] == "ONLINE"
     assert fake_workflow_adapter.create_calls[0]["name"] == "nightly-sync"
+    assert fake_task_adapter.generate_code_calls == [{"project_code": 7, "count": 1}]
+    created_task_definitions = json.loads(
+        str(fake_workflow_adapter.create_calls[0]["task_definition_json"])
+    )
+    assert [task["code"] for task in created_task_definitions] == [7101]
     assert fake_workflow_adapter.release_calls[-1][1] == "ONLINE"
     assert _mapping(result.resolved["workflow"])["source"] == "file"
+
+
+def test_create_workflow_result_translates_task_code_allocation_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    fake_task_adapter.generate_codes_error = ApiResultError(
+        result_code=12345,
+        result_message="code service unavailable",
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+    )
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: nightly-sync
+  project: etl-prod
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ApiTransportError,
+        match="could not allocate task codes",
+    ) as exc_info:
+        workflow_service.create_workflow_result(file=spec_path)
+
+    assert exc_info.value.details == {
+        "resource": "project",
+        "project_code": 7,
+        "action": "workflow.create",
+        "task_code_count": 1,
+        "result_code": 12345,
+        "result_message": "code service unavailable",
+    }
+    assert fake_workflow_adapter.create_calls == []
 
 
 def test_create_workflow_result_suggests_review_for_remote_validation_error(
@@ -1860,7 +1936,11 @@ def test_create_workflow_result_can_dry_run_schedule_plan(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7301])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1981,7 +2061,11 @@ def test_create_workflow_result_accepts_confirmation_and_emits_warning_details(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7402])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     fake_schedule_adapter.preview_times_value = [
         "2024-01-01 00:00:00",
         "2024-01-01 00:05:00",
@@ -2097,7 +2181,11 @@ def test_create_workflow_result_can_create_and_online_schedule(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7401])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -2175,6 +2263,7 @@ tasks:
         "Review task names and task references, then retry with workflow dry-run "
         "before applying the change."
     )
+    assert fake_task_adapter.generate_code_calls == []
 
 
 def test_create_workflow_result_reports_unknown_task_dependency_with_suggestion(
@@ -2606,7 +2695,11 @@ def test_edit_workflow_result_dry_run_emits_diff_and_update_request(
     fake_task_adapter: FakeTaskAdapter,
 ) -> None:
     codes = iter([8101, 8102, 8103])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -2766,6 +2859,67 @@ patch:
     ]
 
 
+def test_edit_workflow_result_allocates_codes_only_for_new_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    offline_workflow = replace(
+        fake_workflow_adapter.workflows[0],
+        release_state_value=FakeEnumValue("OFFLINE"),
+        schedule_release_state_value=FakeEnumValue("OFFLINE"),
+    )
+    workflow_adapter = replace(
+        fake_workflow_adapter,
+        workflows=[offline_workflow, *fake_workflow_adapter.workflows[1:]],
+        dags={
+            **fake_workflow_adapter.dags,
+            101: replace(
+                fake_workflow_adapter.dags[101],
+                workflow_definition_value=offline_workflow,
+            ),
+        },
+    )
+    fake_task_adapter.generated_codes = [8_101]
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=fake_task_adapter,
+    )
+    patch_path = tmp_path / "workflow.patch.yaml"
+    patch_path.write_text(
+        """
+patch:
+  tasks:
+    create:
+      - name: verify
+        type: SHELL
+        command: echo verify
+        depends_on: [load]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    workflow_service.edit_workflow_result(
+        "daily-sync",
+        patch=patch_path,
+        project="etl-prod",
+    )
+    task_definitions = json.loads(
+        str(workflow_adapter.update_calls[0]["task_definition_json"])
+    )
+
+    assert fake_task_adapter.generate_code_calls == [{"project_code": 7, "count": 1}]
+    assert [(task["name"], task["code"]) for task in task_definitions] == [
+        ("extract", 201),
+        ("load", 202),
+        ("verify", 8_101),
+    ]
+
+
 def test_edit_workflow_result_full_file_dry_run_reconciles_desired_state(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -2774,7 +2928,11 @@ def test_edit_workflow_result_full_file_dry_run_reconciles_desired_state(
     fake_task_adapter: FakeTaskAdapter,
 ) -> None:
     codes = iter([8101])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -3036,7 +3194,11 @@ def test_edit_workflow_result_dry_run_compiles_extended_task_execution_fields(
     fake_task_adapter: FakeTaskAdapter,
 ) -> None:
     codes = iter([8201, 8202])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -3538,6 +3700,7 @@ patch:
         },
     ]
     assert fake_workflow_adapter.update_calls == []
+    assert fake_task_adapter.generate_code_calls == []
 
 
 def test_edit_workflow_result_emits_schedule_impact_warning_details_after_apply(
@@ -3832,7 +3995,11 @@ def test_workflow_create_get_edit_roundtrip_preserves_switch_and_generic_tasks(
             9304,
         ]
     )
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     workflow_adapter = FakeWorkflowAdapter(workflows=[], dags={})
     _install_workflow_service_fakes(
         monkeypatch,

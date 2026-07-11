@@ -101,7 +101,8 @@ def use_workflow_command(
         typer.Argument(
             help=(
                 "Workflow name to persist for later commands. Run `dsctl "
-                "workflow list` in the selected project to discover values."
+                "workflow list` in the selected project to discover values. "
+                "Requires an effective project and stores it in the same scope."
             ),
         ),
     ] = None,
@@ -121,7 +122,7 @@ def use_workflow_command(
         ),
     ] = "project",
 ) -> None:
-    """Set or clear the workflow context."""
+    """Set or clear workflow context; setting requires an effective project."""
     if clear:
         emit_result(
             "use.workflow",

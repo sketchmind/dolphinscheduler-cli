@@ -1,17 +1,33 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
+import pytest
 from tests.support import make_profile
 
 from dsctl.context import SessionContext
 from dsctl.errors import ApiHttpError, ApiTransportError, ConfigError
 from dsctl.services import doctor as doctor_service
+from dsctl.upstream import get_version_support
 
 if TYPE_CHECKING:
     from _pytest.monkeypatch import MonkeyPatch
+
+
+@pytest.fixture(autouse=True)
+def _isolate_context_layers(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        doctor_service,
+        "read_context_layer",
+        _empty_context_layer,
+    )
+
+
+def _empty_context_layer(*, scope: str = "project") -> SessionContext:
+    del scope
+    return SessionContext()
 
 
 @dataclass
@@ -133,6 +149,165 @@ def test_get_doctor_result_reports_ok_profile_context_adapter_and_api(
         "queueName": "default",
         "timeZone": "Asia/Shanghai",
     }
+
+
+def test_context_check_warns_when_shadowed_user_layer_is_invalid(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        doctor_service,
+        "load_context",
+        lambda: SessionContext(project="repo-project"),
+    )
+
+    def read_layer(*, scope: str = "project") -> SessionContext:
+        if scope == "user":
+            message = "User context workflow requires project"
+            raise ConfigError(
+                message,
+                details={"scope": "user"},
+                suggestion="Run `dsctl use --clear --scope user`.",
+            )
+        return SessionContext(project="repo-project")
+
+    monkeypatch.setattr(doctor_service, "read_context_layer", read_layer)
+
+    check = doctor_service._context_check()
+
+    assert check["status"] == "warning"
+    assert check["message"] == (
+        "Effective context loaded, but a persisted context layer is invalid."
+    )
+    assert check["suggestion"] == "Run `dsctl use --clear --scope user`."
+    details = _mapping(check["details"])
+    assert details["project"] == "repo-project"
+    assert _mapping(details["layer_errors"])["user"] == {
+        "type": "config_error",
+        "message": "User context workflow requires project",
+        "details": {"scope": "user"},
+        "suggestion": "Run `dsctl use --clear --scope user`.",
+    }
+
+
+def test_context_check_reports_every_invalid_layer_when_effective_load_fails(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    project_error = ConfigError(
+        "Project context is invalid",
+        details={"scope": "project"},
+        suggestion="Clear project context.",
+    )
+    monkeypatch.setattr(
+        doctor_service,
+        "load_context",
+        lambda: (_ for _ in ()).throw(project_error),
+    )
+
+    def read_layer(*, scope: str = "project") -> SessionContext:
+        message = f"{scope.title()} context is invalid"
+        raise ConfigError(
+            message,
+            details={"scope": scope},
+            suggestion=f"Clear {scope} context.",
+        )
+
+    monkeypatch.setattr(doctor_service, "read_context_layer", read_layer)
+
+    check = doctor_service._context_check()
+
+    assert check["status"] == "error"
+    assert check["suggestion"] == "Clear project context."
+    details = _mapping(check["details"])
+    layer_errors = _mapping(details["layer_errors"])
+    assert set(layer_errors) == {"project", "user"}
+    assert _mapping(layer_errors["project"])["message"] == (
+        "Project context is invalid"
+    )
+    assert _mapping(layer_errors["user"])["message"] == "User context is invalid"
+
+
+def test_get_doctor_result_warns_for_experimental_unverified_target(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        doctor_service,
+        "load_profile",
+        lambda env_file=None: make_profile(ds_version="3.3.2"),
+    )
+    monkeypatch.setattr(doctor_service, "load_context", SessionContext)
+    monkeypatch.setattr(
+        doctor_service,
+        "DolphinSchedulerClient",
+        lambda profile: FakeDoctorClient(),
+    )
+    monkeypatch.setattr(
+        doctor_service,
+        "_current_user_defaults_details",
+        lambda profile: {
+            "userName": "alice",
+            "tenantCode": "tenant-prod",
+            "queue": "default",
+            "queueName": "default",
+            "timeZone": "Asia/Shanghai",
+        },
+    )
+
+    result = doctor_service.get_doctor_result()
+    data = _mapping(result.data)
+    adapter_check = _mapping(_sequence(data["checks"])[2])
+    message = (
+        "DS 3.3.2 support is experimental and has not passed "
+        "release-specific live smoke testing."
+    )
+    suggestion = (
+        "Set `DS_VERSION=3.4.1` and rerun `dsctl doctor`, or complete the "
+        "DS 3.3.2 live smoke suite before relying on this target."
+    )
+
+    assert data["status"] == "warning"
+    assert data["summary"] == {"ok": 4, "warning": 1, "error": 0}
+    assert result.warnings == [f"doctor adapter: {message}"]
+    assert result.warning_details == [
+        {
+            "code": "doctor_check_not_ok",
+            "check": "adapter",
+            "status": "warning",
+            "message": message,
+            "suggestion": suggestion,
+        }
+    ]
+    assert adapter_check["status"] == "warning"
+    assert adapter_check["message"] == message
+    assert adapter_check["suggestion"] == suggestion
+    assert _mapping(adapter_check["details"]) == {
+        "ds_version": "3.3.2",
+        "contract_version": "3.4.1",
+        "family": "workflow-3.3-plus",
+        "support_level": "experimental",
+        "tested": False,
+        "supported_versions": ["3.3.2", "3.4.0", "3.4.1"],
+    }
+
+
+def test_adapter_check_warns_for_experimental_target_with_test_evidence(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    support = replace(
+        get_version_support("3.3.2"),
+        tested=True,
+    )
+    monkeypatch.setattr(
+        doctor_service,
+        "get_version_support",
+        lambda _version: support,
+    )
+
+    check = doctor_service._adapter_check(make_profile(ds_version="3.3.2"))
+
+    assert check["status"] == "warning"
+    assert "support is experimental" in check["message"]
+    assert _mapping(check["details"])["tested"] is True
+    assert check["suggestion"] is not None
 
 
 def test_get_doctor_result_reports_profile_error_and_skips_api(

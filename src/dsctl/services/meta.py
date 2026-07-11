@@ -6,7 +6,7 @@ from dsctl.upstream import SUPPORTED_VERSIONS, get_version_support
 
 
 def get_version_result(*, env_file: str | None = None) -> CommandResult:
-    """Return CLI and supported DolphinScheduler version metadata."""
+    """Return CLI and selectable DolphinScheduler version metadata."""
     selected_version = load_selected_ds_version(env_file)
     support = get_version_support(selected_version)
     return CommandResult(

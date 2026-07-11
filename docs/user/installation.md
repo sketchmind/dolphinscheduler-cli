@@ -82,7 +82,7 @@ See [Configuration](configuration.md) for the full profile format.
 
 `dsctl version` does not require a live DolphinScheduler connection. It reports
 the CLI version, selected DolphinScheduler version, adapter family, generated
-contract version, and supported server versions.
+contract version, and selectable server versions.
 
 `dsctl doctor` performs local profile checks and remote health checks. It
 requires a configured DolphinScheduler API URL and token.

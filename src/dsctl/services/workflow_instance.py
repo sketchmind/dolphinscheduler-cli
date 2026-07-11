@@ -25,6 +25,10 @@ from dsctl.services._serialization import (
     serialize_task_instance,
     serialize_workflow_instance,
 )
+from dsctl.services._task_code_allocation import (
+    allocate_server_task_codes,
+    preview_task_codes,
+)
 from dsctl.services._validation import (
     optional_ds_datetime,
     require_non_empty_text,
@@ -71,6 +75,7 @@ from dsctl.upstream.runtime_enums import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from dsctl.models.workflow_patch import WorkflowPatchSpec
@@ -1106,6 +1111,7 @@ def _edit_workflow_instance_result(
         project=resolved_project,
         patch=patch,
         spec=spec,
+        allocate_task_codes=preview_task_codes,
     )
     compiled_payload = mutation.payload
     merged_spec = mutation.merged_spec
@@ -1176,6 +1182,19 @@ def _edit_workflow_instance_result(
         workflow_code=require_workflow_definition_code(payload.workflowDefinitionCode),
         sync_definition=sync_definition,
     )
+
+    compiled_payload = _compile_workflow_instance_edit_mutation(
+        dag=dag,
+        project=resolved_project,
+        patch=patch,
+        spec=spec,
+        allocate_task_codes=lambda count: allocate_server_task_codes(
+            count,
+            adapter=runtime.upstream.tasks,
+            project_code=project_code,
+            action="workflow-instance.edit",
+        ),
+    ).payload
 
     try:
         saved_workflow = runtime.upstream.workflow_instances.update(
@@ -1518,10 +1537,12 @@ def _compile_workflow_instance_edit_mutation(
     project: ResolvedProject,
     patch: WorkflowPatchSpec | None,
     spec: WorkflowSpec | None,
+    allocate_task_codes: Callable[[int], Sequence[int]],
 ) -> WorkflowMutationPlan:
     if patch is not None:
         return compile_workflow_mutation_plan(
             dag,
+            allocate_task_codes=allocate_task_codes,
             project=project,
             patch=patch,
             release_state=None,
@@ -1533,6 +1554,7 @@ def _compile_workflow_instance_edit_mutation(
         raise RuntimeError(message)
     mutation = compile_workflow_file_mutation_plan(
         dag,
+        allocate_task_codes=allocate_task_codes,
         project=project,
         desired=spec,
         release_state=None,

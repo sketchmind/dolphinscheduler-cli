@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from dsctl.client import BinaryResponse
 from dsctl.context import SessionContext
-from dsctl.errors import ApiResultError
+from dsctl.errors import ApiResultError, ApiTransportError
 from dsctl.services.runtime import ServiceRuntime
 from dsctl.support.json_types import is_json_value
 
@@ -4878,8 +4878,27 @@ def _require_int(value: object) -> int:
 @dataclass
 class FakeTaskAdapter:
     workflow_tasks: dict[int, list[FakeTaskDefinition]]
+    generated_codes: list[int] | None = None
+    generate_codes_error: ApiResultError | ApiTransportError | None = None
+    generate_code_calls: list[dict[str, int]] = field(default_factory=list)
     update_errors_by_code: dict[int, ApiResultError] | None = None
     update_calls: list[dict[str, object]] = field(default_factory=list)
+
+    def generate_codes(self, *, project_code: int, count: int) -> list[int]:
+        self.generate_code_calls.append({"project_code": project_code, "count": count})
+        if self.generate_codes_error is not None:
+            raise self.generate_codes_error
+        if self.generated_codes is None:
+            start = 8_000_000_000_000_000_000 + sum(
+                call["count"] for call in self.generate_code_calls[:-1]
+            )
+            return list(range(start, start + count))
+        if len(self.generated_codes) < count:
+            message = "FakeTaskAdapter has too few injected task codes"
+            raise AssertionError(message)
+        task_codes = self.generated_codes[:count]
+        del self.generated_codes[:count]
+        return task_codes
 
     def list(
         self,

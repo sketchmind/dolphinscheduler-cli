@@ -7,7 +7,6 @@ from typer.testing import CliRunner
 from dsctl.app import app
 from dsctl.context import SessionContext
 from dsctl.errors import ApiResultError
-from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services import runtime as runtime_service
 from dsctl.services import workflow as workflow_service
 from tests.fakes import (
@@ -217,9 +216,12 @@ def test_workflow_get_help_points_to_workflow_discovery() -> None:
     result = runner.invoke(app, ["workflow", "get", "--help"])
 
     assert result.exit_code == 0
-    assert "workflow list" in result.stdout
-    assert "--raw" not in result.stdout
-    assert "--format" not in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "workflow list" in help_text
+    assert "context only when project also comes from" in help_text
+    assert "otherwise pass WORKFLOW" in help_text
+    assert "--raw" not in help_text
+    assert "--format" not in help_text
 
 
 def test_workflow_export_help_points_to_workflow_discovery() -> None:
@@ -304,7 +306,11 @@ def test_workflow_create_command_can_dry_run_yaml_spec(
     tmp_path: Path,
 ) -> None:
     codes = iter([7201])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
         """
@@ -337,7 +343,11 @@ def test_workflow_create_command_can_dry_run_schedule_plan(
     tmp_path: Path,
 ) -> None:
     codes = iter([7202])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
         """

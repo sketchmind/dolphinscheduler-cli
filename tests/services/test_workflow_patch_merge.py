@@ -250,11 +250,9 @@ def _expected_compiled_task_params(
 
 @pytest.mark.parametrize("task_type", supported_task_template_types())
 def test_apply_workflow_patch_updates_template_task_payloads(
-    monkeypatch: pytest.MonkeyPatch,
     task_type: str,
 ) -> None:
     codes = iter(range(8001, 8100))
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
     template = task_template_result(task_type)
     data = template.data
     assert isinstance(data, dict)
@@ -285,7 +283,10 @@ def test_apply_workflow_patch_updates_template_task_payloads(
         patch,
         edge_builder=workflow_compile_service.workflow_edges,
     )
-    payload = workflow_compile_service.compile_workflow_create_payload(merged)
+    payload = workflow_compile_service.compile_workflow_create_payload(
+        merged,
+        allocate_task_codes=lambda count: [next(codes) for _ in range(count)],
+    )
     task_definitions = json.loads(payload["taskDefinitionJson"])
     compiled_primary = task_definitions[0]
 
@@ -303,10 +304,7 @@ def test_apply_workflow_patch_updates_template_task_payloads(
         assert merged.tasks[0].task_params == patch_set["task_params"]
 
 
-def test_apply_workflow_patch_updates_extended_task_execution_fields(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: 8101)
+def test_apply_workflow_patch_updates_extended_task_execution_fields() -> None:
     baseline = WorkflowSpec.model_validate(
         {
             "workflow": {"name": "patched-workflow"},
@@ -348,7 +346,10 @@ def test_apply_workflow_patch_updates_extended_task_execution_fields(
         patch,
         edge_builder=workflow_compile_service.workflow_edges,
     )
-    payload = workflow_compile_service.compile_workflow_create_payload(merged)
+    payload = workflow_compile_service.compile_workflow_create_payload(
+        merged,
+        allocate_task_codes=lambda count: [8101] * count,
+    )
     task_definitions = json.loads(payload["taskDefinitionJson"])
 
     assert diff["updated_tasks"] == ["extract"]
@@ -388,10 +389,7 @@ def test_apply_workflow_patch_updates_extended_task_execution_fields(
     ]
 
 
-def test_apply_workflow_patch_treats_semantic_defaults_as_no_change(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: 8101)
+def test_apply_workflow_patch_treats_semantic_defaults_as_no_change() -> None:
     baseline = WorkflowSpec.model_validate(
         {
             "workflow": {"name": "patched-workflow"},

@@ -24,6 +24,7 @@ from dsctl.services._workflow_patch import (
 from dsctl.services._workflow_render import workflow_live_baseline
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from dsctl.models.workflow_patch import WorkflowPatchSpec
@@ -149,6 +150,7 @@ def load_workflow_instance_edit_spec_or_error(path: Path) -> WorkflowSpec:
 def compile_workflow_mutation_plan(
     dag: WorkflowDagRecord,
     *,
+    allocate_task_codes: Callable[[int], Sequence[int]],
     project: ResolvedProject,
     patch: WorkflowPatchSpec,
     release_state: str | None,
@@ -162,8 +164,12 @@ def compile_workflow_mutation_plan(
     )
     payload = compile_workflow_update_payload(
         merged_spec,
+        allocate_task_codes=allocate_task_codes,
         release_state=release_state,
         task_identities=patch_task_identities(live_baseline.task_identities, diff=diff),
+        reserved_task_codes={
+            identity.code for identity in live_baseline.task_identities.values()
+        },
     )
     return WorkflowMutationPlan(
         merged_spec=merged_spec,
@@ -177,6 +183,7 @@ def compile_workflow_mutation_plan(
 def compile_workflow_file_mutation_plan(
     dag: WorkflowDagRecord,
     *,
+    allocate_task_codes: Callable[[int], Sequence[int]],
     project: ResolvedProject,
     desired: WorkflowSpec,
     release_state: str | None,
@@ -191,11 +198,15 @@ def compile_workflow_file_mutation_plan(
     )
     payload = compile_workflow_update_payload(
         merged_spec,
+        allocate_task_codes=allocate_task_codes,
         release_state=release_state,
         task_identities=_desired_task_identities(
             live_baseline.task_identities,
             desired=merged_spec,
         ),
+        reserved_task_codes={
+            identity.code for identity in live_baseline.task_identities.values()
+        },
     )
     return WorkflowMutationPlan(
         merged_spec=merged_spec,

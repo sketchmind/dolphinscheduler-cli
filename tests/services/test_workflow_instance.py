@@ -1338,6 +1338,52 @@ patch:
     assert _mapping(result.resolved["workflow"])["version"] == 2
 
 
+def test_edit_workflow_instance_allocates_codes_for_new_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    task_adapter = FakeTaskAdapter(
+        workflow_tasks={},
+        generated_codes=[8_201],
+    )
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_adapter=task_adapter,
+    )
+    patch_file = tmp_path / "workflow-instance.patch.yaml"
+    patch_file.write_text(
+        """
+patch:
+  tasks:
+    create:
+      - name: verify
+        type: SHELL
+        command: echo verify
+        depends_on: [load]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    workflow_instance_service.edit_workflow_instance_result(
+        902,
+        patch=patch_file,
+    )
+    definition_payload = json.loads(
+        str(fake_workflow_instance_adapter.update_calls[0]["task_definition_json"])
+    )
+
+    assert task_adapter.generate_code_calls == [{"project_code": 7, "count": 1}]
+    assert [(task["name"], task["code"]) for task in definition_payload] == [
+        ("extract", 201),
+        ("load", 202),
+        ("verify", 8_201),
+    ]
+
+
 def test_edit_workflow_instance_result_dry_run_compiles_full_file(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

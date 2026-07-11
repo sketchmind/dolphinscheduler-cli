@@ -55,20 +55,29 @@ def require_workflow_selection(
     explicit_workflow: str | None,
     *,
     runtime: ServiceRuntime,
+    project_selection: SelectedValue,
 ) -> SelectedValue:
-    """Resolve the effective workflow name from flag or context."""
+    """Resolve workflow from a flag or the matching project context tuple."""
     normalized_flag = _normalized_text(explicit_workflow)
     if normalized_flag is not None:
         return SelectedValue(value=normalized_flag, source="flag")
 
-    normalized_context = _normalized_text(runtime.context.workflow)
-    if normalized_context is not None:
-        return SelectedValue(value=normalized_context, source="context")
+    if project_selection.source == "context":
+        normalized_context = _normalized_text(runtime.context.workflow)
+        if normalized_context is not None:
+            return SelectedValue(value=normalized_context, source="context")
+        message = "Workflow is required; pass --workflow or set workflow context"
+        suggestion = "Pass --workflow NAME or run `dsctl use workflow NAME`."
+    else:
+        message = "Workflow is required for the explicitly selected project"
+        suggestion = (
+            "Pass --workflow NAME for the selected project, or remove the explicit "
+            "project selection to use the complete stored context tuple."
+        )
 
-    message = "Workflow is required; pass --workflow or set workflow context"
     raise UserInputError(
         message,
-        suggestion="Pass --workflow NAME or run `dsctl use workflow NAME`.",
+        suggestion=suggestion,
     )
 
 

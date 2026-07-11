@@ -4,10 +4,10 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, TypeGuard, cast
 from urllib.parse import urlsplit
 
-from dsctl.errors import ApiTransportError
+from dsctl.errors import ApiResultError, ApiTransportError
 
 if TYPE_CHECKING:
-    from typing import Unpack
+    from typing import NoReturn, Unpack
 
     from dsctl.client import (
         DolphinSchedulerClient,
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
         MultipartFiles,
     )
     from dsctl.generated.versions.ds_3_4_1.api.operations._base import RequestKwargs
-    from dsctl.support.json_types import JsonValue
+    from dsctl.support.json_types import JsonObject, JsonValue
 
 
 class GeneratedSessionAdapter:
@@ -65,6 +65,51 @@ class GeneratedSessionAdapter:
                 },
             ) from exc
         return payload
+
+    def raise_payload_error(
+        self,
+        message: str,
+        *,
+        validation_error_count: int | None = None,
+        cause: Exception | None = None,
+    ) -> NoReturn:
+        """Translate one generated response-contract failure."""
+        details: JsonObject = {"validation_message": message}
+        if validation_error_count is not None:
+            details["validation_error_count"] = validation_error_count
+        error = ApiTransportError(
+            (
+                "DolphinScheduler response payload did not match the generated "
+                "API contract."
+            ),
+            details=details,
+            source={
+                "kind": "remote",
+                "system": "dolphinscheduler",
+                "layer": "response",
+            },
+            suggestion=(
+                "Verify DS_VERSION matches the server, check DolphinScheduler "
+                "API health, then retry."
+            ),
+        )
+        if cause is None:
+            raise error
+        raise error from cause
+
+    def raise_result_error(
+        self,
+        *,
+        code: int | None,
+        message: str,
+        data: JsonValue,
+    ) -> NoReturn:
+        """Translate one generated DS result-envelope failure."""
+        raise ApiResultError(
+            result_code=code,
+            result_message=message,
+            data=data,
+        )
 
 
 def _relative_path(url: str, *, base_url: str) -> str:

@@ -640,7 +640,11 @@ def _explain_schedule_create_result(
         runtime=runtime,
         project_code=resolved_project.code,
     )
-    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    selected_workflow = require_workflow_selection(
+        workflow,
+        runtime=runtime,
+        project_selection=selected_project,
+    )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
         adapter=runtime.upstream.workflows,
@@ -796,7 +800,11 @@ def _create_schedule_result(
         runtime=runtime,
         project_code=resolved_project.code,
     )
-    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    selected_workflow = require_workflow_selection(
+        workflow,
+        runtime=runtime,
+        project_selection=selected_project,
+    )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
         adapter=runtime.upstream.workflows,

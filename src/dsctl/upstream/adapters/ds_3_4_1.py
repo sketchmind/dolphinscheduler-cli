@@ -112,6 +112,7 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.scheduler import (
     QueryScheduleListPagingParams,
 )
 from dsctl.generated.versions.ds_3_4_1.api.operations.task_definition import (
+    GenTaskCodeListParams,
     UpdateTaskWithUpstreamParams,
 )
 from dsctl.generated.versions.ds_3_4_1.api.operations.task_group import (
@@ -2098,11 +2099,82 @@ class _DS341WorkflowLineageOperations:
         )
 
 
+def _task_code_response_error(
+    message: str,
+    *,
+    project_code: int,
+    requested_count: int,
+    received_count: int,
+) -> ApiTransportError:
+    """Describe one malformed task-code allocation response."""
+    return ApiTransportError(
+        message,
+        details={
+            "endpoint": (f"/projects/{project_code}/task-definition/gen-task-codes"),
+            "project_code": project_code,
+            "requested_count": requested_count,
+            "received_count": received_count,
+        },
+        source={
+            "kind": "remote",
+            "system": "dolphinscheduler",
+            "layer": "response",
+        },
+        suggestion=(
+            "Verify DS_VERSION matches the server, check DolphinScheduler API "
+            "health, then retry."
+        ),
+    )
+
+
 @dataclass(frozen=True)
 class _DS341TaskOperations:
     """Bound task operations backed by generated task clients."""
 
     client: DS341Client
+
+    def generate_codes(self, *, project_code: int, count: int) -> list[int]:
+        task_codes: list[int] = []
+        remaining = count
+        while remaining > 0:
+            batch_size = min(remaining, 100)
+            batch = self.client.task_definition.gen_task_code_list(
+                project_code,
+                GenTaskCodeListParams(genNum=batch_size),
+            )
+            if len(batch) != batch_size:
+                message = (
+                    "DolphinScheduler returned "
+                    f"{len(batch)} task codes when {batch_size} were requested"
+                )
+                raise _task_code_response_error(
+                    message,
+                    project_code=project_code,
+                    requested_count=batch_size,
+                    received_count=len(batch),
+                )
+            if any(code <= 0 or code > 2**63 - 1 for code in batch):
+                message = (
+                    "DolphinScheduler returned a task code outside the positive "
+                    "signed 64-bit integer range"
+                )
+                raise _task_code_response_error(
+                    message,
+                    project_code=project_code,
+                    requested_count=batch_size,
+                    received_count=len(batch),
+                )
+            if len(set(batch)) != len(batch) or set(task_codes).intersection(batch):
+                message = "DolphinScheduler returned duplicate task codes"
+                raise _task_code_response_error(
+                    message,
+                    project_code=project_code,
+                    requested_count=batch_size,
+                    received_count=len(batch),
+                )
+            task_codes.extend(batch)
+            remaining -= batch_size
+        return task_codes
 
     def list(
         self,

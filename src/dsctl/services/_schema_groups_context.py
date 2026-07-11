@@ -65,15 +65,19 @@ def use_group() -> dict[str, object]:
             command(
                 "workflow",
                 action="use.workflow",
-                summary="Set or clear the workflow context.",
+                summary=(
+                    "Set or clear workflow context; setting requires an "
+                    "effective project."
+                ),
                 arguments=[
                     argument(
                         "name",
                         value_type="string",
                         description=(
                             "Workflow name to persist. Run `dsctl workflow list` "
-                            "in the selected project to discover values. Required "
-                            "unless --clear."
+                            "in the selected project to discover values. Requires "
+                            "an effective project, which is stored in the same "
+                            "scope. Required unless --clear."
                         ),
                         required=False,
                         selector="opaque_name",

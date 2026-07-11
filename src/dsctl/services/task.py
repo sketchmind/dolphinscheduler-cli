@@ -195,7 +195,11 @@ def _list_tasks_result(
         selected_project.value,
         adapter=runtime.upstream.projects,
     )
-    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    selected_workflow = require_workflow_selection(
+        workflow,
+        runtime=runtime,
+        project_selection=selected_project,
+    )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
         adapter=runtime.upstream.workflows,
@@ -397,7 +401,11 @@ def _resolve_task_scope(
         selected_project.value,
         adapter=runtime.upstream.projects,
     )
-    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    selected_workflow = require_workflow_selection(
+        workflow,
+        runtime=runtime,
+        project_selection=selected_project,
+    )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
         adapter=runtime.upstream.workflows,
