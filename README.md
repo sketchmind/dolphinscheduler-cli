@@ -163,12 +163,14 @@ For agents, prefer compact JSON with explicit columns and a small page size.
 This keeps the standard envelope, types, pagination, resolved selections,
 warnings, and structured errors while avoiding wide DS response objects.
 Standard JSON uses UTF-8 directly instead of escaping ordinary non-ASCII text.
+For token reduction, select only needed columns and reduce page size first;
+compact JSON is the final lossless whitespace optimization.
 
 Successful data and raw artifacts are written to stdout. Structured command
 errors are written to stderr with a nonzero exit code. Table and TSV stdout
-remain pure row data; implicit stored context, partial/non-first-page summaries,
-and warnings are written to stderr. Raw artifact warnings also use stderr
-without changing the artifact body.
+remain pure row data; partial/non-first-page summaries and warnings are written
+to stderr. Raw artifact warnings also use stderr without changing the artifact
+body.
 
 `--columns '*'` selects all top-level row fields. Quote `*` so the shell does
 not expand it as a filesystem glob.

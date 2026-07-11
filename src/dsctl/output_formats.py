@@ -133,34 +133,12 @@ def _render_success_diagnostics(
     include_page: bool,
 ) -> str:
     lines: list[str] = []
-    context = _implicit_context_diagnostic(payload)
-    if context is not None:
-        lines.append(context)
     if include_page:
         page = _pagination_diagnostic(payload)
         if page is not None:
             lines.append(page)
     lines.extend(_warning_diagnostics(payload))
     return "\n".join(lines)
-
-
-def _implicit_context_diagnostic(payload: JsonObject) -> str | None:
-    resolved = payload.get("resolved")
-    if not isinstance(resolved, Mapping):
-        return None
-
-    selections: list[str] = []
-    for resource in ("project", "workflow"):
-        selected = resolved.get(resource)
-        if not isinstance(selected, Mapping) or selected.get("source") != "context":
-            continue
-        value = selected.get("name", selected.get("value"))
-        if isinstance(value, bool) or not isinstance(value, (int, str)):
-            continue
-        selections.append(f"{resource}={value}")
-    if not selections:
-        return None
-    return f"context: {'; '.join(selections)}"
 
 
 def _pagination_diagnostic(payload: JsonObject) -> str | None:

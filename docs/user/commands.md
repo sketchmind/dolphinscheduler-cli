@@ -122,12 +122,13 @@ dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <
 For agents and scripts that need the full machine contract, prefer
 `--compact --columns ...` plus a small `--page-size`. Compact JSON is UTF-8,
 keeps the standard envelope, and changes only insignificant whitespace.
+Column projection and page size provide the largest reductions; compact JSON
+is a secondary, lossless whitespace optimization.
 
 Successful data and raw artifacts use stdout. Structured command errors use
-stderr. Table and TSV keep stdout row-only; implicit stored context,
-partial/non-first-page summaries, and warnings use stderr so redirection and
-simple pipelines remain valid. Raw artifact warnings also use stderr without
-changing the artifact body.
+stderr. Table and TSV keep stdout row-only; partial/non-first-page summaries
+and warnings use stderr so redirection and simple pipelines remain valid. Raw
+artifact warnings also use stderr without changing the artifact body.
 
 Use `dsctl schema --command <ACTION>` and inspect `data_shape` to discover the
 canonical row/object path and default display columns for row-oriented
