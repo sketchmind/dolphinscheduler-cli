@@ -7,8 +7,8 @@ This guide describes the stable YAML authoring surface used by
 Use the command output as the first source of truth when generating YAML:
 
 ```bash
-dsctl capabilities
-dsctl schema
+dsctl capabilities --summary
+dsctl schema --command workflow.create
 dsctl task-type list
 dsctl template task
 dsctl task-type get SQL

@@ -19,7 +19,7 @@ class DataShapeSchema(TypedDict, total=False):
 
 @dataclass(frozen=True)
 class DataShape:
-    """One low-entropy row model shared by schema and display rendering."""
+    """One low-entropy row model shared by services and output rendering."""
 
     kind: DataShapeKind
     row_path: str | None = None
@@ -156,10 +156,6 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
         row_path="data.members",
         default_columns=("name", "value", "attributes"),
     ),
-    "schema": DataShape(
-        kind="summary",
-        row_path="data.rows",
-    ),
     "task-type.list": DataShape(
         kind="summary",
         row_path="data.taskTypes",
@@ -229,6 +225,57 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
     ),
 }
 
+SCHEMA_VIEW_SHAPES: dict[str, DataShape] = {
+    "index": DataShape(
+        kind="summary",
+        row_path="data.groups",
+        default_columns=("name", "summary", "action_count", "schema_command"),
+    ),
+    "groups": DataShape(
+        kind="summary",
+        row_path="data",
+        default_columns=("name", "summary", "action_count", "schema_command"),
+    ),
+    "commands": DataShape(
+        kind="summary",
+        row_path="data",
+        default_columns=("action", "group", "name", "summary", "schema_command"),
+    ),
+    "group": DataShape(
+        kind="summary",
+        row_path="data.actions",
+        default_columns=("action", "name", "summary", "schema_command"),
+    ),
+    "command": DataShape(
+        kind="summary",
+        row_path="data.command",
+        default_columns=(
+            "kind",
+            "name",
+            "flag",
+            "type",
+            "required",
+            "value",
+            "discovery_command",
+            "invocation",
+        ),
+    ),
+    "full": DataShape(
+        kind="summary",
+        row_path="data.commands",
+        default_columns=("kind", "name", "summary"),
+    ),
+    "full_group": DataShape(
+        kind="summary",
+        row_path="data.rows",
+        default_columns=("kind", "action", "name", "summary", "schema_command"),
+    ),
+    "full_command": DataShape(
+        kind="summary",
+        row_path="data.rows",
+    ),
+}
+
 DATA_SHAPES: dict[str, DataShape] = {
     **{
         action: DataShape(
@@ -258,17 +305,28 @@ DATA_SHAPES: dict[str, DataShape] = {
 }
 
 
-def data_shape_for_action(action: str) -> DataShape | None:
+def data_shape_for_action(action: str, *, view: str | None = None) -> DataShape | None:
     """Return display/schema row metadata for one stable command action."""
+    if action == "schema":
+        return SCHEMA_VIEW_SHAPES.get("index" if view is None else view)
     return DATA_SHAPES.get(action)
 
 
-def data_shape_schema_for_action(action: str) -> DataShapeSchema | None:
+def data_shape_schema_for_action(
+    action: str,
+    *,
+    view: str | None = None,
+) -> DataShapeSchema | None:
     """Return one JSON-safe schema data-shape payload when available."""
-    shape = data_shape_for_action(action)
+    shape = data_shape_for_action(action, view=view)
     if shape is None:
         return None
     return shape.to_schema()
+
+
+def schema_view_data_shapes() -> dict[str, DataShapeSchema]:
+    """Return every view-dependent row model for the schema command."""
+    return {view: shape.to_schema() for view, shape in SCHEMA_VIEW_SHAPES.items()}
 
 
 __all__ = [
@@ -276,4 +334,5 @@ __all__ = [
     "DataShapeSchema",
     "data_shape_for_action",
     "data_shape_schema_for_action",
+    "schema_view_data_shapes",
 ]

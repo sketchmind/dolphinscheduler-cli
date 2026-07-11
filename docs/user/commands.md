@@ -5,9 +5,10 @@ The stable CLI surface is documented in the
 machine-readable behavior contract for command names, output envelopes, error
 shape, warnings, and dry-run behavior.
 
-Use `dsctl schema` for exact command arguments, options, choices, and selector
-rules. Use `dsctl capabilities` for lightweight feature discovery; it is not an
-argument schema.
+Use the bounded `dsctl schema` index to find actions, `schema --group GROUP` to
+browse one family, and `schema --command ACTION` for exact arguments, options,
+choices, selector rules, payload hints, and output shape. Use
+`dsctl capabilities` for feature discovery; it is not an argument schema.
 
 For agent or scripted discovery, prefer scoped self-description calls when the
 full payload is unnecessary:
@@ -15,15 +16,18 @@ full payload is unnecessary:
 ```bash
 dsctl capabilities --summary
 dsctl capabilities --section runtime
+dsctl schema
 dsctl schema --list-groups
-dsctl schema --list-commands
 dsctl schema --group task-instance
 dsctl schema --command task-instance.list
 dsctl enum names
 ```
 
 `schema --group` values come from `dsctl schema --list-groups`.
-`schema --command` values come from `dsctl schema --list-commands`.
+Action names are present in the default index and group views;
+`schema --list-commands` retains the detailed compatibility inventory.
+In an action-local response, use `data.command.invocation` for the exact CLI
+path and placeholders, and obey `data.command.constraints[]` before executing.
 `enum list ENUM` values come from `dsctl enum names`.
 
 ## Discovery
@@ -36,6 +40,7 @@ dsctl schema
 dsctl schema --list-groups
 dsctl schema --list-commands
 dsctl schema --command task-instance.list
+dsctl schema --full
 dsctl capabilities
 dsctl capabilities --summary
 dsctl enum names
@@ -119,7 +124,7 @@ dsctl --output-format tsv --columns id,name,state task-instance list --workflow-
 dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <workflow_instance_id>
 ```
 
-For agents and scripts that need the full machine contract, prefer
+For agents and scripts reading command results, prefer
 `--compact --columns ...` plus a small `--page-size`. Compact JSON is UTF-8,
 keeps the standard envelope, and changes only insignificant whitespace.
 Column projection and page size provide the largest reductions; compact JSON
@@ -130,12 +135,12 @@ stderr. Table and TSV keep stdout row-only; partial/non-first-page summaries
 and warnings use stderr so redirection and simple pipelines remain valid. Raw
 artifact warnings also use stderr without changing the artifact body.
 
-Use `dsctl schema --command <ACTION>` and inspect `data_shape` to discover the
-canonical row/object path and default display columns for row-oriented
-commands.
-For quick terminal inspection of one command contract, use table output; scoped
-schema views include compact rows for arguments, options, payload hints, and
-data-shape metadata:
+Use `dsctl schema --command <ACTION>` and inspect `data.command.data_shape` to
+discover the canonical row/object path and default display columns for
+row-oriented commands. For quick terminal inspection of one command contract,
+use table output. The renderer derives compact argument, option, payload, and
+data-shape rows from the canonical `data.command` object; it does not append a
+non-standard footer or duplicate those rows in JSON:
 
 ```bash
 dsctl --output-format table schema --command datasource.create

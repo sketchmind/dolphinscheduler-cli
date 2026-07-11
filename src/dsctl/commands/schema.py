@@ -19,8 +19,8 @@ def schema_command(
         typer.Option(
             "--group",
             help=(
-                "Return schema for one command group. Discover values with "
-                "`dsctl schema --list-groups`."
+                "Return one group's action index. Discover groups with "
+                "`dsctl schema` or `dsctl schema --list-groups`."
             ),
         ),
     ] = None,
@@ -29,8 +29,8 @@ def schema_command(
         typer.Option(
             "--command",
             help=(
-                "Return schema for one stable command action. Discover values "
-                "with `dsctl schema --list-commands`."
+                "Return one complete action-local contract. Discover actions "
+                "with `dsctl schema` or `dsctl schema --group GROUP`."
             ),
         ),
     ] = None,
@@ -45,11 +45,21 @@ def schema_command(
         bool,
         typer.Option(
             "--list-commands",
-            help="List valid values for --command.",
+            help="List valid action names for --command.",
+        ),
+    ] = False,
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help=(
+                "Return the expanded schema representation. May be combined "
+                "with --group or --command."
+            ),
         ),
     ] = False,
 ) -> None:
-    """Print the stable machine-readable CLI schema."""
+    """Discover the CLI schema; no options returns the bounded action index."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -60,5 +70,6 @@ def schema_command(
             command_action=command,
             list_groups=list_groups,
             list_commands=list_commands,
+            full=full,
         ),
     )

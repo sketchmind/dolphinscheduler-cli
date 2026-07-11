@@ -6,8 +6,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, TypeAlias, TypeGuard, cast
 
+from dsctl.data_shapes import DataShape, data_shape_for_action
 from dsctl.errors import UserInputError
-from dsctl.services._data_shapes import DataShape, data_shape_for_action
+from dsctl.schema_contract_rows import command_contract_rows
 
 if TYPE_CHECKING:
     from dsctl.support.json_types import JsonObject, JsonValue
@@ -199,13 +200,21 @@ def _render_success_payload(
     options: RenderOptions,
 ) -> str:
     data = payload.get("data")
-    shape = data_shape_for_action(action)
-    rows = _extract_rows(data, shape=shape)
+    view = _result_view(payload, action=action)
+    shape = data_shape_for_action(action, view=view)
+    derived_rows = _derived_rows(data, action=action, view=view)
+    rows = derived_rows
+    if rows is None:
+        rows = _extract_rows(data, shape=shape)
     if rows is not None:
         columns = _resolve_columns(
             rows,
             requested=options.columns,
-            defaults=() if shape is None else shape.default_columns,
+            defaults=(
+                ()
+                if shape is None or (derived_rows is not None and view != "command")
+                else shape.default_columns
+            ),
             action=action,
         )
         return _render_rows(rows, columns=columns, output_format=options.output_format)
@@ -274,7 +283,24 @@ def _project_json_payload(
 ) -> JsonObject:
     """Return a copy of a success envelope with row/object data projected."""
     projected = deepcopy(payload)
-    shape = data_shape_for_action(action)
+    view = _result_view(projected, action=action)
+    shape = data_shape_for_action(action, view=view)
+    derived_rows = _derived_rows(projected.get("data"), action=action, view=view)
+    if (
+        action == "schema"
+        and view in {"command", "full_group", "full_command"}
+        and derived_rows is not None
+    ):
+        data = projected.get("data")
+        if not isinstance(data, dict):
+            raise _projection_not_supported_error(action=action, columns=columns)
+        row_field = "command" if view == "command" else "rows"
+        data[row_field] = _project_json_value(
+            list(derived_rows),
+            columns=columns,
+            action=action,
+        )
+        return projected
     if shape is not None and shape.row_path is not None:
         value = _value_at_path(projected, shape.row_path)
         replacement = _project_json_value(value, columns=columns, action=action)
@@ -304,6 +330,45 @@ def _project_json_payload(
 
     projected["data"] = _project_json_value(data, columns=columns, action=action)
     return projected
+
+
+def _result_view(payload: JsonObject, *, action: str) -> str | None:
+    if action != "schema":
+        return None
+    resolved = payload.get("resolved")
+    schema = resolved.get("schema") if isinstance(resolved, Mapping) else None
+    scope = schema.get("scope") if isinstance(schema, Mapping) else None
+    data = payload.get("data")
+    if isinstance(data, Mapping):
+        data_view = data.get("view")
+        if isinstance(data_view, str):
+            if data_view == "full" and scope in {"group", "command"}:
+                return f"full_{scope}"
+            return data_view
+    if not isinstance(schema, Mapping):
+        return None
+    resolved_view = schema.get("view")
+    return resolved_view if isinstance(resolved_view, str) else None
+
+
+def _derived_rows(
+    data: JsonValue | None,
+    *,
+    action: str,
+    view: str | None,
+) -> tuple[JsonObject, ...] | None:
+    if action != "schema" or not isinstance(data, Mapping):
+        return None
+    if view == "command":
+        command = data.get("command")
+        action_name = command.get("action") if isinstance(command, Mapping) else None
+        if isinstance(command, Mapping) and isinstance(action_name, str):
+            return tuple(command_contract_rows(command, action=action_name))
+    if view in {"full_group", "full_command"}:
+        legacy_rows = _coerce_rows(data.get("rows"))
+        if legacy_rows is not None:
+            return legacy_rows
+    return None
 
 
 def _project_json_value(
@@ -380,7 +445,8 @@ def _projection_not_supported_error(
         message,
         details={"action": action, "columns": list(columns)},
         suggestion=(
-            f"Run `dsctl schema --command {action}` and inspect data_shape, "
+            f"Run `dsctl schema --command {action}` and inspect "
+            "data.command.data_shape, "
             "or omit --columns for this command."
         ),
     )
@@ -492,7 +558,8 @@ def _validate_requested_columns(
             "available_columns": _infer_columns(rows),
         },
         suggestion=(
-            f"Run `dsctl schema --command {action}` and inspect data_shape, "
+            f"Run `dsctl schema --command {action}` and inspect "
+            "data.command.data_shape, "
             "or retry with columns present in the JSON row payload."
         ),
     )

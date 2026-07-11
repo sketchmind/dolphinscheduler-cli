@@ -275,6 +275,41 @@ request new codes.
 - DS DTO details
 - name resolution
 
+### Progressive Self-Description
+
+`services.schema` is a deep module over the generated/handwritten command
+catalog. Its interface exposes index, group, action, list, and expanded queries;
+callers do not need to know how action nodes, DS-version identity, payload
+metadata, data shapes, or correction candidates are assembled.
+
+The normal discovery path is deliberately bounded:
+
+```text
+schema index -> group action index -> action-local contract
+```
+
+An agent that already knows an action may jump directly to the final step.
+`--full` selects the expanded projection adapter for catalog audits and
+generators. It is not the default representation.
+
+The canonical bounded JSON contract contains each fact once. In particular,
+action-local JSON owns one `command` object and does not carry duplicate
+renderer rows. The output adapter derives table, TSV, and explicit column
+projection rows from that object. Schema view-aware data shapes keep index,
+list, group, and command projection paths local to the output boundary.
+
+Static cross-field command constraints live in the schema constraint registry
+and mirror service/command validation (`exactly_one_of`, `requires`, mode
+alternatives, and related forms). Tests require every referenced flag or
+placeholder to exist in the action contract. Dynamic runtime facts, including
+confirmation tokens derived from a concrete mutation, stay in service errors
+rather than being guessed by the static schema.
+
+Self-description quality is evaluated at the task level rather than by response
+size alone: necessary tokens, discovery round trips, retry tokens, and
+ambiguity/misoperation risk all count. Byte-budget tests bound common responses
+without removing information needed to construct the next correct command.
+
 ## Dependency Rules
 
 ```text

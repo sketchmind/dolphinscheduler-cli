@@ -370,7 +370,8 @@ surface.
 - [ ] broader `dsctl explain` for execution-context and parameter reasoning
 - [x] `dsctl lint` for local workflow design-time checks
 - [x] `dsctl doctor` for runtime and governance diagnostics
-- [x] `dsctl schema` — JSON tool definition output for the current stable surface
+- [x] `dsctl schema` — bounded index and action-local JSON contracts, with
+      explicit `--full` expansion for the current stable surface
 - [x] `dsctl enum names`, `dsctl enum list <enum>` — enum value discovery
 - [x] `dsctl task-type list` — live DS task-type discovery with favourite flags
 - [x] `dsctl task-type get|schema` — local task authoring summaries, field
@@ -530,7 +531,11 @@ The project is **production-ready** when all of these are true:
 - [ ] Every command returns structured JSON envelope (no exceptions)
   - [x] all registered command callbacks are structurally required to route
         through `emit_result`
-- [x] `dsctl schema` outputs complete tool definition
+- [x] `dsctl schema` provides progressive discovery and complete action-local
+      contracts; `schema --full` outputs the expanded tool definition
+- [ ] complete schema parity for every deterministic cross-field command
+      validator; high-impact mode, source, update, selector, and force guards
+      are already machine-readable through `command.constraints`
 - [x] `dsctl template` covers all upstream default task types
 - [ ] Error responses include machine-actionable `type` and `suggestion`
 - [ ] `--dry-run` available on all mutating commands
