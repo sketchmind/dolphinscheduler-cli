@@ -4,8 +4,8 @@ This quality gate ensures generated packages are only modified through the
 generation pipeline, never by hand.  It works by:
 
 1. Running the package generator into a temporary directory.
-2. Comparing every generated version package in the temp output against
-   src/dsctl/generated/.
+2. Comparing every generated version package and namespace initializer in the
+   temp output against src/dsctl/generated/.
 3. Failing with a clear diff if any file diverges.
 
 Usage:
@@ -14,13 +14,14 @@ Usage:
 Exit codes:
     0 — generated code is fresh.
     1 — generated code has hand-edits or is out of date.
-    2 — generated code has not been copied into src/ yet (skip check).
+    2 — the generator failed before freshness could be checked.
 """
 
 from __future__ import annotations
 
-import filecmp
+import hashlib
 import shutil
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -43,6 +44,7 @@ INPUT_ROOTS = (
     ROOT / "references" / "dolphinscheduler",
 )
 IGNORED_INPUT_DIRS = {"__pycache__", "target", ".git"}
+IGNORED_GENERATED_ENTRIES = frozenset({"__pycache__"})
 
 
 def _find_version_dirs(base: Path) -> list[Path]:
@@ -56,45 +58,100 @@ def _find_version_dirs(base: Path) -> list[Path]:
     ]
 
 
-def _iter_input_files() -> list[Path]:
-    """Return codegen input files whose mtimes invalidate the cache."""
-    files: list[Path] = []
+def _iter_input_entries() -> list[tuple[str, Path]]:
+    """Return deterministic codegen input paths for cache fingerprinting."""
+    entries: list[tuple[str, Path]] = []
     for root in INPUT_ROOTS:
-        if root.is_file():
-            files.append(root)
-            continue
+        root_label = _input_path_label(root)
+        entries.append((root_label, root))
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if not path.is_file():
+            relative_path = path.relative_to(root)
+            if any(part in IGNORED_INPUT_DIRS for part in relative_path.parts):
                 continue
-            if any(part in IGNORED_INPUT_DIRS for part in path.parts):
-                continue
-            files.append(path)
-    return files
+            entries.append((f"{root_label}/{relative_path.as_posix()}", path))
+    return sorted(entries, key=lambda item: item[0])
 
 
-def _latest_input_mtime_ns() -> int:
-    """Return the newest input mtime used to invalidate cached output."""
-    latest = 0
-    for path in _iter_input_files():
-        latest = max(latest, path.stat().st_mtime_ns)
-    return latest
+def _input_path_label(path: Path) -> str:
+    """Return one checkout-independent label when the input is under ROOT."""
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.absolute().as_posix()
 
 
-def _cache_is_fresh() -> bool:
-    """Return whether the cached fresh output is newer than all inputs."""
+def _input_fingerprint() -> str:
+    """Hash input paths, entry kinds, and contents into one cache key."""
+    digest = hashlib.sha256()
+    for label, path in _iter_input_entries():
+        kind, content_digest = _input_entry_signature(path)
+        _update_digest(digest, label)
+        _update_digest(digest, kind)
+        _update_digest(digest, content_digest)
+    return digest.hexdigest()
+
+
+def _input_entry_signature(path: Path) -> tuple[str, str]:
+    """Return the identity that codegen observes, following file symlinks."""
+    kind, identity = _entry_signature(path)
+    if kind != "symlink":
+        return (kind, identity)
+    if path.is_file():
+        return ("symlink-file", f"{identity}\0{_file_digest(path)}")
+    if path.is_dir():
+        return ("symlink-directory", identity)
+    return (kind, identity)
+
+
+def _update_digest(digest: hashlib._Hash, value: str) -> None:
+    encoded = value.encode("utf-8")
+    digest.update(len(encoded).to_bytes(8, byteorder="big"))
+    digest.update(encoded)
+
+
+def _entry_signature(path: Path) -> tuple[str, str]:
+    """Return an entry kind plus content identity without following symlinks."""
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        return ("missing", "")
+    if stat.S_ISLNK(mode):
+        return ("symlink", str(path.readlink()))
+    if stat.S_ISDIR(mode):
+        return ("directory", "")
+    if stat.S_ISREG(mode):
+        return ("file", _file_digest(path))
+    return ("other", str(mode))
+
+
+def _file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file_handle:
+        while chunk := file_handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _cache_is_fresh(input_fingerprint: str) -> bool:
+    """Return whether cached output was generated from the same inputs."""
     if not CACHE_STAMP.exists():
         return False
     cached_versions = CACHE_OUTPUT / "generated" / "versions"
     if not _find_version_dirs(cached_versions):
         return False
-    return CACHE_STAMP.stat().st_mtime_ns >= _latest_input_mtime_ns()
+    try:
+        cached_fingerprint = CACHE_STAMP.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    return cached_fingerprint == input_fingerprint
 
 
 def _materialize_fresh_output() -> Path:
     """Return the output root containing fresh generated package output."""
-    if _cache_is_fresh():
+    input_fingerprint = _input_fingerprint()
+    if _cache_is_fresh(input_fingerprint):
         return CACHE_OUTPUT
 
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
@@ -103,10 +160,11 @@ def _materialize_fresh_output() -> Path:
     try:
         snapshot = build_contract_snapshot(ROOT)
         write_generated_package(ROOT, snapshot, tmp_output)
+        _require_unchanged_inputs(input_fingerprint)
         if CACHE_OUTPUT.exists():
             shutil.rmtree(CACHE_OUTPUT)
         tmp_output.replace(CACHE_OUTPUT)
-        CACHE_STAMP.touch()
+        CACHE_STAMP.write_text(f"{input_fingerprint}\n", encoding="utf-8")
     except Exception:
         shutil.rmtree(tmp_root, ignore_errors=True)
         raise
@@ -115,29 +173,61 @@ def _materialize_fresh_output() -> Path:
     return CACHE_OUTPUT
 
 
+def _require_unchanged_inputs(expected_fingerprint: str) -> None:
+    if _input_fingerprint() == expected_fingerprint:
+        return
+    message = "Codegen inputs changed while freshness output was generated"
+    raise RuntimeError(message)
+
+
 def _compare_trees(src: Path, ref: Path) -> list[str]:
     """Recursively compare two directory trees. Return list of differences."""
-    diffs: list[str] = []
-
-    cmp = filecmp.dircmp(str(src), str(ref))
-    _collect_diffs(cmp, diffs, rel=Path())
+    src_entries = _tree_entries(src)
+    ref_entries = _tree_entries(ref)
+    src_paths = set(src_entries)
+    ref_paths = set(ref_entries)
+    diffs = [
+        f"  hand-added:   {Path('generated') / path}"
+        for path in sorted(src_paths - ref_paths)
+    ]
+    diffs.extend(
+        f"  missing:      {Path('generated') / path}"
+        for path in sorted(ref_paths - src_paths)
+    )
+    for path in sorted(src_paths & ref_paths):
+        src_kind, src_identity = src_entries[path]
+        ref_kind, ref_identity = ref_entries[path]
+        rendered_path = Path("generated") / path
+        if src_kind != ref_kind:
+            diffs.append(f"  type-changed: {rendered_path}")
+        elif src_identity != ref_identity:
+            diffs.append(f"  modified:     {rendered_path}")
     return diffs
 
 
-def _collect_diffs(cmp: filecmp.dircmp[str], diffs: list[str], rel: Path) -> None:
-    diffs.extend(f"  hand-added:   {rel / name}" for name in sorted(cmp.left_only))
-    diffs.extend(f"  missing:      {rel / name}" for name in sorted(cmp.right_only))
-    diffs.extend(f"  modified:     {rel / name}" for name in sorted(cmp.diff_files))
-    for sub_name, sub_cmp in sorted(cmp.subdirs.items()):
-        _collect_diffs(sub_cmp, diffs, rel / sub_name)
+def _tree_entries(root: Path) -> dict[Path, tuple[str, str]]:
+    entries: dict[Path, tuple[str, str]] = {}
+
+    def visit(directory: Path, relative_directory: Path) -> None:
+        for path in sorted(directory.iterdir(), key=lambda item: item.name):
+            if path.name in IGNORED_GENERATED_ENTRIES:
+                continue
+            relative_path = relative_directory / path.name
+            signature = _entry_signature(path)
+            entries[relative_path] = signature
+            if signature[0] == "directory":
+                visit(path, relative_path)
+
+    visit(root, Path())
+    return entries
 
 
 def main() -> int:
-    # --- Guard: skip if generated code hasn't been copied to src/ yet ---
+    # --- Guard: committed generated code must contain at least one version. ---
     version_dirs = _find_version_dirs(SRC_GENERATED)
     if not version_dirs:
-        print("check_generated_freshness: no version packages in src/, skipping.")
-        return 0
+        print("check_generated_freshness: FAILED — no version packages in src/.")
+        return 1
 
     command_hint = str(PYTHON) if PYTHON.exists() else sys.executable
 
@@ -148,20 +238,9 @@ def main() -> int:
         print(str(exc))
         return 2
 
-    # --- Compare each version package ---
+    # --- Compare the complete generated namespace symmetrically. ---
     fresh_versions = fresh_output / "generated" / "versions"
-    all_diffs: list[str] = []
-
-    for src_version in version_dirs:
-        slug = src_version.name
-        ref_version = fresh_versions / slug
-        if not ref_version.is_dir():
-            all_diffs.append(f"  version {slug} exists in src/ but not in fresh output")
-            continue
-        diffs = _compare_trees(src_version, ref_version)
-        if diffs:
-            all_diffs.append(f"src/dsctl/generated/versions/{slug}/:")
-            all_diffs.extend(diffs)
+    all_diffs = _compare_trees(SRC_GENERATED.parent, fresh_versions.parent)
 
     if all_diffs:
         print("check_generated_freshness: FAILED — generated code has diverged.")
