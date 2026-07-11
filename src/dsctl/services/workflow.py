@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal, TypedDict, cast
@@ -835,10 +836,22 @@ def _create_workflow_result(
             confirm_risk=confirm_risk,
         )
     )
-    payload = _compile_workflow_create_payload(
-        spec,
-        allocate_task_codes=preview_task_codes,
-    )
+    try:
+        payload = _compile_workflow_create_payload(
+            spec,
+            allocate_task_codes=preview_task_codes,
+        )
+    except UserInputError as error:
+        file_arg = shlex.quote(str(file))
+        raise UserInputError(
+            error.message,
+            details=error.details,
+            suggestion=(
+                f"Run `dsctl lint workflow {file_arg}`, fix task names and "
+                "references, then retry "
+                f"`dsctl workflow create --file {file_arg} --dry-run`."
+            ),
+        ) from error
     parameter_warnings, parameter_warning_details = (
         workflow_parameter_expression_warnings(spec)
     )
@@ -2654,6 +2667,7 @@ def _resolve_workflow_target(
         workflow,
         runtime=runtime,
         project_selection=selected_project,
+        input_form="argument",
     )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
@@ -2699,6 +2713,7 @@ def _resolve_workflow_edit_target(
         workflow,
         runtime=runtime,
         project_selection=selected_project,
+        input_form="argument",
     )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,

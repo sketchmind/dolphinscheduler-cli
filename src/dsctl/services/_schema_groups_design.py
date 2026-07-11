@@ -806,6 +806,7 @@ def workflow_group() -> dict[str, object]:
                             "task fields with `dsctl task-type schema TYPE`."
                         ),
                         required=True,
+                        discovery_command="dsctl template workflow --raw",
                     ),
                     option(
                         "project",

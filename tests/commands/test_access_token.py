@@ -116,7 +116,7 @@ def test_access_token_get_command_reports_not_found_suggestion() -> None:
     assert payload["action"] == "access-token.get"
     assert payload["error"]["type"] == "not_found"
     assert payload["error"]["suggestion"] == (
-        "Retry with `access-token list` to inspect available values and verify "
+        "Retry with `dsctl access-token list` to inspect available values and verify "
         "the selected id."
     )
 

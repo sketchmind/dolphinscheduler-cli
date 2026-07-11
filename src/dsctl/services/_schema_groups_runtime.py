@@ -417,6 +417,7 @@ def workflow_instance_group() -> dict[str, object]:
                         value_type="integer",
                         description="Polling interval in seconds.",
                         default=DEFAULT_WATCH_INTERVAL_SECONDS,
+                        minimum=1,
                     ),
                     option(
                         "timeout-seconds",
@@ -425,6 +426,7 @@ def workflow_instance_group() -> dict[str, object]:
                             "Maximum seconds to wait. Use 0 to wait indefinitely."
                         ),
                         default=DEFAULT_WATCH_TIMEOUT_SECONDS,
+                        minimum=0,
                     ),
                 ],
             ),
@@ -715,6 +717,7 @@ def task_instance_group() -> dict[str, object]:
                         value_type="integer",
                         description="Polling interval in seconds.",
                         default=DEFAULT_TASK_INSTANCE_WATCH_INTERVAL_SECONDS,
+                        minimum=1,
                     ),
                     option(
                         "timeout-seconds",
@@ -723,6 +726,7 @@ def task_instance_group() -> dict[str, object]:
                             "Maximum seconds to wait. Use 0 to wait indefinitely."
                         ),
                         default=DEFAULT_TASK_INSTANCE_WATCH_TIMEOUT_SECONDS,
+                        minimum=0,
                     ),
                 ],
             ),
@@ -784,6 +788,7 @@ def task_instance_group() -> dict[str, object]:
                             "upstream logger API."
                         ),
                         default=200,
+                        minimum=1,
                     ),
                     option(
                         "raw",

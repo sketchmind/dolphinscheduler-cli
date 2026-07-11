@@ -5741,7 +5741,7 @@ class FakeTaskInstanceAdapter:
         *,
         project_code: int,
         task_instance_id: int,
-    ) -> FakeTaskInstance:
+    ) -> FakeTaskInstance | None:
         sequence = (self.task_instance_sequences_by_id or {}).get(task_instance_id)
         if sequence:
             if len(sequence) > 1:
@@ -5753,10 +5753,7 @@ class FakeTaskInstanceAdapter:
                 and task_instance.projectCode == project_code
             ):
                 return task_instance
-        raise ApiResultError(
-            result_code=10103,
-            result_message=f"task instance id {task_instance_id} not found",
-        )
+        return None
 
     def log_chunk(
         self,

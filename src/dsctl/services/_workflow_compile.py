@@ -24,9 +24,9 @@ if TYPE_CHECKING:
     from dsctl.support.yaml_io import JsonObject
 
 
-_WORKFLOW_COMPILE_REVIEW_SUGGESTION = (
-    "Review task names and task references, then retry with workflow dry-run "
-    "before applying the change."
+_WORKFLOW_GRAPH_REVIEW_SUGGESTION = (
+    "Fix task names and references in the workflow input, then retry the "
+    "current operation."
 )
 
 
@@ -189,7 +189,7 @@ def workflow_edges(tasks: list[WorkflowTaskSpec]) -> list[tuple[str, str]]:
             message = f"Task '{task_name}' depends on unknown task '{predecessor}'"
             raise UserInputError(
                 message,
-                suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+                suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
             )
         if successor not in task_names:
             message = (
@@ -197,13 +197,13 @@ def workflow_edges(tasks: list[WorkflowTaskSpec]) -> list[tuple[str, str]]:
             )
             raise UserInputError(
                 message,
-                suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+                suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
             )
         if predecessor == successor:
             message = f"Task '{task_name}' cannot reference itself in {label}"
             raise UserInputError(
                 message,
-                suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+                suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
             )
         edge = (predecessor, successor)
         if edge in seen:
@@ -298,7 +298,7 @@ def _task_levels(
         message = "Workflow tasks contain a dependency cycle"
         raise UserInputError(
             message,
-            suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+            suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
         )
 
     levels: dict[str, int] = {}
@@ -620,14 +620,14 @@ def _resolve_local_task_name_ref(
         message = f"Task '{task_name}' expects a task name string in {label}"
         raise UserInputError(
             message,
-            suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+            suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
         )
     candidate = value.strip()
     if candidate not in task_codes:
         message = f"Task '{task_name}' references unknown task '{candidate}' in {label}"
         raise UserInputError(
             message,
-            suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+            suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
         )
     return task_codes[candidate]
 

@@ -237,7 +237,11 @@ def workflow(
             project=lambda record: record,
             not_found_result_codes=(WORKFLOW_DEFINITION_NOT_EXIST,),
             not_found_message=not_found_message,
-            not_found_details={"resource": WORKFLOW_RESOURCE, "code": workflow_code},
+            not_found_details={
+                "resource": WORKFLOW_RESOURCE,
+                "code": workflow_code,
+                "project_code": project_code,
+            },
         )
         if payload.projectCode != project_code:
             message = (

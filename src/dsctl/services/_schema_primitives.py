@@ -151,6 +151,7 @@ def option(
     supported_keys: Sequence[str] | None = None,
     discovery_command: str | None = None,
     placement: str | None = None,
+    minimum: int | None = None,
 ) -> dict[str, object]:
     """Build one schema option payload."""
     data: dict[str, object] = {
@@ -161,12 +162,20 @@ def option(
         "required": required,
         "description": description,
     }
-    if default is not None:
-        data["default"] = default
-    if value_name is not None:
-        data["value_name"] = value_name
-    if selector is not None:
-        data["selector"] = selector
+    data.update(
+        {
+            key: value
+            for key, value in (
+                ("default", default),
+                ("value_name", value_name),
+                ("selector", selector),
+                ("discovery_command", discovery_command),
+                ("placement", placement),
+                ("minimum", minimum),
+            )
+            if value is not None
+        }
+    )
     if choices is not None:
         data["choices"] = list(choices)
     if multiple:
@@ -175,8 +184,4 @@ def option(
         data["examples"] = list(examples)
     if supported_keys is not None:
         data["supported_keys"] = list(supported_keys)
-    if discovery_command is not None:
-        data["discovery_command"] = discovery_command
-    if placement is not None:
-        data["placement"] = placement
     return data

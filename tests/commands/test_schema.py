@@ -364,6 +364,23 @@ def test_schema_command_table_output_supports_contract_columns() -> None:
     assert "Unknown display column" not in result.stdout
 
 
+def test_schema_command_table_output_exposes_numeric_minimum() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--output-format",
+            "table",
+            "schema",
+            "--command",
+            "workflow-instance.watch",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "minimum=1" in result.stdout
+    assert "minimum=0" in result.stdout
+
+
 def test_schema_command_rejects_conflicting_scope_options() -> None:
     result = runner.invoke(
         app,

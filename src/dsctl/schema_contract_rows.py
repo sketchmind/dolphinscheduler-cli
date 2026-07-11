@@ -113,6 +113,9 @@ def _parameter_value(item: Mapping[str, JsonValue]) -> str:
     selector = item.get("selector")
     if isinstance(selector, str):
         parts.append(f"selector={selector}")
+    minimum = item.get("minimum")
+    if isinstance(minimum, int | float) and not isinstance(minimum, bool):
+        parts.append(f"minimum={minimum}")
     if "default" in item:
         parts.append(f"default={_compact_value(item['default'])}")
     choices = item.get("choices")

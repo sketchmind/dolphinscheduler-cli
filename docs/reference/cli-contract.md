@@ -485,8 +485,8 @@ Current guarantees:
 - uses `DS_VERSION` and `--env-file` for compact selected-version contract
   identity; `--full` retains all supported-version metadata
 - command arguments and options may include additive metadata such as
-  `choices`, `examples`, `supported_keys`, and `discovery_command` when the
-  CLI can expose a tighter contract for composite inputs
+  `choices`, `minimum`, `examples`, `supported_keys`, and
+  `discovery_command` when the CLI can expose a tighter contract
 - command entries that accept file payloads may include compact `payload`
   metadata; when present, `payload.template_command` is the preferred
   progressive-discovery command for a concrete payload template
@@ -765,6 +765,8 @@ Rules:
 - `data.schema` is a JSON-Schema-style authoring contract with `x-dsctl`
   metadata
 - `data.fields[]` is the canonical row model for table/tsv and `--columns`
+- dotted authoring paths are nested JSON Schema objects and `[]` paths are
+  represented as arrays; `data.fields[]` is not duplicated as `data.rows[]`
 - `data.fields[].choice_source` records the command or local source for
   discoverable values; `data.fields[].related_commands[]` records adjacent
   inspection or creation commands when useful

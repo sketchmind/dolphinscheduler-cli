@@ -117,3 +117,34 @@ def test_task_type_schema_command_returns_choice_sources_for_fields() -> None:
         "dsctl resource upload --file FILE",
         "dsctl resource view RESOURCE",
     ]
+
+
+def test_task_type_schema_table_uses_canonical_fields() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "task-type", "schema", "SHELL"],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[0].startswith("path")
+    assert "retry.times" in result.stdout
+    assert "depends_on[]" in result.stdout
+
+
+def test_task_type_schema_json_columns_project_canonical_fields() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--compact",
+            "--columns",
+            "path,type",
+            "task-type",
+            "schema",
+            "SHELL",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert "rows" not in payload["data"]
+    assert payload["data"]["fields"][0] == {"path": "name", "type": "string"}

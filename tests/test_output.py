@@ -164,10 +164,46 @@ def test_error_payload_infers_lookup_suggestion_from_not_found_details() -> None
         "message": "Project 'missing' was not found",
         "details": {"resource": "project", "name": "missing"},
         "suggestion": (
-            "Retry with `project list` to inspect available values, or pass "
+            "Retry with `dsctl project list` to inspect available values, or pass "
             "the numeric code if known."
         ),
     }
+
+
+@pytest.mark.parametrize(
+    ("details", "expected_command"),
+    [
+        (
+            {"resource": "workflow", "name": "missing", "project_code": 7},
+            "dsctl workflow list --project 7",
+        ),
+        (
+            {
+                "resource": "task",
+                "name": "missing",
+                "project_code": 7,
+                "workflow_code": 101,
+            },
+            "dsctl task list --project 7 --workflow 101",
+        ),
+        (
+            {
+                "resource": "task-instance",
+                "id": 999,
+                "workflow_instance_id": 901,
+            },
+            "dsctl task-instance list --workflow-instance 901",
+        ),
+    ],
+)
+def test_not_found_suggestion_preserves_numeric_scope_tuple(
+    details: dict[str, object],
+    expected_command: str,
+) -> None:
+    error = NotFoundError("missing", details=details)
+
+    assert error.suggestion is not None
+    assert f"`{expected_command}`" in error.suggestion
 
 
 def test_error_payload_infers_lookup_suggestion_from_resolution_details() -> None:

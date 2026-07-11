@@ -54,6 +54,11 @@ def get_workflow_instance(
                 "resource": WORKFLOW_INSTANCE_RESOURCE,
                 "id": workflow_instance_id,
             },
+            source=exc.source,
+            suggestion=(
+                "Run `dsctl workflow-instance list` to inspect available "
+                "workflow instance ids."
+            ),
         ) from exc
 
 

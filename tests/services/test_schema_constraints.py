@@ -49,6 +49,18 @@ def test_schema_exposes_high_value_cross_field_constraints() -> None:
         "fields": ["--start", "--end"],
     } in _constraints(workflow_backfill)
 
+    for action in (
+        "workflow.lineage.get",
+        "workflow.lineage.dependent-tasks",
+    ):
+        assert _constraints(_command_contract(action)) == [
+            {
+                "kind": "requires",
+                "if_present": "--project",
+                "fields": ["WORKFLOW"],
+            }
+        ]
+
     use_clear = _command_contract("use.clear")
     assert _constraints(use_clear) == [{"kind": "requires_all", "fields": ["--clear"]}]
 

@@ -376,6 +376,17 @@ surface.
 - [x] `dsctl task-type list` — live DS task-type discovery with favourite flags
 - [x] `dsctl task-type get|schema` — local task authoring summaries, field
       contracts, state rules, choices, and compile mappings
+- [ ] make task authoring discovery progressive: keep one canonical field
+      contract and add explicit field, JSON Schema, compile, and full views
+      instead of repeating the same metadata in one large response
+- [ ] make complex mutation dry-runs semantic by default: return the ordered
+      plan, compiled counts, and resolved selectors; expose raw REST requests
+      through one explicit detail view without duplicating `request` and
+      `requests[0]`
+- [ ] add bounded lifecycle `next_actions` (two or three command patterns per
+      transition) for create, run, watch, task inspection, and log retrieval
+- [ ] add an explicit read-only context validity check without making ordinary
+      `dsctl context` perform remote calls
 - [x] audit log inspection and audit filter metadata discovery
 - [x] workflow lineage inspection and dependent-task discovery
 - [ ] `--non-interactive` mode (never prompt stdin)

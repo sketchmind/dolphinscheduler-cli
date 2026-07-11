@@ -18,6 +18,12 @@ versioning policy is needed.
   explicit invocation and cross-field constraint metadata, and task-level
   response-size budgets while retaining the detailed `--list-commands`
   compatibility inventory.
+- Corrected task-authoring JSON Schema nesting and local references for retry
+  objects, dependency arrays, and plugin parameter models; removed the
+  duplicate `rows` copy of the canonical field list.
+- Improved workflow/template discovery, positional workflow recovery hints,
+  scoped resolver suggestions, runtime numeric bounds, and task-instance
+  missing/log error translation without masking generic upstream failures.
 
 ## 0.2.0 - 2026-04-20
 

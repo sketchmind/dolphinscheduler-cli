@@ -114,7 +114,6 @@ class TaskTypeAuthoringSchemaData(TypedDict):
     compile_mappings: list[TaskAuthoringCompileMappingData]
     template_command: str
     raw_template_command: str
-    rows: list[TaskAuthoringFieldData]
 
 
 class _MissingDefault:
@@ -276,7 +275,6 @@ def task_type_schema_data(task_type: str) -> TaskTypeAuthoringSchemaData:
         compile_mappings=_compile_mappings_for(normalized),
         template_command=f"dsctl template task {normalized}",
         raw_template_command=f"dsctl template task {normalized} --raw",
-        rows=fields,
     )
 
 
@@ -1326,11 +1324,7 @@ def _json_schema_for(
     fields: Sequence[TaskAuthoringFieldData],
 ) -> JsonObject:
     task_params_schema = _task_params_json_schema(task_type)
-    properties = {
-        _top_level_property_name(field["path"]): _field_json_schema(field)
-        for field in fields
-        if not field["path"].startswith("task_params.")
-    }
+    properties = _top_level_json_schema_properties(fields)
     properties["type"] = {"const": task_type, "type": "string"}
     properties["task_params"] = {"$ref": "#/$defs/task_params"}
     required = ["name", "type"]
@@ -1371,7 +1365,10 @@ def _task_params_json_schema(task_type: str) -> JsonObject:
             "additionalProperties": True,
             "description": "Generic DS-native task_params object for this plugin.",
         }
-    schema = model.model_json_schema(by_alias=True)
+    schema = model.model_json_schema(
+        by_alias=True,
+        ref_template="#/$defs/task_params/$defs/{model}",
+    )
     return require_json_object(schema, label=f"{task_type} task params schema")
 
 
@@ -1401,8 +1398,86 @@ def _field_json_schema(field: TaskAuthoringFieldData) -> JsonObject:
     return schema
 
 
-def _top_level_property_name(path: str) -> str:
-    return path.split(".", maxsplit=1)[0].removesuffix("[]")
+def _top_level_json_schema_properties(
+    fields: Sequence[TaskAuthoringFieldData],
+) -> JsonObject:
+    properties: JsonObject = {}
+    for field in fields:
+        path = field["path"]
+        if path == "task_params" or path.startswith("task_params."):
+            continue
+        _insert_authoring_field_schema(properties, path=path, field=field)
+    return properties
+
+
+def _insert_authoring_field_schema(
+    properties: JsonObject,
+    *,
+    path: str,
+    field: TaskAuthoringFieldData,
+) -> None:
+    current = properties
+    segments = path.split(".")
+    for index, segment in enumerate(segments):
+        is_array = segment.endswith("[]")
+        name = segment.removesuffix("[]")
+        if index == len(segments) - 1:
+            current[name] = (
+                _array_field_json_schema(field)
+                if is_array
+                else _field_json_schema(field)
+            )
+            return
+        current = _nested_authoring_properties(
+            current,
+            name=name,
+            is_array=is_array,
+            path=path,
+        )
+
+
+def _nested_authoring_properties(
+    properties: JsonObject,
+    *,
+    name: str,
+    is_array: bool,
+    path: str,
+) -> JsonObject:
+    existing = properties.get(name)
+    if existing is None:
+        nested: JsonObject = {"type": "object", "properties": {}}
+        node: JsonObject = {"type": "array", "items": nested} if is_array else nested
+        properties[name] = node
+    elif isinstance(existing, dict):
+        node = existing
+    else:
+        message = f"task authoring schema path conflicts at {path}"
+        raise TypeError(message)
+
+    target = node.get("items") if is_array else node
+    if not isinstance(target, dict):
+        message = f"task authoring schema path has invalid container at {path}"
+        raise TypeError(message)
+    nested_properties = target.get("properties")
+    if not isinstance(nested_properties, dict):
+        message = f"task authoring schema path has no object properties at {path}"
+        raise TypeError(message)
+    return nested_properties
+
+
+def _array_field_json_schema(field: TaskAuthoringFieldData) -> JsonObject:
+    item_schema = _field_json_schema(field)
+    array_schema: JsonObject = {
+        "type": "array",
+        "items": item_schema,
+    }
+    for key in ("description", "default", "x-dsctl"):
+        value = item_schema.pop(key, None)
+        if value is not None:
+            if key == "default" and isinstance(value, tuple):
+                value = list(value)
+            array_schema[key] = value
+    return array_schema
 
 
 def _summary_rows(task_type: str) -> list[TaskTypeSummaryRowData]:

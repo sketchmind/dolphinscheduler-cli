@@ -4357,6 +4357,7 @@ def test_adapter_task_instance_methods_bridge_v2_and_logger_endpoints() -> None:
     assert page.total == 1
     assert page.totalList is not None
     assert page.totalList[0].name == "extract"
+    assert task_instance is not None
     assert task_instance.workflowInstanceId == 901
     assert log.lineNum == 2
     assert log.message == "line-1\nline-2"
@@ -4368,6 +4369,51 @@ def test_adapter_task_instance_methods_bridge_v2_and_logger_endpoints() -> None:
         ("POST", "/dolphinscheduler/projects/7/task-instances/3001/savepoint"),
         ("POST", "/dolphinscheduler/projects/7/task-instances/3001/stop"),
     ]
+
+
+def test_adapter_task_instance_get_normalizes_only_empty_200_body_to_none() -> None:
+    profile = make_profile()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == (
+            "/dolphinscheduler/v2/projects/7/task-instances/999999"
+        )
+        return httpx.Response(200, content=b"")
+
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = DS341Adapter().bind(profile, http_client=http_client)
+        task_instance = session.task_instances.get(
+            project_code=7,
+            task_instance_id=999999,
+        )
+
+    assert task_instance is None
+
+
+def test_adapter_task_instance_get_preserves_nonempty_invalid_json_error() -> None:
+    profile = make_profile()
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"not-json")
+
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = DS341Adapter().bind(profile, http_client=http_client)
+        with pytest.raises(ApiTransportError, match="not valid JSON"):
+            session.task_instances.get(
+                project_code=7,
+                task_instance_id=999999,
+            )
 
 
 def test_adapter_resource_methods_use_resource_endpoints() -> None:

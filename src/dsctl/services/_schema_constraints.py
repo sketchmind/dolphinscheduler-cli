@@ -62,6 +62,8 @@ _WORKFLOW_TARGET_ACTIONS = (
     "workflow.run-task",
     "workflow.backfill",
     "workflow.delete",
+    "workflow.lineage.get",
+    "workflow.lineage.dependent-tasks",
 )
 _WORKFLOW_EXPLICIT_PROJECT_CONSTRAINT = (_requires("--project", "WORKFLOW"),)
 

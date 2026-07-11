@@ -91,7 +91,7 @@ def test_project_get_command_reports_not_found_suggestion() -> None:
     assert payload["action"] == "project.get"
     assert payload["error"]["type"] == "not_found"
     assert payload["error"]["suggestion"] == (
-        "Retry with `project list` to inspect available values, or pass the "
+        "Retry with `dsctl project list` to inspect available values, or pass the "
         "numeric code if known."
     )
 

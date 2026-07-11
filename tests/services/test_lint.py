@@ -260,5 +260,13 @@ tasks:
         encoding="utf-8",
     )
 
-    with pytest.raises(UserInputError, match="depends on unknown task 'missing'"):
+    with pytest.raises(
+        UserInputError,
+        match="depends on unknown task 'missing'",
+    ) as exc_info:
         lint_workflow_result(file=spec_path)
+
+    assert exc_info.value.suggestion == (
+        "Fix task names and references in the workflow input, then retry the "
+        "current operation."
+    )
