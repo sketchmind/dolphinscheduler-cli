@@ -465,6 +465,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
                     state_value=FakeEnumValue("RUNNING_EXECUTION"),
                     retry_times_value=0,
                     host="worker-1",
+                    log_path_value="/logs/3001.log",
                     start_time_value="2026-04-11 10:00:00",
                     duration_value="15s",
                 ),
@@ -490,6 +491,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
                     state_value=FakeEnumValue("FAILURE"),
                     retry_times_value=2,
                     host="worker-2",
+                    log_path_value="/logs/3003.log",
                     end_time_value="2026-04-11 10:01:00",
                     duration_value="8s",
                 ),
@@ -549,6 +551,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": "2026-04-11 10:00:00",
             "endTime": None,
             "duration": "15s",
+            "logAvailable": True,
         }
     ]
     assert data["queuedTasks"] == [
@@ -563,6 +566,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": None,
             "endTime": None,
             "duration": None,
+            "logAvailable": False,
         }
     ]
     assert data["failedTasks"] == [
@@ -577,6 +581,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": None,
             "endTime": "2026-04-11 10:01:00",
             "duration": "8s",
+            "logAvailable": True,
         }
     ]
     assert data["retriedTasks"] == [
@@ -591,6 +596,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": None,
             "endTime": "2026-04-11 10:01:00",
             "duration": "8s",
+            "logAvailable": True,
         },
         {
             "id": 3004,
@@ -603,6 +609,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": None,
             "endTime": "2026-04-11 10:02:00",
             "duration": "3s",
+            "logAvailable": False,
         },
     ]
 

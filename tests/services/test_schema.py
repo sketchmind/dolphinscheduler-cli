@@ -139,6 +139,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "warnings",
             "warning_details",
         ],
+        "optional_success_fields": ["next_actions"],
         "error_fields": [
             "ok",
             "action",
@@ -155,6 +156,17 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "warning_details_aligned": True,
         "data_shape_metadata": True,
         "json_column_projection": True,
+        "next_actions": {
+            "field": "next_actions",
+            "presence": "successful_applicable_json_responses_only",
+            "max_items": 3,
+            "ordered": True,
+            "item_fields": ["action", "command", "mutates"],
+            "command_kind": "complete_shell_invocation",
+            "authorization": "advisory",
+            "row_output": False,
+            "preserves_env_file": True,
+        },
     }
 
     commands = data["commands"]
@@ -241,6 +253,11 @@ def test_schema_result_describes_current_stable_surface() -> None:
     capabilities_command = _find_command(commands, "capabilities")
     capabilities_options = _require_list(capabilities_command["options"])
     assert _find_option(capabilities_options, "summary")["default"] is False
+    full_option = _find_option(capabilities_options, "full")
+    assert full_option["default"] is False
+    assert full_option["description"] == (
+        "Return the complete expanded capability inventory."
+    )
     section_option = _find_option(capabilities_options, "section")
     assert section_option["description"] == (
         "Return one top-level capability section. Supported: selection, output, "
@@ -251,6 +268,12 @@ def test_schema_result_describes_current_stable_surface() -> None:
     section_choices = section_option["choices"]
     assert isinstance(section_choices, list)
     assert "runtime" in section_choices
+    assert capabilities_command["constraints"] == [
+        {
+            "kind": "at_most_one_of",
+            "fields": ["--summary", "--section", "--full"],
+        }
+    ]
 
     template_group = _find_group(commands, "template")
     workflow_command = _find_command(template_group["commands"], "workflow")
@@ -1350,6 +1373,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "warnings": True,
             "warning_details_alignment": True,
             "structured_errors": True,
+            "structured_next_actions": True,
         },
         "errors": {
             "structured": True,

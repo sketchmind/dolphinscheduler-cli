@@ -11,7 +11,7 @@ from dsctl.services.schema import get_schema_result
 
 
 def test_surface_discovery_is_consistent_between_schema_and_capabilities() -> None:
-    capabilities = get_capabilities_result().data
+    capabilities = get_capabilities_result(full=True).data
     schema = get_schema_result(full=True).data
 
     assert isinstance(capabilities, dict)

@@ -27,7 +27,7 @@ def capabilities_command(
         bool,
         typer.Option(
             "--summary",
-            help="Return lightweight capability discovery.",
+            help="Return the bounded default capability summary explicitly.",
         ),
     ] = False,
     section: Annotated[
@@ -37,8 +37,15 @@ def capabilities_command(
             help=CAPABILITIES_SECTION_HELP,
         ),
     ] = None,
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help="Return the complete expanded capability inventory.",
+        ),
+    ] = False,
 ) -> None:
-    """Print stable version and surface capability discovery."""
+    """Print bounded version and surface capability discovery."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -47,5 +54,6 @@ def capabilities_command(
             env_file=env_file,
             summary=summary,
             section=section,
+            full=full,
         ),
     )

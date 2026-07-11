@@ -112,7 +112,7 @@ ACTION_CONSTRAINTS: dict[str, tuple[Constraint, ...]] = {
         ),
         _forbids("--full", "--list-groups", "--list-commands"),
     ),
-    "capabilities": (_fields("at_most_one_of", "--summary", "--section"),),
+    "capabilities": (_fields("at_most_one_of", "--summary", "--section", "--full"),),
     "task-type.schema": (
         _fields(
             "at_most_one_of",

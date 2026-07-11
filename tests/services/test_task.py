@@ -300,6 +300,68 @@ def test_update_task_result_dry_run_emits_native_update_request(
     assert task_params["rawScript"] == "echo load v2"
 
 
+def test_update_remote_shell_command_preserves_existing_connection_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+) -> None:
+    remote = FakeTaskDefinition(
+        code=203,
+        name="remote",
+        project_code_value=7,
+        task_type_value="REMOTESHELL",
+        task_params_value=('{"rawScript":"echo old","type":"SSH","datasource":17}'),
+        project_name_value="etl-prod",
+        flag_value=FakeEnumValue("YES"),
+    )
+    workflow = FakeWorkflow(
+        code=101,
+        name="daily-sync",
+        project_code_value=7,
+        user_id_value=11,
+    )
+    workflow_adapter = FakeWorkflowAdapter(
+        workflows=[workflow],
+        dags={
+            101: FakeDag(
+                workflow_definition_value=workflow,
+                task_definition_list_value=[remote],
+                workflow_task_relation_list_value=[],
+            )
+        },
+    )
+    task_adapter = FakeTaskAdapter(workflow_tasks={101: [remote]})
+    _install_task_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    result = task_service.update_task_result(
+        "remote",
+        set_values=["command=echo new"],
+        dry_run=True,
+    )
+    no_change = task_service.update_task_result(
+        "remote",
+        set_values=["command=echo old"],
+        dry_run=True,
+    )
+    data = _mapping(result.data)
+    request = _mapping(data["request"])
+    form = _mapping(request["form"])
+    payload = _mapping(json.loads(str(form["taskDefinitionJsonObj"])))
+    task_params = _mapping(json.loads(str(payload["taskParams"])))
+
+    assert _mapping(no_change.data)["no_change"] is True
+    assert task_params == {
+        "rawScript": "echo new",
+        "type": "SSH",
+        "datasource": 17,
+    }
+
+
 def test_update_task_result_applies_native_task_update(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,

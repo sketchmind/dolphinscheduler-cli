@@ -408,6 +408,7 @@ def test_workflow_instance_digest_command_returns_runtime_summary() -> None:
             "startTime": None,
             "endTime": None,
             "duration": None,
+            "logAvailable": False,
         }
     ]
 

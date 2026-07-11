@@ -174,6 +174,96 @@ def test_task_type_summary_result_describes_local_authoring_contract() -> None:
     assert commands["full-schema"] == "dsctl task-type schema SQL --full"
 
 
+@pytest.mark.parametrize(
+    (
+        "task_type",
+        "expected_payload_modes",
+        "expected_required_paths",
+        "expected_required_paths_by_payload_mode",
+    ),
+    [
+        (
+            "SHELL",
+            ["command", "task_params"],
+            ["name", "type"],
+            {
+                "command": ["command"],
+                "task_params": ["task_params.rawScript"],
+            },
+        ),
+        (
+            "PYTHON",
+            ["command", "task_params"],
+            ["name", "type"],
+            {
+                "command": ["command"],
+                "task_params": ["task_params.rawScript"],
+            },
+        ),
+        (
+            "REMOTESHELL",
+            ["task_params"],
+            ["name", "type"],
+            {
+                "task_params": [
+                    "task_params.rawScript",
+                    "task_params.datasource",
+                ]
+            },
+        ),
+        (
+            "SQL",
+            ["task_params"],
+            [
+                "name",
+                "type",
+                "task_params",
+                "task_params.type",
+                "task_params.datasource",
+                "task_params.sql",
+                "task_params.sqlType",
+            ],
+            {},
+        ),
+    ],
+)
+def test_task_type_summary_separates_payload_mode_requirements(
+    task_type: str,
+    expected_payload_modes: list[str],
+    expected_required_paths: list[str],
+    expected_required_paths_by_payload_mode: dict[str, list[str]],
+) -> None:
+    data = _mapping(task_type_service.task_type_summary_result(task_type).data)
+
+    assert data["payload_modes"] == expected_payload_modes
+    assert data["required_paths"] == expected_required_paths
+    assert (
+        data["required_paths_by_payload_mode"]
+        == expected_required_paths_by_payload_mode
+    )
+
+
+def test_remote_shell_schema_exposes_ssh_as_the_only_connection_type() -> None:
+    data = _mapping(task_type_service.task_type_schema_result("REMOTESHELL").data)
+    fields = [_mapping(item) for item in _sequence(data["fields"])]
+    remote_type = next(field for field in fields if field["path"] == "task_params.type")
+
+    assert remote_type["type"] == "enum"
+    assert remote_type["choices"] == ["SSH"]
+
+    json_schema_data = _mapping(
+        task_type_service.task_type_schema_result(
+            "REMOTESHELL",
+            json_schema=True,
+        ).data
+    )
+    schema = _mapping(json_schema_data["schema"])
+    definitions = _mapping(schema["$defs"])
+    task_params = _mapping(definitions["task_params"])
+    properties = _mapping(task_params["properties"])
+    assert _mapping(properties["type"])["const"] == "SSH"
+
+
 def test_task_type_schema_result_describes_fields_and_state_rules() -> None:
     result = task_type_service.task_type_schema_result("SQL")
     data = _mapping(result.data)

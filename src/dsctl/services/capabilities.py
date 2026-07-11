@@ -109,13 +109,15 @@ def get_capabilities_result(
     env_file: str | None = None,
     summary: bool = False,
     section: str | None = None,
+    full: bool = False,
 ) -> CommandResult:
-    """Return stable capability discovery for the current CLI surface."""
-    if summary and section is not None:
-        message = "--summary and --section are mutually exclusive"
+    """Return bounded capability discovery unless expansion is explicit."""
+    selected_views = sum((summary, section is not None, full))
+    if selected_views > 1:
+        message = "--summary, --section, and --full are mutually exclusive"
         raise UserInputError(
             message,
-            suggestion="Pass either --summary or --section SECTION, not both.",
+            suggestion=("Pass at most one of --summary, --section SECTION, or --full."),
         )
     selected_version = load_selected_ds_version(env_file)
     support = get_version_support(selected_version)
@@ -123,11 +125,6 @@ def get_capabilities_result(
         _capabilities_data(support),
         label="capabilities data",
     )
-    if summary:
-        return CommandResult(
-            data=_capabilities_summary_data(data),
-            resolved={"capabilities": {"view": "summary"}},
-        )
     if section is not None:
         normalized_section = section.strip()
         return CommandResult(
@@ -139,8 +136,14 @@ def get_capabilities_result(
                 }
             },
         )
+    if full:
+        return CommandResult(
+            data=data,
+            resolved={"capabilities": {"view": "full"}},
+        )
     return CommandResult(
-        data=data,
+        data=_capabilities_summary_data(data),
+        resolved={"capabilities": {"view": "summary"}},
     )
 
 
@@ -363,7 +366,7 @@ def _capabilities_section_data(
                 "available_sections": list(CAPABILITIES_SECTION_CHOICES),
             },
             suggestion=(
-                "Run `dsctl capabilities --summary` or pass one section name "
+                "Run `dsctl capabilities` or pass one section name "
                 "from the available_sections list."
             ),
         )

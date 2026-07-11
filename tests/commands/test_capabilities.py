@@ -45,12 +45,13 @@ EXPECTED_DS_CAPABILITIES = {
 }
 
 
-def test_capabilities_command_returns_surface_discovery() -> None:
-    result = runner.invoke(app, ["capabilities"])
+def test_capabilities_command_returns_full_surface_discovery() -> None:
+    result = runner.invoke(app, ["capabilities", "--full"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "capabilities"
+    assert payload["resolved"] == {"capabilities": {"view": "full"}}
     assert payload["data"]["ds"] == EXPECTED_DS_CAPABILITIES
     assert payload["data"]["resources"]["top_level"] == [
         "version",
@@ -119,6 +120,7 @@ def test_capabilities_command_returns_surface_discovery() -> None:
         "warnings": True,
         "warning_details_alignment": True,
         "structured_errors": True,
+        "structured_next_actions": True,
     }
     assert payload["data"]["self_description"] == {
         "schema": True,
@@ -150,6 +152,7 @@ def test_capabilities_help_points_to_section_discovery() -> None:
     assert "capabilities" in help_text
     assert "selection" in help_text
     assert "runtime" in help_text
+    assert "--full" in help_text
 
 
 def test_capabilities_command_honors_env_file_ds_version(
@@ -185,6 +188,23 @@ def test_capabilities_command_returns_summary() -> None:
     assert "parameter_syntax" not in payload["data"]["authoring"]
 
 
+def test_capabilities_command_defaults_to_bounded_summary() -> None:
+    default_result = runner.invoke(app, ["--compact", "capabilities"])
+    explicit_result = runner.invoke(
+        app,
+        ["--compact", "capabilities", "--summary"],
+    )
+
+    assert default_result.exit_code == 0
+    assert explicit_result.exit_code == 0
+    assert json.loads(default_result.stdout) == json.loads(explicit_result.stdout)
+    assert len(default_result.stdout.encode("utf-8")) < 8 * 1024
+    payload = json.loads(default_result.stdout)
+    assert payload["resolved"] == {"capabilities": {"view": "summary"}}
+    assert "parameter_syntax" not in payload["data"]["authoring"]
+    assert "task_templates" not in payload["data"]["authoring"]
+
+
 def test_capabilities_command_returns_section() -> None:
     result = runner.invoke(app, ["capabilities", "--section", "runtime"])
 
@@ -214,6 +234,19 @@ def test_capabilities_command_rejects_conflicting_scope_options() -> None:
     result = runner.invoke(
         app,
         ["capabilities", "--summary", "--section", "runtime"],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "capabilities"
+    assert payload["error"]["type"] == "user_input_error"
+    assert "mutually exclusive" in payload["error"]["message"]
+
+
+def test_capabilities_command_rejects_full_with_section() -> None:
+    result = runner.invoke(
+        app,
+        ["capabilities", "--full", "--section", "runtime"],
     )
 
     assert result.exit_code == 1

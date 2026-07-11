@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.errors import DsctlError
+from dsctl.result_navigation import next_actions_for
 from dsctl.support.json_types import is_json_value
 
 if TYPE_CHECKING:
@@ -53,9 +54,14 @@ class DryRunWarningDetail(TypedDict):
     request_sent: bool
 
 
-def success_payload(action: str, result: CommandResult) -> JsonObject:
+def success_payload(
+    action: str,
+    result: CommandResult,
+    *,
+    env_file: str | None = None,
+) -> JsonObject:
     """Build the standard success envelope for a completed command."""
-    return {
+    payload: JsonObject = {
         "ok": True,
         "action": action,
         "resolved": result.resolved,
@@ -66,6 +72,18 @@ def success_payload(action: str, result: CommandResult) -> JsonObject:
             for item in result.warning_details
         ],
     }
+    next_actions = next_actions_for(
+        action,
+        resolved=result.resolved,
+        data=result.data,
+        env_file=env_file,
+    )
+    if next_actions:
+        payload["next_actions"] = [
+            require_json_object(item, label="success payload next action")
+            for item in next_actions
+        ]
+    return payload
 
 
 def error_payload(

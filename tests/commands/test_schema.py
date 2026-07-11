@@ -153,6 +153,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
             "warnings",
             "warning_details",
         ],
+        "optional_success_fields": ["next_actions"],
         "error_fields": [
             "ok",
             "action",
@@ -169,6 +170,17 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "warning_details_aligned": True,
         "data_shape_metadata": True,
         "json_column_projection": True,
+        "next_actions": {
+            "field": "next_actions",
+            "presence": "successful_applicable_json_responses_only",
+            "max_items": 3,
+            "ordered": True,
+            "item_fields": ["action", "command", "mutates"],
+            "command_kind": "complete_shell_invocation",
+            "authorization": "advisory",
+            "row_output": False,
+            "preserves_env_file": True,
+        },
     }
     assert payload["data"]["capabilities"]["monitor"] == {
         "health": True,

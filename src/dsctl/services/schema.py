@@ -385,7 +385,7 @@ def _schema_index_data(*, ds_version: str) -> JsonObject:
             },
             {
                 "rel": "capabilities",
-                "command": "dsctl capabilities --summary",
+                "command": "dsctl capabilities",
             },
         ],
     }
@@ -1074,7 +1074,9 @@ def _top_level_command_schema(name: str) -> JsonObject:
                     _option(
                         "summary",
                         value_type="boolean",
-                        description="Return lightweight capability discovery.",
+                        description=(
+                            "Return the bounded default capability summary explicitly."
+                        ),
                         default=False,
                     ),
                     _option(
@@ -1087,6 +1089,14 @@ def _top_level_command_schema(name: str) -> JsonObject:
                         ),
                         choices=list(CAPABILITIES_SECTION_CHOICES),
                         discovery_command="dsctl schema --command capabilities",
+                    ),
+                    _option(
+                        "full",
+                        value_type="boolean",
+                        description=(
+                            "Return the complete expanded capability inventory."
+                        ),
+                        default=False,
                     ),
                 ],
             ),
