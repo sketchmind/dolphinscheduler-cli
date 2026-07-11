@@ -98,7 +98,7 @@ def test_render_command_omits_page_diagnostic_for_empty_result() -> None:
     assert rendered.stderr == ""
 
 
-def test_render_command_reports_only_implicit_project_and_workflow_context() -> None:
+def test_render_command_does_not_append_resolved_context_to_row_output() -> None:
     payload = success_payload(
         "workflow.list",
         CommandResult(
@@ -114,34 +114,6 @@ def test_render_command_reports_only_implicit_project_and_workflow_context() -> 
                     "name": "daily-etl",
                     "source": "context",
                 },
-                "task": {
-                    "name": "extract",
-                    "source": "context",
-                },
-            },
-        ),
-    )
-
-    rendered = render_command(
-        payload,
-        action="workflow.list",
-        options=RenderOptions(output_format="table"),
-    )
-
-    assert rendered.stderr == "context: project=etl-prod; workflow=daily-etl\n"
-
-
-def test_render_command_omits_explicit_selection_context() -> None:
-    payload = success_payload(
-        "workflow.list",
-        CommandResult(
-            data=[{"code": 1, "name": "daily-etl", "version": 1}],
-            resolved={
-                "project": {
-                    "code": 7,
-                    "name": "etl-prod",
-                    "source": "flag",
-                }
             },
         ),
     )

@@ -128,8 +128,8 @@ Rules:
 - `tsv` renders the same row model as tab-separated text for shell pipelines
 - row-oriented formats use each command's `data_shape` metadata when present
   and fall back to runtime shape inference for simple list payloads
-- table and TSV write only row data to stdout; implicit stored context,
-  partial/non-first-page summaries, and warnings are written to stderr
+- table and TSV write only row data to stdout; partial/non-first-page summaries
+  and warnings are written to stderr
 - global options are passed before the command group, for example:
 
 ```bash
@@ -172,6 +172,8 @@ Rules:
 - it may be combined with `--columns`
 - it changes only insignificant JSON whitespace; envelope fields, types,
   pagination, resolved metadata, warnings, and errors remain intact
+- it is a secondary token optimization; select needed columns and reduce page
+  size before relying on layout compaction
 - raw artifact success output is unchanged
 - `--compact` with table or TSV is a `user_input_error`
 - like every global option, it must appear before the command group
@@ -198,8 +200,8 @@ Process-channel guarantees:
 - Typer/Click usage errors are written to stderr and exit with status 2
 - JSON keeps warnings and page metadata inside the envelope without duplicating
   them to stderr
-- table and TSV keep stdout row-only and write implicit stored context,
-  partial/non-first-page, and warning diagnostics to stderr
+- table and TSV keep stdout row-only and write partial/non-first-page and
+  warning diagnostics to stderr
 - raw artifacts keep their exact success body on stdout and write any warnings
   to stderr
 
