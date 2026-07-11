@@ -53,6 +53,7 @@ TOP_LEVEL_COMMANDS: tuple[str, ...] = (
     "schema",
     "capabilities",
 )
+GROUP_LEVEL_ACTIONS: tuple[str, ...] = ("use.clear",)
 NAME_FIRST_RESOURCES: tuple[str, ...] = (
     PROJECT_RESOURCE,
     ENV_RESOURCE,
@@ -377,7 +378,7 @@ def resource_label(resource: str) -> str:
 
 def stable_leaf_actions() -> frozenset[str]:
     """Return the stable leaf command actions described by the CLI surface."""
-    actions = set(TOP_LEVEL_COMMANDS)
+    actions = {*TOP_LEVEL_COMMANDS, *GROUP_LEVEL_ACTIONS}
     for resource, commands in RESOURCE_COMMAND_TREE.items():
         for command in commands:
             actions.update(_surface_leaf_actions((resource,), command))

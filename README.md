@@ -81,14 +81,19 @@ dsctl workflow edit --help
 ```
 
 Use `schema` for machine-readable arguments, options, choices, payload hints,
-and output shape metadata:
+and output shape metadata. Start with the bounded index, expand one group only
+when needed, then request the action-local contract:
 
 ```bash
+dsctl schema
 dsctl schema --list-groups
-dsctl schema --list-commands
+dsctl schema --group workflow
 dsctl schema --command workflow.edit
 dsctl schema --command task-type.schema
 ```
+
+`dsctl schema --full` retains the expanded whole-surface contract for audits
+and generators; it is not the normal agent discovery path.
 
 Use `capabilities` for lightweight feature discovery:
 

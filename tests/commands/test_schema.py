@@ -17,12 +17,13 @@ runner = CliRunner()
 
 
 def test_schema_command_returns_machine_readable_cli_surface() -> None:
-    result = runner.invoke(app, ["schema"])
+    result = runner.invoke(app, ["schema", "--full"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "schema"
-    assert payload["data"]["schema_version"] == 1
+    assert payload["data"]["schema_version"] == 2
+    assert payload["data"]["view"] == "full"
     assert payload["data"]["cli"] == {"name": "dsctl", "version": "0.2.0"}
     command_names = [item["name"] for item in payload["data"]["commands"]]
     assert command_names[:18] == [
@@ -186,10 +187,12 @@ def test_schema_command_honors_env_file_ds_version(isolated_cwd: Path) -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["data"]["capabilities"]["ds"]["selected_version"] == "3.3.2"
-    assert payload["data"]["capabilities"]["ds"]["current_version"] == "3.3.2"
-    assert payload["data"]["capabilities"]["ds"]["support_level"] == "experimental"
-    assert payload["data"]["capabilities"]["ds"]["tested"] is False
+    assert payload["data"]["ds"] == {
+        "selected_version": "3.3.2",
+        "contract_version": "3.4.1",
+        "support_level": "experimental",
+        "tested": False,
+    }
 
 
 def test_schema_command_returns_group_scope() -> None:
@@ -205,9 +208,10 @@ def test_schema_command_returns_group_scope() -> None:
         }
     }
     assert "capabilities" not in payload["data"]
-    commands = payload["data"]["commands"]
-    assert len(commands) == 1
-    assert commands[0]["name"] == "task-instance"
+    assert payload["data"]["group"]["name"] == "task-instance"
+    assert any(
+        item["action"] == "task-instance.list" for item in payload["data"]["actions"]
+    )
 
 
 def test_schema_command_returns_command_scope() -> None:
@@ -222,12 +226,9 @@ def test_schema_command_returns_command_scope() -> None:
             "command": "task-instance.list",
         }
     }
-    commands = payload["data"]["commands"]
-    assert len(commands) == 1
-    assert commands[0]["name"] == "task-instance"
-    assert [item["action"] for item in commands[0]["commands"]] == [
-        "task-instance.list"
-    ]
+    command = payload["data"]["command"]
+    assert command["name"] == "list"
+    assert command["action"] == "task-instance.list"
 
 
 def test_schema_command_can_list_group_and_command_values() -> None:
@@ -268,8 +269,7 @@ def test_schema_command_datasource_create_uses_payload_reference() -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    commands = payload["data"]["commands"]
-    datasource_create = commands[0]["commands"][0]
+    datasource_create = payload["data"]["command"]
     assert "payload_schema" not in datasource_create
     assert datasource_create["payload"]["template_command"] == (
         "dsctl template datasource --type MYSQL"
@@ -296,6 +296,25 @@ def test_schema_command_datasource_create_table_output_is_compact() -> None:
     assert "additional_fields_by_type" not in result.stdout
 
 
+def test_schema_command_expanded_scope_keeps_derived_table_contract_rows() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--output-format",
+            "table",
+            "schema",
+            "--command",
+            "datasource.create",
+            "--full",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "description" in result.stdout.splitlines()[0]
+    assert "--file" in result.stdout
+    assert "template_discovery_command" in result.stdout
+
+
 def test_schema_command_long_choices_render_as_discovery_hint() -> None:
     result = runner.invoke(
         app,
@@ -307,6 +326,22 @@ def test_schema_command_long_choices_render_as_discovery_hint() -> None:
     assert "choices=29 values; use discovery_command" in result.stdout
     assert "dsctl template datasource" in result.stdout
     assert "ALIYUN_SERVERLESS_SPARK" not in result.stdout
+
+
+def test_schema_command_default_table_prioritizes_compact_invocation_fields() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "schema", "--command", "workflow.backfill"],
+    )
+
+    assert result.exit_code == 0
+    assert max(len(line) for line in result.stdout.splitlines()) < 240
+    header = result.stdout.splitlines()[0]
+    assert "invocation" in header
+    assert "description" not in header
+    assert "dsctl workflow backfill [WORKFLOW] [OPTIONS]" in result.stdout
+    assert "at_least_one_of" in result.stdout
+    assert "--date | --start+--end" in result.stdout
 
 
 def test_schema_command_table_output_supports_contract_columns() -> None:
@@ -340,3 +375,13 @@ def test_schema_command_rejects_conflicting_scope_options() -> None:
     assert payload["action"] == "schema"
     assert payload["error"]["type"] == "user_input_error"
     assert "mutually exclusive" in payload["error"]["message"]
+
+
+def test_schema_command_rejects_full_list_view() -> None:
+    result = runner.invoke(app, ["schema", "--list-commands", "--full"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "schema"
+    assert payload["error"]["type"] == "user_input_error"
+    assert "--full cannot be combined" in payload["error"]["message"]

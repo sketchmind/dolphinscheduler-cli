@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
+from dsctl.data_shapes import data_shape_schema_for_action
 from dsctl.errors import UserInputError
 from dsctl.models import supported_typed_task_types
-from dsctl.services._data_shapes import data_shape_schema_for_action
 from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 from dsctl.services.schema import get_schema_result
@@ -77,11 +77,12 @@ EXPECTED_DS_CAPABILITIES = {
 
 
 def test_schema_result_describes_current_stable_surface() -> None:
-    result = get_schema_result()
+    result = get_schema_result(full=True)
     data = result.data
 
     assert isinstance(data, dict)
-    assert data["schema_version"] == 1
+    assert data["schema_version"] == 2
+    assert data["view"] == "full"
     assert data["cli"] == {"name": "dsctl", "version": "0.2.0"}
     assert data["supported_ds_versions"] == ["3.3.2", "3.4.0", "3.4.1"]
     assert data["ds_versions"] == EXPECTED_VERSION_METADATA
@@ -195,23 +196,34 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "task-instance",
     ]
     schema_command = _find_command(commands, "schema")
+    assert schema_command["invocation"] == "dsctl schema [OPTIONS]"
     schema_options = _require_list(schema_command["options"])
     assert _find_option(schema_options, "group")["description"] == (
-        "Return schema for one command group. Discover values with "
-        "`dsctl schema --list-groups`."
+        "Return one group's action index. Discover groups with `dsctl schema` "
+        "or `dsctl schema --list-groups`."
     )
     assert _find_option(schema_options, "group")["discovery_command"] == (
         "dsctl schema --list-groups"
     )
     assert _find_option(schema_options, "command")["description"] == (
-        "Return schema for one stable command action. Discover values with "
-        "`dsctl schema --list-commands`."
+        "Return one complete action-local contract. Discover actions with "
+        "`dsctl schema` or `dsctl schema --group GROUP`."
     )
     assert _find_option(schema_options, "command")["discovery_command"] == (
-        "dsctl schema --list-commands"
+        "dsctl schema"
     )
     assert _find_option(schema_options, "list-groups")["default"] is False
     assert _find_option(schema_options, "list-commands")["default"] is False
+    assert _find_option(schema_options, "full")["default"] is False
+    schema_view_shapes = _require_dict(schema_command["data_shapes_by_view"])
+    assert _require_dict(schema_view_shapes["index"])["row_path"] == "data.groups"
+    assert _require_dict(schema_view_shapes["group"])["row_path"] == "data.actions"
+    assert _require_dict(schema_view_shapes["command"])["row_path"] == ("data.command")
+    assert _require_dict(schema_view_shapes["full"])["row_path"] == "data.commands"
+    assert _require_dict(schema_view_shapes["full_group"])["row_path"] == "data.rows"
+    assert _require_dict(schema_view_shapes["full_command"])["row_path"] == (
+        "data.rows"
+    )
     global_options = _require_list(data["global_options"])
     assert _find_option(global_options, "output-format")["choices"] == [
         "json",
@@ -1432,25 +1444,23 @@ def test_schema_result_honors_env_file_ds_version(tmp_path: Path) -> None:
     data = result.data
 
     assert isinstance(data, dict)
-    capabilities = data["capabilities"]
-    assert isinstance(capabilities, dict)
-    ds_capabilities = capabilities["ds"]
-    assert isinstance(ds_capabilities, dict)
-    assert ds_capabilities["selected_version"] == "3.3.2"
-    assert ds_capabilities["current_version"] == "3.3.2"
-    assert ds_capabilities["support_level"] == "experimental"
-    assert ds_capabilities["tested"] is False
+    ds = _require_dict(data["ds"])
+    assert ds["selected_version"] == "3.3.2"
+    assert ds["contract_version"] == "3.4.1"
+    assert ds["support_level"] == "experimental"
+    assert ds["tested"] is False
 
 
 def test_schema_result_can_return_one_group() -> None:
-    result = get_schema_result(group="task-instance")
+    result = get_schema_result(group="task-instance", full=True)
     data = result.data
 
     assert isinstance(data, dict)
     assert "capabilities" not in data
     assert result.resolved == {
         "schema": {
-            "view": "group",
+            "view": "full",
+            "scope": "group",
             "group": "task-instance",
         }
     }
@@ -1476,14 +1486,15 @@ def test_schema_result_can_return_one_group() -> None:
 
 
 def test_schema_result_can_return_one_command() -> None:
-    result = get_schema_result(command_action="task-instance.list")
+    result = get_schema_result(command_action="task-instance.list", full=True)
     data = result.data
 
     assert isinstance(data, dict)
     assert "capabilities" not in data
     assert result.resolved == {
         "schema": {
-            "view": "command",
+            "view": "full",
+            "scope": "command",
             "command": "task-instance.list",
         }
     }
@@ -1514,6 +1525,7 @@ def test_schema_result_can_return_one_command() -> None:
         "kind": "command",
         "name": "task-instance.list",
         "description": "List task instances with project-scoped runtime filters.",
+        "invocation": "dsctl task-instance list [OPTIONS]",
     }
     assert any(
         _require_dict(row).get("kind") == "data_shape"
@@ -1523,7 +1535,8 @@ def test_schema_result_can_return_one_command() -> None:
     )
 
     workflow_instance_result = get_schema_result(
-        command_action="workflow-instance.list"
+        command_action="workflow-instance.list",
+        full=True,
     )
     workflow_instance_data = _require_dict(workflow_instance_result.data)
     workflow_instance_group = _require_dict(
@@ -1549,7 +1562,8 @@ def test_schema_result_can_return_one_command() -> None:
     }
 
     workflow_instance_get_result = get_schema_result(
-        command_action="workflow-instance.get"
+        command_action="workflow-instance.get",
+        full=True,
     )
     workflow_instance_get_data = _require_dict(workflow_instance_get_result.data)
     workflow_instance_get_group = _require_dict(
@@ -1578,7 +1592,10 @@ def test_schema_result_can_return_one_command() -> None:
     )
     assert workflow_instance_get_options == []
 
-    datasource_list_result = get_schema_result(command_action="datasource.list")
+    datasource_list_result = get_schema_result(
+        command_action="datasource.list",
+        full=True,
+    )
     datasource_list_data = _require_dict(datasource_list_result.data)
     datasource_group = _require_dict(_require_list(datasource_list_data["commands"])[0])
     datasource_list_command = _require_dict(
@@ -1590,7 +1607,10 @@ def test_schema_result_can_return_one_command() -> None:
         "default_columns": ["id", "name", "type", "createTime"],
         "column_discovery": "runtime_row_keys",
     }
-    datasource_get_result = get_schema_result(command_action="datasource.get")
+    datasource_get_result = get_schema_result(
+        command_action="datasource.get",
+        full=True,
+    )
     datasource_get_data = _require_dict(datasource_get_result.data)
     datasource_get_group = _require_dict(
         _require_list(datasource_get_data["commands"])[0]
@@ -1607,7 +1627,7 @@ def test_schema_result_can_return_one_command() -> None:
 
 
 def test_schema_result_command_rows_expose_payload_discovery() -> None:
-    result = get_schema_result(command_action="datasource.create")
+    result = get_schema_result(command_action="datasource.create", full=True)
     data = _require_dict(result.data)
     rows = [_require_dict(row) for row in _require_list(data["rows"])]
 
@@ -1630,7 +1650,7 @@ def test_schema_result_command_rows_expose_payload_discovery() -> None:
         ),
     } in rows
 
-    workflow_result = get_schema_result(command_action="workflow.edit")
+    workflow_result = get_schema_result(command_action="workflow.edit", full=True)
     workflow_data = _require_dict(workflow_result.data)
     workflow_rows = [_require_dict(row) for row in _require_list(workflow_data["rows"])]
     assert {
@@ -1666,13 +1686,12 @@ def test_schema_result_can_list_group_and_command_discovery_rows() -> None:
     assert groups_result.resolved == {
         "schema": {
             "view": "groups",
-            "next": "dsctl schema --group GROUP",
         }
     }
     assert first_group == {
         "name": "use",
         "summary": "Set or clear persisted CLI context.",
-        "command_count": 2,
+        "action_count": 3,
         "schema_command": "dsctl schema --group use",
     }
 
@@ -1692,7 +1711,6 @@ def test_schema_result_can_list_group_and_command_discovery_rows() -> None:
     assert commands_result.resolved == {
         "schema": {
             "view": "commands",
-            "next": "dsctl schema --command ACTION",
         }
     }
     assert version_command == {
@@ -1736,8 +1754,7 @@ def test_data_shapes_do_not_infer_get_metadata_for_unstable_actions() -> None:
 def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
     workflow_result = get_schema_result(command_action="workflow.list")
     workflow_data = _require_dict(workflow_result.data)
-    workflow_group = _require_dict(_require_list(workflow_data["commands"])[0])
-    workflow_command = _require_dict(_require_list(workflow_group["commands"])[0])
+    workflow_command = _require_dict(workflow_data["command"])
     assert workflow_command["data_shape"] == {
         "kind": "collection",
         "row_path": "data",
@@ -1747,8 +1764,7 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
 
     task_type_result = get_schema_result(command_action="task-type.list")
     task_type_data = _require_dict(task_type_result.data)
-    task_type_group = _require_dict(_require_list(task_type_data["commands"])[0])
-    task_type_command = _require_dict(_require_list(task_type_group["commands"])[0])
+    task_type_command = _require_dict(task_type_data["command"])
     assert task_type_command["data_shape"] == {
         "kind": "summary",
         "row_path": "data.taskTypes",
@@ -1758,12 +1774,7 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
 
     task_type_schema_result = get_schema_result(command_action="task-type.schema")
     task_type_schema_data = _require_dict(task_type_schema_result.data)
-    task_type_schema_group = _require_dict(
-        _require_list(task_type_schema_data["commands"])[0]
-    )
-    task_type_schema_command = _require_dict(
-        _require_list(task_type_schema_group["commands"])[0]
-    )
+    task_type_schema_command = _require_dict(task_type_schema_data["command"])
     assert task_type_schema_command["data_shape"] == {
         "kind": "summary",
         "row_path": "data.fields",
@@ -1782,15 +1793,7 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
         command_action="alert-plugin.definition.list"
     )
     alert_definition_data = _require_dict(alert_definition_result.data)
-    alert_definition_group = _require_dict(
-        _require_list(alert_definition_data["commands"])[0]
-    )
-    alert_definition_subgroup = _require_dict(
-        _require_list(alert_definition_group["commands"])[0]
-    )
-    alert_definition_command = _require_dict(
-        _require_list(alert_definition_subgroup["commands"])[0]
-    )
+    alert_definition_command = _require_dict(alert_definition_data["command"])
     assert alert_definition_command["data_shape"] == {
         "kind": "summary",
         "row_path": "data.definitions",
@@ -1800,8 +1803,7 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
 
     digest_result = get_schema_result(command_action="workflow-instance.digest")
     digest_data = _require_dict(digest_result.data)
-    digest_group = _require_dict(_require_list(digest_data["commands"])[0])
-    digest_command = _require_dict(_require_list(digest_group["commands"])[0])
+    digest_command = _require_dict(digest_data["command"])
     assert digest_command["data_shape"] == {
         "kind": "object",
         "row_path": "data",
@@ -1821,9 +1823,7 @@ def test_schema_result_can_return_one_top_level_command() -> None:
     data = result.data
 
     assert isinstance(data, dict)
-    commands = _require_list(data["commands"])
-    assert len(commands) == 1
-    version_command = _require_dict(commands[0])
+    version_command = _require_dict(data["command"])
     assert version_command["kind"] == "command"
     assert version_command["action"] == "version"
 
@@ -1833,12 +1833,10 @@ def test_schema_result_can_return_group_action_command() -> None:
     data = result.data
 
     assert isinstance(data, dict)
-    commands = _require_list(data["commands"])
-    assert len(commands) == 1
-    use_group = _require_dict(commands[0])
-    assert use_group["name"] == "use"
-    assert _require_dict(use_group["group_action"])["action"] == "use.clear"
-    assert _require_list(use_group["commands"]) == []
+    command = _require_dict(data["command"])
+    assert command["name"] == "use"
+    assert command["action"] == "use.clear"
+    assert _require_list(command["arguments"]) == []
 
 
 def test_schema_result_rejects_conflicting_scope_options() -> None:
@@ -1853,30 +1851,31 @@ def test_schema_result_rejects_unknown_group() -> None:
     with pytest.raises(UserInputError, match="Unknown schema group") as exc_info:
         get_schema_result(group="missing")
 
-    assert exc_info.value.details["group"] == "missing"
-    available_groups = exc_info.value.details["available_groups"]
-    assert isinstance(available_groups, list)
-    assert "task-instance" in available_groups
+    assert exc_info.value.details["requested"] == "missing"
+    assert exc_info.value.details["available_count"] == 29
+    assert isinstance(exc_info.value.details["candidates"], list)
+    assert exc_info.value.details["discovery_command"] == ("dsctl schema --list-groups")
     assert exc_info.value.suggestion == (
         "Run `dsctl schema --list-groups` to choose a group name."
     )
 
 
 def test_schema_result_rejects_unknown_command() -> None:
-    with pytest.raises(UserInputError, match="Unknown schema command") as exc_info:
+    with pytest.raises(UserInputError, match="Unknown schema action") as exc_info:
         get_schema_result(command_action="missing.command")
 
-    assert exc_info.value.details["command"] == "missing.command"
-    available_commands = exc_info.value.details["available_commands"]
-    assert isinstance(available_commands, list)
-    assert "task-instance.list" in available_commands
+    assert exc_info.value.details["requested"] == "missing.command"
+    assert exc_info.value.details["available_count"] == 174
+    candidates = exc_info.value.details["candidates"]
+    assert isinstance(candidates, list)
+    assert len(candidates) <= 3
     assert exc_info.value.suggestion == (
-        "Run `dsctl schema --list-commands` to choose a command action."
+        "Run `dsctl schema` to browse the bounded action index."
     )
 
 
 def test_schema_result_describes_group_level_use_clear_action() -> None:
-    result = get_schema_result()
+    result = get_schema_result(full=True)
     data = result.data
 
     assert isinstance(data, dict)
@@ -1927,7 +1926,7 @@ def test_schema_result_describes_group_level_use_clear_action() -> None:
 
 
 def test_schema_describes_atomic_workflow_context_fallback() -> None:
-    result = get_schema_result()
+    result = get_schema_result(full=True)
     data = _require_dict(result.data)
 
     workflow_group = _find_group(data["commands"], "workflow")
@@ -1949,7 +1948,7 @@ def test_schema_describes_atomic_workflow_context_fallback() -> None:
 
 
 def test_schema_describes_mode_specific_workflow_selectors() -> None:
-    result = get_schema_result()
+    result = get_schema_result(full=True)
     data = _require_dict(result.data)
 
     workflow_group = _find_group(data["commands"], "workflow")
@@ -1976,7 +1975,7 @@ def test_schema_describes_mode_specific_workflow_selectors() -> None:
 
 
 def test_schema_defaults_follow_runtime_constants() -> None:
-    result = get_schema_result()
+    result = get_schema_result(full=True)
     data = result.data
 
     assert isinstance(data, dict)
@@ -2008,7 +2007,7 @@ def test_schema_defaults_follow_runtime_constants() -> None:
 
 
 def test_schema_task_update_set_option_exposes_supported_keys() -> None:
-    result = get_schema_result()
+    result = get_schema_result(full=True)
     data = result.data
 
     assert isinstance(data, dict)
@@ -2047,7 +2046,7 @@ def test_schema_task_update_set_option_exposes_supported_keys() -> None:
 
 
 def test_schema_runtime_list_commands_expose_all_pages_option() -> None:
-    result = get_schema_result()
+    result = get_schema_result(full=True)
     data = result.data
 
     assert isinstance(data, dict)

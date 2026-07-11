@@ -170,7 +170,7 @@ def test_services_do_not_import_generated_directly() -> None:
 
 
 def test_paginated_schema_commands_expose_standard_all_option() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -205,7 +205,7 @@ def test_paginated_schema_commands_expose_standard_all_option() -> None:
 
 
 def test_literal_emit_result_actions_are_declared_in_schema() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -222,7 +222,7 @@ def test_literal_emit_result_actions_are_declared_in_schema() -> None:
 
 
 def test_schema_declared_commands_expose_help() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -238,7 +238,7 @@ def test_schema_declared_commands_expose_help() -> None:
 
 
 def test_schema_selector_fields_expose_discovery_commands() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -259,7 +259,7 @@ def test_schema_selector_fields_expose_discovery_commands() -> None:
 
 
 def test_schema_choice_fields_are_discoverable_from_help_or_schema() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -295,7 +295,7 @@ def test_schema_choice_fields_are_discoverable_from_help_or_schema() -> None:
 
 
 def test_schema_discovery_commands_point_to_existing_help_surfaces() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)

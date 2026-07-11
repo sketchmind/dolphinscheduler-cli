@@ -11,6 +11,13 @@ versioning policy is needed.
 - Routed structured command failures to stderr while preserving stdout for
   successful data and raw artifacts.
 - Added table and TSV page/warning diagnostics on stderr.
+- Changed `dsctl schema` to schema version 2: the default is now a bounded
+  action index, group and command views are progressive/action-local, and the
+  former expanded representation is available explicitly through `--full`.
+- Added bounded schema typo candidates, view-aware JSON/table/TSV projection,
+  explicit invocation and cross-field constraint metadata, and task-level
+  response-size budgets while retaining the detailed `--list-commands`
+  compatibility inventory.
 
 ## 0.2.0 - 2026-04-20
 

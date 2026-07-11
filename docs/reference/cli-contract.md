@@ -380,8 +380,11 @@ Current guarantees:
 ## `dsctl schema`
 
 Returns the stable machine-readable command schema for the current CLI surface.
-This is the authoritative self-description for command invocation: arguments,
-options, choices, selectors, defaults, and supported composite keys.
+Schema version 2 uses progressive discovery: the default response is a bounded
+index, a group response is an action index, and a command response is the
+complete action-local invocation contract. This is the authoritative
+self-description for arguments, options, choices, selectors, defaults,
+payload hints, supported composite keys, and command output shape.
 
 Options:
 
@@ -389,73 +392,106 @@ Options:
 - `--command ACTION`
 - `--list-groups`
 - `--list-commands`
+- `--full`
 
 Selection rules:
 
-- omit all scope options to return the full schema, including `capabilities`
-- `--group` returns one command-group schema by stable group name such as
-  `task-instance`
+- omit all options to return the bounded root index; its `groups[].actions`
+  and `root_actions[]` cover every stable action name without expanding action
+  contracts
+- `--group` returns a bounded action index for one stable group such as
+  `task-instance`; each action includes its summary, help command, and exact
+  schema command
 - `--group` values come from `dsctl schema --list-groups`
-- `--command` returns one command schema by stable action such as
-  `task-instance.list` or `version`
-- `--command` values come from `dsctl schema --list-commands`
+- `--command` returns one complete action-local `data.command` object for an
+  action such as `task-instance.list` or `version`; it does not wrap the action
+  in the whole command-group tree
+- action names come from the default index, a group index, or the compatibility
+  inventory `dsctl schema --list-commands`
 - `--list-groups` returns compact rows with `name`, `summary`,
-  `command_count`, and `schema_command`
-- `--list-commands` returns compact rows with `action`, `group`, `name`,
-  `summary`, and `schema_command`
-- `--list-commands` uses `group: null` for root-level commands such as
-  `version`
+  recursive `action_count`, and `schema_command`
+- `--list-commands` retains compatibility rows with `action`, `group`, `name`,
+  `summary`, and `schema_command`; the bounded default index is preferred when
+  only action names are needed
+- `--full` returns the expanded whole-surface representation, including the
+  complete `commands` tree and embedded `capabilities`
+- `--full` may be combined with `--group` or `--command` to retain the expanded
+  scoped representation; it cannot be combined with list views
 - `--group`, `--command`, `--list-groups`, and `--list-commands` are mutually
   exclusive
-- scoped schema payloads keep the standard schema header and `commands` tree
-  shape but omit `capabilities`; use `dsctl capabilities` for feature
-  discovery
-- scoped `--group` and `--command` payloads also include `rows` for compact
-  table/tsv rendering; JSON callers that need the full contract should continue
-  reading `commands`
-- `--group` rows list commands in the group with `kind`, `action`, `name`,
-  `summary`, and `schema_command`
-- `--command` rows flatten the command contract into `command`, `argument`,
-  `option`, `payload`, and `data_shape` rows so terminal output does not
-  collapse nested contract data into one large value cell
-- scoped schema `resolved.schema.view` is `group`, `command`, `groups`, or
-  `commands`
+- unknown groups and actions return `available_count`, at most three
+  deterministic `candidates`, and one `discovery_command`; errors never dump
+  the entire action inventory
 
-Current `data` fields:
+Bounded view shapes:
 
-- `schema_version`
-- `cli`
-- `supported_ds_versions`
-- `ds_versions`
-- `global_options`
-- `selection`
-- `output`
-- `errors`
-- `confirmation`
-- `capabilities`
-- `commands`
-- `rows` for scoped `--group` and `--command` views
+- index: `schema_version`, `view`, `cli`, `ds`, `global_options`,
+  `action_count`, `groups`, `root_actions`, and `links`
+- group: `schema_version`, `view`, `cli`, `ds`, `group`, `actions`, and
+  `links`
+- command: `schema_version`, `view`, `cli`, `ds`, `global_options`, optional
+  `group`, canonical `command`, and `links`
+- list views keep `data` as a row list for pipeline compatibility
+- full: `schema_version`, `view`, `cli`, supported-version and global contract
+  fields, `capabilities`, and the expanded `commands` tree
+
+The canonical index, group, and command JSON views never contain renderer-only
+`rows`. Table and TSV presentation derive rows from `groups`, `actions`, or the
+canonical `command` object. For a command view, JSON `--columns` projects the
+derived contract rows into `data.command`; without `--columns`,
+`data.command` remains the canonical object.
+
+The `schema` action contract exposes `data_shapes_by_view` because its canonical
+row path changes by view. Its ordinary `data_shape` describes the default index
+view; renderers select the matching view-specific shape at runtime. Expanded
+shapes distinguish root `full` (`data.commands`) from `full_group` and
+`full_command` (`data.rows`) using `resolved.schema.scope`.
+
+`resolved.schema.view` is `index`, `group`, `command`, `groups`, `commands`, or
+`full`. Full scoped responses also set `resolved.schema.scope` to `group` or
+`command`.
+
+`links[]` contains optional related navigation, not a sequence that callers
+must follow. Exact invocations use `command`; placeholder-bearing forms use
+`command_pattern`. Bounded responses do not link to the high-cost `--full`
+view.
+
+Every action-local `command` includes an `invocation` usage string with the
+exact CLI path, positional placeholders, and `[OPTIONS]` when applicable. This
+is authoritative for actions whose stable action id is not the literal command
+path, such as `use.clear` (`dsctl use --clear [OPTIONS]`).
+
+Modeled static relationships between multiple inputs appear in
+`command.constraints[]` instead of relying on prose. Current constraint kinds
+are `exactly_one_of`, `at_most_one_of`, `at_least_one_of`, `all_or_none`,
+`requires`, `requires_all`, `requires_any`, and `forbids`.
+`fields` names positional placeholders or option flags; `alternatives` groups
+fields that form one mode; `if_present` and `if_absent` make a relationship
+conditional. Constraint references are tested against the corresponding action
+contract. Runtime validation remains authoritative for dynamic conditions such
+as risk-confirmation tokens and for static validators not yet represented in
+the registry; absence of `constraints` is not a claim that no relationship can
+exist.
 
 Current guarantees:
 
 - describes only the current stable surface
-- every `global_options` entry declares `placement: "before_command"`
-- uses `DS_VERSION` and `--env-file` when rendering embedded capability
-  metadata, matching `dsctl capabilities`
-- includes selector semantics for name-first, path-first, and id-first resources
-- includes the standard success/error envelope contract
-- includes the stable structured error envelope and `error.source` contract
+- bounded `global_options` repeat only the four global flags required to build
+  an invocation, and every entry declares `placement: "before_command"`
+- `--output-format`, `--columns`, and `--compact` therefore remain discoverable
+  even when an agent jumps directly to an action-local contract
+- the compact option declares its structured requirement that
+  `--output-format` be `json`
+- uses `DS_VERSION` and `--env-file` for compact selected-version contract
+  identity; `--full` retains all supported-version metadata
 - command arguments and options may include additive metadata such as
   `choices`, `examples`, `supported_keys`, and `discovery_command` when the
   CLI can expose a tighter contract for composite inputs
 - command entries that accept file payloads may include compact `payload`
   metadata; when present, `payload.template_command` is the preferred
   progressive-discovery command for a concrete payload template
-- includes task template type and variant discovery under
-  `capabilities.templates.task`
-- `--group`, `--command`, `--list-groups`, and `--list-commands` are additive
-  scoped or discovery views over the same command tree, not a different schema
-  mode
+- feature discovery remains the responsibility of `dsctl capabilities`; only
+  the explicit expanded `--full` view embeds it
 - `schema_version` changes for breaking schema changes; additive fields may
   appear within the same version
 - is tested against the actual registered command tree
@@ -464,14 +500,18 @@ Current guarantees:
   `--output-format table|tsv`
 - schema and capabilities output metadata expose `json_column_projection` when
   JSON `--columns` projection is supported
+- compact standard-envelope budgets guard the progressive path: root index
+  below 16 KiB, every action-local contract below 8 KiB, and unknown-action
+  recovery below 2 KiB
 
 ## `dsctl capabilities`
 
 Returns stable version and surface capability discovery for the current CLI and
 selected DS version.
-This payload is intentionally lighter than `dsctl schema`: it answers what
-resource families and feature groups exist, not how to invoke every command.
-Agents that need to construct commands should read `dsctl schema`.
+It answers which resource families and feature groups exist, while `schema`
+answers how to invoke them. Agents should prefer `--summary` or one `--section`
+unless they need the complete feature inventory, and should request
+`schema --command ACTION` when constructing a command.
 
 Options:
 
@@ -537,7 +577,8 @@ Current guarantees:
   distinguish feature discovery from command invocation metadata
 - `--summary` and `--section` are additive scoped views over the same feature
   discovery data, not output-format modes
-- is intended as the lightweight companion to `dsctl schema`
+- `--summary` and `--section` are the bounded feature-discovery companions to
+  progressive `dsctl schema`
 
 ## `dsctl use`
 
