@@ -6,9 +6,11 @@ from typing import TYPE_CHECKING, Literal, TypedDict
 from dsctl.client import DolphinSchedulerClient
 from dsctl.config import ClusterProfile, load_profile
 from dsctl.context import (
+    ContextScope,
     SessionContext,
     load_context,
     project_context_path,
+    read_context_layer,
     user_context_path,
 )
 from dsctl.errors import DsctlError
@@ -22,6 +24,8 @@ from dsctl.upstream import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from dsctl.support.yaml_io import JsonObject
 
 DoctorStatus = Literal["ok", "warning", "error"]
 
@@ -143,26 +147,52 @@ def _profile_check(*, env_file: str | None) -> _ProfileCheckResult:
 
 
 def _context_check() -> DoctorCheckData:
+    layer_errors, layer_suggestion = _context_layer_errors()
     try:
         session = load_context()
     except DsctlError as exc:
+        error_details = _error_details(exc)
+        if layer_errors:
+            error_details["layer_errors"] = layer_errors
         return _doctor_check(
             "context",
             "error",
             exc.message,
-            _error_details(exc),
+            error_details,
             suggestion=_error_suggestion(
                 exc,
-                fallback="Fix or remove the invalid context file and retry.",
+                fallback=(
+                    layer_suggestion
+                    or "Fix or remove the invalid context file and retry."
+                ),
             ),
         )
     except Exception as exc:  # pragma: no cover - defensive doctor fallback
+        error_details = _error_details(exc)
+        if layer_errors:
+            error_details["layer_errors"] = layer_errors
         return _doctor_check(
             "context",
             "error",
             _unexpected_message(exc),
-            _error_details(exc),
-            suggestion="Fix or remove the invalid context file and retry.",
+            error_details,
+            suggestion=(
+                layer_suggestion or "Fix or remove the invalid context file and retry."
+            ),
+        )
+
+    context_details = _context_details(session)
+    if layer_errors:
+        context_details["layer_errors"] = layer_errors
+        return _doctor_check(
+            "context",
+            "warning",
+            "Effective context loaded, but a persisted context layer is invalid.",
+            context_details,
+            suggestion=(
+                layer_suggestion
+                or "Fix or clear each invalid context layer, then rerun `dsctl doctor`."
+            ),
         )
 
     if _context_is_empty(session):
@@ -173,14 +203,34 @@ def _context_check() -> DoctorCheckData:
         "context",
         "ok",
         message,
-        {
-            "project": session.project,
-            "workflow": session.workflow,
-            "set_at": session.set_at,
-            "user_path": str(user_context_path()),
-            "project_path": str(project_context_path()),
-        },
+        context_details,
     )
+
+
+def _context_details(session: SessionContext) -> JsonObject:
+    """Return effective context values and both persisted layer paths."""
+    return {
+        "project": session.project,
+        "workflow": session.workflow,
+        "set_at": session.set_at,
+        "user_path": str(user_context_path()),
+        "project_path": str(project_context_path()),
+    }
+
+
+def _context_layer_errors() -> tuple[JsonObject, str | None]:
+    """Audit each stored layer, including layers shadowed at runtime."""
+    errors: JsonObject = {}
+    suggestion: str | None = None
+    scopes: tuple[ContextScope, ...] = ("project", "user")
+    for scope in scopes:
+        try:
+            read_context_layer(scope=scope)
+        except Exception as exc:  # doctor must aggregate every diagnostic
+            errors[scope] = _error_payload(exc)
+            if suggestion is None:
+                suggestion = _error_suggestion(exc)
+    return errors, suggestion
 
 
 def _adapter_check(profile: ClusterProfile | None) -> DoctorCheckData:
@@ -199,7 +249,7 @@ def _adapter_check(profile: ClusterProfile | None) -> DoctorCheckData:
             _error_details(exc),
             suggestion=_error_suggestion(
                 exc,
-                fallback="Use one of the supported DolphinScheduler versions.",
+                fallback="Use one of the selectable DolphinScheduler versions.",
             ),
         )
     except Exception as exc:  # pragma: no cover - defensive doctor fallback
@@ -208,21 +258,52 @@ def _adapter_check(profile: ClusterProfile | None) -> DoctorCheckData:
             "error",
             _unexpected_message(exc),
             _error_details(exc),
-            suggestion="Use one of the supported DolphinScheduler versions.",
+            suggestion="Use one of the selectable DolphinScheduler versions.",
+        )
+
+    details = {
+        "ds_version": support.server_version,
+        "contract_version": support.contract_version,
+        "family": support.family,
+        "support_level": support.support_level,
+        "tested": support.tested,
+        "supported_versions": list(SUPPORTED_VERSIONS),
+    }
+    if support.support_level == "experimental":
+        default_version = get_default_version_support().server_version
+        if support.tested:
+            message = (
+                f"DS {support.server_version} support is experimental even though "
+                "release-specific live smoke testing has passed."
+            )
+            suggestion = (
+                f"Set `DS_VERSION={default_version}` for stable support, or promote "
+                f"DS {support.server_version} only after its compatibility review "
+                "is complete."
+            )
+        else:
+            message = (
+                f"DS {support.server_version} support is experimental and has not "
+                "passed release-specific live smoke testing."
+            )
+            suggestion = (
+                f"Set `DS_VERSION={default_version}` and rerun `dsctl doctor`, or "
+                f"complete the DS {support.server_version} live smoke suite before "
+                "relying on this target."
+            )
+        return _doctor_check(
+            "adapter",
+            "warning",
+            message,
+            details,
+            suggestion=suggestion,
         )
 
     return _doctor_check(
         "adapter",
         "ok",
         "Adapter resolved.",
-        {
-            "ds_version": support.server_version,
-            "contract_version": support.contract_version,
-            "family": support.family,
-            "support_level": support.support_level,
-            "tested": support.tested,
-            "supported_versions": list(SUPPORTED_VERSIONS),
-        },
+        details,
     )
 
 
@@ -444,16 +525,18 @@ def _error_details(
         details["env_file"] = env_file
     if endpoint is not None:
         details["endpoint"] = endpoint
-    if isinstance(error, DsctlError):
-        details["error"] = error.to_payload()
-        return details
+    details["error"] = _error_payload(error)
+    return details
 
-    details["error"] = {
+
+def _error_payload(error: Exception) -> JsonObject:
+    if isinstance(error, DsctlError):
+        return error.to_payload()
+    return {
         "type": "unexpected_error",
         "message": _unexpected_message(error),
         "exception": error.__class__.__name__,
     }
-    return details
 
 
 def _error_suggestion(error: Exception, *, fallback: str | None = None) -> str | None:

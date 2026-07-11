@@ -200,6 +200,13 @@ Rules:
 - improve the generator first when DS-facing shapes are wrong
 - use `tools/check_generated_freshness.py` to keep generated output in sync
 
+The generated runtime routes response-contract and result-envelope failures
+through explicit `SessionLike` hooks. Its standalone default adapter raises
+self-contained generated exceptions, while the production
+`GeneratedSessionAdapter` translates the same hooks into stable `dsctl`
+transport and result errors. Resource adapters must not add one-off catches for
+generated payload validation.
+
 ### Upstream
 
 `upstream/` owns:
@@ -241,6 +248,16 @@ separate legacy adapters instead of service-layer branches.
 - Typer
 - direct generated imports
 - stdout rendering
+
+Workflow task identity allocation is split across the service and upstream
+layers. The compiler always receives an explicit allocator. Lint and dry-run
+use deterministic preview-only codes, while an applied workflow create,
+workflow edit, or workflow-instance edit first completes the same local
+compile preflight and then obtains persistent task codes from DolphinScheduler
+through the bound `TaskOperations` interface. The upstream 3.4.1 adapter backs
+that interface with the generated `gen-task-codes` REST operation and batches
+requests to the server limit of 100 codes. Existing-task and no-op edits do not
+request new codes.
 
 ### Commands
 

@@ -17,7 +17,8 @@ PROJECT_HELP = (
 TASK_HELP = "Task name or numeric code. Use `dsctl task list` to discover values."
 WORKFLOW_HELP = (
     "Workflow name or code. Run `dsctl workflow list` in the selected project "
-    "to discover values; falls back to workflow context."
+    "to discover values. When omitted, uses workflow context only when project "
+    "also comes from context; otherwise pass --workflow."
 )
 
 

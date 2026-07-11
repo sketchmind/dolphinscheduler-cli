@@ -35,14 +35,14 @@ EXPECTED_VERSION_METADATA = [
         "server_version": "3.3.2",
         "contract_version": "3.4.1",
         "family": "workflow-3.3-plus",
-        "support_level": "full",
+        "support_level": "experimental",
         "tested": False,
     },
     {
         "server_version": "3.4.0",
         "contract_version": "3.4.1",
         "family": "workflow-3.3-plus",
-        "support_level": "full",
+        "support_level": "experimental",
         "tested": False,
     },
     {

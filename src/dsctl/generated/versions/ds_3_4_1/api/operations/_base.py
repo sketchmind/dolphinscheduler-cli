@@ -5,6 +5,7 @@ import httpx
 from typing import (
     IO,
     Mapping,
+    NoReturn,
     Protocol,
     Sequence,
     TypeGuard,
@@ -14,7 +15,12 @@ from typing import (
     Unpack,
 )
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    TypeAdapter,
+    ValidationError,
+)
 
 T = TypeVar("T")
 
@@ -106,6 +112,16 @@ class ApiResultError(RuntimeError):
         self.result_message = message
         self.data = data
 
+class ApiPayloadValidationError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        validation_error_count: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.validation_error_count = validation_error_count
+
 class BaseParamsModel(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -123,6 +139,22 @@ class SessionLike(Protocol):
         headers: dict[str, str],
         **kwargs: Unpack[RequestKwargs],
     ) -> JsonValue: ...
+
+    def raise_payload_error(
+        self,
+        message: str,
+        *,
+        validation_error_count: int | None = None,
+        cause: Exception | None = None,
+    ) -> NoReturn: ...
+
+    def raise_result_error(
+        self,
+        *,
+        code: int | None,
+        message: str,
+        data: JsonValue,
+    ) -> NoReturn: ...
 
 class _RequestsSessionAdapter:
     def __init__(self, session: httpx.Client | None = None) -> None:
@@ -154,6 +186,30 @@ class _RequestsSessionAdapter:
         )
         return self._unwrap_payload(payload)
 
+    def raise_payload_error(
+        self,
+        message: str,
+        *,
+        validation_error_count: int | None = None,
+        cause: Exception | None = None,
+    ) -> NoReturn:
+        error = ApiPayloadValidationError(
+            message,
+            validation_error_count=validation_error_count,
+        )
+        if cause is None:
+            raise error
+        raise error from cause
+
+    def raise_result_error(
+        self,
+        *,
+        code: int | None,
+        message: str,
+        data: JsonValue,
+    ) -> NoReturn:
+        raise ApiResultError(code=code, message=message, data=data)
+
     def _unwrap_payload(self, payload: JsonValue) -> JsonValue:
         if isinstance(payload, dict) and {"code", "msg"}.issubset(payload):
             if "data" not in payload and "dataList" not in payload:
@@ -164,7 +220,7 @@ class _RequestsSessionAdapter:
                 data = payload.get("dataList")
             if result_code != 0:
                 result_message = str(payload.get("msg") or "DS API error")
-                raise ApiResultError(
+                self.raise_result_error(
                     code=(result_code if isinstance(result_code, int) else None),
                     message=result_message,
                     data=data,
@@ -224,7 +280,14 @@ class BaseRequestsClient:
         return _require_json_value(value, label="json payload")
 
     def _validate_payload(self, value: object, adapter: TypeAdapter[T]) -> T:
-        return adapter.validate_python(value)
+        try:
+            return adapter.validate_python(value)
+        except ValidationError as error:
+            self._session.raise_payload_error(
+                "Response payload did not match generated API contract",
+                validation_error_count=error.error_count(),
+                cause=error,
+            )
 
     def _project_status_data(self, value: JsonValue) -> JsonValue:
         if not isinstance(value, dict):
@@ -237,7 +300,7 @@ class BaseRequestsClient:
         if data is None and "data" not in payload:
             data = payload.get("dataList")
         if status != "SUCCESS":
-            raise ApiResultError(
+            self._session.raise_result_error(
                 code=None,
                 message=str(payload.get("msg") or "DS API error"),
                 data=data,
@@ -260,7 +323,8 @@ class BaseRequestsClient:
             return value
         payload = _require_json_object(value, label="single-field payload")
         if field_name not in payload:
-            raise TypeError(f"single-field payload must contain {field_name}")
+            message = f"single-field payload must contain {field_name}"
+            self._session.raise_payload_error(message)
         return _require_json_value(
             payload[field_name],
             label=f"single-field payload {field_name}",
@@ -290,4 +354,4 @@ class BaseRequestsClient:
             **request_kwargs,
         )
 
-__all__ = ["BaseRequestsClient", "BaseParamsModel", "UploadFileLike", "SessionLike", "ApiResultError"]
+__all__ = ["BaseRequestsClient", "BaseParamsModel", "UploadFileLike", "SessionLike", "ApiResultError", "ApiPayloadValidationError"]

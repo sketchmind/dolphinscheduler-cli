@@ -126,8 +126,11 @@ def test_task_list_help_points_to_project_and_workflow_discovery() -> None:
     result = runner.invoke(app, ["task", "list", "--help"])
 
     assert result.exit_code == 0
-    assert "project list" in result.stdout
-    assert "workflow list" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "project list" in help_text
+    assert "workflow list" in help_text
+    assert "uses workflow context only when project" in help_text
+    assert "also comes from context" in help_text
 
 
 def test_task_get_command_returns_task_payload() -> None:

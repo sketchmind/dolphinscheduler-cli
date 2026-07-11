@@ -15,14 +15,14 @@ EXPECTED_VERSION_METADATA = [
         "server_version": "3.3.2",
         "contract_version": "3.4.1",
         "family": "workflow-3.3-plus",
-        "support_level": "full",
+        "support_level": "experimental",
         "tested": False,
     },
     {
         "server_version": "3.4.0",
         "contract_version": "3.4.1",
         "family": "workflow-3.3-plus",
-        "support_level": "full",
+        "support_level": "experimental",
         "tested": False,
     },
     {
@@ -147,17 +147,22 @@ def test_capabilities_help_points_to_section_discovery() -> None:
     assert "runtime" in help_text
 
 
-def test_capabilities_command_honors_env_file_ds_version() -> None:
-    with runner.isolated_filesystem():
-        Path("cluster.env").write_text("DS_VERSION=3.3.2\n", encoding="utf-8")
+def test_capabilities_command_honors_env_file_ds_version(
+    isolated_cwd: Path,
+) -> None:
+    (isolated_cwd / "cluster.env").write_text(
+        "DS_VERSION=3.3.2\n",
+        encoding="utf-8",
+    )
 
-        result = runner.invoke(app, ["--env-file", "cluster.env", "capabilities"])
+    result = runner.invoke(app, ["--env-file", "cluster.env", "capabilities"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["data"]["ds"]["current_version"] == "3.3.2"
     assert payload["data"]["ds"]["selected_version"] == "3.3.2"
     assert payload["data"]["ds"]["contract_version"] == "3.4.1"
+    assert payload["data"]["ds"]["support_level"] == "experimental"
     assert payload["data"]["ds"]["tested"] is False
     assert "priority" in payload["data"]["enums"]["names"]
 

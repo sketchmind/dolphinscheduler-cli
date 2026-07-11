@@ -16,6 +16,20 @@ from dsctl.services.template import (
     supported_task_template_variants,
 )
 
+_WORKFLOW_ARGUMENT_DESCRIPTION = (
+    "Workflow name or numeric code. When omitted, uses workflow context only "
+    "when project also comes from context; otherwise pass WORKFLOW."
+)
+_WORKFLOW_EDIT_ARGUMENT_DESCRIPTION = (
+    "Workflow name or numeric code. Required with --file; with --patch, uses "
+    "workflow context only when project also comes from context; otherwise "
+    "pass WORKFLOW."
+)
+_WORKFLOW_OPTION_DESCRIPTION = (
+    "Workflow name or code. When omitted, uses workflow context only when "
+    "project also comes from context; otherwise pass --workflow."
+)
+
 
 def schedule_group() -> dict[str, object]:
     """Build the schedule command group schema."""
@@ -143,11 +157,23 @@ def schedule_group() -> dict[str, object]:
                 options=[
                     workflow_option(
                         description=(
-                            "Workflow name or code. Falls back to workflow context "
-                            "for create explain."
+                            "Workflow name or code for create explain only. When "
+                            "schedule_id is omitted, uses workflow context only "
+                            "when project also comes from context; do not pass "
+                            "--workflow with schedule_id."
                         )
                     ),
-                    project_option(),
+                    option(
+                        "project",
+                        value_type="string",
+                        description=(
+                            "Project name or code for create explain only. When "
+                            "schedule_id is omitted, falls back to stored project "
+                            "context; do not pass --project with schedule_id."
+                        ),
+                        selector="name_or_code",
+                        discovery_command="dsctl project list",
+                    ),
                     option(
                         "cron",
                         value_type="string",
@@ -240,11 +266,7 @@ def schedule_group() -> dict[str, object]:
                 action="schedule.create",
                 summary="Create one schedule.",
                 options=[
-                    workflow_option(
-                        description=(
-                            "Workflow name or code. Falls back to workflow context."
-                        )
-                    ),
+                    workflow_option(description=_WORKFLOW_OPTION_DESCRIPTION),
                     project_option(),
                     option(
                         "cron",
@@ -708,10 +730,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -727,10 +746,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -751,11 +767,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Required with "
-                            "--file; with --patch, falls back to workflow "
-                            "context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -771,10 +783,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -831,11 +840,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Required with "
-                            "--file; with --patch, falls back to workflow "
-                            "context when omitted."
-                        ),
+                        description=_WORKFLOW_EDIT_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -904,10 +909,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -923,10 +925,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -945,10 +944,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -1053,10 +1049,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -1182,10 +1175,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -1367,10 +1357,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -1404,10 +1391,7 @@ def workflow_group() -> dict[str, object]:
                             argument(
                                 "workflow",
                                 value_type="string",
-                                description=(
-                                    "Workflow name or numeric code. Falls back to "
-                                    "workflow context when omitted."
-                                ),
+                                description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                                 required=False,
                                 selector="name_or_code",
                                 discovery_command="dsctl workflow list",
@@ -1426,10 +1410,7 @@ def workflow_group() -> dict[str, object]:
                             argument(
                                 "workflow",
                                 value_type="string",
-                                description=(
-                                    "Workflow name or numeric code. Falls back to "
-                                    "workflow context when omitted."
-                                ),
+                                description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                                 required=False,
                                 selector="name_or_code",
                                 discovery_command="dsctl workflow list",
@@ -1467,11 +1448,7 @@ def task_group() -> dict[str, object]:
                 summary="List tasks inside one workflow.",
                 options=[
                     project_option(),
-                    workflow_option(
-                        description=(
-                            "Workflow name or code. Falls back to workflow context."
-                        )
-                    ),
+                    workflow_option(description=_WORKFLOW_OPTION_DESCRIPTION),
                     option(
                         "search",
                         value_type="string",
@@ -1500,11 +1477,7 @@ def task_group() -> dict[str, object]:
                 ],
                 options=[
                     project_option(),
-                    workflow_option(
-                        description=(
-                            "Workflow name or code. Falls back to workflow context."
-                        )
-                    ),
+                    workflow_option(description=_WORKFLOW_OPTION_DESCRIPTION),
                 ],
             ),
             command(
@@ -1528,11 +1501,7 @@ def task_group() -> dict[str, object]:
                 ],
                 options=[
                     project_option(),
-                    workflow_option(
-                        description=(
-                            "Workflow name or code. Falls back to workflow context."
-                        )
-                    ),
+                    workflow_option(description=_WORKFLOW_OPTION_DESCRIPTION),
                     option(
                         "set",
                         value_type="string",

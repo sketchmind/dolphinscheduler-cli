@@ -46,7 +46,9 @@ dsctl doctor
 
 `DS_VERSION` defaults to `3.4.1`. It can currently select `3.4.1`, `3.4.0`,
 or `3.3.2`; those versions share the generated `3.4.1` contract adapter until
-an upstream REST difference requires a separate adapter.
+an upstream REST difference requires a separate adapter. `3.4.1` has full,
+live-tested support; `3.4.0` and `3.3.2` remain selectable experimental targets
+until their live smoke suites pass.
 
 You can also load connection settings from a dotenv-style file:
 

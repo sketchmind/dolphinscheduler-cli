@@ -46,14 +46,14 @@ EXPECTED_VERSION_METADATA = [
         "server_version": "3.3.2",
         "contract_version": "3.4.1",
         "family": "workflow-3.3-plus",
-        "support_level": "full",
+        "support_level": "experimental",
         "tested": False,
     },
     {
         "server_version": "3.4.0",
         "contract_version": "3.4.1",
         "family": "workflow-3.3-plus",
-        "support_level": "full",
+        "support_level": "experimental",
         "tested": False,
     },
     {
@@ -1420,6 +1420,7 @@ def test_schema_result_honors_env_file_ds_version(tmp_path: Path) -> None:
     assert isinstance(ds_capabilities, dict)
     assert ds_capabilities["selected_version"] == "3.3.2"
     assert ds_capabilities["current_version"] == "3.3.2"
+    assert ds_capabilities["support_level"] == "experimental"
     assert ds_capabilities["tested"] is False
 
 
@@ -1680,7 +1681,7 @@ def test_schema_result_can_list_group_and_command_discovery_rows() -> None:
         "action": "version",
         "group": None,
         "name": "version",
-        "summary": "Return CLI and supported DolphinScheduler version metadata.",
+        "summary": "Return CLI and selectable DolphinScheduler version metadata.",
         "schema_command": "dsctl schema --command version",
     }
     assert datasource_create == {
@@ -1901,6 +1902,58 @@ def test_schema_result_describes_group_level_use_clear_action() -> None:
     assert (
         _require_dict(use_workflow_args[0])["discovery_command"]
         == "dsctl workflow list"
+    )
+    assert "Requires an effective project" in _require_str(
+        _require_dict(use_workflow_args[0])["description"]
+    )
+
+
+def test_schema_describes_atomic_workflow_context_fallback() -> None:
+    result = get_schema_result()
+    data = _require_dict(result.data)
+
+    workflow_group = _find_group(data["commands"], "workflow")
+    workflow_get = _find_command(workflow_group["commands"], "get")
+    workflow_argument = _require_dict(_require_list(workflow_get["arguments"])[0])
+    assert "only when project also comes from context" in _require_str(
+        workflow_argument["description"]
+    )
+
+    task_group = _find_group(data["commands"], "task")
+    task_list = _find_command(task_group["commands"], "list")
+    workflow_option = _find_option(
+        _require_list(task_list["options"]),
+        "workflow",
+    )
+    assert "only when project also comes from context" in _require_str(
+        workflow_option["description"]
+    )
+
+
+def test_schema_describes_mode_specific_workflow_selectors() -> None:
+    result = get_schema_result()
+    data = _require_dict(result.data)
+
+    workflow_group = _find_group(data["commands"], "workflow")
+    workflow_describe = _find_command(workflow_group["commands"], "describe")
+    workflow_argument = _require_dict(_require_list(workflow_describe["arguments"])[0])
+    workflow_description = _require_str(workflow_argument["description"])
+    assert "only when project also comes from context" in workflow_description
+    assert "--file" not in workflow_description
+    assert "--patch" not in workflow_description
+
+    schedule_group = _find_group(data["commands"], "schedule")
+    schedule_explain = _find_command(schedule_group["commands"], "explain")
+    explain_options = _require_list(schedule_explain["options"])
+    workflow_option = _find_option(explain_options, "workflow")
+    project_option = _find_option(explain_options, "project")
+    assert "create explain only" in _require_str(workflow_option["description"])
+    assert "do not pass --workflow with schedule_id" in _require_str(
+        workflow_option["description"]
+    )
+    assert "create explain only" in _require_str(project_option["description"])
+    assert "do not pass --project with schedule_id" in _require_str(
+        project_option["description"]
     )
 
 

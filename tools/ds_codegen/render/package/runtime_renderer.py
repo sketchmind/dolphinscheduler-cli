@@ -96,6 +96,8 @@ def write_base_operations_module(
     )
     package_exports[("api", "operations")]["_base"] = [
         requests_base_class_name,
+        "ApiPayloadValidationError",
+        "ApiResultError",
         "UploadFileLike",
         "SessionLike",
     ]
@@ -115,6 +117,7 @@ def render_base_operations_module(
             "from typing import (",
             "    IO,",
             "    Mapping,",
+            "    NoReturn,",
             "    Protocol,",
             "    Sequence,",
             "    TypeGuard,",
@@ -124,7 +127,12 @@ def render_base_operations_module(
             "    Unpack,",
             ")",
             "",
-            "from pydantic import BaseModel, ConfigDict, TypeAdapter",
+            "from pydantic import (",
+            "    BaseModel,",
+            "    ConfigDict,",
+            "    TypeAdapter,",
+            "    ValidationError,",
+            ")",
             "",
             'T = TypeVar("T")',
             "",
@@ -218,6 +226,16 @@ def render_base_operations_module(
             "        self.result_message = message",
             "        self.data = data",
             "",
+            "class ApiPayloadValidationError(RuntimeError):",
+            "    def __init__(",
+            "        self,",
+            "        message: str,",
+            "        *,",
+            "        validation_error_count: int | None = None,",
+            "    ) -> None:",
+            "        super().__init__(message)",
+            "        self.validation_error_count = validation_error_count",
+            "",
             f"class {base_params_model_name}(BaseModel):",
             "    model_config = ConfigDict(",
             "        populate_by_name=True,",
@@ -235,6 +253,22 @@ def render_base_operations_module(
             "        headers: dict[str, str],",
             "        **kwargs: Unpack[RequestKwargs],",
             "    ) -> JsonValue: ...",
+            "",
+            "    def raise_payload_error(",
+            "        self,",
+            "        message: str,",
+            "        *,",
+            "        validation_error_count: int | None = None,",
+            "        cause: Exception | None = None,",
+            "    ) -> NoReturn: ...",
+            "",
+            "    def raise_result_error(",
+            "        self,",
+            "        *,",
+            "        code: int | None,",
+            "        message: str,",
+            "        data: JsonValue,",
+            "    ) -> NoReturn: ...",
             "",
             "class _RequestsSessionAdapter:",
             "    def __init__(self, session: httpx.Client | None = None) -> None:",
@@ -266,6 +300,30 @@ def render_base_operations_module(
             "        )",
             "        return self._unwrap_payload(payload)",
             "",
+            "    def raise_payload_error(",
+            "        self,",
+            "        message: str,",
+            "        *,",
+            "        validation_error_count: int | None = None,",
+            "        cause: Exception | None = None,",
+            "    ) -> NoReturn:",
+            "        error = ApiPayloadValidationError(",
+            "            message,",
+            "            validation_error_count=validation_error_count,",
+            "        )",
+            "        if cause is None:",
+            "            raise error",
+            "        raise error from cause",
+            "",
+            "    def raise_result_error(",
+            "        self,",
+            "        *,",
+            "        code: int | None,",
+            "        message: str,",
+            "        data: JsonValue,",
+            "    ) -> NoReturn:",
+            "        raise ApiResultError(code=code, message=message, data=data)",
+            "",
             "    def _unwrap_payload(self, payload: JsonValue) -> JsonValue:",
             (
                 '        if isinstance(payload, dict) and {"code", "msg"}.'
@@ -283,7 +341,7 @@ def render_base_operations_module(
                 'payload.get("msg") or "DS API error"'
                 ")"
             ),
-            "                raise ApiResultError(",
+            "                self.raise_result_error(",
             (
                 "                    code=("
                 "result_code if isinstance(result_code, int) else None"
@@ -351,7 +409,14 @@ def render_base_operations_module(
                 "self, value: object, adapter: TypeAdapter[T]"
                 ") -> T:"
             ),
-            "        return adapter.validate_python(value)",
+            "        try:",
+            "            return adapter.validate_python(value)",
+            "        except ValidationError as error:",
+            "            self._session.raise_payload_error(",
+            '                "Response payload did not match generated API contract",',
+            "                validation_error_count=error.error_count(),",
+            "                cause=error,",
+            "            )",
             "",
             "    def _project_status_data(self, value: JsonValue) -> JsonValue:",
             "        if not isinstance(value, dict):",
@@ -364,7 +429,7 @@ def render_base_operations_module(
             '        if data is None and "data" not in payload:',
             '            data = payload.get("dataList")',
             '        if status != "SUCCESS":',
-            "            raise ApiResultError(",
+            "            self._session.raise_result_error(",
             "                code=None,",
             '                message=str(payload.get("msg") or "DS API error"),',
             "                data=data,",
@@ -390,10 +455,8 @@ def render_base_operations_module(
                 'value, label="single-field payload")'
             ),
             "        if field_name not in payload:",
-            (
-                "            raise TypeError("
-                'f"single-field payload must contain {field_name}")'
-            ),
+            '            message = f"single-field payload must contain {field_name}"',
+            "            self._session.raise_payload_error(message)",
             "        return _require_json_value(",
             "            payload[field_name],",
             '            label=f"single-field payload {field_name}",',
@@ -431,7 +494,8 @@ def render_base_operations_module(
             + requests_base_class_name
             + '", "'
             + base_params_model_name
-            + '", "UploadFileLike", "SessionLike", "ApiResultError"]',
+            + '", "UploadFileLike", "SessionLike", "ApiResultError", '
+            '"ApiPayloadValidationError"]',
             "",
         ]
     )

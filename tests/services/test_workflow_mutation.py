@@ -10,12 +10,17 @@ from tests.fakes import (
     FakeWorkflowTaskRelation,
 )
 
-from dsctl.errors import UserInputError
+from dsctl.errors import ApiTransportError, UserInputError
 from dsctl.services._workflow_mutation import (
     compile_workflow_mutation_plan,
     load_workflow_patch_or_error,
 )
 from dsctl.services.resolver import ResolvedProject
+
+
+def _unexpected_task_code_allocation(_count: int) -> list[int]:
+    message = "existing-task mutation must not allocate task codes"
+    raise AssertionError(message)
 
 
 @pytest.fixture
@@ -111,6 +116,7 @@ patch:
 
     plan = compile_workflow_mutation_plan(
         workflow_dag,
+        allocate_task_codes=_unexpected_task_code_allocation,
         project=resolved_project,
         patch=patch,
         release_state="OFFLINE",
@@ -147,6 +153,7 @@ patch:
 
     plan = compile_workflow_mutation_plan(
         workflow_dag,
+        allocate_task_codes=_unexpected_task_code_allocation,
         project=resolved_project,
         patch=patch,
         release_state=None,
@@ -154,3 +161,61 @@ patch:
 
     assert plan.has_changes is False
     assert plan.diff["workflow_updated_fields"] == []
+
+
+@pytest.mark.parametrize(
+    ("patch_text", "allocated_code"),
+    [
+        (
+            """
+patch:
+  tasks:
+    create:
+      - name: verify
+        type: SHELL
+        command: echo verify
+        depends_on: [extract]
+    delete:
+      - load
+""".strip(),
+            202,
+        ),
+        (
+            """
+patch:
+  tasks:
+    create:
+      - name: verify
+        type: SHELL
+        command: echo verify
+        depends_on: [extract-v2]
+    rename:
+      - from: extract
+        to: extract-v2
+""".strip(),
+            201,
+        ),
+    ],
+)
+def test_compile_workflow_mutation_rejects_codes_colliding_with_any_live_task(
+    tmp_path: Path,
+    workflow_dag: FakeDag,
+    resolved_project: ResolvedProject,
+    patch_text: str,
+    allocated_code: int,
+) -> None:
+    patch_file = tmp_path / "collision.patch.yaml"
+    patch_file.write_text(patch_text, encoding="utf-8")
+    patch = load_workflow_patch_or_error(patch_file)
+
+    with pytest.raises(
+        ApiTransportError,
+        match="collided with an existing task code",
+    ):
+        compile_workflow_mutation_plan(
+            workflow_dag,
+            allocate_task_codes=lambda _count: [allocated_code],
+            project=resolved_project,
+            patch=patch,
+            release_state="OFFLINE",
+        )

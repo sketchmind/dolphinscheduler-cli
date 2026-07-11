@@ -175,12 +175,14 @@ class ResolutionError(DsctlError):
         message: str,
         *,
         details: Mapping[str, object] | None = None,
+        source: Mapping[str, JsonValue] | None = None,
         suggestion: str | None = None,
     ) -> None:
         """Infer one selection or ambiguity hint when details are available."""
         super().__init__(
             message,
             details=details,
+            source=source,
             suggestion=(
                 suggestion
                 if suggestion is not None
@@ -199,12 +201,14 @@ class NotFoundError(ResolutionError):
         message: str,
         *,
         details: Mapping[str, object] | None = None,
+        source: Mapping[str, JsonValue] | None = None,
         suggestion: str | None = None,
     ) -> None:
         """Infer one lookup retry hint for selection-oriented not-found errors."""
         super().__init__(
             message,
             details=details,
+            source=source,
             suggestion=(
                 suggestion if suggestion is not None else _not_found_suggestion(details)
             ),

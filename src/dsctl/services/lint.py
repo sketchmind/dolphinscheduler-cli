@@ -12,6 +12,7 @@ from dsctl.services._parameter_warnings import (
     ParameterExpressionWarningDetail,
     workflow_parameter_expression_warnings,
 )
+from dsctl.services._task_code_allocation import preview_task_codes
 from dsctl.services._workflow_compile import (
     compile_workflow_create_payload,
     workflow_edges,
@@ -98,7 +99,10 @@ def lint_workflow_result(*, file: str | Path) -> CommandResult:
     spec = _load_workflow_spec_or_error(path)
     require_schedule_block_create_compatible(spec)
     try:
-        payload = compile_workflow_create_payload(spec)
+        payload = compile_workflow_create_payload(
+            spec,
+            allocate_task_codes=preview_task_codes,
+        )
     except UserInputError as error:
         raise _lint_compile_error(error) from error
     edges = workflow_edges(spec.tasks)

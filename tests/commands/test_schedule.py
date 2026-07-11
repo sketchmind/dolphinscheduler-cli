@@ -18,7 +18,7 @@ from tests.fakes import (
     FakeWorkflowAdapter,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -177,12 +177,26 @@ def test_schedule_create_help_points_to_related_discovery_commands() -> None:
     result = runner.invoke(app, ["schedule", "create", "--help"])
 
     assert result.exit_code == 0
-    assert "workflow list" in result.stdout
-    assert "project list" in result.stdout
-    assert "alert-group" in result.stdout
-    assert "worker-group" in result.stdout
-    assert "tenant list" in result.stdout
-    assert "environment list" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "workflow list" in help_text
+    assert "project list" in help_text
+    assert "alert-group" in help_text
+    assert "worker-group" in help_text
+    assert "tenant list" in help_text
+    assert "environment list" in help_text
+    assert "context only when project" in help_text
+    assert "also comes from context" in help_text
+
+
+def test_schedule_explain_help_distinguishes_create_and_update_selectors() -> None:
+    result = runner.invoke(app, ["schedule", "explain", "--help"])
+
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout).lower()
+    assert "workflow name or code for create explain only" in help_text
+    assert "project name or code for create explain only" in help_text
+    assert "do not pass --workflow with schedule_id" in help_text
+    assert "do not pass --project with schedule_id" in help_text
 
 
 def test_schedule_explain_command_returns_create_explanation() -> None:

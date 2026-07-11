@@ -67,12 +67,14 @@ WORKER_GROUP_HELP = (
 )
 WORKFLOW_HELP = (
     "Workflow name or numeric code. Run `dsctl workflow list` in the selected "
-    "project to discover values; falls back to workflow context when omitted."
+    "project to discover values. When omitted, uses workflow context only when "
+    "project also comes from context; otherwise pass WORKFLOW."
 )
 WORKFLOW_EDIT_HELP = (
     "Workflow name or numeric code. Run `dsctl workflow list` in the selected "
-    "project to discover values. Required with --file; with --patch, falls "
-    "back to workflow context when omitted."
+    "project to discover values. Required with --file; with --patch, uses "
+    "workflow context only when project also comes from context; otherwise "
+    "pass WORKFLOW."
 )
 
 

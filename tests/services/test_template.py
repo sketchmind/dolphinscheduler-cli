@@ -502,11 +502,9 @@ def _compilable_workflow_document(
 
 @pytest.mark.parametrize("task_type", supported_task_template_types())
 def test_task_templates_compile_through_workflow_create_payload(
-    monkeypatch: pytest.MonkeyPatch,
     task_type: str,
 ) -> None:
     codes = iter(range(7001, 7100))
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
     template = task_template_result(task_type)
     data = template.data
     assert isinstance(data, dict)
@@ -516,7 +514,10 @@ def test_task_templates_compile_through_workflow_create_payload(
     assert isinstance(task_document, dict)
 
     spec = WorkflowSpec.model_validate(_compilable_workflow_document(task_document))
-    payload = workflow_compile_service.compile_workflow_create_payload(spec)
+    payload = workflow_compile_service.compile_workflow_create_payload(
+        spec,
+        allocate_task_codes=lambda count: [next(codes) for _ in range(count)],
+    )
     task_definitions = json.loads(payload["taskDefinitionJson"])
 
     assert task_definitions[0]["taskType"] == task_type
@@ -541,12 +542,10 @@ def test_task_templates_compile_through_workflow_create_payload(
     ],
 )
 def test_task_template_variants_compile_through_workflow_create_payload(
-    monkeypatch: pytest.MonkeyPatch,
     task_type: str,
     variant: str,
 ) -> None:
     codes = iter(range(8001, 8100))
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
     template = task_template_result(task_type, variant=variant)
     data = template.data
     assert isinstance(data, dict)
@@ -554,7 +553,10 @@ def test_task_template_variants_compile_through_workflow_create_payload(
     assert isinstance(task_document, dict)
 
     spec = WorkflowSpec.model_validate(_compilable_workflow_document(task_document))
-    payload = workflow_compile_service.compile_workflow_create_payload(spec)
+    payload = workflow_compile_service.compile_workflow_create_payload(
+        spec,
+        allocate_task_codes=lambda count: [next(codes) for _ in range(count)],
+    )
     task_definitions = json.loads(payload["taskDefinitionJson"])
 
     assert task_definitions[0]["taskType"] == task_type

@@ -128,6 +128,10 @@ dsctl use --clear
 - [x] YAML `schedule:` block support during `workflow create`
 - [x] extend task-type coverage for DS logical/compound nodes:
       `SUB_WORKFLOW`, `DEPENDENT`, `SWITCH`, `CONDITIONS`
+- [ ] Deepen workflow compilation into one pure prepared-compilation object
+      that validates once, owns active/unavailable task identities, and can
+      materialize either preview or server-allocated task codes without
+      duplicating phase-order knowledge across mutation services.
 
 **Done when:**
 ```bash

@@ -288,6 +288,11 @@ Example:
 }
 ```
 
+`supported_ds_versions` lists selectable targets; it does not claim that every
+listed version has stable support. The selected target's `support_level`
+communicates that distinction: `3.4.1` is currently `full`, while `3.4.0` and
+`3.3.2` are `experimental` until their live smoke suites pass.
+
 ## `dsctl context`
 
 Returns the effective config profile plus stored session context.
@@ -313,9 +318,12 @@ Current guarantees:
 
 - always returns one aggregated diagnostic payload instead of failing on the
   first broken dependency
-- checks local profile loading, merged context loading, adapter resolution, API
-  actuator health, and current-user runtime defaults
+- checks local profile loading, effective context selection, every persisted
+  context layer (including shadowed layers), adapter resolution, API actuator
+  health, and current-user runtime defaults
 - preserves structured error details under `checks[].details.error`
+- reports invalid shadowed context layers as a `context` warning under
+  `checks[].details.layer_errors` instead of failing effective context loading
 - exposes `checks[].suggestion` for every check; successful checks use `null`
 - emits top-level warnings for any check whose status is not `ok`
 - when such a warning is present, the aligned `warning_details[]` item uses
@@ -458,6 +466,12 @@ Current guarantees:
 - `data.ds.family` groups compatible server versions that share adapter
   semantics
 - `data.ds.support_level` is one of `full`, `legacy_core`, or `experimental`
+- `data.ds.tested` reports whether the selected version's live smoke suite has
+  passed
+- `data.ds.supported_versions` lists selectable targets, while
+  `data.ds.versions` reports each target's support level and test evidence
+- registry entries marked `full` or `legacy_core` always have `tested: true`;
+  untested selectable targets use `experimental`
 
 - summarizes only the current stable surface
 - exposes name-first, path-first, and id-first selection rules
@@ -494,12 +508,35 @@ Rules:
 - `--scope` accepts `project` or `user`
 - setting `project` clears any stored `workflow` beneath it
 - clearing `project` also clears `workflow`
+- each stored layer treats `project`, optional `workflow`, and `set_at` as one
+  atomic selection tuple; a stored workflow is valid only with a project in
+  the same layer
+- setting workflow context requires an effective project and persists that
+  project with the workflow in the selected scope
+- a workflow from context is used only when the command's project also came
+  from context; passing `--project` or selecting a project from a file requires
+  an explicit workflow selector
+- the project-scoped layer takes precedence over the user-scoped layer; an
+  update to user scope can remain shadowed by an existing project-scoped tuple
+- YAML `null` means that key is absent rather than a persistent tombstone;
+  a layer with `project: null` falls back to the lower layer, while
+  `workflow: null` leaves the selected project without workflow context
+- clearing a layer's project and workflow deletes that layer instead of
+  persisting an empty selection; legacy `set_at`-only layers remain readable
+- `set_at` comes from the layer that contributes the effective project and
+  workflow tuple; a `set_at`-only layer does not override lower selection time
 
-Successful output returns the merged effective context in:
+Successful output normally returns the merged effective context in:
 
 - `data.project`
 - `data.workflow`
 - `data.set_at`
+
+If the selected layer mutation succeeds but another persisted layer is still
+invalid, the command remains successful, returns the updated layer as a safe
+fallback, and emits warning detail code
+`context_layer_invalid_after_update`. Repair or clear the invalid layer before
+treating that fallback as the effective merged context.
 
 ## `dsctl lint workflow FILE`
 
@@ -516,6 +553,8 @@ Rules:
 - this command is local-only and does not require DS connectivity
 - it validates the stable workflow YAML model
 - it runs the same local compile path used by `workflow create`
+- compiled task codes are deterministic preview values only; lint never
+  requests or reserves persistent task codes from DolphinScheduler
 - it warns when `workflow.project` is omitted because workflow selection then
   depends on `--project` or stored project context
 - it warns on risky `$[...]` dynamic parameter time formats; uppercase
@@ -2848,7 +2887,8 @@ Fetches one workflow by name or numeric code.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: positional argument, then context workflow
+- workflow selection: positional argument, then context workflow only when the
+  project also came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Output:
@@ -2862,7 +2902,8 @@ Exports one workflow by name or numeric code as an editable YAML document.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: positional argument, then context workflow
+- workflow selection: positional argument, then context workflow only when the
+  project also came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Output:
@@ -2932,6 +2973,9 @@ Rules:
 - `--dry-run` returns the compiled legacy DS form request inside the standard
   dry-run envelope; when additional lifecycle steps would run, `data.requests`
   contains the ordered request plan
+- dry-run task codes are deterministic preview values and are never sent or
+  persisted; applied create first completes the same local compile preflight,
+  then obtains persistent task codes from DolphinScheduler's REST API
 - when a YAML `schedule:` block is present, `--dry-run` also returns
   `data.schedule_preview` and `data.schedule_confirmation`
 - YAML `workflow.release_state: ONLINE` creates the workflow, then brings it
@@ -3018,7 +3062,8 @@ full desired-state workflow YAML file.
 Options:
 
 - positional `WORKFLOW` selects the current workflow for `--file`; for
-  `--patch`, it is optional and falls back to workflow context
+  `--patch`, it is optional only when project and workflow both come from the
+  stored context tuple
 - exactly one of `--patch PATH` or `--file PATH` is required
 - `--project PROJECT`
 - `--dry-run`
@@ -3045,7 +3090,7 @@ Rules:
   - `schedule:` is rejected; use schedule commands for schedule lifecycle
 - target workflow selection for `--patch`:
   - explicit positional `WORKFLOW`
-  - then workflow context
+  - then workflow context only when project also came from context
 - target workflow selection for `--file`:
   - explicit positional `WORKFLOW` is required, so workflow rename intent is
     explicit
@@ -3147,7 +3192,9 @@ patch:
   - `depends_on`
 - task matching is name-based
 - workflow edit preserves the live DS task `code + version` identity for
-  existing tasks and allocates new task codes only for newly created tasks
+  existing tasks and allocates new task codes from DolphinScheduler only for
+  newly created tasks; the CLI completes local compile validation before that
+  allocation request, and no-op edits request no codes
 - task renames rewrite:
   - `depends_on`
   - `SWITCH` branch targets
@@ -3215,12 +3262,14 @@ Deletes one workflow definition after explicit confirmation.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
 
-- positional `WORKFLOW` is optional and falls back to workflow context
+- positional `WORKFLOW` is optional only when project and workflow both come
+  from the stored context tuple
 - `--force` is required
 - the CLI fetches the current workflow before deletion and returns that payload
   in `data.workflow`
@@ -3273,12 +3322,14 @@ Returns the lineage graph anchored on one resolved workflow.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
 
-- positional `WORKFLOW` is optional and falls back to workflow context
+- positional `WORKFLOW` is optional only when project and workflow both come
+  from the stored context tuple
 - the payload shape matches `workflow lineage list`
 
 ## `dsctl workflow lineage dependent-tasks WORKFLOW`
@@ -3288,7 +3339,8 @@ Returns workflows and tasks that depend on one resolved workflow or task.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - optional task filter is explicit-only through `--task`
 - use `dsctl project list`, `dsctl workflow list`, and `dsctl task list` to
   discover selectors
@@ -3300,7 +3352,8 @@ Options:
 
 Rules:
 
-- positional `WORKFLOW` is optional and falls back to workflow context
+- positional `WORKFLOW` is optional only when project and workflow both come
+  from the stored context tuple
 - `--task` accepts a task name or numeric task code inside the selected
   workflow
 
@@ -3826,7 +3879,8 @@ Creates one schedule bound to a resolved workflow.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - tenant selection:
   `flag > enabled project preference.tenant > current-user tenantCode > "default"`
 - use `dsctl project list` and `dsctl workflow list` to discover project and
@@ -3951,7 +4005,8 @@ Lists tasks inside one resolved workflow.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 The `data` payload is a JSON array of task summaries:
@@ -3967,7 +4022,8 @@ Fetches one task definition inside one resolved workflow.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - task is resolved by name or numeric code within the selected workflow
 - use `dsctl task list` inside the selected workflow to discover task names and
   codes
@@ -4053,7 +4109,8 @@ Triggers one workflow definition and returns the created workflow instance ids.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 - use `dsctl worker-group list`, `dsctl tenant list`,
   `dsctl alert-group list`, and `dsctl environment list` to discover optional
@@ -4115,7 +4172,8 @@ from `--scope`.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `argument > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - task selection: `--task` name or code within the workflow definition
 - use `dsctl project list`, `dsctl workflow list`, and `dsctl task list` to
   discover selectors
@@ -4173,7 +4231,8 @@ This uses DolphinScheduler's workflow trigger endpoint with
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `argument > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - optional task selection: `--task` name or code within the workflow definition
 - use `dsctl project list`, `dsctl workflow list`, and `dsctl task list` to
   discover selectors
@@ -4225,7 +4284,8 @@ payload.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
@@ -4244,7 +4304,8 @@ payload.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
@@ -4463,6 +4524,9 @@ Rules:
   one of `patch_file` or `file`, and `syncDefine`
 - `--dry-run` returns the compiled DS form payload plus `diff`, `no_change`,
   and `syncDefine`
+- dry-run uses deterministic preview task codes; applied edits obtain
+  persistent codes from DolphinScheduler only for newly created tasks and only
+  after local compile validation and confirmation checks succeed
 - applying a no-op edit returns the current workflow-instance payload, emits one
   warning, and the aligned `warning_details[]` item uses code
   `workflow_instance_edit_no_persistent_change`

@@ -27,7 +27,8 @@ PROJECT_HELP = (
 SCHEDULE_ID_HELP = "Schedule id. Use `dsctl schedule list` to discover values."
 WORKFLOW_HELP = (
     "Workflow name or code. Run `dsctl workflow list` in the selected project "
-    "to discover values; falls back to workflow context."
+    "to discover values. When omitted, uses workflow context only when project "
+    "also comes from context; otherwise pass --workflow."
 )
 
 
@@ -213,9 +214,11 @@ def explain_command(
         typer.Option(
             "--workflow",
             help=(
-                "Workflow name or code. Run `dsctl workflow list` in the "
-                "selected project to discover values; falls back to workflow "
-                "context for create explain."
+                "Workflow name or code for create explain only. Run `dsctl "
+                "workflow list` in the selected project to discover values. "
+                "When SCHEDULE_ID is omitted, uses workflow context only when "
+                "project also comes from context; do not pass --workflow with "
+                "SCHEDULE_ID."
             ),
         ),
     ] = None,
@@ -223,7 +226,12 @@ def explain_command(
         str | None,
         typer.Option(
             "--project",
-            help=PROJECT_HELP,
+            help=(
+                "Project name or code for create explain only. Run `dsctl "
+                "project list` to discover values. When SCHEDULE_ID is omitted, "
+                "falls back to stored project context; do not pass --project "
+                "with SCHEDULE_ID."
+            ),
         ),
     ] = None,
     cron: Annotated[

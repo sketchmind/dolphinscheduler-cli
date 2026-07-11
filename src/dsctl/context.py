@@ -4,11 +4,12 @@ import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import yaml
 
 from dsctl.errors import ConfigError
+from dsctl.support.json_types import JsonObject, JsonValue, is_json_value
 
 ContextScope = Literal["project", "user"]
 PROJECT_CONTEXT_FILENAME = ".dsctl-context.yaml"
@@ -30,6 +31,19 @@ class SessionContext:
     workflow: str | None = None
     set_at: str | None = None
 
+    def __post_init__(self) -> None:
+        """Keep project and workflow selection as one valid scope tuple."""
+        for field_name, value in (
+            ("project", self.project),
+            ("workflow", self.workflow),
+        ):
+            if value is not None and not value.strip():
+                message = f"{field_name} context must not be blank"
+                raise ValueError(message)
+        if self.workflow is not None and self.project is None:
+            message = "workflow context requires project context"
+            raise ValueError(message)
+
     def to_data(self) -> dict[str, str]:
         """Serialize the context for YAML storage."""
         return {
@@ -44,15 +58,20 @@ class SessionContext:
 
 
 def load_context(*, cwd: Path | None = None) -> SessionContext:
-    """Load merged user-level and project-level context state."""
-    merged: dict[str, str] = {}
-    for path in (user_context_path(), project_context_path(cwd=cwd)):
-        merged.update(_read_context_file(path))
-    return SessionContext(
-        project=merged.get("project"),
-        workflow=merged.get("workflow"),
-        set_at=merged.get("set_at"),
+    """Load the highest-priority context tuple that selects a project."""
+    context_layers: tuple[tuple[ContextScope, Path], ...] = (
+        ("project", project_context_path(cwd=cwd)),
+        ("user", user_context_path()),
     )
+    for scope, path in context_layers:
+        layer = _read_context_file(path, scope=scope)
+        if "project" in layer:
+            return SessionContext(
+                project=layer["project"],
+                workflow=layer.get("workflow"),
+                set_at=layer.get("set_at"),
+            )
+    return SessionContext()
 
 
 def write_context(
@@ -82,14 +101,40 @@ def update_context(
     """Update a context layer.
 
     Omitted fields preserve the current stored value. Passing ``None`` clears
-    that field from the selected context scope.
+    that field from the selected context scope. Updating project clears an
+    omitted workflow so the two values cannot cross project boundaries.
     """
-    current = read_context_layer(scope=scope, cwd=cwd)
+    can_discard_unbound_workflow = (
+        not isinstance(project, _UnsetContextValue) or workflow is None
+    )
+    if not can_discard_unbound_workflow:
+        current = read_context_layer(scope=scope, cwd=cwd)
+    else:
+        current_data = _read_context_file(
+            _context_path(scope=scope, cwd=cwd),
+            scope=scope,
+            discard_unbound_workflow=True,
+        )
+        current = SessionContext(
+            project=current_data.get("project"),
+            workflow=current_data.get("workflow"),
+            set_at=current_data.get("set_at"),
+        )
+    updated_project = _resolve_context_update(current.project, project)
+    updated_workflow = (
+        None
+        if not isinstance(project, _UnsetContextValue)
+        and isinstance(workflow, _UnsetContextValue)
+        else _resolve_context_update(current.workflow, workflow)
+    )
     updated = SessionContext(
-        project=_resolve_context_update(current.project, project),
-        workflow=_resolve_context_update(current.workflow, workflow),
+        project=updated_project,
+        workflow=updated_workflow,
         set_at=_utc_now(),
     )
+    if updated.project is None:
+        clear_context(scope=scope, cwd=cwd)
+        return SessionContext()
     write_context(updated, scope=scope, cwd=cwd)
     return updated
 
@@ -109,7 +154,10 @@ def read_context_layer(
     *, scope: ContextScope = "project", cwd: Path | None = None
 ) -> SessionContext:
     """Read a single context layer without merging it with other scopes."""
-    data = _read_context_file(_context_path(scope=scope, cwd=cwd))
+    data = _read_context_file(
+        _context_path(scope=scope, cwd=cwd),
+        scope=scope,
+    )
     return SessionContext(
         project=data.get("project"),
         workflow=data.get("workflow"),
@@ -135,7 +183,42 @@ def _context_path(*, scope: ContextScope, cwd: Path | None = None) -> Path:
     return project_context_path(cwd=cwd)
 
 
-def _read_context_file(path: Path) -> dict[str, str]:
+def _read_context_file(
+    path: Path,
+    *,
+    scope: ContextScope,
+    discard_unbound_workflow: bool = False,
+) -> dict[str, str]:
+    data = _validated_context_data(
+        _load_context_mapping(path),
+        path=path,
+        scope=scope,
+    )
+    if "workflow" not in data or "project" in data:
+        return data
+    if discard_unbound_workflow:
+        data.pop("workflow")
+        return data
+
+    message = f"Context file {path} workflow requires project in the same layer"
+    raise ConfigError(
+        message,
+        details={
+            "path": str(path),
+            "scope": scope,
+            "key": "workflow",
+            "required_key": "project",
+        },
+        suggestion=(
+            f"Run `dsctl use project NAME --scope {scope}` to bind a project "
+            "and discard the unbound workflow, or run `dsctl use --clear "
+            f"--scope {scope}` to clear that context layer."
+        ),
+    )
+
+
+def _load_context_mapping(path: Path) -> JsonObject:
+    """Load one context YAML mapping without applying context invariants."""
     if not path.exists():
         return {}
 
@@ -156,16 +239,97 @@ def _read_context_file(path: Path) -> dict[str, str]:
             message,
             details={"path": str(path)},
         )
-    data = {str(key): str(value) for key, value in loaded.items() if value is not None}
+    invalid_keys = sorted(str(key) for key in loaded if not isinstance(key, str))
+    if invalid_keys:
+        message = f"Context file {path} contains unsupported keys"
+        raise ConfigError(
+            message,
+            details={"path": str(path), "keys": invalid_keys},
+        )
+
+    data: JsonObject = {}
+    for raw_key, raw_value in loaded.items():
+        key = cast("str", raw_key)
+        if not is_json_value(raw_value):
+            message = f"Context value {key!r} in {path} must be a string"
+            raise ConfigError(
+                message,
+                details={
+                    "path": str(path),
+                    "key": key,
+                    "expected_type": "string",
+                    "actual_type": type(raw_value).__name__,
+                },
+            )
+        data[key] = raw_value
+    return data
+
+
+def _validated_context_data(
+    loaded: JsonObject,
+    *,
+    path: Path,
+    scope: ContextScope,
+) -> dict[str, str]:
+    """Validate supported context keys and their scalar values."""
     allowed_keys = {"project", "workflow", "set_at"}
-    unexpected = sorted(set(data) - allowed_keys)
+    unexpected = sorted(key for key in loaded if key not in allowed_keys)
     if unexpected:
         message = f"Context file {path} contains unsupported keys"
         raise ConfigError(
             message,
             details={"path": str(path), "keys": unexpected},
         )
+
+    data: dict[str, str] = {}
+    for key, value in loaded.items():
+        validated_value = _validated_context_value(
+            value,
+            key=key,
+            path=path,
+            scope=scope,
+        )
+        if validated_value is not None:
+            data[key] = validated_value
     return data
+
+
+def _validated_context_value(
+    value: JsonValue,
+    *,
+    key: str,
+    path: Path,
+    scope: ContextScope,
+) -> str | None:
+    """Validate one optional scalar context value."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        message = f"Context value {key!r} in {path} must be a string"
+        raise ConfigError(
+            message,
+            details={
+                "path": str(path),
+                "key": key,
+                "expected_type": "string",
+                "actual_type": type(value).__name__,
+            },
+        )
+    if key in {"project", "workflow"} and not value.strip():
+        message = f"Context value {key!r} in {path} must not be blank"
+        raise ConfigError(
+            message,
+            details={
+                "path": str(path),
+                "scope": scope,
+                "key": key,
+            },
+            suggestion=(
+                f"Run `dsctl use --clear --scope {scope}` to clear the "
+                "invalid context layer, then set project context again."
+            ),
+        )
+    return value
 
 
 def _utc_now() -> str:

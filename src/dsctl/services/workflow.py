@@ -50,6 +50,10 @@ from dsctl.services._serialization import (
     optional_text,
     require_resource_int,
 )
+from dsctl.services._task_code_allocation import (
+    allocate_server_task_codes,
+    preview_task_codes,
+)
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
@@ -107,6 +111,7 @@ from dsctl.services.selection import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from dsctl.models.workflow_patch import WorkflowPatchSpec
@@ -830,7 +835,10 @@ def _create_workflow_result(
             confirm_risk=confirm_risk,
         )
     )
-    payload = _compile_workflow_create_payload(spec)
+    payload = _compile_workflow_create_payload(
+        spec,
+        allocate_task_codes=preview_task_codes,
+    )
     parameter_warnings, parameter_warning_details = (
         workflow_parameter_expression_warnings(spec)
     )
@@ -847,6 +855,16 @@ def _create_workflow_result(
             parameter_warnings=parameter_warnings,
             parameter_warning_details=parameter_warning_details,
         )
+
+    payload = _compile_workflow_create_payload(
+        spec,
+        allocate_task_codes=lambda count: allocate_server_task_codes(
+            count,
+            adapter=runtime.upstream.tasks,
+            project_code=resolved_project.code,
+            action="workflow.create",
+        ),
+    )
 
     _create_remote_workflow(
         runtime,
@@ -924,6 +942,7 @@ def _edit_workflow_result(
         project=target.resolved_project,
         patch=patch,
         spec=spec,
+        allocate_task_codes=preview_task_codes,
     )
     desired_release_state = mutation.payload["releaseState"]
     payload = mutation.payload
@@ -1024,6 +1043,19 @@ def _edit_workflow_result(
         workflow_code=target.resolved_workflow.code,
     )
 
+    payload = _compile_workflow_edit_mutation(
+        dag=dag,
+        project=target.resolved_project,
+        patch=patch,
+        spec=spec,
+        allocate_task_codes=lambda count: allocate_server_task_codes(
+            count,
+            adapter=runtime.upstream.tasks,
+            project_code=target.resolved_project.code,
+            action="workflow.edit",
+        ),
+    ).payload
+
     _update_remote_workflow(
         runtime,
         project=target.resolved_project,
@@ -1054,10 +1086,12 @@ def _compile_workflow_edit_mutation(
     project: ResolvedProject,
     patch: WorkflowPatchSpec | None,
     spec: WorkflowSpec | None,
+    allocate_task_codes: Callable[[int], Sequence[int]],
 ) -> WorkflowMutationPlan:
     if patch is not None:
         return compile_workflow_mutation_plan(
             dag,
+            allocate_task_codes=allocate_task_codes,
             project=project,
             patch=patch,
             release_state=_workflow_edit_release_state(patch),
@@ -1067,6 +1101,7 @@ def _compile_workflow_edit_mutation(
         raise RuntimeError(message)
     return compile_workflow_file_mutation_plan(
         dag,
+        allocate_task_codes=allocate_task_codes,
         project=project,
         desired=spec,
         release_state=spec.workflow.release_state.value,
@@ -2615,7 +2650,11 @@ def _resolve_workflow_target(
         selected_project.value,
         adapter=runtime.upstream.projects,
     )
-    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    selected_workflow = require_workflow_selection(
+        workflow,
+        runtime=runtime,
+        project_selection=selected_project,
+    )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
         adapter=runtime.upstream.workflows,
@@ -2656,7 +2695,11 @@ def _resolve_workflow_edit_target(
         resolved_project=resolved_project,
         spec=spec,
     )
-    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    selected_workflow = require_workflow_selection(
+        workflow,
+        runtime=runtime,
+        project_selection=selected_project,
+    )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
         adapter=runtime.upstream.workflows,

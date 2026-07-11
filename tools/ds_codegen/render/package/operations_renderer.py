@@ -33,6 +33,9 @@ if TYPE_CHECKING:
     from ds_codegen.render.package.planner import PackageRenderContext
 
 AnnotationImportTarget = tuple[tuple[str, ...], str]
+_STRICT_INT_LIST_RESPONSE_OPERATION_IDS = frozenset(
+    {"TaskDefinitionController.genTaskCodeList"}
+)
 
 
 @dataclass(frozen=True)
@@ -111,6 +114,10 @@ def render_operations_module(
         != "None"
         for operation in operations
     )
+    uses_strict_int_list_response = any(
+        operation.operation_id in _STRICT_INT_LIST_RESPONSE_OPERATION_IDS
+        for operation in operations
+    )
 
     sections = [
         "from __future__ import annotations",
@@ -118,12 +125,15 @@ def render_operations_module(
         base_import,
         "",
     ]
-    if uses_request_params and uses_validated_returns:
-        sections.extend(["from pydantic import Field, TypeAdapter", ""])
-    elif uses_request_params:
-        sections.extend(["from pydantic import Field", ""])
-    elif uses_validated_returns:
-        sections.extend(["from pydantic import TypeAdapter", ""])
+    pydantic_imports: list[str] = []
+    if uses_request_params:
+        pydantic_imports.append("Field")
+    if uses_strict_int_list_response:
+        pydantic_imports.append("StrictInt")
+    if uses_validated_returns:
+        pydantic_imports.append("TypeAdapter")
+    if pydantic_imports:
+        sections.extend([f"from pydantic import {', '.join(pydantic_imports)}", ""])
 
     import_targets: set[AnnotationImportTarget] = set()
     current_module_parts = ("api", "operations", module_name)
@@ -316,6 +326,7 @@ def _render_operation_method(
         owner_import_path=None,
         context=context,
     )
+    payload_adapter_type = _payload_adapter_type(operation, return_type=return_type)
     lines = [
         f"    def {method_name}(",
         "        " + ",\n        ".join(signature_items),
@@ -408,7 +419,9 @@ def _render_operation_method(
             lines.extend(_projected_payload_lines(operation))
             lines.append(
                 "        "
-                f"return self._validate_payload(payload, TypeAdapter({return_type}))"
+                "return self._validate_payload("
+                f"payload, TypeAdapter({payload_adapter_type})"
+                ")"
             )
         return "\n".join(lines)
 
@@ -430,7 +443,9 @@ def _render_operation_method(
     lines.append(f"        {request_call_lines[-1]}")
     lines.extend(_projected_payload_lines(operation))
     lines.append(
-        f"        return self._validate_payload(payload, TypeAdapter({return_type}))"
+        "        return self._validate_payload("
+        f"payload, TypeAdapter({payload_adapter_type})"
+        ")"
     )
     return "\n".join(lines)
 
@@ -443,6 +458,19 @@ def _projected_payload_lines(operation: OperationSpec) -> list[str]:
     if operation.response_projection == "single_data_list":
         return ["        payload = self._project_single_data_list(payload)"]
     return []
+
+
+def _payload_adapter_type(operation: OperationSpec, *, return_type: str) -> str:
+    """Render endpoint-specific response validation without widening annotations."""
+    if operation.operation_id not in _STRICT_INT_LIST_RESPONSE_OPERATION_IDS:
+        return return_type
+    if return_type != "list[int]":
+        message = (
+            f"Strict integer-list response override for {operation.operation_id} "
+            f"expected list[int], got {return_type}"
+        )
+        raise ValueError(message)
+    return "list[StrictInt]"
 
 
 def _operation_method_name(operation: OperationSpec) -> str:

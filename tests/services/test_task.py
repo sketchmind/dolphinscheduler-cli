@@ -216,6 +216,24 @@ def test_list_tasks_result_requires_workflow_selection(
     )
 
 
+def test_list_tasks_explicit_project_does_not_reuse_context_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    _install_task_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    with pytest.raises(UserInputError, match="Workflow is required"):
+        task_service.list_tasks_result(project="etl-prod")
+
+
 def test_get_task_result_reports_missing_tasks(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
