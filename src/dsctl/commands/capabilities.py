@@ -45,7 +45,7 @@ def capabilities_command(
         ),
     ] = False,
 ) -> None:
-    """Print bounded version and surface capability discovery."""
+    """Discover supported features and versions; use schema for command syntax."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

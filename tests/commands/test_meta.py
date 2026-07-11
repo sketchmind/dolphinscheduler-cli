@@ -6,6 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import _misplaced_root_option, app, main
+from tests.support import normalize_cli_help
 
 runner = CliRunner()
 
@@ -74,6 +75,31 @@ def test_root_help_describes_global_output_option_placement() -> None:
     assert "--compact" in result.stdout
     assert "Global option" in result.stdout
     assert "COMMAND" in result.stdout
+
+
+def test_root_help_routes_agents_to_narrow_discovery_and_navigation() -> None:
+    result = runner.invoke(app, ["--help"])
+    help_text = normalize_cli_help(result.stdout)
+
+    assert result.exit_code == 0
+    assert "schema --command ACTION" in help_text
+    assert "leaf `--help`" in help_text
+    assert "inspect one relevant group" in help_text
+    assert "do not preload unrelated groups" in help_text
+    assert "downstream lifecycle actions" in help_text
+    assert "next_actions" in help_text
+    assert "matches the current goal and is authorized" in help_text
+    assert "run that command unchanged" in help_text
+
+
+def test_workflow_create_help_separates_bounded_lint_from_full_dry_run() -> None:
+    result = runner.invoke(app, ["workflow", "create", "--help"])
+    help_text = normalize_cli_help(result.stdout)
+
+    assert result.exit_code == 0
+    assert "lint workflow FILE" in help_text
+    assert "full DS request" in help_text
+    assert "bounded DAG validation" in help_text
 
 
 def test_misplaced_root_option_detection() -> None:

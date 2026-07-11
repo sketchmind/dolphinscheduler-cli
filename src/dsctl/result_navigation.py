@@ -107,6 +107,67 @@ def _workflow_release_navigation(
     return []
 
 
+def _workflow_create_navigation(
+    resolved: JsonObject,
+    data: JsonValue,
+    command_prefix: CommandPrefix,
+) -> list[NextActionData]:
+    data_object = _object(data)
+    if data_object is None:
+        return []
+    if data_object.get("dry_run") is not True:
+        return _workflow_release_navigation(resolved, data, command_prefix)
+
+    project_code = _nested_positive_int(resolved, "project", "code")
+    file = _non_empty_opaque_string(resolved.get("file"))
+    if project_code is None or file is None:
+        return []
+
+    argv = [
+        *command_prefix,
+        "--compact",
+        "--columns",
+        "code,name,releaseState",
+        "workflow",
+        "create",
+        "--file",
+        file,
+        "--project",
+        str(project_code),
+    ]
+    confirmation_args = _workflow_create_confirmation_args(data_object)
+    if confirmation_args is None:
+        return []
+    argv.extend(confirmation_args)
+    return [_action("workflow.create", argv, mutates=True)]
+
+
+def _workflow_create_confirmation_args(
+    data: Mapping[str, JsonValue],
+) -> list[str] | None:
+    has_schedule_preview = "schedule_preview" in data
+    has_schedule_confirmation = "schedule_confirmation" in data
+    if has_schedule_preview or has_schedule_confirmation:
+        if not has_schedule_preview or not has_schedule_confirmation:
+            return None
+        if _object(data.get("schedule_preview")) is None:
+            return None
+        schedule_confirmation = _object(data.get("schedule_confirmation"))
+        if schedule_confirmation is None:
+            return None
+        confirmation_required = schedule_confirmation.get("required")
+        if confirmation_required is True:
+            confirmation_token = _non_blank_opaque_string(
+                schedule_confirmation.get("token")
+            )
+            if confirmation_token is None:
+                return None
+            return ["--confirm-risk", confirmation_token]
+        if confirmation_required is not False:
+            return None
+    return []
+
+
 def _workflow_run_navigation(
     resolved: JsonObject,
     data: JsonValue,
@@ -335,6 +396,18 @@ def _upper_string(value: JsonValue) -> str | None:
     return normalized or None
 
 
+def _non_empty_opaque_string(value: JsonValue) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    return value
+
+
+def _non_blank_opaque_string(value: JsonValue) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value
+
+
 def _task_state(row: JsonValue) -> str | None:
     mapping = _object(row)
     return None if mapping is None else _upper_string(mapping.get("state"))
@@ -370,7 +443,7 @@ def _ranked_task_ids(rows: Sequence[JsonValue]) -> list[int]:
 
 
 _NAVIGATION_RULES: dict[str, NavigationRule] = {
-    "workflow.create": _workflow_release_navigation,
+    "workflow.create": _workflow_create_navigation,
     "workflow.online": _workflow_release_navigation,
     "workflow.run": _workflow_run_navigation,
     "workflow.run-task": _workflow_run_navigation,

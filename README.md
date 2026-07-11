@@ -72,7 +72,9 @@ dsctl task-instance log <task_instance_id> --raw
 
 ## Discover Commands
 
-Start with `--help` for human-readable command entry points:
+Start with `--help` for concise command entry points. This representation is
+also effective for agents when it contains enough information to construct the
+next invocation:
 
 ```bash
 dsctl --help
@@ -80,9 +82,11 @@ dsctl workflow --help
 dsctl workflow edit --help
 ```
 
-Use `schema` for machine-readable arguments, options, choices, payload hints,
-and output shape metadata. Start with the bounded index, expand one group only
-when needed, then request the action-local contract:
+Use `schema` when exact machine-readable arguments, choices, constraints,
+payload hints, or output shape metadata are needed. JSON is not inherently more
+token-efficient than help text: inspect only the action being executed next.
+Use a group view only when the action is unknown, and the root index only when
+the group itself is unknown:
 
 ```bash
 dsctl schema
@@ -94,6 +98,11 @@ dsctl schema --command task-type.schema
 
 `dsctl schema --full` retains the expanded whole-surface contract for audits
 and generators; it is not the normal agent discovery path.
+
+Successful JSON may include bounded `next_actions`. When a suggestion matches
+the current goal and has the required mutation authorization, agents should
+preserve that selected `command` unchanged. A `mutates: true` action must
+complete before reads that depend on its new state.
 
 Use `capabilities` for lightweight feature discovery:
 
@@ -108,8 +117,9 @@ an explicit spelling of the default view.
 
 ## Workflow Authoring
 
-Create workflow YAML from templates, lint it locally, then dry-run before
-sending it to DolphinScheduler:
+Create workflow YAML from templates and lint it locally before sending it to
+DolphinScheduler. Dry-run is the verbose DS request-plan view when that payload
+must be inspected:
 
 ```bash
 dsctl template task SHELL --raw

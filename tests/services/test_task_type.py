@@ -586,7 +586,9 @@ def test_task_type_schema_result_returns_bounded_field_candidates() -> None:
         "dsctl task-type schema SHELL --field 'task_params.resourceList[].resourceName'"
     )
     assert "available_fields" not in details
-    assert candidate["command"] in (exc_info.value.suggestion or "")
+    candidate_command = candidate["command"]
+    assert isinstance(candidate_command, str)
+    assert candidate_command in (exc_info.value.suggestion or "")
 
 
 def test_generic_task_type_typos_recover_known_common_fields() -> None:

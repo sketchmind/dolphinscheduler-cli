@@ -148,9 +148,17 @@ def dry_run_result(
         "request": request,
     }
     if requests is not None:
-        data["requests"] = [
+        request_plan = [
             require_json_object(item, label="dry-run request item") for item in requests
         ]
+        if not request_plan:
+            message = "dry-run request plan cannot be empty"
+            raise ValueError(message)
+        if request_plan[0] != request:
+            message = "dry-run request plan must begin with the primary request"
+            raise ValueError(message)
+        if len(request_plan) > 1:
+            data["requests"] = request_plan
     if extra_data is not None:
         for key, value in extra_data.items():
             if key in data:

@@ -59,7 +59,7 @@ def schema_command(
         ),
     ] = False,
 ) -> None:
-    """Discover the CLI schema; no options returns the bounded action index."""
+    """Discover exact contracts; use group or index only when action is unknown."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

@@ -1,4 +1,5 @@
 import json
+import shlex
 from pathlib import Path
 
 import pytest
@@ -305,7 +306,7 @@ def test_workflow_create_command_can_dry_run_yaml_spec(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    codes = iter([7201])
+    codes = iter([7201, 7202, 7203])
     monkeypatch.setattr(
         workflow_service,
         "preview_task_codes",
@@ -318,9 +319,16 @@ workflow:
   name: nightly-sync
   project: etl-prod
 tasks:
-  - name: extract
+  - name: orbital-check
     type: SHELL
-    command: echo extract
+    command: echo orbit=stable
+  - name: payload-check
+    type: SHELL
+    command: echo payload=ready
+  - name: mission-summary
+    type: SHELL
+    command: echo LUNA_CLI_EVAL_OK
+    depends_on: [orbital-check, payload-check]
 """.strip(),
         encoding="utf-8",
     )
@@ -335,7 +343,20 @@ tasks:
     assert payload["action"] == "workflow.create"
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["request"]["path"] == "/projects/7/workflow-definition"
-    assert len(payload["data"]["requests"]) == 1
+    assert "requests" not in payload["data"]
+    assert len(result.stdout.encode("utf-8")) < 4_608
+    assert shlex.split(payload["next_actions"][0]["command"]) == [
+        "dsctl",
+        "--compact",
+        "--columns",
+        "code,name,releaseState",
+        "workflow",
+        "create",
+        "--file",
+        str(spec_path),
+        "--project",
+        "7",
+    ]
 
 
 def test_workflow_create_command_can_dry_run_schedule_plan(
