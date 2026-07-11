@@ -112,11 +112,22 @@ For scan-friendly terminal output, pass a global output renderer before the
 command group:
 
 ```bash
+dsctl --compact --columns id,name,state workflow-instance list --project etl-prod --page-size 10
 dsctl --columns id,name,state workflow-instance list --project etl-prod
 dsctl --output-format table workflow-instance list --project etl-prod
 dsctl --output-format tsv --columns id,name,state task-instance list --workflow-instance <workflow_instance_id>
 dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <workflow_instance_id>
 ```
+
+For agents and scripts that need the full machine contract, prefer
+`--compact --columns ...` plus a small `--page-size`. Compact JSON is UTF-8,
+keeps the standard envelope, and changes only insignificant whitespace.
+
+Successful data and raw artifacts use stdout. Structured command errors use
+stderr. Table and TSV keep stdout row-only; implicit stored context,
+partial/non-first-page summaries, and warnings use stderr so redirection and
+simple pipelines remain valid. Raw artifact warnings also use stderr without
+changing the artifact body.
 
 Use `dsctl schema --command <ACTION>` and inspect `data_shape` to discover the
 canonical row/object path and default display columns for row-oriented

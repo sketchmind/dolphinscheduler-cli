@@ -3,7 +3,7 @@ import json
 import pytest
 import typer
 
-from dsctl.cli_runtime import AppState, emit_result, set_app_state
+from dsctl.cli_runtime import AppState, emit_raw_result, emit_result, set_app_state
 from dsctl.errors import ConfigError
 from dsctl.output import CommandResult
 from dsctl.output_formats import RenderOptions
@@ -20,7 +20,9 @@ def test_emit_result_formats_dsctl_errors(
         emit_result("context", builder)
 
     assert exc_info.value.exit_code == 1
-    assert json.loads(capsys.readouterr().out) == {
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err) == {
         "ok": False,
         "action": "context",
         "resolved": {},
@@ -44,7 +46,84 @@ def test_emit_result_does_not_swallow_unexpected_exceptions(
     with pytest.raises(ValueError, match="boom"):
         emit_result("context", builder)
 
-    assert capsys.readouterr().out == ""
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_emit_raw_result_writes_errors_only_to_stderr(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def builder() -> CommandResult:
+        message = "Missing required setting: DS_API_URL"
+        raise ConfigError(message)
+
+    with pytest.raises(typer.Exit) as exc_info:
+        emit_raw_result("workflow.export", builder, lambda result: str(result.data))
+
+    captured = capsys.readouterr()
+    assert exc_info.value.exit_code == 1
+    assert captured.out == ""
+    assert json.loads(captured.err)["error"]["type"] == "config_error"
+
+
+def test_emit_raw_result_validates_render_options_before_builder(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    set_app_state(
+        AppState(
+            env_file=None,
+            render_options=RenderOptions(output_format="table", compact=True),
+        )
+    )
+    called = False
+
+    def builder() -> CommandResult:
+        nonlocal called
+        called = True
+        return CommandResult(data={"text": "artifact"})
+
+    try:
+        with pytest.raises(typer.Exit) as exc_info:
+            emit_raw_result(
+                "task-instance.log",
+                builder,
+                lambda result: str(result.data),
+            )
+
+        captured = capsys.readouterr()
+        assert exc_info.value.exit_code == 1
+        assert called is False
+        assert captured.out == ""
+        assert "--compact can only be used" in captured.err
+    finally:
+        set_app_state(AppState(env_file=None))
+
+
+def test_emit_raw_result_preserves_exact_body_with_compact_json_enabled(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    set_app_state(
+        AppState(
+            env_file=None,
+            render_options=RenderOptions(compact=True),
+        )
+    )
+
+    def builder() -> CommandResult:
+        return CommandResult(data={"text": "line-1\nline-2"})
+
+    try:
+        emit_raw_result(
+            "task-instance.log",
+            builder,
+            lambda result: "line-1\nline-2",
+        )
+        captured = capsys.readouterr()
+        assert captured.out == "line-1\nline-2"
+        assert captured.err == ""
+    finally:
+        set_app_state(AppState(env_file=None))
 
 
 def test_emit_result_can_render_table_rows(
@@ -132,6 +211,103 @@ def test_emit_result_can_render_empty_table_with_default_columns(
         assert capsys.readouterr().out == (
             "code | name | config\n-----+------+-------\n"
         )
+    finally:
+        set_app_state(AppState(env_file=None))
+
+
+def test_emit_result_reports_page_metadata_to_stderr_for_table_output(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    set_app_state(
+        AppState(
+            env_file=None,
+            render_options=RenderOptions(output_format="table"),
+        )
+    )
+
+    def builder() -> CommandResult:
+        return CommandResult(
+            data={
+                "totalList": [
+                    {"code": 101, "name": "etl-prod", "description": "demo"},
+                    {"code": 102, "name": "stock-etl", "description": "demo"},
+                ],
+                "total": 10,
+                "totalPage": 5,
+                "pageNo": 1,
+                "pageSize": 2,
+                "currentPage": 1,
+            }
+        )
+
+    try:
+        emit_result("project.list", builder)
+        captured = capsys.readouterr()
+        assert "etl-prod" in captured.out
+        assert "stock-etl" in captured.out
+        assert captured.err == "page: 1/5; showing 2 of 10 rows\n"
+    finally:
+        set_app_state(AppState(env_file=None))
+
+
+def test_emit_result_reports_structured_warnings_to_stderr_for_row_output(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    set_app_state(
+        AppState(
+            env_file=None,
+            render_options=RenderOptions(
+                output_format="tsv",
+                columns=("id", "name"),
+            ),
+        )
+    )
+
+    def builder() -> CommandResult:
+        message = "dry run: no request was sent"
+        return CommandResult(
+            data=[{"id": 7, "name": "extract"}],
+            warnings=[message],
+            warning_details=[
+                {
+                    "code": "dry_run_no_request_sent",
+                    "message": message,
+                    "request_sent": False,
+                }
+            ],
+        )
+
+    try:
+        emit_result("task-instance.list", builder)
+        captured = capsys.readouterr()
+        assert captured.out.startswith("id\tname\n")
+        assert captured.err == (
+            "warning[dry_run_no_request_sent]: dry run: no request was sent\n"
+        )
+    finally:
+        set_app_state(AppState(env_file=None))
+
+
+def test_emit_result_renders_compact_utf8_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    set_app_state(
+        AppState(
+            env_file=None,
+            render_options=RenderOptions(compact=True),
+        )
+    )
+
+    def builder() -> CommandResult:
+        return CommandResult(data={"name": "无人值守测试"})
+
+    try:
+        emit_result("project.get", builder)
+        captured = capsys.readouterr()
+        assert captured.err == ""
+        assert captured.out.count("\n") == 1
+        assert "无人值守测试" in captured.out
+        assert "\\u" not in captured.out
     finally:
         set_app_state(AppState(env_file=None))
 
@@ -245,7 +421,9 @@ def test_emit_result_rejects_mixed_columns_wildcard(
         emit_result("task-instance.list", builder)
 
     assert exc_info.value.exit_code == 1
-    output = capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    output = captured.err
     assert "error.type" in output
     assert "user_input_error" in output
     assert "--columns '*' cannot be combined with explicit columns" in output

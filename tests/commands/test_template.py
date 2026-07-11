@@ -146,7 +146,7 @@ def test_template_params_command_rejects_unknown_topic() -> None:
     result = runner.invoke(app, ["template", "params", "--topic", "unknown"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Run `dsctl template params` to inspect available topics."
@@ -261,7 +261,7 @@ def test_template_datasource_command_rejects_unknown_type() -> None:
     result = runner.invoke(app, ["template", "datasource", "--type", "unknown"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Run `dsctl template datasource` to choose a supported datasource type, "
@@ -329,7 +329,7 @@ def test_template_task_command_rejects_unknown_task_type() -> None:
     result = runner.invoke(app, ["template", "task", "UNKNOWN"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "Unsupported task template type 'UNKNOWN'."
     assert payload["error"]["details"]["task_type"] == "UNKNOWN"
@@ -399,7 +399,7 @@ def test_template_task_raw_requires_task_type() -> None:
     result = runner.invoke(app, ["template", "task", "--raw"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "--raw requires TASK_TYPE."
 

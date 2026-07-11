@@ -135,7 +135,7 @@ def test_datasource_create_command_rejects_unknown_type(tmp_path: Path) -> None:
     result = runner.invoke(app, ["datasource", "create", "--file", str(file)])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "datasource.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -158,7 +158,7 @@ def test_datasource_create_command_rejects_payload_with_id(tmp_path: Path) -> No
     result = runner.invoke(app, ["datasource", "create", "--file", str(file)])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "datasource.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -223,7 +223,7 @@ def test_datasource_update_command_rejects_mismatched_payload_id(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "datasource.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -236,7 +236,7 @@ def test_datasource_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["datasource", "delete", "warehouse"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "datasource.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

@@ -225,7 +225,7 @@ def test_alert_plugin_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["alert-plugin", "delete", "slack-ops"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "alert-plugin.delete"
     assert payload["error"]["type"] == "user_input_error"
 
@@ -250,7 +250,7 @@ def test_alert_plugin_test_command_requires_live_alert_server(
     result = runner.invoke(app, ["alert-plugin", "test", "slack-ops"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "alert-plugin.test"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (

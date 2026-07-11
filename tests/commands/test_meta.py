@@ -1,10 +1,11 @@
 import json
+import sys
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from dsctl.app import _misplaced_root_option, app
+from dsctl.app import _misplaced_root_option, app, main
 
 runner = CliRunner()
 
@@ -46,12 +47,61 @@ def test_version_command_can_project_json_columns() -> None:
     assert payload["data"] == {"cli": "0.2.0", "ds": "3.4.1"}
 
 
+def test_version_command_accepts_compact_json_output() -> None:
+    result = runner.invoke(app, ["--compact", "version"])
+
+    assert result.exit_code == 0
+    assert result.stderr == ""
+    assert result.stdout.count("\n") == 1
+    assert json.loads(result.stdout)["action"] == "version"
+
+
+def test_compact_rejects_non_json_output() -> None:
+    result = runner.invoke(
+        app,
+        ["--compact", "--output-format", "table", "version"],
+    )
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert "--compact can only be used" in result.stderr
+
+
+def test_root_help_describes_global_output_option_placement() -> None:
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "--compact" in result.stdout
+    assert "Global option" in result.stdout
+    assert "COMMAND" in result.stdout
+
+
 def test_misplaced_root_option_detection() -> None:
     assert (
         _misplaced_root_option(["worker-group", "list", "--output-format", "table"])
         == "--output-format"
     )
     assert _misplaced_root_option(["--output-format", "table", "version"]) is None
+    assert _misplaced_root_option(["version", "--compact"]) == "--compact"
+    assert _misplaced_root_option(["--compact", "version"]) is None
+
+
+def test_console_main_reports_misplaced_compact_on_stderr(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["dsctl", "version", "--compact"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 2
+    assert captured.out == ""
+    assert captured.err == (
+        "--compact is a global dsctl option. Put it before the command group, "
+        "for example: dsctl --compact <command> ...\n"
+    )
 
 
 @pytest.mark.parametrize("ds_version", ["3.3.2", "3.4.0"])

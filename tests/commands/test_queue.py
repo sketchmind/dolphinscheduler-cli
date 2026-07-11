@@ -123,7 +123,7 @@ def test_queue_update_command_requires_one_change() -> None:
     result = runner.invoke(app, ["queue", "update", "default"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "queue.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -135,7 +135,7 @@ def test_queue_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["queue", "delete", "default"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "queue.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

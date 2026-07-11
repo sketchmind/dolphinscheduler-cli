@@ -184,7 +184,7 @@ def test_task_instance_list_command_requires_project_without_workflow_instance()
     result = runner.invoke(app, ["task-instance", "list"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -206,7 +206,7 @@ def test_task_instance_list_command_rejects_workflow_definition_filter() -> None
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["details"]["upstream_filter"] == "workflowDefinitionName"
@@ -342,7 +342,7 @@ def test_task_instance_sub_workflow_command_reports_task_type_suggestion(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.sub-workflow"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -407,7 +407,7 @@ def test_task_instance_force_success_command_reports_workflow_state_suggestion()
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.force-success"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -469,7 +469,7 @@ def test_task_instance_list_command_reports_supported_state_names() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -492,7 +492,7 @@ def test_task_instance_list_command_reports_supported_execute_types() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -514,7 +514,7 @@ def test_task_instance_stop_command_reports_running_state_suggestion() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.stop"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -588,7 +588,7 @@ def test_task_instance_savepoint_command_preserves_raw_remote_source(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.savepoint"
     assert payload["error"]["type"] == "api_result_error"
     assert payload["error"]["source"] == {

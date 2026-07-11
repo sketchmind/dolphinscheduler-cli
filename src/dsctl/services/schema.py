@@ -244,6 +244,7 @@ def _schema_data(*, ds_version: str) -> dict[str, object]:
                     "environment."
                 ),
                 value_name="PATH",
+                placement="before_command",
             ),
             _option(
                 "output-format",
@@ -256,6 +257,7 @@ def _schema_data(*, ds_version: str) -> dict[str, object]:
                 default="json",
                 choices=["json", "table", "tsv"],
                 value_name="FORMAT",
+                placement="before_command",
             ),
             _option(
                 "columns",
@@ -265,6 +267,17 @@ def _schema_data(*, ds_version: str) -> dict[str, object]:
                     "In json mode this narrows the standard envelope data payload."
                 ),
                 value_name="CSV",
+                placement="before_command",
+            ),
+            _option(
+                "compact",
+                value_type="boolean",
+                description=(
+                    "Emit the standard JSON envelope without indentation. "
+                    "Valid only with --output-format json."
+                ),
+                default=False,
+                placement="before_command",
             ),
         ],
         "selection": selection_schema_data(),

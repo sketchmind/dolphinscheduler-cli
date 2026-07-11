@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project follows a simple public-release changelog until a stronger
 versioning policy is needed.
 
+## Unreleased
+
+- Added compact UTF-8 JSON output for agent and scripted use.
+- Routed structured command failures to stderr while preserving stdout for
+  successful data and raw artifacts.
+- Added table and TSV page/warning diagnostics on stderr.
+
 ## 0.2.0 - 2026-04-20
 
 - Added typed task authoring schema discovery for workflow YAML creation.

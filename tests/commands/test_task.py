@@ -255,7 +255,7 @@ def test_task_update_command_reports_schema_suggestion_for_unsupported_set_key()
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Run `dsctl schema --command task.update` and inspect "
@@ -280,7 +280,7 @@ def test_task_update_command_suggests_schema_for_invalid_timeout_notify_strategy
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "timeout_notify_strategy requires timeout > 0"
     assert payload["error"]["suggestion"] == (
@@ -397,7 +397,7 @@ def test_task_update_command_reports_schema_suggestion_for_remote_no_change_erro
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (
         "Task update did not change any persisted fields"
@@ -516,7 +516,7 @@ def test_task_update_command_reports_invalid_state_suggestion(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["message"] == "task state does not support modification"
     assert payload["error"]["suggestion"] == (

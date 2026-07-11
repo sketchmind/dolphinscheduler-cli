@@ -10,6 +10,7 @@ Current stable commands:
 - global option `--env-file PATH`
 - global option `--output-format {json,table,tsv}`
 - global option `--columns CSV`
+- global option `--compact`
 - `dsctl version`
 - `dsctl context`
 - `dsctl doctor`
@@ -121,11 +122,14 @@ Rules:
 - `json` returns the standard JSON envelope and remains the stable machine
   contract; when `--columns` is present, only the command data payload at the
   canonical row/object path is projected
+- JSON is encoded as UTF-8 and ordinary non-ASCII text is not escaped
 - `table` renders row/object-oriented data as a plain text table for terminal
   scanning
 - `tsv` renders the same row model as tab-separated text for shell pipelines
 - row-oriented formats use each command's `data_shape` metadata when present
   and fall back to runtime shape inference for simple list payloads
+- table and TSV write only row data to stdout; implicit stored context,
+  partial/non-first-page summaries, and warnings are written to stderr
 - global options are passed before the command group, for example:
 
 ```bash
@@ -157,6 +161,28 @@ dsctl --output-format tsv --columns id,name,state,host task-instance list --work
 dsctl --output-format tsv --columns '*' task-instance list --workflow-instance 901
 ```
 
+### `--compact`
+
+Emits the standard JSON envelope without indentation. It is a JSON layout
+modifier, not a separate output format.
+
+Rules:
+
+- it is valid only with `--output-format json`
+- it may be combined with `--columns`
+- it changes only insignificant JSON whitespace; envelope fields, types,
+  pagination, resolved metadata, warnings, and errors remain intact
+- raw artifact success output is unchanged
+- `--compact` with table or TSV is a `user_input_error`
+- like every global option, it must appear before the command group
+
+Recommended agent usage:
+
+```bash
+dsctl --compact --columns id,name,state \
+  task-instance list --workflow-instance 901 --page-size 10
+```
+
 ## Output Envelope
 
 Every stable command returns the standard JSON envelope from `src/dsctl/output.py`.
@@ -164,6 +190,21 @@ This statement applies to the default `--output-format json` mode. Explicit
 `--columns` projection keeps the envelope and narrows only the command `data`
 payload. Row-oriented display formats are an alternate rendering layer over the
 same command result.
+
+Process-channel guarantees:
+
+- successful standard results and raw artifacts are written to stdout
+- structured command errors are written to stderr and exit with status 1
+- Typer/Click usage errors are written to stderr and exit with status 2
+- JSON keeps warnings and page metadata inside the envelope without duplicating
+  them to stderr
+- table and TSV keep stdout row-only and write implicit stored context,
+  partial/non-first-page, and warning diagnostics to stderr
+- raw artifacts keep their exact success body on stdout and write any warnings
+  to stderr
+
+JSON object member order is not a semantic contract. Consumers must read fields
+by name.
 
 Success shape:
 
@@ -261,6 +302,10 @@ Current `data_shape` fields:
 - `default_columns`: suggested compact display columns
 - `column_discovery`: currently `runtime_row_keys`, meaning full column
   discovery comes from the JSON row payload
+
+Current output metadata also exposes `compact_option`, `compact_json`,
+`json_encoding`, `default_json_layout`, `error_channel`, and
+`row_diagnostics_channel`.
 
 ## `dsctl version`
 
@@ -392,6 +437,7 @@ Current `data` fields:
 Current guarantees:
 
 - describes only the current stable surface
+- every `global_options` entry declares `placement: "before_command"`
 - uses `DS_VERSION` and `--env-file` when rendering embedded capability
   metadata, matching `dsctl capabilities`
 - includes selector semantics for name-first, path-first, and id-first resources

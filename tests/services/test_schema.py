@@ -124,6 +124,12 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "default_format": "json",
         "format_option": "--output-format",
         "columns_option": "--columns",
+        "compact_option": "--compact",
+        "compact_json": True,
+        "json_encoding": "utf-8",
+        "default_json_layout": "pretty",
+        "error_channel": "stderr",
+        "row_diagnostics_channel": "stderr",
         "success_fields": [
             "ok",
             "action",
@@ -213,6 +219,13 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "tsv",
     ]
     assert _find_option(global_options, "columns")["value_name"] == "CSV"
+    compact_option = _find_option(global_options, "compact")
+    assert compact_option["default"] is False
+    assert compact_option["placement"] == "before_command"
+    assert all(
+        _find_option(global_options, name)["placement"] == "before_command"
+        for name in ("env-file", "output-format", "columns", "compact")
+    )
     capabilities_command = _find_command(commands, "capabilities")
     capabilities_options = _require_list(capabilities_command["options"])
     assert _find_option(capabilities_options, "summary")["default"] is False
@@ -1288,6 +1301,11 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "standard_envelope": True,
             "formats": ["json", "table", "tsv"],
             "default_format": "json",
+            "compact_json": True,
+            "json_encoding": "utf-8",
+            "default_json_layout": "pretty",
+            "error_channel": "stderr",
+            "row_diagnostics_channel": "stderr",
             "data_shape_metadata": True,
             "display_columns": True,
             "json_column_projection": True,
