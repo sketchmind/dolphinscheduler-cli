@@ -97,26 +97,40 @@ def parse_ds_datetime(value: str) -> struct_time:
     return strptime(value, DS_DATETIME_FORMAT)
 
 
-def require_positive_int(value: int, *, label: str) -> int:
+def require_positive_int(
+    value: int,
+    *,
+    label: str,
+    input_hint: str | None = None,
+) -> int:
     """Require one positive CLI integer value."""
     if value < 1:
         message = f"{label} must be greater than or equal to 1"
         raise UserInputError(
             message,
             details={label: value},
-            suggestion=f"Pass {label} as an integer greater than or equal to 1.",
+            suggestion=(
+                f"Pass {input_hint or label} as an integer greater than or equal to 1."
+            ),
         )
     return value
 
 
-def require_non_negative_int(value: int, *, label: str) -> int:
+def require_non_negative_int(
+    value: int,
+    *,
+    label: str,
+    input_hint: str | None = None,
+) -> int:
     """Require one non-negative CLI integer value."""
     if value < 0:
         message = f"{label} must be greater than or equal to 0"
         raise UserInputError(
             message,
             details={label: value},
-            suggestion=f"Pass {label} as an integer greater than or equal to 0.",
+            suggestion=(
+                f"Pass {input_hint or label} as an integer greater than or equal to 0."
+            ),
         )
     return value
 

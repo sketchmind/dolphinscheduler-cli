@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import pytest
 
 from dsctl.errors import UserInputError
@@ -36,4 +38,25 @@ def test_require_non_negative_int_includes_suggestion() -> None:
 
     assert exc_info.value.suggestion == (
         "Pass parallelism as an integer greater than or equal to 0."
+    )
+
+
+@pytest.mark.parametrize(
+    ("validator", "value", "minimum", "input_hint"),
+    [
+        (require_positive_int, 0, 1, "--interval-seconds"),
+        (require_non_negative_int, -1, 0, "--timeout-seconds"),
+    ],
+)
+def test_integer_validator_uses_executable_input_hint(
+    validator: Callable[..., int],
+    value: int,
+    minimum: int,
+    input_hint: str,
+) -> None:
+    with pytest.raises(UserInputError) as exc_info:
+        validator(value, label="internal_name", input_hint=input_hint)
+
+    assert exc_info.value.suggestion == (
+        f"Pass {input_hint} as an integer greater than or equal to {minimum}."
     )

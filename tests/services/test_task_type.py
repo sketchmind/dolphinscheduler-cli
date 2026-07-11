@@ -12,6 +12,7 @@ from tests.support import make_profile
 from dsctl.errors import ApiTransportError
 from dsctl.services import runtime as runtime_service
 from dsctl.services import task_type as task_type_service
+from dsctl.upstream import upstream_default_task_types
 
 
 def _install_task_type_service_fakes(
@@ -38,6 +39,33 @@ def _sequence(value: object) -> Sequence[object]:
     assert isinstance(value, Sequence)
     assert not isinstance(value, (str, bytes, bytearray))
     return value
+
+
+def _local_json_refs(value: object) -> list[str]:
+    refs: list[str] = []
+    if isinstance(value, Mapping):
+        ref = value.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/"):
+            refs.append(ref)
+        for nested in value.values():
+            refs.extend(_local_json_refs(nested))
+    elif isinstance(value, Sequence) and not isinstance(
+        value,
+        (str, bytes, bytearray),
+    ):
+        for nested in value:
+            refs.extend(_local_json_refs(nested))
+    return refs
+
+
+def _resolve_local_json_ref(schema: Mapping[str, object], ref: str) -> object:
+    current: object = schema
+    for raw_token in ref.removeprefix("#/").split("/"):
+        token = raw_token.replace("~1", "/").replace("~0", "~")
+        assert isinstance(current, Mapping), ref
+        assert token in current, ref
+        current = current[token]
+    return current
 
 
 def test_list_task_types_result_returns_remote_payload_and_cli_coverage(
@@ -144,11 +172,41 @@ def test_task_type_schema_result_describes_fields_and_state_rules() -> None:
     schema = _mapping(data["schema"])
 
     assert result.resolved == {"task_type": "SQL"}
+    assert "rows" not in data
     assert any(_mapping(field)["path"] == "task_params.sqlType" for field in fields)
     assert _mapping(state_rules[1])["when"] == "task_params.sqlType == 1"
     assert _mapping(schema["x-dsctl"])["raw_template_command"] == (
         "dsctl template task SQL --raw"
     )
+
+
+def test_task_type_json_schema_preserves_nested_and_array_authoring_fields() -> None:
+    result = task_type_service.task_type_schema_result("SHELL")
+    data = _mapping(result.data)
+    schema = _mapping(data["schema"])
+    properties = _mapping(schema["properties"])
+
+    retry = _mapping(properties["retry"])
+    assert retry["type"] == "object"
+    retry_properties = _mapping(retry["properties"])
+    assert _mapping(retry_properties["times"])["type"] == "integer"
+    assert _mapping(retry_properties["times"])["default"] == 0
+    assert _mapping(retry_properties["interval"])["type"] == "integer"
+    assert _mapping(retry_properties["interval"])["default"] == 0
+
+    depends_on = _mapping(properties["depends_on"])
+    assert depends_on["type"] == "array"
+    assert depends_on["default"] == []
+    assert _mapping(depends_on["items"])["type"] == "string"
+
+
+@pytest.mark.parametrize("task_type", upstream_default_task_types())
+def test_task_type_json_schema_local_refs_resolve(task_type: str) -> None:
+    result = task_type_service.task_type_schema_result(task_type)
+    schema = _mapping(_mapping(result.data)["schema"])
+
+    for ref in _local_json_refs(schema):
+        _resolve_local_json_ref(schema, ref)
 
 
 def test_task_type_schema_result_exposes_field_discovery_commands() -> None:

@@ -2358,6 +2358,24 @@ class _DS341WorkflowInstanceOperations:
         )
 
 
+def _is_empty_task_instance_get_response(
+    error: ApiTransportError,
+    *,
+    project_code: int,
+    task_instance_id: int,
+) -> bool:
+    """Recognize the nullable DS 3.4.1 task-instance v2 lookup response."""
+    return (
+        error.message == "Response body was not valid JSON"
+        and error.details.get("method") == "POST"
+        and error.details.get("path")
+        == f"v2/projects/{project_code}/task-instances/{task_instance_id}"
+        and error.details.get("status_code") == 200
+        and error.details.get("body") == ""
+        and error.details.get("retryable") is False
+    )
+
+
 @dataclass(frozen=True)
 class _DS341TaskInstanceOperations:
     """Bound task-instance operations backed by generated runtime clients."""
@@ -2408,11 +2426,20 @@ class _DS341TaskInstanceOperations:
         *,
         project_code: int,
         task_instance_id: int,
-    ) -> TaskInstance:
-        return self.client.task_instance_v2.query_task_instance_by_code(
-            project_code,
-            task_instance_id,
-        )
+    ) -> TaskInstance | None:
+        try:
+            return self.client.task_instance_v2.query_task_instance_by_code(
+                project_code,
+                task_instance_id,
+            )
+        except ApiTransportError as error:
+            if _is_empty_task_instance_get_response(
+                error,
+                project_code=project_code,
+                task_instance_id=task_instance_id,
+            ):
+                return None
+            raise
 
     def log_chunk(
         self,

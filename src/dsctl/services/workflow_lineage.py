@@ -216,6 +216,7 @@ def _resolve_workflow_lineage_target(
         workflow,
         runtime=runtime,
         project_selection=selected_project,
+        input_form="argument",
     )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,

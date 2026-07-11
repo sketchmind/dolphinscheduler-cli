@@ -316,10 +316,12 @@ def watch_workflow_instance_result(
     normalized_interval_seconds = require_positive_int(
         interval_seconds,
         label="interval_seconds",
+        input_hint="--interval-seconds",
     )
     normalized_timeout_seconds = require_non_negative_int(
         timeout_seconds,
         label="timeout_seconds",
+        input_hint="--timeout-seconds",
     )
     return run_with_service_runtime(
         env_file,
@@ -1282,7 +1284,7 @@ def _watch_workflow_instance_result(
                 suggestion=(
                     "Retry with a larger --timeout-seconds value or inspect the "
                     "current state with "
-                    f"`workflow-instance get {workflow_instance_id}`."
+                    f"`dsctl workflow-instance get {workflow_instance_id}`."
                 ),
             )
         time.sleep(interval_seconds)

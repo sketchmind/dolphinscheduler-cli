@@ -154,6 +154,41 @@ def test_workflow_instance_list_command_returns_page_payload() -> None:
     assert payload["data"]["totalList"][0]["id"] == 901
 
 
+def test_workflow_instance_get_command_preserves_ambiguous_v2_lookup_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_adapter = FakeProjectAdapter(
+        projects=[FakeProject(code=7, name="etl-prod")]
+    )
+    workflow_instance_adapter = FakeWorkflowInstanceAdapter(workflow_instances=[])
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise ApiResultError(
+            result_code=10116,
+            result_message="query workflow instance by id error:null",
+        )
+
+    monkeypatch.setattr(workflow_instance_adapter, "get", fail_get)
+    monkeypatch.setattr(
+        runtime_service,
+        "open_service_runtime",
+        lambda env_file=None: fake_service_runtime(
+            project_adapter,
+            profile=make_profile(),
+            workflow_instance_adapter=workflow_instance_adapter,
+        ),
+    )
+
+    result = runner.invoke(app, ["workflow-instance", "get", "999999"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "workflow-instance.get"
+    assert payload["error"]["type"] == "api_result_error"
+    assert payload["error"]["source"]["result_code"] == 10116
+
+
 def test_workflow_instance_list_command_supports_all_pages() -> None:
     result = runner.invoke(
         app,
@@ -719,7 +754,7 @@ def test_workflow_instance_watch_command_reports_timeout_suggestion(
     assert payload["error"]["type"] == "timeout"
     assert payload["error"]["suggestion"] == (
         "Retry with a larger --timeout-seconds value or inspect the current "
-        "state with `workflow-instance get 901`."
+        "state with `dsctl workflow-instance get 901`."
     )
 
 

@@ -95,7 +95,7 @@ def test_project_resolver_reports_missing_names() -> None:
             adapter=adapter,
         )
     assert exc_info.value.suggestion == (
-        "Retry with `project list` to inspect available values, or pass the "
+        "Retry with `dsctl project list` to inspect available values, or pass the "
         "numeric code if known."
     )
 
@@ -124,8 +124,16 @@ def test_workflow_resolver_preserves_permission_error(
 def test_workflow_resolver_translates_known_missing_numeric_code() -> None:
     adapter = FakeWorkflowAdapter(workflows=[], dags={})
 
-    with pytest.raises(NotFoundError, match="Workflow code 101 was not found"):
+    with pytest.raises(
+        NotFoundError,
+        match="Workflow code 101 was not found",
+    ) as exc_info:
         resolver_service.workflow("101", adapter=adapter, project_code=7)
+
+    assert exc_info.value.suggestion == (
+        "Retry with `dsctl workflow list --project 7` to inspect available values "
+        "and verify the selected code."
+    )
 
 
 def test_project_resolver_rejects_empty_identifier() -> None:

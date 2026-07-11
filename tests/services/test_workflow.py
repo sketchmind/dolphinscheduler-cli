@@ -2260,8 +2260,8 @@ tasks:
         workflow_service.create_workflow_result(file=spec_path)
 
     assert exc_info.value.suggestion == (
-        "Review task names and task references, then retry with workflow dry-run "
-        "before applying the change."
+        f"Run `dsctl lint workflow {spec_path}`, fix task names and references, "
+        f"then retry `dsctl workflow create --file {spec_path} --dry-run`."
     )
     assert fake_task_adapter.generate_code_calls == []
 
@@ -2298,8 +2298,8 @@ tasks:
         workflow_service.create_workflow_result(file=spec_path)
 
     assert exc_info.value.suggestion == (
-        "Review task names and task references, then retry with workflow dry-run "
-        "before applying the change."
+        f"Run `dsctl lint workflow {spec_path}`, fix task names and references, "
+        f"then retry `dsctl workflow create --file {spec_path} --dry-run`."
     )
 
 

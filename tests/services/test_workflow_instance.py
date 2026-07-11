@@ -1,5 +1,5 @@
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -622,6 +622,69 @@ def test_get_workflow_instance_result_reports_missing_instance(
         workflow_instance_service.get_workflow_instance_result(999)
 
 
+@pytest.mark.parametrize(
+    "operation",
+    [
+        workflow_instance_service.get_workflow_instance_result,
+        workflow_instance_service.digest_workflow_instance_result,
+        workflow_instance_service.watch_workflow_instance_result,
+    ],
+)
+def test_workflow_instance_reads_preserve_ambiguous_v2_lookup_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    operation: Callable[..., object],
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=10116,
+        result_message="query workflow instance by id error:null",
+    )
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_workflow_instance_adapter, "get", fail_get)
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(ApiResultError) as exc_info:
+        operation(999)
+
+    assert exc_info.value is upstream_error
+
+
+def test_workflow_instance_read_preserves_non_missing_v2_fallback_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=10116,
+        result_message="query workflow instance by id error:database unavailable",
+    )
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_workflow_instance_adapter, "get", fail_get)
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(ApiResultError) as exc_info:
+        workflow_instance_service.get_workflow_instance_result(999)
+
+    assert exc_info.value is upstream_error
+
+
 @pytest.mark.parametrize("result_code", [30001, 30002])
 def test_get_workflow_instance_result_translates_permission_errors(
     monkeypatch: pytest.MonkeyPatch,
@@ -866,7 +929,7 @@ def test_watch_workflow_instance_result_times_out(
         )
     assert exc_info.value.suggestion == (
         "Retry with a larger --timeout-seconds value or inspect the current "
-        "state with `workflow-instance get 901`."
+        "state with `dsctl workflow-instance get 901`."
     )
 
 

@@ -1203,6 +1203,9 @@ def test_schema_result_describes_current_stable_surface() -> None:
         _find_option(workflow_create_options, "file")["description"]
     )
     assert "template workflow" in workflow_create_file_description
+    assert _find_option(workflow_create_options, "file")["discovery_command"] == (
+        "dsctl template workflow --raw"
+    )
 
     workflow_edit = _find_command(workflow_group["commands"], "edit")
     workflow_edit_options = _require_list(workflow_edit["options"])
@@ -1300,6 +1303,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
     task_instance_log = _find_command(task_instance_group["commands"], "log")
     task_instance_log_options = _require_list(task_instance_log["options"])
     assert _find_option(task_instance_log_options, "tail")["default"] == 200
+    assert _find_option(task_instance_log_options, "tail")["minimum"] == 1
     assert _find_option(task_instance_log_options, "raw")["default"] is False
     assert task_instance_log["payload"] == {
         "raw_option": "--raw",
@@ -1991,9 +1995,11 @@ def test_schema_defaults_follow_runtime_constants() -> None:
     assert _find_option(watch_options, "interval-seconds")["default"] == (
         DEFAULT_WATCH_INTERVAL_SECONDS
     )
+    assert _find_option(watch_options, "interval-seconds")["minimum"] == 1
     assert _find_option(watch_options, "timeout-seconds")["default"] == (
         DEFAULT_WATCH_TIMEOUT_SECONDS
     )
+    assert _find_option(watch_options, "timeout-seconds")["minimum"] == 0
 
     task_instance_group = _find_group(data["commands"], "task-instance")
     task_instance_watch = _find_command(task_instance_group["commands"], "watch")
@@ -2001,9 +2007,11 @@ def test_schema_defaults_follow_runtime_constants() -> None:
     assert _find_option(task_instance_watch_options, "interval-seconds")["default"] == (
         DEFAULT_TASK_INSTANCE_WATCH_INTERVAL_SECONDS
     )
+    assert _find_option(task_instance_watch_options, "interval-seconds")["minimum"] == 1
     assert _find_option(task_instance_watch_options, "timeout-seconds")["default"] == (
         DEFAULT_TASK_INSTANCE_WATCH_TIMEOUT_SECONDS
     )
+    assert _find_option(task_instance_watch_options, "timeout-seconds")["minimum"] == 0
 
 
 def test_schema_task_update_set_option_exposes_supported_keys() -> None:

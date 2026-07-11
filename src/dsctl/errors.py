@@ -32,30 +32,38 @@ if TYPE_CHECKING:
     from dsctl.support.json_types import JsonObject, JsonValue
 
 _RESOURCE_RESOLUTION_HINTS: dict[str, tuple[str, str, str | None]] = {
-    PROJECT_RESOURCE: ("project list", "code", None),
+    PROJECT_RESOURCE: ("dsctl project list", "code", None),
     PROJECT_PARAMETER_RESOURCE: (
-        "project-parameter list",
+        "dsctl project-parameter list",
         "code",
         "in the selected project",
     ),
-    WORKFLOW_RESOURCE: ("workflow list", "code", "in the selected project"),
-    ENV_RESOURCE: ("environment list", "code", None),
-    CLUSTER_RESOURCE: ("cluster list", "code", None),
-    DATASOURCE_RESOURCE: ("datasource list", "id", None),
-    NAMESPACE_RESOURCE: ("namespace list", "id", None),
-    ALERT_PLUGIN_RESOURCE: ("alert-plugin list", "id", None),
-    ALERT_GROUP_RESOURCE: ("alert-group list", "id", None),
-    USER_RESOURCE: ("user list", "id", None),
-    QUEUE_RESOURCE: ("queue list", "id", None),
-    TASK_GROUP_RESOURCE: ("task-group list", "id", None),
-    TENANT_RESOURCE: ("tenant list", "id", None),
-    WORKER_GROUP_RESOURCE: ("worker-group list", "id", None),
-    ACCESS_TOKEN_RESOURCE: ("access-token list", "id", None),
-    TASK_RESOURCE: ("task list", "code", "in the selected workflow"),
-    SCHEDULE_RESOURCE: ("schedule list", "id", "in the selected project"),
-    WORKFLOW_INSTANCE_RESOURCE: ("workflow-instance list", "id", None),
+    WORKFLOW_RESOURCE: (
+        "dsctl workflow list",
+        "code",
+        "in the selected project",
+    ),
+    ENV_RESOURCE: ("dsctl environment list", "code", None),
+    CLUSTER_RESOURCE: ("dsctl cluster list", "code", None),
+    DATASOURCE_RESOURCE: ("dsctl datasource list", "id", None),
+    NAMESPACE_RESOURCE: ("dsctl namespace list", "id", None),
+    ALERT_PLUGIN_RESOURCE: ("dsctl alert-plugin list", "id", None),
+    ALERT_GROUP_RESOURCE: ("dsctl alert-group list", "id", None),
+    USER_RESOURCE: ("dsctl user list", "id", None),
+    QUEUE_RESOURCE: ("dsctl queue list", "id", None),
+    TASK_GROUP_RESOURCE: ("dsctl task-group list", "id", None),
+    TENANT_RESOURCE: ("dsctl tenant list", "id", None),
+    WORKER_GROUP_RESOURCE: ("dsctl worker-group list", "id", None),
+    ACCESS_TOKEN_RESOURCE: ("dsctl access-token list", "id", None),
+    TASK_RESOURCE: ("dsctl task list", "code", "in the selected workflow"),
+    SCHEDULE_RESOURCE: (
+        "dsctl schedule list",
+        "id",
+        "in the selected project",
+    ),
+    WORKFLOW_INSTANCE_RESOURCE: ("dsctl workflow-instance list", "id", None),
     TASK_INSTANCE_RESOURCE: (
-        "task-instance list",
+        "dsctl task-instance list",
         "id",
         "in the selected workflow instance",
     ),
@@ -350,8 +358,36 @@ def _not_found_suggestion(
     resource_hint = _resource_resolution_hint(details)
     if resource_hint is None:
         return None
-    list_command, numeric_label, scope_hint = resource_hint
-    scope_text = "" if scope_hint is None else f" {scope_hint}"
+    base_list_command, numeric_label, scope_hint = resource_hint
+    resource = details.get("resource")
+    project_code = details.get("project_code")
+    workflow_code = details.get("workflow_code")
+    workflow_instance_id = details.get("workflow_instance_id")
+    list_command = _scoped_resolution_list_command(
+        base_list_command,
+        resource=resource if isinstance(resource, str) else None,
+        project_code=(
+            project_code
+            if isinstance(project_code, int) and not isinstance(project_code, bool)
+            else None
+        ),
+        workflow_code=(
+            workflow_code
+            if isinstance(workflow_code, int) and not isinstance(workflow_code, bool)
+            else None
+        ),
+        workflow_instance_id=(
+            workflow_instance_id
+            if isinstance(workflow_instance_id, int)
+            and not isinstance(workflow_instance_id, bool)
+            else None
+        ),
+    )
+    scope_text = (
+        ""
+        if scope_hint is None or list_command != base_list_command
+        else f" {scope_hint}"
+    )
     if _has_name_selector(details):
         return (
             f"Retry with `{list_command}`{scope_text} to inspect available "
@@ -363,6 +399,31 @@ def _not_found_suggestion(
             f"values and verify the selected {numeric_label}."
         )
     return None
+
+
+def _scoped_resolution_list_command(
+    base_command: str,
+    *,
+    resource: str | None,
+    project_code: int | None,
+    workflow_code: int | None,
+    workflow_instance_id: int | None,
+) -> str:
+    """Preserve numeric parent selectors in one executable discovery command."""
+    if (
+        resource in {PROJECT_PARAMETER_RESOURCE, SCHEDULE_RESOURCE, WORKFLOW_RESOURCE}
+        and project_code is not None
+    ):
+        return f"{base_command} --project {project_code}"
+    if (
+        resource == TASK_RESOURCE
+        and project_code is not None
+        and workflow_code is not None
+    ):
+        return f"{base_command} --project {project_code} --workflow {workflow_code}"
+    if resource == TASK_INSTANCE_RESOURCE and workflow_instance_id is not None:
+        return f"{base_command} --workflow-instance {workflow_instance_id}"
+    return base_command
 
 
 def _resource_resolution_hint(

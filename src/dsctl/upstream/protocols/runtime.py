@@ -449,8 +449,8 @@ class TaskInstanceOperations(Protocol):
         *,
         project_code: int,
         task_instance_id: int,
-    ) -> TaskInstanceRecord:
-        """Fetch one task instance by id within one project."""
+    ) -> TaskInstanceRecord | None:
+        """Fetch one task instance by id, or ``None`` when DS returns no body."""
 
     def log_chunk(
         self,
