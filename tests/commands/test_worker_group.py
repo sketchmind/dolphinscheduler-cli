@@ -124,7 +124,7 @@ def test_worker_group_update_command_requires_one_change() -> None:
     result = runner.invoke(app, ["worker-group", "update", "default"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "worker-group.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -136,7 +136,7 @@ def test_worker_group_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["worker-group", "delete", "default"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "worker-group.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

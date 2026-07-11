@@ -105,7 +105,7 @@ def test_project_preference_update_command_requires_input() -> None:
     result = runner.invoke(app, ["project-preference", "update"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "project-preference.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (

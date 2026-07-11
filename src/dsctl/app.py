@@ -13,11 +13,17 @@ from dsctl.output_formats import (
     parse_columns,
 )
 
-_ROOT_OPTIONS_WITH_VALUES = frozenset({"--env-file", "--output-format", "--columns"})
+_ROOT_OPTION_ARITY = {
+    "--env-file": 1,
+    "--output-format": 1,
+    "--columns": 1,
+    "--compact": 0,
+}
 _ROOT_OPTION_EXAMPLES = {
     "--env-file": "dsctl --env-file cluster.env <command> ...",
     "--output-format": "dsctl --output-format table <command> ...",
     "--columns": "dsctl --columns id,name,state <command> ...",
+    "--compact": "dsctl --compact <command> ...",
 }
 
 app = typer.Typer(
@@ -39,8 +45,8 @@ def main_callback(
             exists=True,
             file_okay=True,
             help=(
-                "Load DS_* settings from an env file before reading the process"
-                " environment."
+                "Global option; place before COMMAND. Load DS_* settings from an "
+                "env file before reading the process environment."
             ),
             readable=True,
             resolve_path=True,
@@ -51,8 +57,8 @@ def main_callback(
         typer.Option(
             "--output-format",
             help=(
-                "Render the standard envelope as json, or render row/object "
-                "views as table/tsv."
+                "Global option; place before COMMAND. Render the standard envelope "
+                "as json, or render row/object views as table/tsv."
             ),
         ),
     ] = "json",
@@ -61,11 +67,23 @@ def main_callback(
         typer.Option(
             "--columns",
             help=(
-                "Comma-separated row/object fields to render or project. In json "
-                "mode this narrows the standard envelope data payload."
+                "Global option; place before COMMAND. Comma-separated row/object "
+                "fields to render or project. In json mode this narrows the "
+                "standard envelope data payload."
             ),
         ),
     ] = None,
+    *,
+    compact: Annotated[
+        bool,
+        typer.Option(
+            "--compact",
+            help=(
+                "Global option; place before COMMAND. Emit JSON without indentation; "
+                "valid only with --output-format json."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Initialize shared command state."""
     format_choice = _parse_output_format(output_format)
@@ -78,6 +96,7 @@ def main_callback(
         render_options=RenderOptions(
             output_format=format_choice,
             columns=parsed_columns,
+            compact=compact,
         ),
     )
     ctx.obj = state
@@ -122,7 +141,8 @@ def _misplaced_root_option(args: list[str]) -> str | None:
         if option is not None:
             if seen_command:
                 return option
-            index += 1 if "=" in arg else 2
+            arity = _ROOT_OPTION_ARITY[option]
+            index += 1 if "=" in arg else 1 + arity
             continue
 
         if arg.startswith("-"):
@@ -135,7 +155,7 @@ def _misplaced_root_option(args: list[str]) -> str | None:
 
 
 def _root_option_name(token: str) -> str | None:
-    for option in _ROOT_OPTIONS_WITH_VALUES:
+    for option in _ROOT_OPTION_ARITY:
         if token == option or token.startswith(f"{option}="):
             return option
     return None

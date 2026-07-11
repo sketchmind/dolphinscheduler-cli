@@ -94,7 +94,7 @@ def test_monitor_server_command_rejects_unknown_node_type() -> None:
     result = runner.invoke(app, ["monitor", "server", "master-coordinator"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "monitor.server"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (

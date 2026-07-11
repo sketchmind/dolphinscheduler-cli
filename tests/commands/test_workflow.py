@@ -441,7 +441,7 @@ schedule:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "confirmation_required"
     assert payload["error"]["details"]["risk_type"] == "high_frequency_schedule"
     assert payload["error"]["details"]["confirm_flag"].startswith("--confirm-risk ")
@@ -476,7 +476,7 @@ schedule:
     result = runner.invoke(app, ["workflow", "create", "--file", str(spec_path)])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (
@@ -537,7 +537,7 @@ tasks:
     result = runner.invoke(app, ["workflow", "create", "--file", str(spec_path)])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "workflow task relation invalid"
@@ -665,7 +665,7 @@ def test_workflow_backfill_command_reports_missing_time_selection() -> None:
     result = runner.invoke(app, ["workflow", "backfill"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.backfill"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (
@@ -680,7 +680,7 @@ def test_workflow_run_task_command_reports_scope_choices() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.run-task"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (
@@ -692,7 +692,7 @@ def test_workflow_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["workflow", "delete"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "Workflow deletion requires --force"
@@ -754,7 +754,7 @@ def test_workflow_delete_command_suggests_offline_before_delete(
     result = runner.invoke(app, ["workflow", "delete", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -807,7 +807,7 @@ def test_workflow_delete_command_suggests_schedule_cleanup_for_online_schedule(
     result = runner.invoke(app, ["workflow", "delete", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -863,7 +863,7 @@ def test_workflow_delete_command_suggests_instance_inspection_for_running_instan
     result = runner.invoke(app, ["workflow", "delete", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -919,7 +919,7 @@ def test_workflow_delete_command_suggests_lineage_for_referenced_workflow(
     result = runner.invoke(app, ["workflow", "delete", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "conflict"
     assert payload["error"]["suggestion"] == (
@@ -1053,7 +1053,7 @@ def test_workflow_online_command_suggests_bringing_subworkflows_online(
     result = runner.invoke(app, ["workflow", "online"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.online"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -1193,7 +1193,7 @@ def test_workflow_edit_command_requires_one_edit_input() -> None:
     result = runner.invoke(app, ["workflow", "edit", "daily-sync", "--dry-run"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "Pass exactly one of --patch or --file."
@@ -1217,7 +1217,7 @@ patch:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -1247,7 +1247,7 @@ def test_workflow_edit_command_rejects_invalid_patch_yaml_with_dry_run_suggestio
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "Workflow patch YAML root must be a mapping"
@@ -1350,7 +1350,7 @@ patch:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "workflow task relation invalid"
@@ -1383,7 +1383,7 @@ patch:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert "requires timeout > 0" in payload["error"]["message"]
@@ -1416,7 +1416,7 @@ patch:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (

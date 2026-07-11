@@ -152,11 +152,23 @@ Commands return a stable JSON envelope by default. Use global output options
 before the command group when a table or pipeline-oriented view is more useful:
 
 ```bash
+dsctl --compact --columns id,name,state workflow-instance list --project etl-prod --page-size 10
 dsctl --output-format table workflow-instance list --project etl-prod
 dsctl --output-format tsv --columns id,name,state task-instance list --workflow-instance <workflow_instance_id>
 dsctl --columns id,name,state workflow-instance list --project etl-prod
 dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <workflow_instance_id>
 ```
+
+For agents, prefer compact JSON with explicit columns and a small page size.
+This keeps the standard envelope, types, pagination, resolved selections,
+warnings, and structured errors while avoiding wide DS response objects.
+Standard JSON uses UTF-8 directly instead of escaping ordinary non-ASCII text.
+
+Successful data and raw artifacts are written to stdout. Structured command
+errors are written to stderr with a nonzero exit code. Table and TSV stdout
+remain pure row data; implicit stored context, partial/non-first-page summaries,
+and warnings are written to stderr. Raw artifact warnings also use stderr
+without changing the artifact body.
 
 `--columns '*'` selects all top-level row fields. Quote `*` so the shell does
 not expand it as a filesystem glob.

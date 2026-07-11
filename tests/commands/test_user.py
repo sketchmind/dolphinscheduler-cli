@@ -198,7 +198,7 @@ def test_user_list_command_reports_permission_denied(
     result = runner.invoke(app, ["user", "list"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "user.list"
     assert payload["error"]["type"] == "permission_denied"
 
@@ -284,7 +284,7 @@ def test_user_create_command_reports_upstream_input_suggestion(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "user.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -316,7 +316,7 @@ def test_user_update_command_requires_one_change_suggestion() -> None:
     result = runner.invoke(app, ["user", "update", "alice"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "user.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -330,7 +330,7 @@ def test_user_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["user", "delete", "alice"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "user.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

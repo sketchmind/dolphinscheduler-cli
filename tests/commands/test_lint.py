@@ -76,7 +76,7 @@ schedule:
     result = runner.invoke(app, ["lint", "workflow", str(spec_path)])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "lint.workflow"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (

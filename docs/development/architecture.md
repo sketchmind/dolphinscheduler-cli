@@ -161,7 +161,7 @@ not depend on it.
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │ commands/          CLI surface                              │
-│ Parse options → call service → emit JSON envelope           │
+│ Parse options → call service → emit rendered command        │
 ├──────────────────────────────────────────────────────────────┤
 │ services/          business logic                           │
 │ Selection, resolution, validation, pagination, YAML shaping │
@@ -187,6 +187,7 @@ Foundation owns:
 - context persistence
 - error types
 - JSON/YAML boundary helpers
+- output adapters and exact stdout/stderr/exit-code routing
 
 Foundation does not import upward into commands, services, or upstream.
 

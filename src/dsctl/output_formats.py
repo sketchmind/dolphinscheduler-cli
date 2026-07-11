@@ -22,6 +22,16 @@ class RenderOptions:
 
     output_format: OutputFormat = "json"
     columns: tuple[str, ...] = ()
+    compact: bool = False
+
+
+@dataclass(frozen=True)
+class RenderedCommand:
+    """Exact process output and exit status for one rendered command."""
+
+    stdout: str = ""
+    stderr: str = ""
+    exit_code: int = 0
 
 
 def parse_columns(value: str | None) -> tuple[str, ...]:
@@ -40,9 +50,51 @@ def parse_columns(value: str | None) -> tuple[str, ...]:
 
 def validate_render_options(options: RenderOptions) -> RenderOptions:
     """Reject ambiguous global display settings before running a command."""
+    if options.compact and options.output_format != "json":
+        message = "--compact can only be used with --output-format json"
+        raise UserInputError(
+            message,
+            details={
+                "compact": True,
+                "output_format": options.output_format,
+            },
+            suggestion="Remove --compact or use --output-format json.",
+        )
     if options.columns and "*" in options.columns:
         _validate_wildcard_columns(options.columns)
     return options
+
+
+def render_command(
+    payload: JsonObject,
+    *,
+    action: str,
+    options: RenderOptions,
+) -> RenderedCommand:
+    """Render one standard result into exact process channels and status."""
+    body = render_payload(payload, action=action, options=options)
+    if not payload.get("ok"):
+        return RenderedCommand(
+            stderr=_with_final_newline(body),
+            exit_code=1,
+        )
+
+    diagnostics = ""
+    if options.output_format != "json":
+        diagnostics = _render_success_diagnostics(payload, include_page=True)
+    return RenderedCommand(
+        stdout=_with_final_newline(body),
+        stderr=_with_final_newline(diagnostics) if diagnostics else "",
+    )
+
+
+def render_raw_command(body: str, *, payload: JsonObject) -> RenderedCommand:
+    """Render one successful raw artifact without changing its body bytes."""
+    diagnostics = _render_success_diagnostics(payload, include_page=False)
+    return RenderedCommand(
+        stdout=body,
+        stderr=_with_final_newline(diagnostics) if diagnostics else "",
+    )
 
 
 def render_payload(
@@ -59,14 +111,107 @@ def render_payload(
                 action=action,
                 columns=options.columns,
             )
-        return _render_json(payload)
+        return _render_json(payload, compact=options.compact)
     if not payload.get("ok"):
         return _render_error_payload(payload, output_format=options.output_format)
     return _render_success_payload(payload, action=action, options=options)
 
 
-def _render_json(payload: JsonValue) -> str:
-    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True)
+def _render_json(payload: JsonValue, *, compact: bool) -> str:
+    return json.dumps(
+        payload,
+        indent=None if compact else 2,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":") if compact else None,
+    )
+
+
+def _render_success_diagnostics(
+    payload: JsonObject,
+    *,
+    include_page: bool,
+) -> str:
+    lines: list[str] = []
+    context = _implicit_context_diagnostic(payload)
+    if context is not None:
+        lines.append(context)
+    if include_page:
+        page = _pagination_diagnostic(payload)
+        if page is not None:
+            lines.append(page)
+    lines.extend(_warning_diagnostics(payload))
+    return "\n".join(lines)
+
+
+def _implicit_context_diagnostic(payload: JsonObject) -> str | None:
+    resolved = payload.get("resolved")
+    if not isinstance(resolved, Mapping):
+        return None
+
+    selections: list[str] = []
+    for resource in ("project", "workflow"):
+        selected = resolved.get(resource)
+        if not isinstance(selected, Mapping) or selected.get("source") != "context":
+            continue
+        value = selected.get("name", selected.get("value"))
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            continue
+        selections.append(f"{resource}={value}")
+    if not selections:
+        return None
+    return f"context: {'; '.join(selections)}"
+
+
+def _pagination_diagnostic(payload: JsonObject) -> str | None:
+    data = payload.get("data")
+    if not isinstance(data, Mapping):
+        return None
+    rows = data.get("totalList")
+    if not _is_sequence_like(rows):
+        return None
+
+    total = _int_metadata(data.get("total"))
+    page_no = _int_metadata(data.get("pageNo"))
+    total_page = _int_metadata(data.get("totalPage"))
+    if total is None or page_no is None or total_page is None:
+        return None
+
+    row_count = len(rows)
+    if page_no <= 1 and total_page <= 1 and row_count >= total:
+        return None
+    return f"page: {page_no}/{total_page}; showing {row_count} of {total} rows"
+
+
+def _warning_diagnostics(payload: JsonObject) -> list[str]:
+    warnings = payload.get("warnings")
+    if not _is_sequence_like(warnings):
+        return []
+    details = payload.get("warning_details")
+    detail_items = details if _is_sequence_like(details) else ()
+
+    lines: list[str] = []
+    for index, warning in enumerate(warnings):
+        if not isinstance(warning, str):
+            continue
+        detail = detail_items[index] if index < len(detail_items) else None
+        code = detail.get("code") if isinstance(detail, Mapping) else None
+        label = f"warning[{code}]" if isinstance(code, str) and code else "warning"
+        lines.append(f"{label}: {warning}")
+        suggestion = detail.get("suggestion") if isinstance(detail, Mapping) else None
+        if isinstance(suggestion, str) and suggestion:
+            lines.append(f"  suggestion: {suggestion}")
+    return lines
+
+
+def _int_metadata(value: JsonValue | None) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _with_final_newline(value: str) -> str:
+    return value if value.endswith("\n") else f"{value}\n"
 
 
 def _render_success_payload(
@@ -457,7 +602,10 @@ __all__ = [
     "OUTPUT_FORMAT_CHOICES",
     "OutputFormat",
     "RenderOptions",
+    "RenderedCommand",
     "parse_columns",
+    "render_command",
     "render_payload",
+    "render_raw_command",
     "validate_render_options",
 ]

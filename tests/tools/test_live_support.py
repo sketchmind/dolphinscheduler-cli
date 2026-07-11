@@ -116,3 +116,39 @@ def test_run_dsctl_sanitizes_live_and_profile_environment_when_env_file_is_used(
     assert "DS_API_URL" not in captured_env
     assert "DS_API_TOKEN" not in captured_env
     assert captured_env["PYTHONPATH"].split(os.pathsep)[0] == str(tmp_path / "src")
+
+
+def test_run_dsctl_parses_structured_error_from_stderr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(
+        command: list[str],
+        *,
+        capture_output: bool,
+        check: bool,
+        cwd: Path,
+        env: dict[str, str],
+        text: bool,
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout="",
+            stderr=(
+                '{"ok":false,"action":"user.list","error":{"type":"permission_denied"}}'
+            ),
+        )
+
+    monkeypatch.setattr("tests.live.support.subprocess.run", fake_run)
+
+    result = run_dsctl(tmp_path, ["user", "list"])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert result.payload == {
+        "ok": False,
+        "action": "user.list",
+        "error": {"type": "permission_denied"},
+    }

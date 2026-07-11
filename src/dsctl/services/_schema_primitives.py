@@ -150,6 +150,7 @@ def option(
     examples: Sequence[str] | None = None,
     supported_keys: Sequence[str] | None = None,
     discovery_command: str | None = None,
+    placement: str | None = None,
 ) -> dict[str, object]:
     """Build one schema option payload."""
     data: dict[str, object] = {
@@ -176,4 +177,6 @@ def option(
         data["supported_keys"] = list(supported_keys)
     if discovery_command is not None:
         data["discovery_command"] = discovery_command
+    if placement is not None:
+        data["placement"] = placement
     return data

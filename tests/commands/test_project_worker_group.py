@@ -104,7 +104,7 @@ def test_project_worker_group_clear_command_requires_force() -> None:
     result = runner.invoke(app, ["project-worker-group", "clear"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "project-worker-group.clear"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

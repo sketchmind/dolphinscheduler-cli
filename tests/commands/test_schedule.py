@@ -114,7 +114,7 @@ def test_schedule_list_command_rejects_workflow_and_search_together() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -163,7 +163,7 @@ def test_schedule_preview_command_rejects_mixing_id_and_schedule_fields() -> Non
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.preview"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -378,7 +378,7 @@ def test_schedule_create_command_requires_confirmation_for_high_frequency_risk(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "confirmation_required"
     assert payload["error"]["details"]["risk_type"] == "high_frequency_schedule"
     assert payload["error"]["details"]["confirm_flag"].startswith("--confirm-risk ")
@@ -405,7 +405,7 @@ def test_schedule_create_command_rejects_five_field_cron() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["details"] == {
@@ -424,7 +424,7 @@ def test_schedule_update_command_requires_a_change() -> None:
     result = runner.invoke(app, ["schedule", "update", "1"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["ok"] is False
     assert payload["action"] == "schedule.update"
     assert payload["error"]["type"] == "user_input_error"
@@ -491,7 +491,7 @@ def test_schedule_update_command_reports_offline_retry_suggestion(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.update"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -503,7 +503,7 @@ def test_schedule_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["schedule", "delete", "1"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["ok"] is False
     assert payload["action"] == "schedule.delete"
     assert payload["error"]["type"] == "user_input_error"
@@ -565,7 +565,7 @@ def test_schedule_delete_command_reports_offline_retry_suggestion(
     result = runner.invoke(app, ["schedule", "delete", "1", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.delete"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -630,7 +630,7 @@ def test_schedule_create_command_reports_conflict_with_remote_source(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.create"
     assert payload["error"]["type"] == "conflict"
     assert payload["error"]["source"] == {

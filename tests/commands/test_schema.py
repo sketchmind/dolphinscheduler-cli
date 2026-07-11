@@ -138,6 +138,12 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "default_format": "json",
         "format_option": "--output-format",
         "columns_option": "--columns",
+        "compact_option": "--compact",
+        "compact_json": True,
+        "json_encoding": "utf-8",
+        "default_json_layout": "pretty",
+        "error_channel": "stderr",
+        "row_diagnostics_channel": "stderr",
         "success_fields": [
             "ok",
             "action",
@@ -330,7 +336,7 @@ def test_schema_command_rejects_conflicting_scope_options() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schema"
     assert payload["error"]["type"] == "user_input_error"
     assert "mutually exclusive" in payload["error"]["message"]

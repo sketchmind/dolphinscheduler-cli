@@ -107,6 +107,11 @@ def test_capabilities_command_returns_surface_discovery() -> None:
         "standard_envelope": True,
         "formats": ["json", "table", "tsv"],
         "default_format": "json",
+        "compact_json": True,
+        "json_encoding": "utf-8",
+        "default_json_layout": "pretty",
+        "error_channel": "stderr",
+        "row_diagnostics_channel": "stderr",
         "data_shape_metadata": True,
         "display_columns": True,
         "json_column_projection": True,
@@ -212,7 +217,7 @@ def test_capabilities_command_rejects_conflicting_scope_options() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "capabilities"
     assert payload["error"]["type"] == "user_input_error"
     assert "mutually exclusive" in payload["error"]["message"]

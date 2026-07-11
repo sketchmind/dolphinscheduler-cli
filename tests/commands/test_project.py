@@ -87,7 +87,7 @@ def test_project_get_command_reports_not_found_suggestion() -> None:
     result = runner.invoke(app, ["project", "get", "missing"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "project.get"
     assert payload["error"]["type"] == "not_found"
     assert payload["error"]["suggestion"] == (
@@ -104,7 +104,7 @@ def test_project_get_command_reports_ambiguous_resolution_suggestion(
     result = runner.invoke(app, ["project", "get", "etl-prod"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "project.get"
     assert payload["error"]["type"] == "resolution_error"
     assert payload["error"]["suggestion"] == (
@@ -152,7 +152,7 @@ def test_project_update_command_rejects_conflicting_description_flags() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["ok"] is False
     assert payload["action"] == "project.update"
     assert payload["error"]["type"] == "user_input_error"
@@ -165,7 +165,7 @@ def test_project_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["project", "delete", "etl-prod"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["ok"] is False
     assert payload["action"] == "project.delete"
     assert payload["error"]["type"] == "user_input_error"

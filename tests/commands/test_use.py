@@ -37,7 +37,7 @@ def test_use_workflow_command_requires_project_context(isolated_cwd: Path) -> No
     result = runner.invoke(app, ["use", "workflow", "daily-sync"], env=env)
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Run `dsctl use project NAME --scope project` before setting workflow context."

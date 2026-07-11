@@ -150,7 +150,7 @@ def test_tenant_update_command_requires_one_change() -> None:
     result = runner.invoke(app, ["tenant", "update", "tenant-prod"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "tenant.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -163,7 +163,7 @@ def test_tenant_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["tenant", "delete", "tenant-prod"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "tenant.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

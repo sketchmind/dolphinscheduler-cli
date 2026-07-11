@@ -117,7 +117,7 @@ def test_cluster_create_command_requires_one_config_source() -> None:
     result = runner.invoke(app, ["cluster", "create", "--name", "ops"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "cluster.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -149,7 +149,7 @@ def test_cluster_create_command_rejects_conflicting_config_sources(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Pass inline config with --config or read it from --config-file."
@@ -209,7 +209,7 @@ def test_cluster_update_command_rejects_conflicting_description_flags() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "cluster.update"
     assert payload["error"]["type"] == "user_input_error"
 
@@ -218,7 +218,7 @@ def test_cluster_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["cluster", "delete", "k8s-prod"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "cluster.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."
