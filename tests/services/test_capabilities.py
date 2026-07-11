@@ -65,11 +65,12 @@ EXPECTED_DS_CAPABILITIES = {
 }
 
 
-def test_capabilities_result_describes_current_stable_surface() -> None:
-    result = get_capabilities_result()
+def test_capabilities_full_result_describes_current_stable_surface() -> None:
+    result = get_capabilities_result(full=True)
     data = result.data
 
     assert isinstance(data, dict)
+    assert result.resolved == {"capabilities": {"view": "full"}}
     assert data["cli"] == {"name": "dsctl", "version": "0.2.0"}
     assert data["ds"] == EXPECTED_DS_CAPABILITIES
     assert data["selection"] == {
@@ -415,6 +416,13 @@ def test_capabilities_result_can_return_summary() -> None:
     assert "task_templates" not in authoring
 
 
+def test_capabilities_result_defaults_to_summary() -> None:
+    default_result = get_capabilities_result()
+    explicit_result = get_capabilities_result(summary=True)
+
+    assert default_result == explicit_result
+
+
 def test_capabilities_result_can_return_one_section() -> None:
     result = get_capabilities_result(section="authoring")
     data = result.data
@@ -433,9 +441,22 @@ def test_capabilities_result_can_return_one_section() -> None:
     assert authoring["task_templates"] == EXPECTED_TASK_TEMPLATE_METADATA
 
 
-def test_capabilities_result_rejects_conflicting_scope_options() -> None:
+@pytest.mark.parametrize(
+    ("summary", "section", "full"),
+    [
+        (True, "runtime", False),
+        (True, None, True),
+        (False, "runtime", True),
+    ],
+)
+def test_capabilities_result_rejects_conflicting_scope_options(
+    *,
+    summary: bool,
+    section: str | None,
+    full: bool,
+) -> None:
     with pytest.raises(UserInputError, match="mutually exclusive"):
-        get_capabilities_result(summary=True, section="runtime")
+        get_capabilities_result(summary=summary, section=section, full=full)
 
 
 def test_capabilities_result_rejects_unknown_section() -> None:

@@ -13,6 +13,7 @@ from dsctl.cli_surface import (
     TOP_LEVEL_COMMANDS,
     WORKFLOW_INSTANCE_RESOURCE,
 )
+from dsctl.result_navigation import MAX_NEXT_ACTIONS, NEXT_ACTION_ITEM_FIELDS
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -53,6 +54,7 @@ OUTPUT_SUCCESS_FIELDS: tuple[str, ...] = (
     "warnings",
     "warning_details",
 )
+OUTPUT_OPTIONAL_SUCCESS_FIELDS: tuple[str, ...] = ("next_actions",)
 OUTPUT_ERROR_FIELDS: tuple[str, ...] = (
     *OUTPUT_SUCCESS_FIELDS,
     "error",
@@ -154,6 +156,7 @@ def output_schema_data() -> dict[str, object]:
         "error_channel": "stderr",
         "row_diagnostics_channel": "stderr",
         "success_fields": list(OUTPUT_SUCCESS_FIELDS),
+        "optional_success_fields": list(OUTPUT_OPTIONAL_SUCCESS_FIELDS),
         "error_fields": list(OUTPUT_ERROR_FIELDS),
         "ok_values": {
             "success": True,
@@ -162,6 +165,17 @@ def output_schema_data() -> dict[str, object]:
         "warning_details_aligned": True,
         "data_shape_metadata": True,
         "json_column_projection": True,
+        "next_actions": {
+            "field": "next_actions",
+            "presence": "successful_applicable_json_responses_only",
+            "max_items": MAX_NEXT_ACTIONS,
+            "ordered": True,
+            "item_fields": list(NEXT_ACTION_ITEM_FIELDS),
+            "command_kind": "complete_shell_invocation",
+            "authorization": "advisory",
+            "row_output": False,
+            "preserves_env_file": True,
+        },
     }
 
 
@@ -183,6 +197,7 @@ def output_capabilities_data() -> dict[str, object]:
         "warnings": True,
         "warning_details_alignment": True,
         "structured_errors": True,
+        "structured_next_actions": True,
     }
 
 

@@ -10,12 +10,13 @@ browse one family, and `schema --command ACTION` for exact arguments, options,
 choices, selector rules, payload hints, and output shape. Use
 `dsctl capabilities` for feature discovery; it is not an argument schema.
 
-For agent or scripted discovery, prefer scoped self-description calls when the
-full payload is unnecessary:
+For agent or scripted discovery, start with bounded self-description and
+expand only the section or complete inventory that is needed:
 
 ```bash
-dsctl capabilities --summary
+dsctl capabilities
 dsctl capabilities --section runtime
+dsctl capabilities --full
 dsctl schema
 dsctl schema --list-groups
 dsctl schema --group task-instance
@@ -42,7 +43,8 @@ dsctl schema --list-commands
 dsctl schema --command task-instance.list
 dsctl schema --full
 dsctl capabilities
-dsctl capabilities --summary
+dsctl capabilities --section runtime
+dsctl capabilities --full
 dsctl enum names
 dsctl enum list WorkflowExecutionStatus
 ```

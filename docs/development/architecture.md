@@ -136,7 +136,8 @@ dolphinscheduler-cli/
 │   ├── config.py
 │   ├── context.py
 │   ├── errors.py
-│   └── output.py
+│   ├── output.py
+│   └── result_navigation.py
 ├── tools/
 │   ├── ds_codegen/
 │   ├── generate_ds_contract.py
@@ -188,8 +189,20 @@ Foundation owns:
 - error types
 - JSON/YAML boundary helpers
 - output adapters and exact stdout/stderr/exit-code routing
+- pure, bounded lifecycle navigation derived from an already completed command
+  result
 
 Foundation does not import upward into commands, services, or upstream.
+
+`result_navigation.py` is the single deep module for JSON `next_actions`. Its
+public interface accepts `action`, `resolved`, `data`, and the optional explicit
+env-file target; its private rules own safe fact extraction, lifecycle-state
+decisions, numeric selector preference, target preservation, shell encoding,
+deterministic ordering, de-duplication, and output limits. It performs no I/O
+and imports no service, upstream, or generated contracts. The standard
+success-envelope builder calls it once, so domain services do not need to
+remember an output-navigation hook and table/TSV/raw renderers remain
+row/artifact-only.
 
 ### Generated
 

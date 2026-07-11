@@ -200,10 +200,12 @@ Process-channel guarantees:
 - Typer/Click usage errors are written to stderr and exit with status 2
 - JSON keeps warnings and page metadata inside the envelope without duplicating
   them to stderr
+- applicable successful JSON results may include bounded `next_actions`; JSON
+  `--columns` projection keeps this envelope field and narrows only `data`
 - table and TSV keep stdout row-only and write partial/non-first-page and
-  warning diagnostics to stderr
+  warning diagnostics to stderr; they never append `next_actions` below rows
 - raw artifacts keep their exact success body on stdout and write any warnings
-  to stderr
+  to stderr; they never append `next_actions`
 
 JSON object member order is not a semantic contract. Consumers must read fields
 by name.
@@ -220,6 +222,31 @@ Success shape:
   "warning_details": []
 }
 ```
+
+Applicable workflow lifecycle results may also include this optional top-level
+field:
+
+```json
+{
+  "next_actions": [
+    {
+      "action": "workflow-instance.watch",
+      "command": "dsctl --compact --columns id,name,state,startTime,endTime,duration workflow-instance watch 242",
+      "mutates": false
+    }
+  ]
+}
+```
+
+`next_actions` is an ordered, advisory list of at most three complete shell
+invocations. It is derived locally from the current `action`, `resolved`, and
+`data` plus the explicit invocation target; producing it sends no additional
+request. Every item contains the stable target `action`, one placeholder-free
+`command`, and `mutates`, which states whether executing that command changes
+remote state. When the current invocation uses `--env-file`, every suggested
+command preserves its resolved path with shell-safe quoting. A suggestion does
+not grant permission to execute a mutation. When facts are missing, malformed,
+or ambiguous, the field is omitted rather than populated with guessed values.
 
 Error shape:
 
@@ -277,6 +304,8 @@ Field rules:
 - DS objects projected into `data` keep DS-native field names.
 - CLI envelope fields such as `ok`, `action`, `resolved`, `warnings`, and
   selection metadata use CLI-owned naming.
+- `next_actions`, when present, is CLI-owned lifecycle navigation rather than
+  DS-native resource data; it remains outside both `data` and `resolved`
 - high-risk mutations may return `confirmation_required` and expect the same
   command to be retried with `--confirm-risk TOKEN`
 - `warning_details` is a machine-readable list aligned positionally with
@@ -515,28 +544,30 @@ Current guarantees:
 Returns stable version and surface capability discovery for the current CLI and
 selected DS version.
 It answers which resource families and feature groups exist, while `schema`
-answers how to invoke them. Agents should prefer `--summary` or one `--section`
-unless they need the complete feature inventory, and should request
-`schema --command ACTION` when constructing a command.
+answers how to invoke them. The default is a bounded summary; agents should
+expand one `--section` unless they need the complete `--full` inventory, and
+should request `schema --command ACTION` when constructing a command.
 
 Options:
 
 - `--summary`
 - `--section SECTION`
+- `--full`
 
 Selection rules:
 
-- omit both options to return full capability discovery
-- `--summary` returns lightweight capability discovery with `cli`, `ds`,
+- omit all options to return bounded summary capability discovery
+- `--summary` explicitly requests the same default bounded view with `cli`, `ds`,
   `self_description`, `resources`, `planes`, `runtime`, `schedule`, `monitor`,
   `enums`, and a summarized `authoring` section
 - `--section` returns one top-level section plus the standard `cli`, `ds`, and
   `self_description` header
+- `--full` returns the complete expanded capability inventory
 - valid sections are `selection`, `output`, `errors`, `resources`, `planes`,
   `authoring`, `schedule`, `monitor`, `enums`, and `runtime`
-- `--summary` and `--section` are mutually exclusive
+- `--summary`, `--section`, and `--full` are mutually exclusive
 
-Current `data` fields:
+Complete `--full` `data` fields:
 
 - `cli`
 - `ds`
@@ -581,10 +612,11 @@ Current guarantees:
 - exposes `data.self_description.command_invocation_source="schema"` and
   `data.self_description.capabilities_scope="feature_discovery"` so tools can
   distinguish feature discovery from command invocation metadata
-- `--summary` and `--section` are additive scoped views over the same feature
-  discovery data, not output-format modes
-- `--summary` and `--section` are the bounded feature-discovery companions to
-  progressive `dsctl schema`
+- the default/`--summary` and `--section` views are projections over the same
+  feature discovery data, not output-format modes
+- the default summary and `--section` are the bounded feature-discovery
+  companions to progressive `dsctl schema`; `--full` is explicit expansion
+- compact default capability output remains below 8 KiB
 
 ## `dsctl use`
 
@@ -756,7 +788,14 @@ Rules:
 - `data.raw_template_command` points to the copyable raw YAML fragment
 - `data.schema_command` points directly to the bounded field contract; it is
   not necessary to call `get` before it
-- `data.required_paths[]` lists fields required by the local authoring model
+- `data.payload_modes[]` lists the accepted payload forms for the selected task
+  type
+- `data.required_paths[]` lists fields required independently of the selected
+  payload mode
+- `data.required_paths_by_payload_mode` lists the additional leaf fields needed
+  by each payload form; `SHELL` and `PYTHON` expose `command` and `task_params`
+  alternatives, while `REMOTESHELL` exposes only its datasource-backed
+  `task_params` form
 - `data.choice_sources[]` lists commands or local sources for discoverable
   values
 - `data.rows[]` is the compact table/tsv view of next commands and variants
@@ -3146,7 +3185,7 @@ The current stable YAML surface supports:
   - `type`
   - `description`
   - `task_params`
-  - `command` for `SHELL`, `PYTHON`, and `REMOTESHELL`
+  - `command` for `SHELL` and `PYTHON`
   - `worker_group`
   - `priority`
   - `retry`
@@ -3155,6 +3194,9 @@ The current stable YAML surface supports:
   - `depends_on`
 - task identity fields such as DS task `code` and `version` are system-managed
   and are not authored in workflow YAML
+- `REMOTESHELL` requires `task_params.rawScript` and
+  `task_params.datasource`; `task_params.type` defaults to the DS-native `SSH`
+  value when omitted
 
 Current stable per-task-type validation is built in for:
 
@@ -4202,8 +4244,8 @@ Rules:
 - use `workflow-instance edit --patch|--file` for finished instance repair
 - the CLI compiles the update into the DS native
   `updateTaskWithUpstream` form request
-- `command` updates are supported only for `SHELL`, `PYTHON`, and
-  `REMOTESHELL`
+- `command` updates are supported for `SHELL`, `PYTHON`, and `REMOTESHELL`;
+  existing `REMOTESHELL` connection type and datasource fields are preserved
 - `flag` accepts `YES` or `NO`
 - `depends_on` accepts either a YAML list value or a comma-separated task-name
   string
@@ -4601,6 +4643,9 @@ Current guarantees:
   and `active`
 - highlighted task lists are compact task-instance views rather than the full
   `task-instance get` payload
+- each highlighted task includes `logAvailable`, derived from whether DS
+  returned a non-empty log path; lifecycle navigation only suggests `log` when
+  this value is true
 
 ## `dsctl workflow-instance edit`
 

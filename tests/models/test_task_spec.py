@@ -145,7 +145,7 @@ tasks:
     }
 
 
-def test_load_workflow_spec_accepts_remote_shell_command_shorthand(
+def test_load_workflow_spec_rejects_remote_shell_command_shorthand(
     tmp_path: Path,
 ) -> None:
     spec_path = tmp_path / "workflow.yaml"
@@ -161,10 +161,57 @@ tasks:
         encoding="utf-8",
     )
 
-    spec = load_workflow_spec(spec_path)
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Task 'remote' cannot use command shorthand for REMOTESHELL; "
+            r"define task_params\.rawScript and task_params\.datasource"
+        ),
+    ):
+        load_workflow_spec(spec_path)
 
-    assert spec.tasks[0].command == "echo remote"
-    assert spec.tasks[0].type == "REMOTESHELL"
+
+def test_load_workflow_spec_requires_remote_shell_datasource(tmp_path: Path) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: remote-workflow
+tasks:
+  - name: remote
+    type: REMOTESHELL
+    task_params:
+      rawScript: echo remote
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Task 'remote' task_params\.datasource",
+    ):
+        load_workflow_spec(spec_path)
+
+
+def test_load_workflow_spec_rejects_non_ssh_remote_shell_type(tmp_path: Path) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: remote-workflow
+tasks:
+  - name: remote
+    type: REMOTESHELL
+    task_params:
+      rawScript: echo remote
+      type: MYSQL
+      datasource: 7
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"task_params\.type must be SSH"):
+        load_workflow_spec(spec_path)
 
 
 def test_load_workflow_spec_normalizes_remote_shell_alias(
@@ -178,7 +225,10 @@ workflow:
 tasks:
   - name: remote
     type: REMOTE_SHELL
-    command: echo remote
+    task_params:
+      rawScript: echo remote
+      type: ssh
+      datasource: 7
 """.strip(),
         encoding="utf-8",
     )
@@ -186,6 +236,11 @@ tasks:
     spec = load_workflow_spec(spec_path)
 
     assert spec.tasks[0].type == "REMOTESHELL"
+    assert spec.tasks[0].task_params == {
+        "rawScript": "echo remote",
+        "type": "SSH",
+        "datasource": 7,
+    }
 
 
 def test_load_workflow_spec_accepts_sub_workflow_task_params(tmp_path: Path) -> None:

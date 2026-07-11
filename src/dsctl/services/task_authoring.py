@@ -22,6 +22,7 @@ from dsctl.models.task_spec import (
     canonical_task_type,
     task_params_model_for_type,
 )
+from dsctl.models.workflow_spec import COMMAND_TASK_TYPES
 from dsctl.output import CommandResult, require_json_object, require_json_value
 from dsctl.services import _task_templates
 
@@ -96,6 +97,7 @@ class TaskTypeSummaryData(TypedDict):
     variants: list[str]
     payload_modes: list[str]
     required_paths: list[str]
+    required_paths_by_payload_mode: dict[str, list[str]]
     template_command: str
     raw_template_command: str
     schema_command: str
@@ -141,7 +143,7 @@ _TASK_TYPE_SCHEMA_VERSION = 2
 _COMPILE_MAPPING_DESCRIPTION = (
     "Compiled by workflow create/edit before sending DS REST form fields."
 )
-_COMMAND_TASK_TYPES = frozenset({"PYTHON", "REMOTESHELL", "SHELL"})
+_SCRIPT_TASK_TYPES = frozenset({*COMMAND_TASK_TYPES, "REMOTESHELL"})
 _DEPENDENT_CYCLE_VALUES = ("hour", "day", "week", "month")
 _DEPENDENT_DATE_VALUES_BY_CYCLE = {
     "hour": (
@@ -273,10 +275,20 @@ def task_type_summary_data(task_type: str) -> TaskTypeSummaryData:
     """Build the compact task authoring summary for one supported task type."""
     normalized = require_supported_authoring_task_type(task_type)
     metadata = _task_templates.task_template_metadata()[normalized]
+    fields = _fields_for(normalized)
+    required_paths_by_payload_mode = _required_paths_by_payload_mode(
+        normalized,
+        fields,
+    )
+    mode_specific_paths = {
+        path for paths in required_paths_by_payload_mode.values() for path in paths
+    }
     required_paths = [
         field["path"]
-        for field in _fields_for(normalized)
+        for field in fields
         if field.get("required") is True
+        and field["path"] not in mode_specific_paths
+        and not (required_paths_by_payload_mode and field["path"] == "task_params")
     ]
     return TaskTypeSummaryData(
         task_type=normalized,
@@ -286,6 +298,7 @@ def task_type_summary_data(task_type: str) -> TaskTypeSummaryData:
         variants=metadata["variants"],
         payload_modes=metadata["payload_modes"],
         required_paths=required_paths,
+        required_paths_by_payload_mode=required_paths_by_payload_mode,
         template_command=f"dsctl template task {normalized}",
         raw_template_command=f"dsctl template task {normalized} --raw",
         schema_command=f"dsctl task-type schema {normalized}",
@@ -299,6 +312,26 @@ def task_type_summary_data(task_type: str) -> TaskTypeSummaryData:
         },
         rows=_summary_rows(normalized),
     )
+
+
+def _required_paths_by_payload_mode(
+    task_type: str,
+    fields: Sequence[TaskAuthoringFieldData],
+) -> dict[str, list[str]]:
+    """Return leaf requirements that depend on a script payload mode."""
+    if task_type not in _SCRIPT_TASK_TYPES:
+        return {}
+    task_params_paths = [
+        field["path"]
+        for field in fields
+        if field.get("required") is True and field["path"].startswith("task_params.")
+    ]
+    if task_type in COMMAND_TASK_TYPES:
+        return {
+            "command": ["command"],
+            "task_params": task_params_paths,
+        }
+    return {"task_params": task_params_paths}
 
 
 def _task_type_authoring_contract(task_type: str) -> _TaskTypeAuthoringContract:
@@ -601,7 +634,7 @@ def _fields_for(task_type: str) -> list[TaskAuthoringFieldData]:
 def _common_fields(task_type: str) -> tuple[_FieldSpec, ...]:
     payload_rule = (
         "required when command is absent"
-        if task_type in _COMMAND_TASK_TYPES
+        if task_type in COMMAND_TASK_TYPES
         else "required"
     )
     fields = [
@@ -631,13 +664,13 @@ def _common_fields(task_type: str) -> tuple[_FieldSpec, ...]:
         _FieldSpec(
             "task_params",
             "object",
-            required=task_type not in _COMMAND_TASK_TYPES,
+            required=task_type not in COMMAND_TASK_TYPES,
             active_when=payload_rule,
             compile_path="taskDefinitionJson[].taskParams",
             description="DS task plugin payload for this task type.",
         ),
     ]
-    if task_type in _COMMAND_TASK_TYPES:
+    if task_type in COMMAND_TASK_TYPES:
         fields.append(
             _FieldSpec(
                 "command",
@@ -813,8 +846,9 @@ def _remote_shell_fields() -> tuple[_FieldSpec, ...]:
         ),
         _FieldSpec(
             "task_params.type",
-            "string",
+            "enum",
             default="SSH",
+            choices=("SSH",),
             compile_path="taskDefinitionJson[].taskParams.type",
             description="Remote connection mode used by the DS plugin.",
         ),
@@ -1519,7 +1553,7 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
                 "description": "Monthly dependency windows.",
             },
         ]
-    if task_type in _COMMAND_TASK_TYPES:
+    if task_type in COMMAND_TASK_TYPES:
         return [
             {
                 "when": "command is set",
@@ -1646,7 +1680,7 @@ def _json_schema_for(
     properties["type"] = {"const": task_type, "type": "string"}
     properties["task_params"] = {"$ref": "#/$defs/task_params"}
     required = ["name", "type"]
-    if task_type not in _COMMAND_TASK_TYPES:
+    if task_type not in COMMAND_TASK_TYPES:
         required.append("task_params")
     schema: JsonObject = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1664,7 +1698,7 @@ def _json_schema_for(
             "lint_command": "dsctl lint workflow FILE",
         },
     }
-    if task_type in _COMMAND_TASK_TYPES:
+    if task_type in COMMAND_TASK_TYPES:
         schema["oneOf"] = [
             {"required": ["command"], "not": {"required": ["task_params"]}},
             {"required": ["task_params"], "not": {"required": ["command"]}},

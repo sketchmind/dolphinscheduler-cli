@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import json
+import shlex
+from typing import TYPE_CHECKING
 
 import pytest
 import typer
@@ -7,6 +11,9 @@ from dsctl.cli_runtime import AppState, emit_raw_result, emit_result, set_app_st
 from dsctl.errors import ConfigError
 from dsctl.output import CommandResult
 from dsctl.output_formats import RenderOptions
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_emit_result_formats_dsctl_errors(
@@ -308,6 +315,40 @@ def test_emit_result_renders_compact_utf8_json(
         assert captured.out.count("\n") == 1
         assert "无人值守测试" in captured.out
         assert "\\u" not in captured.out
+    finally:
+        set_app_state(AppState(env_file=None))
+
+
+def test_emit_result_preserves_explicit_env_file_in_next_actions(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / "test cluster.env"
+    set_app_state(
+        AppState(
+            env_file=env_file,
+            render_options=RenderOptions(compact=True),
+        )
+    )
+
+    def builder() -> CommandResult:
+        return CommandResult(data={"workflowInstanceIds": [242]})
+
+    try:
+        emit_result("workflow.run", builder)
+        payload = json.loads(capsys.readouterr().out)
+        command = payload["next_actions"][0]["command"]
+        assert shlex.split(command) == [
+            "dsctl",
+            "--env-file",
+            str(env_file),
+            "--compact",
+            "--columns",
+            "id,name,state,startTime,endTime,duration",
+            "workflow-instance",
+            "watch",
+            "242",
+        ]
     finally:
         set_app_state(AppState(env_file=None))
 

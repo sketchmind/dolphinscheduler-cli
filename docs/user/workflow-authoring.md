@@ -7,7 +7,7 @@ This guide describes the stable YAML authoring surface used by
 Use the command output as the first source of truth when generating YAML:
 
 ```bash
-dsctl capabilities --summary
+dsctl capabilities
 dsctl schema --command workflow.create
 dsctl task-type list
 dsctl template task
@@ -75,8 +75,8 @@ workflow YAML file, then run `dsctl lint workflow` and `workflow create
 
 ## Payload Modes
 
-Script-like tasks can use either a CLI shorthand or the DS-native task params
-shape:
+`SHELL` and `PYTHON` tasks can use either a CLI shorthand or the DS-native task
+params shape:
 
 ```yaml
 name: inline-shell
@@ -85,8 +85,12 @@ command: |
   echo "inline command"
 ```
 
-The `command` shorthand is only accepted for `SHELL`, `PYTHON`, and
-`REMOTESHELL`. It compiles to DS `taskParams.rawScript`.
+The `command` shorthand is only accepted for `SHELL` and `PYTHON`. It compiles
+to DS `taskParams.rawScript`.
+
+`REMOTESHELL` only accepts `task_params` because DS also needs an SSH
+datasource. Its required leaf fields are `task_params.rawScript` and
+`task_params.datasource`; `task_params.type` defaults to `SSH` when omitted.
 
 Use `task_params` when a task needs DS-native plugin fields:
 

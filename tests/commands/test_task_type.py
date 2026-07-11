@@ -85,6 +85,7 @@ def test_task_type_get_command_returns_local_authoring_summary() -> None:
     assert payload["data"]["schema_command"] == "dsctl task-type schema SQL"
     assert payload["data"]["raw_template_command"] == "dsctl template task SQL --raw"
     assert "task_params.sql" in payload["data"]["required_paths"]
+    assert payload["data"]["required_paths_by_payload_mode"] == {}
 
 
 def test_task_type_schema_command_returns_field_contract() -> None:

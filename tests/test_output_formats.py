@@ -127,6 +127,43 @@ def test_render_command_does_not_append_resolved_context_to_row_output() -> None
     assert rendered.stderr == ""
 
 
+@pytest.mark.parametrize("output_format", ["table", "tsv"])
+def test_render_command_does_not_append_next_actions_to_row_output(
+    output_format: OutputFormat,
+) -> None:
+    payload = success_payload(
+        "workflow.run",
+        CommandResult(data={"workflowInstanceIds": [242]}),
+    )
+
+    rendered = render_command(
+        payload,
+        action="workflow.run",
+        options=RenderOptions(output_format=output_format),
+    )
+
+    assert "next_actions" not in rendered.stdout
+    assert "workflow-instance watch" not in rendered.stdout
+    assert rendered.stderr == ""
+
+
+def test_json_column_projection_preserves_next_actions_outside_data() -> None:
+    payload = success_payload(
+        "workflow.run",
+        CommandResult(data={"workflowInstanceIds": [242], "unbounded": "x" * 1_000}),
+    )
+
+    rendered = render_command(
+        payload,
+        action="workflow.run",
+        options=RenderOptions(compact=True, columns=("workflowInstanceIds",)),
+    )
+    output = json.loads(rendered.stdout)
+
+    assert output["data"] == {"workflowInstanceIds": [242]}
+    assert output["next_actions"][0]["action"] == "workflow-instance.watch"
+
+
 def test_render_command_reports_actual_row_count_on_a_later_page() -> None:
     payload = success_payload(
         "project.list",

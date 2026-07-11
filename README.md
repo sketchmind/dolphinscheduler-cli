@@ -98,9 +98,13 @@ and generators; it is not the normal agent discovery path.
 Use `capabilities` for lightweight feature discovery:
 
 ```bash
-dsctl capabilities --summary
+dsctl capabilities
 dsctl capabilities --section authoring
 ```
+
+The default is a bounded summary. Use `dsctl capabilities --full` only when
+the complete expanded inventory is required; `--summary` remains available as
+an explicit spelling of the default view.
 
 ## Workflow Authoring
 
