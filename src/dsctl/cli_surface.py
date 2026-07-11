@@ -373,3 +373,26 @@ SURFACE_PLANES: dict[str, tuple[str, ...]] = {
 def resource_label(resource: str) -> str:
     """Render one stable resource slug as a human-readable title."""
     return resource.replace("_", " ").replace("-", " ").title()
+
+
+def stable_leaf_actions() -> frozenset[str]:
+    """Return the stable leaf command actions described by the CLI surface."""
+    actions = set(TOP_LEVEL_COMMANDS)
+    for resource, commands in RESOURCE_COMMAND_TREE.items():
+        for command in commands:
+            actions.update(_surface_leaf_actions((resource,), command))
+    return frozenset(actions)
+
+
+def _surface_leaf_actions(
+    prefix: tuple[str, ...],
+    command: SurfaceCommand,
+) -> set[str]:
+    path = (*prefix, command.name)
+    if not command.commands:
+        return {".".join(path)}
+    return {
+        action
+        for child in command.commands
+        for action in _surface_leaf_actions(path, child)
+    }

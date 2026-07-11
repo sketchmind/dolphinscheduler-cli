@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, TypedDict
 
+from dsctl.cli_surface import stable_leaf_actions
+
 DataShapeKind = Literal["page", "collection", "object", "summary"]
 
 
@@ -99,16 +101,25 @@ COLLECTION_DEFAULTS: dict[str, tuple[str, ...]] = {
     "workflow.list": ("code", "name", "version"),
 }
 
+_STABLE_LEAF_ACTIONS = stable_leaf_actions()
+
+
+def _stable_get_defaults(
+    list_defaults: dict[str, tuple[str, ...]],
+) -> dict[str, tuple[str, ...]]:
+    get_defaults: dict[str, tuple[str, ...]] = {}
+    for action, columns in list_defaults.items():
+        if not action.endswith(".list"):
+            continue
+        get_action = action.removesuffix(".list") + ".get"
+        if get_action in _STABLE_LEAF_ACTIONS:
+            get_defaults[get_action] = columns
+    return get_defaults
+
+
 OBJECT_DEFAULTS: dict[str, tuple[str, ...]] = {
-    **{
-        action.removesuffix(".list") + ".get": columns
-        for action, columns in PAGE_LIST_DEFAULTS.items()
-    },
-    **{
-        action.removesuffix(".list") + ".get": columns
-        for action, columns in COLLECTION_DEFAULTS.items()
-        if action.endswith(".list")
-    },
+    **_stable_get_defaults(PAGE_LIST_DEFAULTS),
+    **_stable_get_defaults(COLLECTION_DEFAULTS),
     "datasource.get": ("id", "name", "type", "host", "port", "database"),
     "project-preference.get": (),
     "workflow.lineage.get": (),
