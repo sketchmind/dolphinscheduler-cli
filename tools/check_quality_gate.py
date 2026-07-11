@@ -22,7 +22,7 @@ TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 class Step:
     name: str
     command: tuple[str, ...]
-    skip_reason: str | None = None
+    unavailable_reason: str | None = None
 
 
 def python_cmd(python: str, *args: str) -> tuple[str, ...]:
@@ -85,7 +85,7 @@ def codespell_step(python: str) -> Step:
     return Step(
         "Codespell",
         (),
-        skip_reason=(
+        unavailable_reason=(
             "codespell is not installed in the active environment; "
             "install dev dependencies or use --skip-codespell"
         ),
@@ -182,9 +182,9 @@ def build_steps(
 
 def run_step(step: Step) -> int:
     print(f"[quality] {step.name}")
-    if step.skip_reason is not None:
-        print(f"[quality] skipped: {step.skip_reason}")
-        return 0
+    if step.unavailable_reason is not None:
+        print(f"[quality] unavailable: {step.unavailable_reason}")
+        return 2
     print(f"[quality] $ {shlex.join(step.command)}")
     # Commands come from the static quality-gate step table, not user input.
     completed = subprocess.run(step.command, cwd=ROOT, check=False)  # noqa: S603
