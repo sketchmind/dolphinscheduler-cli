@@ -397,6 +397,27 @@ def test_schema_result_describes_current_stable_surface() -> None:
     )
     task_type_schema = _find_command(task_type_group["commands"], "schema")
     assert task_type_schema["action"] == "task-type.schema"
+    task_type_schema_options = _require_list(task_type_schema["options"])
+    assert [_require_dict(item)["name"] for item in task_type_schema_options] == [
+        "field",
+        "json-schema",
+        "compile-mappings",
+        "full",
+    ]
+    assert _find_option(task_type_schema_options, "field")["discovery_command"] == (
+        "dsctl task-type schema TYPE"
+    )
+    assert task_type_schema["constraints"] == [
+        {
+            "kind": "at_most_one_of",
+            "fields": [
+                "--field",
+                "--json-schema",
+                "--compile-mappings",
+                "--full",
+            ],
+        }
+    ]
 
     env_group = _find_group(commands, "environment")
     env_command_names = [
@@ -1788,9 +1809,69 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
             "required",
             "default",
             "choice_source",
+            "choice_value",
             "active_when",
         ],
         "column_discovery": "runtime_row_keys",
+    }
+    assert task_type_schema_command["data_shapes_by_view"] == {
+        "fields": {
+            "kind": "summary",
+            "row_path": "data.fields",
+            "default_columns": [
+                "path",
+                "type",
+                "required",
+                "default",
+                "choice_source",
+                "choice_value",
+                "active_when",
+            ],
+            "column_discovery": "runtime_row_keys",
+        },
+        "field": {
+            "kind": "summary",
+            "row_path": "data.fields",
+            "default_columns": [
+                "path",
+                "type",
+                "required",
+                "default",
+                "choice_source",
+                "choice_value",
+                "active_when",
+            ],
+            "column_discovery": "runtime_row_keys",
+        },
+        "json_schema": {
+            "kind": "document",
+            "value_path": "data.schema",
+            "column_discovery": "not_applicable",
+            "supported_output_formats": ["json"],
+            "column_projection": False,
+        },
+        "compile_mappings": {
+            "kind": "summary",
+            "row_path": "data.compile_mappings",
+            "default_columns": [
+                "authoring_path",
+                "ds_payload_path",
+            ],
+            "column_discovery": "runtime_row_keys",
+        },
+        "full": {
+            "kind": "summary",
+            "row_path": "data.fields",
+            "default_columns": [
+                "path",
+                "type",
+                "required",
+                "default",
+                "choice_source",
+                "active_when",
+            ],
+            "column_discovery": "runtime_row_keys",
+        },
     }
 
     alert_definition_result = get_schema_result(

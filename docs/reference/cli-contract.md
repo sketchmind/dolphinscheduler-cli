@@ -298,12 +298,17 @@ Field rules:
 
 Current `data_shape` fields:
 
-- `kind`: one of `page`, `collection`, `object`, or `summary`
+- `kind`: one of `page`, `collection`, `object`, `summary`, or `document`
 - `row_path`: dot-path from the standard JSON envelope to the canonical row
   collection or object, such as `data.totalList` or `data`
+- `value_path`: dot-path to a non-row document such as `data.schema`
 - `default_columns`: suggested compact display columns
-- `column_discovery`: currently `runtime_row_keys`, meaning full column
-  discovery comes from the JSON row payload
+- `column_discovery`: normally `runtime_row_keys`, meaning full column discovery
+  comes from the JSON row payload; document views use `not_applicable`
+- `supported_output_formats`: present when a shape supports fewer than the
+  standard `json`, `table`, and `tsv` set
+- `column_projection`: present as `false` when `--columns` would destroy the
+  document semantics and is therefore rejected
 
 Current output metadata also exposes `compact_option`, `compact_json`,
 `json_encoding`, `default_json_layout`, `error_channel`, and
@@ -441,10 +446,11 @@ canonical `command` object. For a command view, JSON `--columns` projects the
 derived contract rows into `data.command`; without `--columns`,
 `data.command` remains the canonical object.
 
-The `schema` action contract exposes `data_shapes_by_view` because its canonical
-row path changes by view. Its ordinary `data_shape` describes the default index
-view; renderers select the matching view-specific shape at runtime. Expanded
-shapes distinguish root `full` (`data.commands`) from `full_group` and
+Actions whose canonical row path changes by view expose
+`data_shapes_by_view`. Their ordinary `data_shape` describes the default view;
+renderers select the matching view-specific shape at runtime. This applies to
+both progressive self-description and `task-type.schema`. Expanded top-level
+schema shapes distinguish root `full` (`data.commands`) from `full_group` and
 `full_command` (`data.rows`) using `resolved.schema.scope`.
 
 `resolved.schema.view` is `index`, `group`, `command`, `groups`, `commands`, or
@@ -748,7 +754,8 @@ Rules:
 - `resolved.task_type` is the normalized DS-native task type
 - `data.template_command` points to the default YAML fragment
 - `data.raw_template_command` points to the copyable raw YAML fragment
-- `data.schema_command` points to the full authoring contract
+- `data.schema_command` points directly to the bounded field contract; it is
+  not necessary to call `get` before it
 - `data.required_paths[]` lists fields required by the local authoring model
 - `data.choice_sources[]` lists commands or local sources for discoverable
   values
@@ -757,26 +764,54 @@ Rules:
 
 ## `dsctl task-type schema TASK_TYPE`
 
-Returns the full local authoring contract for one DS task type. This command is
-local and does not call DolphinScheduler.
+Returns one local authoring view for a DS task type. This command is local and
+does not call DolphinScheduler. With no selector it returns the bounded field
+contract needed for ordinary YAML authoring.
+
+Options:
+
+- `--field PATH`
+- `--json-schema`
+- `--compile-mappings`
+- `--full`
 
 Rules:
 
-- `data.schema` is a JSON-Schema-style authoring contract with `x-dsctl`
-  metadata
-- `data.fields[]` is the canonical row model for table/tsv and `--columns`
+- the four selectors are mutually exclusive; no selector means the `fields`
+  view
+- `resolved.task_type` is the normalized type and `resolved.view` is one of
+  `fields`, `field`, `json_schema`, `compile_mappings`, or `full`
+- bounded views use `data.schema_version: 2` and include small `data.links`
+  commands for direct progressive navigation
+- the default `data.fields[]` is the canonical row model for table/tsv and
+  `--columns`; `data.state_rules[]` keeps the conditionals needed to use those
+  fields correctly, and `condition_paths[]` identifies the fields controlling
+  each rule without parsing its human-readable `when` text
 - dotted authoring paths are nested JSON Schema objects and `[]` paths are
   represented as arrays; `data.fields[]` is not duplicated as `data.rows[]`
 - `data.fields[].choice_source` records the command or local source for
-  discoverable values; `data.fields[].related_commands[]` records adjacent
+  discoverable values, `data.fields[].choice_value` identifies which returned
+  field to use, and `data.fields[].related_commands[]` records adjacent
   inspection or creation commands when useful
-- `data.state_rules[]` describes task-type conditionals such as SQL
-  `sqlType`
-- `data.choice_sources[]` records how to discover valid external values
-  and which returned field to use, such as resource `fullName`, datasource
-  `id`, workflow `code`, or a task name in the same YAML file
-- `data.compile_mappings[]` records how authoring YAML maps to DS REST form
-  payload fields
+- `--field PATH` returns one element in `data.fields[]` plus only state rules
+  that mention that path; unknown paths return at most three executable typo
+  candidates rather than the whole field catalog
+- `--json-schema` returns the nested validation contract in `data.schema`; its
+  `x-dsctl` navigation metadata does not repeat state rules, choice sources, or
+  compile mappings; this document view is JSON-only, so table/tsv and
+  `--columns` fail rather than silently returning an incomplete schema
+- `--compile-mappings` returns one `data.compile_mapping_policy` plus compact
+  `data.compile_mappings[]` rows, whose table/tsv row source is distinct from
+  the field view
+- `--full` retains the former expanded top-level paths and repeated
+  `schema.x-dsctl` metadata for compatibility, audits, and generators; it is
+  not the recommended LLM authoring path
+- supported table/tsv output is always a standard single table with no metadata
+  footer: fields/field/full render `data.fields[]`, and compile mappings render
+  their own rows
+- compact success envelopes are budgeted below 12 KiB for the default view,
+  10 KiB for JSON Schema, 5 KiB for compile mappings, and 3 KiB for one field
+  across the supported task-type catalog
 - the schema is for authoring workflow YAML, not for representing every raw DS
   database column
 
@@ -3054,8 +3089,9 @@ Rules:
 
 - use `dsctl template workflow --raw` to start a workflow YAML file
 - use `dsctl template task` to discover task template variants
-- use `dsctl task-type schema TYPE` to inspect full task fields, choices,
-  related discovery commands, and state rules before writing `task_params`
+- use `dsctl task-type schema TYPE` to inspect bounded task fields, returned
+  value selectors, related discovery commands, and state rules before writing
+  `task_params`; request JSON Schema or compile mappings only when needed
 - use `dsctl project list` to discover project names and codes for `--project`
 - project selection precedence is:
   - explicit `--project`

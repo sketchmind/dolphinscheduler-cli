@@ -298,7 +298,7 @@ def parameter_syntax_index_data() -> ParameterSyntaxIndexData:
         "recommended_flow": [
             "Run `dsctl template params` first and select only the needed topic.",
             "Run `dsctl template task TYPE --variant params` for task-specific YAML.",
-            "Run `dsctl task-type schema TYPE` for full task field rules.",
+            "Run `dsctl task-type schema TYPE` for bounded task field rules.",
             "Run `dsctl lint workflow FILE` before sending the workflow to DS.",
             "Run `dsctl workflow create --file FILE --dry-run` before mutation.",
         ],

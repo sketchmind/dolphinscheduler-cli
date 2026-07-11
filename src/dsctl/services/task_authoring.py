@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
+from difflib import get_close_matches
+from shlex import quote
 from typing import TYPE_CHECKING, TypedDict, cast
 
 from dsctl.errors import UserInputError
@@ -39,6 +42,7 @@ class TaskAuthoringFieldData(TypedDict, total=False):
     choices: list[str]
     active_when: str
     choice_source: str
+    choice_value: str
     related_commands: list[str]
     compile_path: str
     description: str
@@ -48,6 +52,7 @@ class TaskAuthoringStateRuleData(TypedDict, total=False):
     """One task-type-specific field state rule."""
 
     when: str
+    condition_paths: list[str]
     active_paths: list[str]
     inactive_paths: list[str]
     compile_policy: dict[str, str]
@@ -102,7 +107,7 @@ class TaskTypeSummaryData(TypedDict):
 
 
 class TaskTypeAuthoringSchemaData(TypedDict):
-    """Full local authoring contract for one DS task type."""
+    """Legacy full local authoring contract for one DS task type."""
 
     task_type: str
     category: str
@@ -116,11 +121,26 @@ class TaskTypeAuthoringSchemaData(TypedDict):
     raw_template_command: str
 
 
+@dataclass(frozen=True)
+class _TaskTypeAuthoringContract:
+    """Canonical facts projected into bounded or legacy task schema views."""
+
+    task_type: str
+    category: str
+    kind: str
+    fields: list[TaskAuthoringFieldData]
+    state_rules: list[TaskAuthoringStateRuleData]
+
+
 class _MissingDefault:
     """Sentinel for field descriptors without a default value."""
 
 
 _MISSING = _MissingDefault()
+_TASK_TYPE_SCHEMA_VERSION = 2
+_COMPILE_MAPPING_DESCRIPTION = (
+    "Compiled by workflow create/edit before sending DS REST form fields."
+)
 _COMMAND_TASK_TYPES = frozenset({"PYTHON", "REMOTESHELL", "SHELL"})
 _DEPENDENT_CYCLE_VALUES = ("hour", "day", "week", "month")
 _DEPENDENT_DATE_VALUES_BY_CYCLE = {
@@ -214,14 +234,36 @@ def task_type_summary_result(task_type: str) -> CommandResult:
     )
 
 
-def task_type_schema_result(task_type: str) -> CommandResult:
-    """Return the full local authoring schema for one DS task type."""
+def task_type_schema_result(
+    task_type: str,
+    *,
+    field: str | None = None,
+    json_schema: bool = False,
+    compile_mappings: bool = False,
+    full: bool = False,
+) -> CommandResult:
+    """Return one bounded authoring view or the explicit legacy full contract."""
+    selected_field = _normalize_schema_field(field)
+    view = _task_type_schema_view(
+        field=selected_field,
+        json_schema=json_schema,
+        compile_mappings=compile_mappings,
+        full=full,
+    )
     normalized = require_supported_authoring_task_type(task_type)
-    data = task_type_schema_data(normalized)
+    contract = _task_type_authoring_contract(normalized)
+    data = _project_task_type_schema(
+        contract,
+        view=view,
+        field=selected_field,
+    )
     warnings, warning_details = _generic_task_warnings(normalized)
+    resolved: JsonObject = {"task_type": normalized, "view": view}
+    if selected_field is not None:
+        resolved["field"] = selected_field
     return CommandResult(
         data=require_json_object(data, label="task type authoring schema data"),
-        resolved={"task_type": normalized},
+        resolved=resolved,
         warnings=warnings,
         warning_details=warning_details,
     )
@@ -259,23 +301,268 @@ def task_type_summary_data(task_type: str) -> TaskTypeSummaryData:
     )
 
 
-def task_type_schema_data(task_type: str) -> TaskTypeAuthoringSchemaData:
-    """Build the full task authoring contract for one supported task type."""
-    normalized = require_supported_authoring_task_type(task_type)
-    metadata = _task_templates.task_template_metadata()[normalized]
-    fields = _fields_for(normalized)
-    return TaskTypeAuthoringSchemaData(
-        task_type=normalized,
+def _task_type_authoring_contract(task_type: str) -> _TaskTypeAuthoringContract:
+    """Build canonical authoring facts once before selecting a representation."""
+    metadata = _task_templates.task_template_metadata()[task_type]
+    fields = _fields_for(task_type)
+    state_rules = _state_rules_for(task_type)
+    return _TaskTypeAuthoringContract(
+        task_type=task_type,
         category=metadata["category"],
         kind=metadata["kind"],
-        schema=_json_schema_for(normalized, fields=fields),
         fields=fields,
-        state_rules=_state_rules_for(normalized),
-        choice_sources=_choice_sources_for(normalized),
-        compile_mappings=_compile_mappings_for(normalized),
-        template_command=f"dsctl template task {normalized}",
-        raw_template_command=f"dsctl template task {normalized} --raw",
+        state_rules=state_rules,
     )
+
+
+def _normalize_schema_field(field: str | None) -> str | None:
+    if field is None:
+        return None
+    normalized = field.strip()
+    if normalized:
+        return normalized
+    message = "--field must include an authoring field path."
+    raise UserInputError(
+        message,
+        details={"field": field},
+        suggestion="Remove --field or pass a path from `dsctl task-type schema TYPE`.",
+    )
+
+
+def _task_type_schema_view(
+    *,
+    field: str | None,
+    json_schema: bool,
+    compile_mappings: bool,
+    full: bool,
+) -> str:
+    selected = [
+        flag
+        for flag, enabled in (
+            ("--field", field is not None),
+            ("--json-schema", json_schema),
+            ("--compile-mappings", compile_mappings),
+            ("--full", full),
+        )
+        if enabled
+    ]
+    if len(selected) > 1:
+        message = "Task type schema view selectors cannot be combined."
+        raise UserInputError(
+            message,
+            details={
+                "constraint": "at_most_one_of",
+                "selected": selected,
+            },
+            suggestion=(
+                "Use only one of --field, --json-schema, --compile-mappings, or --full."
+            ),
+        )
+    if field is not None:
+        return "field"
+    if json_schema:
+        return "json_schema"
+    if compile_mappings:
+        return "compile_mappings"
+    if full:
+        return "full"
+    return "fields"
+
+
+def _project_task_type_schema(
+    contract: _TaskTypeAuthoringContract,
+    *,
+    view: str,
+    field: str | None,
+) -> JsonObject:
+    if view == "full":
+        return require_json_object(
+            _legacy_task_type_schema_data(contract),
+            label="legacy task type authoring schema data",
+        )
+
+    data = _bounded_task_type_schema_data(contract)
+    if view == "fields":
+        data["fields"] = cast("JsonValue", contract.fields)
+        data["state_rules"] = cast("JsonValue", contract.state_rules)
+    elif view == "field" and field is not None:
+        selected = _require_authoring_field(contract, field)
+        data["fields"] = cast("JsonValue", [selected])
+        data["state_rules"] = cast(
+            "JsonValue",
+            _state_rules_for_field(contract.state_rules, field),
+        )
+    elif view == "json_schema":
+        data["schema"] = _json_schema_for(contract.task_type, fields=contract.fields)
+    elif view == "compile_mappings":
+        mappings = _compile_mappings_from_fields(contract.fields)
+        data["compile_mapping_policy"] = _COMPILE_MAPPING_DESCRIPTION
+        data["compile_mappings"] = cast(
+            "JsonValue",
+            [
+                {
+                    "authoring_path": mapping["authoring_path"],
+                    "ds_payload_path": mapping["ds_payload_path"],
+                }
+                for mapping in mappings
+            ],
+        )
+    else:
+        message = f"Unsupported internal task type schema view '{view}'"
+        raise RuntimeError(message)
+    return data
+
+
+def _bounded_task_type_schema_data(
+    contract: _TaskTypeAuthoringContract,
+) -> JsonObject:
+    return {
+        "schema_version": _TASK_TYPE_SCHEMA_VERSION,
+        "task_type": contract.task_type,
+        "category": contract.category,
+        "kind": contract.kind,
+        "links": {
+            "fields": f"dsctl task-type schema {contract.task_type}",
+            "field": (
+                f"dsctl task-type schema {contract.task_type} --field 'FIELD_PATH'"
+            ),
+            "json_schema": (
+                f"dsctl task-type schema {contract.task_type} --json-schema"
+            ),
+            "compile_mappings": (
+                f"dsctl task-type schema {contract.task_type} --compile-mappings"
+            ),
+            "full": f"dsctl task-type schema {contract.task_type} --full",
+            "template": f"dsctl template task {contract.task_type}",
+            "raw_template": f"dsctl template task {contract.task_type} --raw",
+        },
+    }
+
+
+def _legacy_task_type_schema_data(
+    contract: _TaskTypeAuthoringContract,
+) -> TaskTypeAuthoringSchemaData:
+    legacy_fields: list[TaskAuthoringFieldData] = []
+    for field in contract.fields:
+        legacy_field = dict(field)
+        legacy_field.pop("choice_value", None)
+        legacy_fields.append(cast("TaskAuthoringFieldData", legacy_field))
+    choice_sources = _choice_sources_from_fields(contract.fields)
+    compile_mappings = _compile_mappings_from_fields(contract.fields)
+    schema = deepcopy(_json_schema_for(contract.task_type, fields=legacy_fields))
+    metadata_value = schema.get("x-dsctl")
+    if not isinstance(metadata_value, dict):
+        message = "task authoring JSON Schema is missing x-dsctl metadata"
+        raise TypeError(message)
+    metadata = dict(metadata_value)
+    metadata["state_rules"] = cast("JsonValue", contract.state_rules)
+    metadata["choice_sources"] = cast("JsonValue", choice_sources)
+    metadata["compile_mappings"] = cast("JsonValue", compile_mappings)
+    schema["x-dsctl"] = metadata
+    return TaskTypeAuthoringSchemaData(
+        task_type=contract.task_type,
+        category=contract.category,
+        kind=contract.kind,
+        schema=schema,
+        fields=legacy_fields,
+        state_rules=contract.state_rules,
+        choice_sources=choice_sources,
+        compile_mappings=compile_mappings,
+        template_command=f"dsctl template task {contract.task_type}",
+        raw_template_command=f"dsctl template task {contract.task_type} --raw",
+    )
+
+
+def _require_authoring_field(
+    contract: _TaskTypeAuthoringContract,
+    field_path: str,
+) -> TaskAuthoringFieldData:
+    fields_by_path = {field["path"]: field for field in contract.fields}
+    selected = fields_by_path.get(field_path)
+    if selected is not None:
+        return selected
+
+    open_plugin_field = contract.kind == "generic" and field_path.startswith(
+        "task_params."
+    )
+    candidates: list[dict[str, str]] = []
+    if not open_plugin_field:
+        candidates.extend(
+            {
+                "path": candidate_path,
+                "command": (
+                    f"dsctl task-type schema {contract.task_type} --field "
+                    f"{quote(candidate_path)}"
+                ),
+            }
+            for candidate_path in get_close_matches(
+                field_path,
+                list(fields_by_path),
+                n=3,
+                cutoff=0.45,
+            )
+        )
+    details: JsonObject = {
+        "task_type": contract.task_type,
+        "field": field_path,
+        "available_count": len(fields_by_path),
+        "candidates": cast("JsonValue", candidates),
+        "discovery_command": f"dsctl task-type schema {contract.task_type}",
+    }
+    if open_plugin_field:
+        details["open_task_params"] = True
+        suggestion = (
+            "This generic task type accepts plugin-defined task_params; inspect an "
+            "exported workflow or the upstream plugin contract."
+        )
+    elif candidates:
+        suggestion = (
+            f"Retry with `{candidates[0]['command']}`, or inspect the bounded "
+            "field catalog."
+        )
+    else:
+        suggestion = (
+            f"Run `dsctl task-type schema {contract.task_type}` to inspect the "
+            "bounded field catalog."
+        )
+    message = f"Unknown {contract.task_type} authoring field '{field_path}'."
+    raise UserInputError(
+        message,
+        details=details,
+        suggestion=suggestion,
+    )
+
+
+def _state_rules_for_field(
+    rules: Sequence[TaskAuthoringStateRuleData],
+    field_path: str,
+) -> list[TaskAuthoringStateRuleData]:
+    return [rule for rule in rules if _state_rule_mentions_field(rule, field_path)]
+
+
+def _state_rule_mentions_field(
+    rule: TaskAuthoringStateRuleData,
+    field_path: str,
+) -> bool:
+    related_paths = [
+        *rule.get("condition_paths", []),
+        *rule.get("active_paths", []),
+        *rule.get("inactive_paths", []),
+        *rule.get("compile_policy", {}),
+    ]
+    normalized_field = _normalize_authoring_path(field_path)
+    return any(
+        normalized_field == normalized_path
+        or normalized_field.startswith(f"{normalized_path}.")
+        or normalized_path.startswith(f"{normalized_field}.")
+        for path in related_paths
+        if (normalized_path := _normalize_authoring_path(path))
+    )
+
+
+def _normalize_authoring_path(path: str) -> str:
+    """Normalize array markers while retaining dotted field boundaries."""
+    return path.replace("[]", "")
 
 
 def require_supported_authoring_task_type(task_type: str) -> str:
@@ -298,10 +585,17 @@ def require_supported_authoring_task_type(task_type: str) -> str:
 
 
 def _fields_for(task_type: str) -> list[TaskAuthoringFieldData]:
-    return [
+    fields = [
         field.to_data()
         for field in (*_common_fields(task_type), *_task_specific_fields(task_type))
     ]
+    for field in fields:
+        source = field.get("choice_source")
+        if isinstance(source, str):
+            choice_value = _choice_source_value(field["path"], source)
+            if choice_value is not None:
+                field["choice_value"] = choice_value
+    return fields
 
 
 def _common_fields(task_type: str) -> tuple[_FieldSpec, ...]:
@@ -1065,7 +1359,6 @@ def _parameter_fields(*, include_resources: bool = False) -> tuple[_FieldSpec, .
             "task_params.localParams[]",
             "object",
             default=(),
-            choice_source="dsctl template params --topic property",
             related_commands=(
                 "dsctl template params --topic property",
                 "dsctl template params --topic built-in",
@@ -1121,6 +1414,7 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
         return [
             {
                 "when": "task_params.sqlType == 0",
+                "condition_paths": ["task_params.sqlType"],
                 "active_paths": [
                     "task_params.sendEmail",
                     "task_params.displayRows",
@@ -1134,6 +1428,7 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
             },
             {
                 "when": "task_params.sqlType == 1",
+                "condition_paths": ["task_params.sqlType"],
                 "active_paths": [
                     "task_params.preStatements",
                     "task_params.postStatements",
@@ -1161,6 +1456,9 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
         return [
             {
                 "when": "dependItem.cycle == hour",
+                "condition_paths": [
+                    "task_params.dependence.dependTaskList[].dependItemList[].cycle"
+                ],
                 "active_paths": [
                     "task_params.dependence.dependTaskList[].dependItemList[].dateValue"
                 ],
@@ -1174,6 +1472,9 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
             },
             {
                 "when": "dependItem.cycle == day",
+                "condition_paths": [
+                    "task_params.dependence.dependTaskList[].dependItemList[].cycle"
+                ],
                 "active_paths": [
                     "task_params.dependence.dependTaskList[].dependItemList[].dateValue"
                 ],
@@ -1187,6 +1488,9 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
             },
             {
                 "when": "dependItem.cycle == week",
+                "condition_paths": [
+                    "task_params.dependence.dependTaskList[].dependItemList[].cycle"
+                ],
                 "active_paths": [
                     "task_params.dependence.dependTaskList[].dependItemList[].dateValue"
                 ],
@@ -1200,6 +1504,9 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
             },
             {
                 "when": "dependItem.cycle == month",
+                "condition_paths": [
+                    "task_params.dependence.dependTaskList[].dependItemList[].cycle"
+                ],
                 "active_paths": [
                     "task_params.dependence.dependTaskList[].dependItemList[].dateValue"
                 ],
@@ -1216,6 +1523,7 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
         return [
             {
                 "when": "command is set",
+                "condition_paths": ["command"],
                 "active_paths": ["command"],
                 "inactive_paths": ["task_params"],
                 "compile_policy": {
@@ -1227,6 +1535,7 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
             },
             {
                 "when": "task_params is set",
+                "condition_paths": ["task_params"],
                 "active_paths": ["task_params"],
                 "inactive_paths": ["command"],
                 "compile_policy": {},
@@ -1239,9 +1548,15 @@ def _state_rules_for(task_type: str) -> list[TaskAuthoringStateRuleData]:
 
 
 def _choice_sources_for(task_type: str) -> list[TaskAuthoringChoiceSourceData]:
+    return _choice_sources_from_fields(_fields_for(task_type))
+
+
+def _choice_sources_from_fields(
+    fields: Sequence[TaskAuthoringFieldData],
+) -> list[TaskAuthoringChoiceSourceData]:
     rows: list[TaskAuthoringChoiceSourceData] = []
     seen: set[str] = set()
-    for field in _fields_for(task_type):
+    for field in fields:
         command = field.get("choice_source")
         if not isinstance(command, str):
             continue
@@ -1252,9 +1567,11 @@ def _choice_sources_for(task_type: str) -> list[TaskAuthoringChoiceSourceData]:
         row: TaskAuthoringChoiceSourceData = {
             "path": path,
             "command": command,
-            "value": _choice_source_value(path, command),
             "description": _choice_source_description(path, command),
         }
+        choice_value = field.get("choice_value")
+        if isinstance(choice_value, str):
+            row["value"] = choice_value
         related_commands = field.get("related_commands")
         if isinstance(related_commands, list) and related_commands:
             row["related_commands"] = related_commands
@@ -1262,10 +1579,11 @@ def _choice_sources_for(task_type: str) -> list[TaskAuthoringChoiceSourceData]:
     return rows
 
 
-def _choice_source_value(path: str, command: str) -> str:
+def _choice_source_value(path: str, command: str) -> str | None:
     if "same workflow YAML" in command:
         return "task.name"
     suffix_values = {
+        "worker_group": "name",
         "resourceName": "fullName",
         "environment_code": "code",
         "task_group_id": "id",
@@ -1281,7 +1599,7 @@ def _choice_source_value(path: str, command: str) -> str:
             return value
     if "enum list" in command:
         return "name"
-    return "name"
+    return None
 
 
 def _choice_source_description(path: str, command: str) -> str:
@@ -1300,9 +1618,11 @@ def _choice_source_description(path: str, command: str) -> str:
     return f"Run `{command}` and use the indicated value for {path}."
 
 
-def _compile_mappings_for(task_type: str) -> list[TaskAuthoringCompileMappingData]:
+def _compile_mappings_from_fields(
+    fields: Sequence[TaskAuthoringFieldData],
+) -> list[TaskAuthoringCompileMappingData]:
     mappings: dict[str, str] = {}
-    for field in _fields_for(task_type):
+    for field in fields:
         compile_path = field.get("compile_path")
         if isinstance(compile_path, str):
             mappings[field["path"]] = compile_path
@@ -1310,9 +1630,7 @@ def _compile_mappings_for(task_type: str) -> list[TaskAuthoringCompileMappingDat
         {
             "authoring_path": authoring_path,
             "ds_payload_path": ds_payload_path,
-            "description": (
-                "Compiled by workflow create/edit before sending DS REST form fields."
-            ),
+            "description": (_COMPILE_MAPPING_DESCRIPTION),
         }
         for authoring_path, ds_payload_path in mappings.items()
     ]
@@ -1344,9 +1662,6 @@ def _json_schema_for(
             "template_command": f"dsctl template task {task_type}",
             "raw_template_command": f"dsctl template task {task_type} --raw",
             "lint_command": "dsctl lint workflow FILE",
-            "state_rules": cast("JsonValue", _state_rules_for(task_type)),
-            "choice_sources": cast("JsonValue", _choice_sources_for(task_type)),
-            "compile_mappings": cast("JsonValue", _compile_mappings_for(task_type)),
         },
     }
     if task_type in _COMMAND_TASK_TYPES:
@@ -1386,7 +1701,13 @@ def _field_json_schema(field: TaskAuthoringFieldData) -> JsonObject:
     if "default" in field:
         schema["default"] = field["default"]
     metadata: JsonObject = {}
-    for key in ("active_when", "choice_source", "related_commands", "compile_path"):
+    for key in (
+        "active_when",
+        "choice_source",
+        "choice_value",
+        "related_commands",
+        "compile_path",
+    ):
         value = field.get(key)
         if value is not None:
             metadata[key] = require_json_value(
@@ -1486,10 +1807,26 @@ def _summary_rows(task_type: str) -> list[TaskTypeSummaryRowData]:
         {
             "kind": "command",
             "name": "schema",
-            "summary": (
-                "Full field contract, state rules, choices, and compile mapping."
-            ),
+            "summary": "Bounded field contract, state rules, and value discovery.",
             "command": f"dsctl task-type schema {task_type}",
+        },
+        {
+            "kind": "command",
+            "name": "json-schema",
+            "summary": "Nested validation schema without repeated authoring metadata.",
+            "command": f"dsctl task-type schema {task_type} --json-schema",
+        },
+        {
+            "kind": "command",
+            "name": "compile-mappings",
+            "summary": "Authoring paths mapped to DS REST payload paths.",
+            "command": f"dsctl task-type schema {task_type} --compile-mappings",
+        },
+        {
+            "kind": "command",
+            "name": "full-schema",
+            "summary": "Expanded compatibility contract for audits and generators.",
+            "command": f"dsctl task-type schema {task_type} --full",
         },
         {
             "kind": "command",
@@ -1552,7 +1889,6 @@ __all__ = [
     "TaskTypeAuthoringSchemaData",
     "TaskTypeSummaryData",
     "require_supported_authoring_task_type",
-    "task_type_schema_data",
     "task_type_schema_result",
     "task_type_summary_data",
     "task_type_summary_result",

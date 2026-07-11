@@ -21,6 +21,12 @@ versioning policy is needed.
 - Corrected task-authoring JSON Schema nesting and local references for retry
   objects, dependency arrays, and plugin parameter models; removed the
   duplicate `rows` copy of the canonical field list.
+- Made task-type authoring discovery progressive: the default is a bounded
+  field and state-rule contract, exact field/JSON Schema/compile mapping views
+  are direct selectors, and the former expanded response is behind `--full`.
+- Made exact-field rule links path-aware, removed a false `localParams` choice
+  value, kept JSON Schema document output lossless, and deduplicated bounded
+  compile-mapping policy text.
 - Improved workflow/template discovery, positional workflow recovery hints,
   scoped resolver suggestions, runtime numeric bounds, and task-instance
   missing/log error translation without masking generic upstream failures.

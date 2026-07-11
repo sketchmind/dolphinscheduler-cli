@@ -376,7 +376,7 @@ surface.
 - [x] `dsctl task-type list` — live DS task-type discovery with favourite flags
 - [x] `dsctl task-type get|schema` — local task authoring summaries, field
       contracts, state rules, choices, and compile mappings
-- [ ] make task authoring discovery progressive: keep one canonical field
+- [x] make task authoring discovery progressive: keep one canonical field
       contract and add explicit field, JSON Schema, compile, and full views
       instead of repeating the same metadata in one large response
 - [ ] make complex mutation dry-runs semantic by default: return the ordered

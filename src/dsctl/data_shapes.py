@@ -5,7 +5,7 @@ from typing import Literal, TypedDict
 
 from dsctl.cli_surface import stable_leaf_actions
 
-DataShapeKind = Literal["page", "collection", "object", "summary"]
+DataShapeKind = Literal["page", "collection", "object", "summary", "document"]
 
 
 class DataShapeSchema(TypedDict, total=False):
@@ -13,8 +13,11 @@ class DataShapeSchema(TypedDict, total=False):
 
     kind: str
     row_path: str
+    value_path: str
     default_columns: list[str]
     column_discovery: str
+    supported_output_formats: list[str]
+    column_projection: bool
 
 
 @dataclass(frozen=True)
@@ -23,17 +26,26 @@ class DataShape:
 
     kind: DataShapeKind
     row_path: str | None = None
+    value_path: str | None = None
     default_columns: tuple[str, ...] = ()
     column_discovery: str = "runtime_row_keys"
+    supported_output_formats: tuple[str, ...] = ("json", "table", "tsv")
+    column_projection: bool = True
 
     def to_schema(self) -> DataShapeSchema:
         """Return the JSON-safe schema representation for this shape."""
         payload = DataShapeSchema(kind=self.kind)
         if self.row_path is not None:
             payload["row_path"] = self.row_path
+        if self.value_path is not None:
+            payload["value_path"] = self.value_path
         if self.default_columns:
             payload["default_columns"] = list(self.default_columns)
         payload["column_discovery"] = self.column_discovery
+        if self.supported_output_formats != ("json", "table", "tsv"):
+            payload["supported_output_formats"] = list(self.supported_output_formats)
+        if not self.column_projection:
+            payload["column_projection"] = False
         return payload
 
 
@@ -140,6 +152,34 @@ OBJECT_DEFAULTS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+_TASK_TYPE_AUTHORING_FIELDS_SHAPE = DataShape(
+    kind="summary",
+    row_path="data.fields",
+    default_columns=(
+        "path",
+        "type",
+        "required",
+        "default",
+        "choice_source",
+        "choice_value",
+        "active_when",
+    ),
+)
+
+_TASK_TYPE_LEGACY_FIELDS_SHAPE = DataShape(
+    kind="summary",
+    row_path="data.fields",
+    default_columns=(
+        "path",
+        "type",
+        "required",
+        "default",
+        "choice_source",
+        "active_when",
+    ),
+)
+
+
 NESTED_ROW_SHAPES: dict[str, DataShape] = {
     "alert-plugin.definition.list": DataShape(
         kind="summary",
@@ -165,18 +205,6 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
         kind="summary",
         row_path="data.rows",
         default_columns=("kind", "name", "summary", "command"),
-    ),
-    "task-type.schema": DataShape(
-        kind="summary",
-        row_path="data.fields",
-        default_columns=(
-            "path",
-            "type",
-            "required",
-            "default",
-            "choice_source",
-            "active_when",
-        ),
     ),
     "template.environment": DataShape(
         kind="summary",
@@ -276,6 +304,34 @@ SCHEMA_VIEW_SHAPES: dict[str, DataShape] = {
     ),
 }
 
+TASK_TYPE_SCHEMA_VIEW_SHAPES: dict[str, DataShape] = {
+    "fields": _TASK_TYPE_AUTHORING_FIELDS_SHAPE,
+    "field": _TASK_TYPE_AUTHORING_FIELDS_SHAPE,
+    "json_schema": DataShape(
+        kind="document",
+        value_path="data.schema",
+        column_discovery="not_applicable",
+        supported_output_formats=("json",),
+        column_projection=False,
+    ),
+    "compile_mappings": DataShape(
+        kind="summary",
+        row_path="data.compile_mappings",
+        default_columns=("authoring_path", "ds_payload_path"),
+    ),
+    "full": _TASK_TYPE_LEGACY_FIELDS_SHAPE,
+}
+
+_VIEW_SHAPES_BY_ACTION: dict[str, dict[str, DataShape]] = {
+    "schema": SCHEMA_VIEW_SHAPES,
+    "task-type.schema": TASK_TYPE_SCHEMA_VIEW_SHAPES,
+}
+
+_DEFAULT_VIEW_BY_ACTION = {
+    "schema": "index",
+    "task-type.schema": "fields",
+}
+
 DATA_SHAPES: dict[str, DataShape] = {
     **{
         action: DataShape(
@@ -307,8 +363,10 @@ DATA_SHAPES: dict[str, DataShape] = {
 
 def data_shape_for_action(action: str, *, view: str | None = None) -> DataShape | None:
     """Return display/schema row metadata for one stable command action."""
-    if action == "schema":
-        return SCHEMA_VIEW_SHAPES.get("index" if view is None else view)
+    view_shapes = _VIEW_SHAPES_BY_ACTION.get(action)
+    if view_shapes is not None:
+        selected_view = _DEFAULT_VIEW_BY_ACTION[action] if view is None else view
+        return view_shapes.get(selected_view)
     return DATA_SHAPES.get(action)
 
 
@@ -326,7 +384,17 @@ def data_shape_schema_for_action(
 
 def schema_view_data_shapes() -> dict[str, DataShapeSchema]:
     """Return every view-dependent row model for the schema command."""
-    return {view: shape.to_schema() for view, shape in SCHEMA_VIEW_SHAPES.items()}
+    return data_shapes_by_view_schema_for_action("schema")
+
+
+def data_shapes_by_view_schema_for_action(
+    action: str,
+) -> dict[str, DataShapeSchema]:
+    """Return every view-dependent row model registered for one action."""
+    return {
+        view: shape.to_schema()
+        for view, shape in _VIEW_SHAPES_BY_ACTION.get(action, {}).items()
+    }
 
 
 __all__ = [
@@ -334,5 +402,6 @@ __all__ = [
     "DataShapeSchema",
     "data_shape_for_action",
     "data_shape_schema_for_action",
+    "data_shapes_by_view_schema_for_action",
     "schema_view_data_shapes",
 ]

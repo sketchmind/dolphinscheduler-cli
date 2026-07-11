@@ -113,6 +113,15 @@ ACTION_CONSTRAINTS: dict[str, tuple[Constraint, ...]] = {
         _forbids("--full", "--list-groups", "--list-commands"),
     ),
     "capabilities": (_fields("at_most_one_of", "--summary", "--section"),),
+    "task-type.schema": (
+        _fields(
+            "at_most_one_of",
+            "--field",
+            "--json-schema",
+            "--compile-mappings",
+            "--full",
+        ),
+    ),
     "environment.create": (_fields("exactly_one_of", "--config", "--config-file"),),
     "environment.update": (
         _fields("at_most_one_of", "--config", "--config-file"),

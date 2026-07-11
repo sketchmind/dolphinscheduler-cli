@@ -298,6 +298,14 @@ renderer rows. The output adapter derives table, TSV, and explicit column
 projection rows from that object. Schema view-aware data shapes keep index,
 list, group, and command projection paths local to the output boundary.
 
+`services.task_authoring` applies the same deep-module rule to task-type
+contracts. It builds canonical metadata, fields, and state rules once, then
+lazily derives only the bounded field, exact field, JSON Schema, compile
+mapping, or explicit legacy-full projection requested. Commands do not assemble
+these representations. View-dependent row paths and document restrictions are
+registered by action in the shared output data-shape module, so
+table/TSV/column adapters do not contain task-type-specific branches.
+
 Static cross-field command constraints live in the schema constraint registry
 and mirror service/command validation (`exactly_one_of`, `requires`, mode
 alternatives, and related forms). Tests require every referenced flag or
