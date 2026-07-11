@@ -43,7 +43,7 @@ from dsctl.cli_surface import (
 from dsctl.config import load_selected_ds_version
 from dsctl.data_shapes import (
     data_shape_schema_for_action,
-    schema_view_data_shapes,
+    data_shapes_by_view_schema_for_action,
 )
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult, require_json_object, require_json_value
@@ -956,19 +956,7 @@ def _annotate_command_node_data_shape(command_node: JsonObject) -> JsonObject:
     annotated = dict(command_node)
     action = annotated.get("action")
     if isinstance(action, str):
-        annotated["invocation"] = _schema_invocation(action, annotated)
-        constraints = constraints_for_action(action)
-        if constraints:
-            annotated["constraints"] = require_json_value(
-                constraints,
-                label="schema command constraints",
-            )
-        shape = data_shape_schema_for_action(action)
-        if shape is not None:
-            annotated["data_shape"] = require_json_object(
-                shape,
-                label="schema data shape",
-            )
+        _annotate_action_contract(annotated, action=action, label="schema command")
     group_action = annotated.get("group_action")
     if isinstance(group_action, dict):
         group_action_data = require_json_object(
@@ -978,22 +966,11 @@ def _annotate_command_node_data_shape(command_node: JsonObject) -> JsonObject:
         group_action_name = group_action_data.get("action")
         if isinstance(group_action_name, str):
             group_action_copy = dict(group_action_data)
-            group_action_copy["invocation"] = _schema_invocation(
-                group_action_name,
+            _annotate_action_contract(
                 group_action_copy,
+                action=group_action_name,
+                label="schema group action",
             )
-            group_action_constraints = constraints_for_action(group_action_name)
-            if group_action_constraints:
-                group_action_copy["constraints"] = require_json_value(
-                    group_action_constraints,
-                    label="schema group action constraints",
-                )
-            shape = data_shape_schema_for_action(group_action_name)
-            if shape is not None:
-                group_action_copy["data_shape"] = require_json_object(
-                    shape,
-                    label="schema data shape",
-                )
             annotated["group_action"] = group_action_copy
     commands_value = annotated.get("commands")
     if isinstance(commands_value, list):
@@ -1006,9 +983,37 @@ def _annotate_command_node_data_shape(command_node: JsonObject) -> JsonObject:
     return annotated
 
 
+def _annotate_action_contract(
+    contract: JsonObject,
+    *,
+    action: str,
+    label: str,
+) -> None:
+    """Attach shared invocation, constraint, and output-shape metadata."""
+    contract["invocation"] = _schema_invocation(action, contract)
+    constraints = constraints_for_action(action)
+    if constraints:
+        contract["constraints"] = require_json_value(
+            constraints,
+            label=f"{label} constraints",
+        )
+    shape = data_shape_schema_for_action(action)
+    if shape is not None:
+        contract["data_shape"] = require_json_object(
+            shape,
+            label=f"{label} data shape",
+        )
+    view_shapes = data_shapes_by_view_schema_for_action(action)
+    if view_shapes:
+        contract["data_shapes_by_view"] = require_json_object(
+            view_shapes,
+            label=f"{label} view data shapes",
+        )
+
+
 def _top_level_command_schema(name: str) -> JsonObject:
     if name == "schema":
-        schema_command = require_json_object(
+        return require_json_object(
             _command(
                 name,
                 action=name,
@@ -1059,11 +1064,6 @@ def _top_level_command_schema(name: str) -> JsonObject:
             ),
             label="top-level command schema",
         )
-        schema_command["data_shapes_by_view"] = require_json_object(
-            schema_view_data_shapes(),
-            label="schema view data shapes",
-        )
-        return schema_command
     if name == "capabilities":
         return require_json_object(
             _command(

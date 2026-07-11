@@ -226,6 +226,19 @@ def test_template_datasource_command_returns_discovery() -> None:
     assert "fields" not in payload["data"]
 
 
+def test_template_datasource_column_error_uses_its_single_data_shape() -> None:
+    result = runner.invoke(
+        app,
+        ["--columns", "bogus", "template", "datasource"],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["details"]["view"] == "list"
+    assert "data.command.data_shape" in payload["error"]["suggestion"]
+    assert "data_shapes_by_view" not in payload["error"]["suggestion"]
+
+
 def test_template_datasource_help_points_to_type_discovery() -> None:
     result = runner.invoke(app, ["template", "datasource", "--help"])
 

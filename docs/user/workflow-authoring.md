@@ -13,6 +13,8 @@ dsctl task-type list
 dsctl template task
 dsctl task-type get SQL
 dsctl task-type schema SQL
+dsctl task-type schema SHELL --field 'task_params.resourceList[].resourceName'
+dsctl task-type schema SQL --json-schema
 dsctl template params
 dsctl template task SHELL --variant resource --raw
 dsctl lint workflow workflow.yaml
@@ -26,9 +28,12 @@ dsctl workflow edit WORKFLOW --patch patch.yaml --dry-run
 Use `dsctl task-type list` when you need the live DS task-type catalog for the
 configured cluster and current user. Use `dsctl template task` when you need
 the compact local template catalog. Then use `dsctl task-type get TYPE` for the
-per-type authoring summary and `dsctl task-type schema TYPE` for full fields,
-state rules, choices, discovery commands, related commands, and compile
-mappings.
+optional per-type authoring summary and `dsctl task-type schema TYPE` directly
+for bounded fields, state rules, discovery commands, and returned value names.
+Use `--field PATH`, `--json-schema`, or `--compile-mappings` only for the detail
+needed by the current task; quote field paths containing `[]`. The JSON Schema
+view is a complete JSON document and therefore does not support table/TSV or
+`--columns`. `--full` is the expanded compatibility view.
 
 `dsctl template workflow` returns a minimal full workflow inside the standard
 JSON envelope. Use `dsctl template workflow --raw > workflow.yaml` when you want
@@ -297,7 +302,7 @@ patch:
 ```
 
 `tasks.create[]` uses the same task item shape as full workflow YAML. Start
-from `dsctl template task TYPE --raw` and inspect full task fields with
+from `dsctl template task TYPE --raw` and inspect bounded task fields with
 `dsctl task-type schema TYPE`. `tasks.update[].match.name` matches the live
 task name before the patch is applied; `tasks.update[].set` is a partial task
 object and omitted fields keep their live values.

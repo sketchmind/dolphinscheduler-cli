@@ -110,6 +110,8 @@ sending it to DolphinScheduler:
 ```bash
 dsctl template task SHELL --raw
 dsctl task-type schema SQL
+dsctl task-type schema SHELL --field 'task_params.resourceList[].resourceName'
+dsctl task-type schema SQL --json-schema
 dsctl template workflow --raw > workflow.yaml
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --project etl-prod --dry-run
