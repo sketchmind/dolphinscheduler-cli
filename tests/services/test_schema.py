@@ -4,6 +4,7 @@ import pytest
 
 from dsctl.errors import UserInputError
 from dsctl.models import supported_typed_task_types
+from dsctl.services._data_shapes import data_shape_schema_for_action
 from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 from dsctl.services.schema import get_schema_result
@@ -1689,6 +1690,28 @@ def test_schema_result_can_list_group_and_command_discovery_rows() -> None:
         "summary": "Create one datasource from a JSON payload file.",
         "schema_command": "dsctl schema --command datasource.create",
     }
+
+
+def test_data_shapes_do_not_infer_get_metadata_for_unstable_actions() -> None:
+    commands = _require_list(get_schema_result(list_commands=True).data)
+    stable_actions = {
+        action
+        for item in commands
+        if isinstance((action := _require_dict(item).get("action")), str)
+    }
+    inferred_get_actions = {
+        f"{action.removesuffix('.list')}.get"
+        for action in stable_actions
+        if action.endswith(".list")
+    }
+
+    orphan_get_actions = inferred_get_actions - stable_actions
+
+    assert {
+        action
+        for action in orphan_get_actions
+        if data_shape_schema_for_action(action) is not None
+    } == set()
 
 
 def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
