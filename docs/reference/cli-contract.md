@@ -540,6 +540,21 @@ Current guarantees:
 - command arguments and options may include additive metadata such as
   `choices`, `minimum`, `examples`, `supported_keys`, and
   `discovery_command` when the CLI can expose a tighter contract
+- `normalization: "lowercase"` means the CLI lowercases the supplied value
+  before choice validation; absence of `normalization` publishes no
+  normalization guarantee for handwritten commands that have not migrated to
+  the canonical command contract
+- path inputs may expose `input_policy` with the parser's `exists`,
+  `file_okay`, `dir_okay`, `readable`, and `resolve_path` rules
+- `default` without `resolution` means omission produces one fixed value
+  without consulting a higher-priority runtime source
+- when `resolution` is also present, its source order is authoritative;
+  `default` is retained only as a schema-version-compatible projection of the
+  same terminal value, not as an eager parser default
+- `resolution.precedence` is ordered from strongest to weakest; the current
+  workflow runtime sources are `flag`, `project_preference`, and `default`;
+  `resolution.fallback` carries the value used by that terminal `default`
+  source
 - command entries that accept file payloads may include compact `payload`
   metadata; when present, `payload.template_command` is the preferred
   progressive-discovery command for a concrete payload template
@@ -556,6 +571,8 @@ Current guarantees:
 - compact standard-envelope budgets guard the progressive path: root index
   below 16 KiB, every action-local contract below 8 KiB, and unknown-action
   recovery below 2 KiB
+- every stable leaf `--help` response stays below 10 KiB so the help-first
+  discovery path cannot grow without an explicit product decision
 
 ## `dsctl capabilities`
 
@@ -4311,12 +4328,16 @@ Selection rules:
   `flag > enabled project preference.workerGroup > "default"`
 - tenant selection:
   `flag > enabled project preference.tenant > "default"`
-- runtime option defaults mirror the DS 3.4.1 UI start modal:
-  `failureStrategy=CONTINUE`, `warningType=NONE`,
-  `workflowInstancePriority=MEDIUM`, `dryRun=0`, and omitted
+- when no enabled project preference provides a value, runtime fallbacks mirror
+  the DS 3.4.1 UI start modal: `failureStrategy=CONTINUE`,
+  `warningType=NONE`, `workflowInstancePriority=MEDIUM`, `dryRun=0`, and omitted
   `warningGroupId`, `environmentCode`, and `startParams`
-- project preference overrides are used for `taskPriority`, `warningType`,
-  `alertGroups`/`alertGroup`, `workerGroup`, `tenant`, and `environmentCode`
+- priority selection is
+  `flag > enabled project preference.taskPriority > MEDIUM`
+- warning-type selection is
+  `flag > enabled project preference.warningType > NONE`
+- project preference resolution also applies to `alertGroups`/`alertGroup`,
+  `workerGroup`, `tenant`, and `environmentCode`
 - `--dry-run` is a local CLI preview: it resolves inputs and emits the native
   `start-workflow-instance` request without sending that start request
 - `--execution-dry-run` sends DS `dryRun=1`: DolphinScheduler creates dry-run
@@ -4346,8 +4367,10 @@ The `resolved` payload also includes:
 Options:
 
 - `--failure-strategy continue|end`, default `continue`
-- `--priority highest|high|medium|low|lowest`, default `medium`
-- `--warning-type none|success|failure|all`, default `none`
+- `--priority highest|high|medium|low|lowest`; omitted values use the priority
+  resolution order above
+- `--warning-type none|success|failure|all`; omitted values use the warning-type
+  resolution order above
 - `--warning-group-id ID`
 - `--environment-code CODE`
 - `--param KEY=VALUE`, repeatable, serialized to DS `startParams`

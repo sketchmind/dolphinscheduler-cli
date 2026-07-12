@@ -116,8 +116,20 @@ def _parameter_value(item: Mapping[str, JsonValue]) -> str:
     minimum = item.get("minimum")
     if isinstance(minimum, int | float) and not isinstance(minimum, bool):
         parts.append(f"minimum={minimum}")
-    if "default" in item:
+    resolution = item.get("resolution")
+    if "default" in item and not isinstance(resolution, Mapping):
         parts.append(f"default={_compact_value(item['default'])}")
+    if isinstance(resolution, Mapping):
+        precedence = resolution.get("precedence")
+        fallback = resolution.get("fallback")
+        if isinstance(precedence, list) and "fallback" in resolution:
+            sources = [
+                "pref" if source == "project_preference" else str(source)
+                for source in precedence
+                if source != "default"
+            ]
+            sources.append("null" if fallback is None else _compact_value(fallback))
+            parts.append(f"resolve={'>'.join(sources)}")
     choices = item.get("choices")
     if isinstance(choices, list):
         parts.append(f"choices={_choices_summary(choices, item=item)}")

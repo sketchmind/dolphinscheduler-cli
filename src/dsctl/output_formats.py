@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, TypeAlias, TypeGuard, cast
 
+from dsctl.command_contract import COMMAND_CATALOG, CommandBindingError
 from dsctl.data_shapes import (
     DataShape,
     data_shape_for_action,
@@ -18,7 +19,10 @@ if TYPE_CHECKING:
     from dsctl.support.json_types import JsonObject, JsonValue
 
 OutputFormat: TypeAlias = Literal["json", "table", "tsv"]
-OUTPUT_FORMAT_CHOICES: tuple[OutputFormat, ...] = ("json", "table", "tsv")
+OUTPUT_FORMAT_CHOICES = cast(
+    "tuple[OutputFormat, ...]",
+    COMMAND_CATALOG.global_option("output-format").input.choices,
+)
 
 
 @dataclass(frozen=True)
@@ -55,7 +59,14 @@ def parse_columns(value: str | None) -> tuple[str, ...]:
 
 def validate_render_options(options: RenderOptions) -> RenderOptions:
     """Reject ambiguous global display settings before running a command."""
-    if options.compact and options.output_format != "json":
+    try:
+        COMMAND_CATALOG.validate_global_values(
+            {
+                "output-format": options.output_format,
+                "compact": options.compact,
+            }
+        )
+    except CommandBindingError as exc:
         message = "--compact can only be used with --output-format json"
         raise UserInputError(
             message,
@@ -64,7 +75,7 @@ def validate_render_options(options: RenderOptions) -> RenderOptions:
                 "output_format": options.output_format,
             },
             suggestion="Remove --compact or use --output-format json.",
-        )
+        ) from exc
     if options.columns and "*" in options.columns:
         _validate_wildcard_columns(options.columns)
     return options

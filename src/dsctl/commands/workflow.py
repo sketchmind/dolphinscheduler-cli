@@ -4,6 +4,8 @@ from typing import Annotated
 import typer
 
 from dsctl.cli_runtime import emit_raw_result, emit_result, get_app_state
+from dsctl.command_contract import COMMAND_CATALOG
+from dsctl.commands._contract_adapter import typer_option
 from dsctl.output import CommandResult
 from dsctl.services.workflow import (
     backfill_workflow_result,
@@ -76,6 +78,7 @@ WORKFLOW_EDIT_HELP = (
     "workflow context only when project also comes from context; otherwise "
     "pass WORKFLOW."
 )
+_WORKFLOW_CREATE = COMMAND_CATALOG.command("workflow.create")
 
 
 def register_workflow_commands(app: typer.Typer) -> None:
@@ -334,64 +337,32 @@ def lineage_dependent_tasks_command(
     )
 
 
-@workflow_app.command("create")
+@workflow_app.command(_WORKFLOW_CREATE.name, help=_WORKFLOW_CREATE.summary)
 def create_command(
     ctx: typer.Context,
     *,
     file: Annotated[
         Path,
-        typer.Option(
-            "--file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to one workflow YAML specification file. Start from "
-                "`dsctl template workflow --raw`; add task fragments with "
-                "`dsctl template task`, and inspect task fields with "
-                "`dsctl task-type schema TYPE`. Validate the authored DAG with "
-                "`dsctl lint workflow FILE`."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
+        typer_option(_WORKFLOW_CREATE.input("file")),
     ],
     project: Annotated[
         str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Override workflow.project from the YAML file. Run `dsctl "
-                "project list` to discover values."
-            ),
-        ),
+        typer_option(_WORKFLOW_CREATE.input("project")),
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option(
-            "--dry-run",
-            help=(
-                "Compile and print the full DS request without sending it. For "
-                "bounded DAG validation, use `dsctl lint workflow FILE`."
-            ),
-        ),
+        typer_option(_WORKFLOW_CREATE.input("dry-run")),
     ] = False,
     confirm_risk: Annotated[
         str | None,
-        typer.Option(
-            "--confirm-risk",
-            help=(
-                "Explicit confirmation token returned by a previous high-risk "
-                "schedule validation failure."
-            ),
-        ),
+        typer_option(_WORKFLOW_CREATE.input("confirm-risk")),
     ] = None,
 ) -> None:
-    """Create one workflow definition from a YAML file."""
+    """Execute the canonical workflow.create command."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
-        "workflow.create",
+        _WORKFLOW_CREATE.action,
         lambda: create_workflow_result(
             file=file,
             project=project,

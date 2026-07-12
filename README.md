@@ -82,6 +82,12 @@ dsctl workflow --help
 dsctl workflow edit --help
 ```
 
+Leaf help is the task-oriented first projection for both humans and agents; it
+should be enough to construct the common invocation without learning a
+project-specific discovery protocol. `schema` is the structured, versioned
+reflection of the CLI facts modeled for machine consumption, not a mandatory
+preflight before every command.
+
 Use `schema` when exact machine-readable arguments, choices, constraints,
 payload hints, or output shape metadata are needed. JSON is not inherently more
 token-efficient than help text: inspect only the action being executed next.

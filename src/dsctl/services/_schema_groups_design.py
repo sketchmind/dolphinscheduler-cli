@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
+from dsctl.command_contract import COMMAND_CATALOG, InputContract, ValueResolution
 from dsctl.services._schema_primitives import (
     argument,
     command,
+    command_from_contract,
     confirm_risk_option,
     group,
     option,
+    option_from_contract,
     project_option,
     workflow_option,
 )
@@ -15,6 +20,9 @@ from dsctl.services.template import (
     supported_parameter_syntax_topics,
     supported_task_template_variants,
 )
+
+if TYPE_CHECKING:
+    from dsctl.support.yaml_io import JsonObject
 
 _WORKFLOW_ARGUMENT_DESCRIPTION = (
     "Workflow name or numeric code. When omitted, uses workflow context only "
@@ -29,6 +37,120 @@ _WORKFLOW_OPTION_DESCRIPTION = (
     "Workflow name or code. When omitted, uses workflow context only when "
     "project also comes from context; otherwise pass --workflow."
 )
+_WORKFLOW_CREATE_CONTRACT = COMMAND_CATALOG.command("workflow.create")
+_WORKFLOW_RUNTIME_PRECEDENCE = ("flag", "project_preference", "default")
+_WORKFLOW_RUNTIME_WORKER_GROUP = InputContract(
+    name="worker-group",
+    kind="option",
+    value_type="string",
+    description=(
+        "Override the worker group used to start the workflow instance. Omit to "
+        "allow enabled project preference before the DS fallback `default` worker "
+        "group."
+    ),
+    discovery_command="dsctl worker-group list",
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback="default",
+    ),
+)
+_WORKFLOW_RUNTIME_TENANT = InputContract(
+    name="tenant",
+    kind="option",
+    value_type="string",
+    description=(
+        "Override the tenant code used to start the workflow instance. Omit to "
+        "allow enabled project preference before the DS fallback `default` tenant."
+    ),
+    discovery_command="dsctl tenant list",
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback="default",
+    ),
+)
+_WORKFLOW_RUNTIME_PRIORITY = InputContract(
+    name="priority",
+    kind="option",
+    value_type="string",
+    description=(
+        "Workflow instance priority. Omit to allow enabled project preference "
+        "before medium."
+    ),
+    choices=("highest", "high", "medium", "low", "lowest"),
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback="medium",
+    ),
+)
+_WORKFLOW_RUNTIME_WARNING_TYPE = InputContract(
+    name="warning-type",
+    kind="option",
+    value_type="string",
+    description=("Warning type. Omit to allow enabled project preference before none."),
+    choices=("none", "success", "failure", "all"),
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback="none",
+    ),
+)
+_WORKFLOW_RUNTIME_WARNING_GROUP = InputContract(
+    name="warning-group-id",
+    kind="option",
+    value_type="integer",
+    description="Warning group id. Omit to allow enabled project preference.",
+    discovery_command="dsctl alert-group list",
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback=None,
+    ),
+)
+_WORKFLOW_RUNTIME_ENVIRONMENT = InputContract(
+    name="environment-code",
+    kind="option",
+    value_type="integer",
+    description="Environment code. Omit to allow enabled project preference.",
+    discovery_command="dsctl environment list",
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback=None,
+    ),
+)
+_SCHEMA_V2_RUNTIME_DEFAULT_FIELDS = frozenset({"priority", "warning-type"})
+
+
+def _workflow_runtime_option(contract: InputContract) -> JsonObject:
+    """Project runtime resolution plus the schema-v2 legacy default fields."""
+    data = option_from_contract(contract)
+    if contract.name not in _SCHEMA_V2_RUNTIME_DEFAULT_FIELDS:
+        return data
+    resolution = contract.resolution
+    if resolution is None:
+        message = f"{contract.name!r} needs resolution for its v2 default projection"
+        raise RuntimeError(message)
+    data["default"] = resolution.fallback
+    return data
+
+
+def _workflow_runtime_options() -> list[JsonObject]:
+    """Build the shared start-time option block in stable CLI order."""
+    return [
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_WORKER_GROUP),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_TENANT),
+        cast(
+            "JsonObject",
+            option(
+                "failure-strategy",
+                value_type="string",
+                description="Failure strategy.",
+                default="continue",
+                choices=["continue", "end"],
+            ),
+        ),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_PRIORITY),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_WARNING_TYPE),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_WARNING_GROUP),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_ENVIRONMENT),
+    ]
 
 
 def schedule_group() -> dict[str, object]:
@@ -791,47 +913,9 @@ def workflow_group() -> dict[str, object]:
                 ],
                 options=[project_option()],
             ),
-            command(
-                "create",
-                action="workflow.create",
-                summary="Create one workflow definition from a YAML file.",
-                options=[
-                    option(
-                        "file",
-                        value_type="path",
-                        description=(
-                            "Path to one workflow YAML specification file. Start "
-                            "from `dsctl template workflow --raw`; add task "
-                            "fragments with `dsctl template task`, and inspect "
-                            "task fields with `dsctl task-type schema TYPE`. "
-                            "Validate the authored DAG with `dsctl lint workflow "
-                            "FILE`."
-                        ),
-                        required=True,
-                        discovery_command="dsctl template workflow --raw",
-                    ),
-                    option(
-                        "project",
-                        value_type="string",
-                        description=(
-                            "Override workflow.project from the YAML file. Run "
-                            "`dsctl project list` to discover values."
-                        ),
-                        selector="name_or_code",
-                        discovery_command="dsctl project list",
-                    ),
-                    option(
-                        "dry-run",
-                        value_type="boolean",
-                        description=(
-                            "Compile and print the full DS request without sending "
-                            "it. For bounded DAG validation, use `dsctl lint "
-                            "workflow FILE`."
-                        ),
-                        default=False,
-                    ),
-                    confirm_risk_option(),
-                ],
+            cast(
+                "dict[str, object]",
+                command_from_contract(_WORKFLOW_CREATE_CONTRACT),
             ),
             command(
                 "edit",
@@ -956,65 +1040,9 @@ def workflow_group() -> dict[str, object]:
                 ],
                 options=[
                     project_option(),
-                    option(
-                        "worker-group",
-                        value_type="string",
-                        description=(
-                            "Override the worker group used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` worker "
-                            "group."
-                        ),
-                        discovery_command="dsctl worker-group list",
-                    ),
-                    option(
-                        "tenant",
-                        value_type="string",
-                        description=(
-                            "Override the tenant code used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` tenant."
-                        ),
-                        discovery_command="dsctl tenant list",
-                    ),
-                    option(
-                        "failure-strategy",
-                        value_type="string",
-                        description="Failure strategy.",
-                        default="continue",
-                        choices=["continue", "end"],
-                    ),
-                    option(
-                        "priority",
-                        value_type="string",
-                        description="Workflow instance priority.",
-                        default="medium",
-                        choices=["highest", "high", "medium", "low", "lowest"],
-                    ),
-                    option(
-                        "warning-type",
-                        value_type="string",
-                        description="Warning type.",
-                        default="none",
-                        choices=["none", "success", "failure", "all"],
-                    ),
-                    option(
-                        "warning-group-id",
-                        value_type="integer",
-                        description=(
-                            "Warning group id. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl alert-group list",
-                    ),
-                    option(
-                        "environment-code",
-                        value_type="integer",
-                        description=(
-                            "Environment code. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl environment list",
+                    *cast(
+                        "list[dict[str, object]]",
+                        _workflow_runtime_options(),
                     ),
                     option(
                         "param",
@@ -1079,65 +1107,9 @@ def workflow_group() -> dict[str, object]:
                         default="self",
                         choices=["self", "pre", "post"],
                     ),
-                    option(
-                        "worker-group",
-                        value_type="string",
-                        description=(
-                            "Override the worker group used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` worker "
-                            "group."
-                        ),
-                        discovery_command="dsctl worker-group list",
-                    ),
-                    option(
-                        "tenant",
-                        value_type="string",
-                        description=(
-                            "Override the tenant code used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` tenant."
-                        ),
-                        discovery_command="dsctl tenant list",
-                    ),
-                    option(
-                        "failure-strategy",
-                        value_type="string",
-                        description="Failure strategy.",
-                        default="continue",
-                        choices=["continue", "end"],
-                    ),
-                    option(
-                        "priority",
-                        value_type="string",
-                        description="Workflow instance priority.",
-                        default="medium",
-                        choices=["highest", "high", "medium", "low", "lowest"],
-                    ),
-                    option(
-                        "warning-type",
-                        value_type="string",
-                        description="Warning type.",
-                        default="none",
-                        choices=["none", "success", "failure", "all"],
-                    ),
-                    option(
-                        "warning-group-id",
-                        value_type="integer",
-                        description=(
-                            "Warning group id. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl alert-group list",
-                    ),
-                    option(
-                        "environment-code",
-                        value_type="integer",
-                        description=(
-                            "Environment code. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl environment list",
+                    *cast(
+                        "list[dict[str, object]]",
+                        _workflow_runtime_options(),
                     ),
                     option(
                         "param",
@@ -1263,65 +1235,9 @@ def workflow_group() -> dict[str, object]:
                         default="desc",
                         choices=["desc", "asc"],
                     ),
-                    option(
-                        "worker-group",
-                        value_type="string",
-                        description=(
-                            "Override the worker group used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` worker "
-                            "group."
-                        ),
-                        discovery_command="dsctl worker-group list",
-                    ),
-                    option(
-                        "tenant",
-                        value_type="string",
-                        description=(
-                            "Override the tenant code used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` tenant."
-                        ),
-                        discovery_command="dsctl tenant list",
-                    ),
-                    option(
-                        "failure-strategy",
-                        value_type="string",
-                        description="Failure strategy.",
-                        default="continue",
-                        choices=["continue", "end"],
-                    ),
-                    option(
-                        "priority",
-                        value_type="string",
-                        description="Workflow instance priority.",
-                        default="medium",
-                        choices=["highest", "high", "medium", "low", "lowest"],
-                    ),
-                    option(
-                        "warning-type",
-                        value_type="string",
-                        description="Warning type.",
-                        default="none",
-                        choices=["none", "success", "failure", "all"],
-                    ),
-                    option(
-                        "warning-group-id",
-                        value_type="integer",
-                        description=(
-                            "Warning group id. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl alert-group list",
-                    ),
-                    option(
-                        "environment-code",
-                        value_type="integer",
-                        description=(
-                            "Environment code. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl environment list",
+                    *cast(
+                        "list[dict[str, object]]",
+                        _workflow_runtime_options(),
                     ),
                     option(
                         "param",

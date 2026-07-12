@@ -4,6 +4,7 @@ import shlex
 from collections.abc import Callable, Mapping, Sequence
 from typing import TypedDict, TypeGuard
 
+from dsctl.command_contract import COMMAND_CATALOG, CommandBindingError
 from dsctl.support.json_types import JsonObject, JsonValue
 
 MAX_NEXT_ACTIONS = 3
@@ -43,7 +44,10 @@ def next_actions_for(
     command_prefix = _command_prefix(env_file)
     if command_prefix is None:
         return []
-    candidates = rule(resolved, data, command_prefix)
+    try:
+        candidates = rule(resolved, data, command_prefix)
+    except CommandBindingError:
+        return []
     actions: list[NextActionData] = []
     seen_commands: set[str] = set()
     for candidate in candidates:
@@ -123,23 +127,32 @@ def _workflow_create_navigation(
     if project_code is None or file is None:
         return []
 
-    argv = [
-        *command_prefix,
-        "--compact",
-        "--columns",
-        "code,name,releaseState",
-        "workflow",
-        "create",
-        "--file",
-        file,
-        "--project",
-        str(project_code),
-    ]
     confirmation_args = _workflow_create_confirmation_args(data_object)
     if confirmation_args is None:
         return []
-    argv.extend(confirmation_args)
-    return [_action("workflow.create", argv, mutates=True)]
+    global_values: dict[str, str | bool] = {
+        "compact": True,
+        "columns": "code,name,releaseState",
+    }
+    if len(command_prefix) == 3:
+        global_values["env-file"] = command_prefix[2]
+    values: dict[str, str | int] = {
+        "file": file,
+        "project": str(project_code),
+    }
+    if confirmation_args:
+        values["confirm-risk"] = confirmation_args[1]
+    return [
+        {
+            "action": "workflow.create",
+            "command": COMMAND_CATALOG.render(
+                "workflow.create",
+                global_values=global_values,
+                values=values,
+            ),
+            "mutates": True,
+        }
+    ]
 
 
 def _workflow_create_confirmation_args(
@@ -355,7 +368,15 @@ def _command_prefix(env_file: str | None) -> CommandPrefix | None:
         return ("dsctl",)
     if not env_file:
         return None
-    return ("dsctl", "--env-file", env_file)
+    try:
+        normalized = COMMAND_CATALOG.validate_global_values({"env-file": env_file})[
+            "env-file"
+        ]
+    except CommandBindingError:
+        return None
+    if not isinstance(normalized, str):
+        return None
+    return ("dsctl", "--env-file", normalized)
 
 
 def _object(value: JsonValue) -> Mapping[str, JsonValue] | None:
