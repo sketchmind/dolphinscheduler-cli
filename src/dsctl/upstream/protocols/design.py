@@ -245,16 +245,8 @@ class WorkflowPayloadRecord(WorkflowRecord, Protocol):
         """Workflow release state."""
 
     @property
-    def scheduleReleaseState(self) -> StringEnumValue | None:  # noqa: N802
-        """Schedule release state for this workflow."""
-
-    @property
     def executionType(self) -> StringEnumValue | None:  # noqa: N802
         """Workflow execution type."""
-
-    @property
-    def schedule(self) -> ScheduleRecord | None:
-        """Attached schedule data when available."""
 
 
 class WorkflowListRecord(WorkflowRecord, Protocol):

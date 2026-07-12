@@ -290,6 +290,20 @@ operations separate avoids an ambiguous generic `list`, prevents rich public
 discovery from adding cost to every name lookup, and leaves pagination/output
 shaping in the service layer without N+1 detail requests.
 
+Workflow detail and DAG responses are not authoritative for attached schedules
+in DS 3.4.1; only the independently persisted schedule resource and rich
+workflow paging query join that state. A service-internal attached-schedule
+lookup is therefore the single seam for workflow get/describe/digest/export,
+edit, release, and delete behavior. It performs one exact project/workflow
+schedule query, enforces the DS zero-or-one invariant, and treats lookup or
+shape failure as an error rather than reusing `schedule: null`. Selector
+resolution stays on `list_refs` and does not pay this cost. Workflow create
+reuses the schedule returned by its own mutation, while workflow offline
+refreshes the attached schedule after DS applies its cascading state change.
+Definition edit compilation deliberately excludes this independently persisted
+schedule from its live baseline; schedule constraints and output shaping consume
+the authoritative record at the workflow service boundary instead.
+
 Workflow task identity allocation is split across the service and upstream
 layers. The compiler always receives an explicit allocator. Lint and dry-run
 use deterministic preview-only codes, while an applied workflow create,

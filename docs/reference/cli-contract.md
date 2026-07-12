@@ -3177,9 +3177,13 @@ Selection rules:
 Output:
 
 - default output returns the workflow payload in the standard JSON envelope
-- every non-null nested workflow `schedule` summary includes an `id` field;
-  it may be `null` when the upstream read payload omits schedule identity, and
-  workflow YAML export intentionally omits that persisted identity
+- the service resolves the independently persisted attached schedule instead
+  of trusting the DS workflow-detail payload; `data.schedule=null` therefore
+  means the authoritative lookup confirmed that no schedule exists
+- every non-null nested workflow `schedule` summary includes a positive numeric
+  `id`; workflow YAML export intentionally omits that persisted identity
+- attached-schedule lookup errors fail the command with a structured error;
+  they are never downgraded to `schedule:null`
 
 ## `dsctl workflow export`
 
@@ -3195,7 +3199,13 @@ Selection rules:
 Output:
 
 - writes only the workflow YAML document
-- use it as the starting point for `workflow edit --file`
+- an export without `schedule:` can be used directly as the starting point for
+  `workflow edit --file`
+- an attached schedule is preserved as a `schedule:` block from the
+  authoritative schedule resource; lookup failure does not emit partial YAML
+- a scheduled export is a complete clone/create document; remove its
+  `schedule:` block before passing it to `workflow edit --file`, because
+  workflow edit intentionally leaves schedule lifecycle to schedule commands
 
 ## `dsctl workflow describe`
 
@@ -3206,6 +3216,8 @@ Use `dsctl project list` and `dsctl workflow list` to discover selectors.
 - `data.workflow`
 - `data.tasks`
 - `data.relations`
+- `data.workflow.schedule` and `scheduleReleaseState` use the same authoritative
+  zero-or-one schedule lookup as `workflow get`
 
 ## `dsctl workflow digest`
 
@@ -3233,6 +3245,7 @@ Current guarantees:
 - omits verbose task payload fields such as `taskParams` and retry/timeout
   details to reduce context size before a caller decides whether to fetch the
   full `workflow describe` or `workflow export` view
+- `data.workflow.schedule` uses the authoritative attached-schedule lookup
 
 ## `dsctl workflow create`
 
@@ -3535,6 +3548,8 @@ patch:
   `sub_workflow_local_params_not_child_inputs` codes as `lint workflow`
 - workflow edit does not mutate the attached schedule; schedule lifecycle stays
   on `schedule update|online|offline`
+- schedule constraints, impacts, and returned workflow payloads use one
+  authoritative lookup performed before any edit mutation
 
 Current `data.diff` fields:
 
@@ -3581,6 +3596,8 @@ Rules:
 - `--force` is required
 - the CLI fetches the current workflow before deletion and returns that payload
   in `data.workflow`
+- deletion resolves the attached schedule before sending the mutation; lookup
+  failure is fail-closed and sends no delete request
 - the workflow must be offline before deletion
 - workflows with online schedules must have their schedule taken offline first
 - workflows with running workflow instances cannot be deleted until those
@@ -4642,6 +4659,11 @@ Rules:
   adds one warning reminding the caller that `schedule online` is still
   required; the aligned `warning_details[]` item uses code
   `workflow_online_leaves_schedule_offline`
+- the returned workflow payload includes the authoritative attached schedule;
+  bringing a workflow online does not bring that schedule online
+- if the mutation succeeds but workflow or schedule refresh fails, the
+  structured error reports `mutation_applied=true` and tells callers to verify
+  state before retrying
 
 ## `dsctl workflow offline`
 
@@ -4662,6 +4684,9 @@ Rules:
   succeeds and adds one warning because DS also forces that schedule offline;
   the aligned `warning_details[]` item uses code
   `workflow_offline_also_offlines_schedule`
+- when a schedule exists, the CLI refreshes it after the workflow mutation so
+  the returned payload reflects DS's cascading `OFFLINE` state; if that refresh
+  fails, the structured error reports `mutation_applied=true`
 
 ## `dsctl workflow-instance list`
 
