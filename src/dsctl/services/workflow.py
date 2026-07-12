@@ -81,6 +81,7 @@ from dsctl.services._workflow_mutation import (
     compile_workflow_mutation_plan,
     load_workflow_edit_spec_or_error,
     load_workflow_patch_or_error,
+    prepare_workflow_file_edit,
 )
 from dsctl.services._workflow_render import (
     WorkflowData,
@@ -1034,11 +1035,20 @@ def _edit_workflow_result(
         action="workflow.edit",
         phase="pre_mutation",
     )
+    definition_spec = (
+        None
+        if spec is None
+        else prepare_workflow_file_edit(
+            spec,
+            attached_schedule=attached_schedule,
+            workflow_release_state=enum_value(live_payload.releaseState),
+        )
+    )
     mutation = _compile_workflow_edit_mutation(
         dag=dag,
         project=target.resolved_project,
         patch=patch,
-        spec=spec,
+        spec=definition_spec,
         allocate_task_codes=preview_task_codes,
     )
     desired_release_state = mutation.payload["releaseState"]
@@ -1148,7 +1158,7 @@ def _edit_workflow_result(
         dag=dag,
         project=target.resolved_project,
         patch=patch,
-        spec=spec,
+        spec=definition_spec,
         allocate_task_codes=lambda count: allocate_server_task_codes(
             count,
             adapter=runtime.upstream.tasks,

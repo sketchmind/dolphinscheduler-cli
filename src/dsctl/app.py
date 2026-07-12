@@ -1,8 +1,12 @@
-import sys
-from pathlib import Path
-from typing import Annotated, cast
+from __future__ import annotations
+
+from pathlib import (
+    Path,  # noqa: TC003 - Typer resolves callback annotations at runtime.
+)
+from typing import TYPE_CHECKING, Annotated, cast
 
 import typer
+from typer.core import TyperCommand, TyperGroup, TyperOption
 
 from dsctl.cli_runtime import AppState, set_app_state
 from dsctl.command_contract import COMMAND_CATALOG, CommandBindingError
@@ -15,11 +19,11 @@ from dsctl.output_formats import (
     parse_columns,
 )
 
+if TYPE_CHECKING:
+    from typer._click.core import Context as TyperClickContext
+
 _ROOT_OPTION_ARITY = {
     option.flag: option.arity for option in COMMAND_CATALOG.global_options
-}
-_ROOT_OPTION_EXAMPLES = {
-    option.flag: option.example for option in COMMAND_CATALOG.global_options
 }
 _ENV_FILE = COMMAND_CATALOG.global_option("env-file").input
 _OUTPUT_FORMAT = COMMAND_CATALOG.global_option("output-format").input
@@ -38,8 +42,18 @@ _ROOT_HELP = (
     "depend on that mutation."
 )
 
+
+class _GlobalOptionGroup(TyperGroup):
+    """Let root rendering/config options appear anywhere before `--`."""
+
+    def parse_args(self, ctx: TyperClickContext, args: list[str]) -> list[str]:
+        """Move catalogued root options ahead of the command before Click parses."""
+        return super().parse_args(ctx, _normalize_root_options(self, args))
+
+
 app = typer.Typer(
     add_completion=False,
+    cls=_GlobalOptionGroup,
     help=_ROOT_HELP,
     no_args_is_help=True,
     pretty_exceptions_enable=False,
@@ -87,10 +101,6 @@ def main_callback(
 
 def main() -> None:
     """Run the Typer application."""
-    misplaced = _misplaced_root_option(sys.argv[1:])
-    if misplaced is not None:
-        _show_misplaced_root_option_error(misplaced)
-        raise SystemExit(2)
     app()
 
 
@@ -109,30 +119,46 @@ def _parse_output_format(value: str) -> OutputFormat:
     return cast("OutputFormat", normalized)
 
 
-def _misplaced_root_option(args: list[str]) -> str | None:
-    """Return a root-only option that appears after the command path."""
-    seen_command = False
+def _normalize_root_options(
+    root: TyperGroup,
+    args: list[str],
+) -> list[str]:
+    """Move unambiguous root options while preserving command option values."""
+    root_args: list[str] = []
+    command_args: list[str] = []
+    current_command: TyperCommand | TyperGroup = root
     index = 0
     while index < len(args):
         arg = args[index]
         if arg == "--":
-            return None
+            command_args.extend(args[index:])
+            break
 
-        option = _root_option_name(arg)
-        if option is not None:
-            if seen_command:
-                return option
-            arity = _ROOT_OPTION_ARITY[option]
-            index += 1 if "=" in arg else 1 + arity
+        local_arity = _command_option_arity(current_command, arg)
+        root_option = _root_option_name(arg)
+        if local_arity is not None and (
+            current_command is not root or root_option is None
+        ):
+            option_end = index + (1 if "=" in arg else 1 + local_arity)
+            command_args.extend(args[index:option_end])
+            index = option_end
             continue
 
-        if arg.startswith("-"):
-            index += 1
+        if root_option is not None:
+            arity = _ROOT_OPTION_ARITY[root_option]
+            option_end = index + (1 if "=" in arg else 1 + arity)
+            root_args.extend(args[index:option_end])
+            index = option_end
             continue
 
-        seen_command = True
+        command_args.append(arg)
+        if isinstance(current_command, TyperGroup) and not arg.startswith("-"):
+            child = current_command.commands.get(arg)
+            if child is None:
+                return args
+            current_command = cast("TyperCommand | TyperGroup", child)
         index += 1
-    return None
+    return [*root_args, *command_args]
 
 
 def _root_option_name(token: str) -> str | None:
@@ -142,12 +168,19 @@ def _root_option_name(token: str) -> str | None:
     return None
 
 
-def _show_misplaced_root_option_error(option: str) -> None:
-    example = _ROOT_OPTION_EXAMPLES[option]
-    typer.echo(
-        (
-            f"{option} is a global dsctl option. Put it before the command "
-            f"group, for example: {example}"
-        ),
-        err=True,
-    )
+def _command_option_arity(
+    command: TyperCommand | TyperGroup,
+    token: str,
+) -> int | None:
+    """Return how many following tokens one command-local option consumes."""
+    option_name = token.split("=", 1)[0]
+    for parameter in command.params:
+        if not isinstance(parameter, TyperOption):
+            continue
+        option_names = (*parameter.opts, *parameter.secondary_opts)
+        if option_name not in option_names:
+            continue
+        if parameter.is_flag or parameter.count:
+            return 0
+        return 0 if "=" in token else parameter.nargs
+    return None

@@ -141,7 +141,8 @@ Rules:
   and fall back to runtime shape inference for simple list payloads
 - table and TSV write only row data to stdout; partial/non-first-page summaries
   and warnings are written to stderr
-- global options are passed before the command group, for example:
+- global options may appear before or after the command path; generated commands
+  use the canonical prefix form, for example:
 
 ```bash
 dsctl --output-format table workflow-instance list --project etl-prod
@@ -187,7 +188,8 @@ Rules:
   size before relying on layout compaction
 - raw artifact success output is unchanged
 - `--compact` with table or TSV is a `user_input_error`
-- like every global option, it must appear before the command group
+- like every global option, it may appear before or after the command path; `--`
+  still ends option processing
 
 Recommended agent usage:
 
@@ -594,7 +596,7 @@ Current guarantees:
 
 - describes only the current stable surface
 - bounded `global_options` repeat only the four global flags required to build
-  an invocation, and every entry declares `placement: "before_command"`
+  an invocation, and every entry declares `placement: "anywhere"`
 - `--output-format`, `--columns`, and `--compact` therefore remain discoverable
   even when an agent jumps directly to an action-local contract
 - the compact option declares its structured requirement that
@@ -3187,7 +3189,8 @@ Output:
 
 ## `dsctl workflow export`
 
-Exports one workflow by name or numeric code as an editable YAML document.
+Exports one workflow by name or numeric code as raw YAML for clone/create
+or read-only schedule-aware definition editing.
 
 Selection rules:
 
@@ -3199,13 +3202,13 @@ Selection rules:
 Output:
 
 - writes only the workflow YAML document
-- an export without `schedule:` can be used directly as the starting point for
-  `workflow edit --file`
+- global display options do not change successful raw YAML; they still shape
+  structured errors
 - an attached schedule is preserved as a `schedule:` block from the
   authoritative schedule resource; lookup failure does not emit partial YAML
-- a scheduled export is a complete clone/create document; remove its
-  `schedule:` block before passing it to `workflow edit --file`, because
-  workflow edit intentionally leaves schedule lifecycle to schedule commands
+- the same document can be passed directly to `workflow create --file` or
+  `workflow edit --file`: create treats `schedule:` as desired state, while edit
+  verifies it as a read-only snapshot and never changes the schedule
 
 ## `dsctl workflow describe`
 
@@ -3404,7 +3407,14 @@ Rules:
     `tasks.rename[]` when task identity must survive a name change
   - workflow rename and same-name task type changes also require
     `--confirm-risk`
-  - `schedule:` is rejected; use schedule commands for schedule lifecycle
+  - an exported `schedule:` is a read-only concurrency snapshot: matching
+    values are stripped before definition compile, while changed or missing
+    attached schedule state is a pre-mutation `conflict`
+  - deleting or nulling one exported schedule field is also a snapshot mismatch;
+    remove the complete `schedule:` block to preserve the schedule without
+    snapshot validation
+  - use schedule commands for intentional schedule lifecycle or configuration
+    changes
 - target workflow selection for `--patch`:
   - explicit positional `WORKFLOW`
   - then workflow context only when project also came from context
@@ -3415,6 +3425,8 @@ Rules:
 - project selection for `--file` is `flag > workflow.project > context`; if
   `--project` and `workflow.project` both exist and disagree, the command fails
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
+- for a bounded dry-run review that omits the large compiled request, use
+  `--columns diff,no_change,workflow_state_constraints,schedule_impacts`
 - current stable patch operations are:
   - `patch.workflow.set`
   - `patch.tasks.create`
@@ -3548,6 +3560,16 @@ patch:
   `sub_workflow_local_params_not_child_inputs` codes as `lint workflow`
 - workflow edit does not mutate the attached schedule; schedule lifecycle stays
   on `schedule update|online|offline`
+- a `schedule:` block from workflow export is accepted as a read-only snapshot;
+  edit verifies its fields against the authoritative attached schedule, removes
+  it from the definition compiler input, and fails before mutation when it is
+  missing or changed
+- omitted and explicit-null fields inside that block compare as null rather than
+  acting as wildcards; only omitting the complete block opts out of validation
+- the `ONLINE` schedule state in an older export may match a current `OFFLINE`
+  schedule only when the workflow is offline and the document still requests
+  the workflow itself `ONLINE`, because DS workflow offline cascades that exact
+  schedule transition; a schedule-only lifecycle change remains a conflict
 - schedule constraints, impacts, and returned workflow payloads use one
   authoritative lookup performed before any edit mutation
 

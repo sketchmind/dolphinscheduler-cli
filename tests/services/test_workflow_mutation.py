@@ -5,15 +5,18 @@ import pytest
 from tests.fakes import (
     FakeDag,
     FakeEnumValue,
+    FakeSchedule,
     FakeTaskDefinition,
     FakeWorkflow,
     FakeWorkflowTaskRelation,
 )
 
-from dsctl.errors import ApiTransportError, UserInputError
+from dsctl.errors import ApiTransportError, ConflictError, UserInputError
+from dsctl.models import WorkflowSpec
 from dsctl.services._workflow_mutation import (
     compile_workflow_mutation_plan,
     load_workflow_patch_or_error,
+    prepare_workflow_file_edit,
 )
 from dsctl.services.resolver import ResolvedProject
 
@@ -91,6 +94,126 @@ def test_load_workflow_patch_or_error_preserves_file_context(
         load_workflow_patch_or_error(patch_file)
 
     assert exc_info.value.details == {"file": str(patch_file)}
+
+
+def test_prepare_workflow_file_edit_rejects_schedule_only_online_intent() -> None:
+    spec = WorkflowSpec.model_validate(
+        {
+            "workflow": {
+                "name": "daily-sync",
+                "release_state": "OFFLINE",
+            },
+            "tasks": [
+                {
+                    "name": "extract",
+                    "type": "SHELL",
+                    "command": "echo extract",
+                }
+            ],
+            "schedule": {
+                "cron": "0 0 0 * * ?",
+                "timezone": "UTC",
+                "start": "2026-01-01 00:00:00",
+                "end": "2026-12-31 23:59:59",
+                "release_state": "ONLINE",
+            },
+        }
+    )
+    attached_schedule = FakeSchedule(
+        id=23,
+        workflow_definition_code_value=101,
+        project_code_value=7,
+        start_time_value="2026-01-01 00:00:00",
+        end_time_value="2026-12-31 23:59:59",
+        timezone_id_value="UTC",
+        crontab_value="0 0 0 * * ?",
+        release_state_value=FakeEnumValue("OFFLINE"),
+    )
+
+    with pytest.raises(ConflictError) as captured:
+        prepare_workflow_file_edit(
+            spec,
+            attached_schedule=attached_schedule,
+            workflow_release_state="OFFLINE",
+        )
+
+    assert captured.value.details["mismatched_fields"] == ["release_state"]
+
+
+@pytest.mark.parametrize(
+    ("field_name", "explicit_null"),
+    [
+        ("failure_strategy", False),
+        ("failure_strategy", True),
+        ("priority", False),
+        ("priority", True),
+        ("release_state", False),
+        ("release_state", True),
+    ],
+)
+def test_prepare_workflow_file_edit_rejects_weakened_schedule_snapshot(
+    field_name: str,
+    *,
+    explicit_null: bool,
+) -> None:
+    schedule: dict[str, object] = {
+        "cron": "0 0 0 * * ?",
+        "timezone": "UTC",
+        "start": "2026-01-01 00:00:00",
+        "end": "2026-12-31 23:59:59",
+        "failure_strategy": "END",
+        "priority": "HIGH",
+        "release_state": "ONLINE",
+    }
+    if explicit_null:
+        schedule[field_name] = None
+    else:
+        del schedule[field_name]
+    spec = WorkflowSpec.model_validate(
+        {
+            "workflow": {
+                "name": "daily-sync",
+                "release_state": "ONLINE",
+            },
+            "tasks": [
+                {
+                    "name": "extract",
+                    "type": "SHELL",
+                    "command": "echo extract",
+                }
+            ],
+            "schedule": schedule,
+        }
+    )
+    attached_schedule = FakeSchedule(
+        id=23,
+        workflow_definition_code_value=101,
+        project_code_value=7,
+        start_time_value="2026-01-01 00:00:00",
+        end_time_value="2026-12-31 23:59:59",
+        timezone_id_value="UTC",
+        crontab_value="0 0 0 * * ?",
+        failure_strategy_value=FakeEnumValue("END"),
+        workflow_instance_priority_value=FakeEnumValue("HIGH"),
+        release_state_value=FakeEnumValue("ONLINE"),
+    )
+
+    with pytest.raises(ConflictError) as captured:
+        prepare_workflow_file_edit(
+            spec,
+            attached_schedule=attached_schedule,
+            workflow_release_state="ONLINE",
+        )
+
+    assert captured.value.details["mismatched_fields"] == [field_name]
+    current_value = {
+        "failure_strategy": "END",
+        "priority": "HIGH",
+        "release_state": "ONLINE",
+    }[field_name]
+    assert captured.value.details["mismatches"] == {
+        field_name: {"file": None, "current": current_value}
+    }
 
 
 def test_compile_workflow_mutation_plan_preserves_existing_task_identity(

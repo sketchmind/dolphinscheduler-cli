@@ -275,7 +275,16 @@ def test_workflow_export_help_points_to_workflow_discovery() -> None:
     help_text = normalize_cli_help(result.stdout)
     assert "workflow list" in help_text
     assert "--project" in help_text
+    assert "raw YAML" in help_text
+    assert "read-only schedule-aware edit" in help_text
+    assert "display options do not alter" in help_text
     assert "--raw" not in help_text
+
+    edit_result = runner.invoke(app, ["workflow", "edit", "--help"])
+    assert edit_result.exit_code == 0
+    edit_help = normalize_cli_help(edit_result.stdout)
+    assert "read-only snapshot" in edit_help
+    assert "--columns diff,no_change" in edit_help
 
 
 def test_workflow_digest_command_returns_compact_graph_summary() -> None:
@@ -1226,6 +1235,45 @@ patch:
             "current_schedule_release_state": "ONLINE",
         },
     ]
+
+
+def test_workflow_edit_command_supports_bounded_dry_run_projection(
+    tmp_path: Path,
+) -> None:
+    patch_path = tmp_path / "workflow.patch.yaml"
+    patch_path.write_text(
+        """
+patch:
+  workflow:
+    set:
+      description: Daily ETL workflow v2
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "workflow",
+            "edit",
+            "--patch",
+            str(patch_path),
+            "--dry-run",
+            "--columns",
+            "diff,no_change,workflow_state_constraints,schedule_impacts",
+            "--compact",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert set(payload["data"]) == {
+        "diff",
+        "no_change",
+        "workflow_state_constraints",
+        "schedule_impacts",
+    }
+    assert "request" not in payload["data"]
 
 
 def test_workflow_edit_command_can_dry_run_full_file_diff(tmp_path: Path) -> None:

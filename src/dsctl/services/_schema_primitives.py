@@ -143,7 +143,7 @@ def bounded_global_option_from_contract(
     """Project one root option into the bounded invocation schema."""
     data: JsonObject = {
         "flag": contract.flag,
-        "placement": "before_command",
+        "placement": "anywhere",
     }
     input_contract = contract.input
     if input_contract.value_name is not None:
@@ -168,7 +168,7 @@ def full_global_option_from_contract(
     """Project one root option into the expanded schema representation."""
     input_contract = contract.input
     data = option_from_contract(input_contract)
-    data["placement"] = "before_command"
+    data["placement"] = "anywhere"
     if contract.requirement is not None:
         required_name, required_value = contract.requirement
         data["requires"] = {f"--{required_name}": required_value}

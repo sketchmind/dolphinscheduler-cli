@@ -314,8 +314,9 @@ definitions.
       detail and DAG responses do not join the independently persisted
       schedule; reads and safety-sensitive mutations fail closed when lookup is
       unavailable, and selector resolution remains lightweight.
-- [ ] Add an explicit definition-only export/edit handoff so scheduled workflow
-      exports do not require callers to remove the `schedule:` block manually.
+- [x] Make complete scheduled workflow exports valid full-file edit inputs by
+      verifying `schedule:` as a read-only snapshot before definition compile;
+      schedule changes remain explicit schedule commands.
 
 **Done when:**
 ```bash

@@ -452,8 +452,9 @@ _GLOBAL_OPTIONS = (
             kind="option",
             value_type="path",
             description=(
-                "Global option; place before COMMAND. Load DS_* settings from an "
-                "env file before reading the process environment."
+                "Global option; may appear before or after the command path. Load "
+                "DS_* settings from an env file before reading the process "
+                "environment."
             ),
             parse_default=None,
             value_name="PATH",
@@ -476,8 +477,9 @@ _GLOBAL_OPTIONS = (
             kind="option",
             value_type="string",
             description=(
-                "Global option; place before COMMAND. Render the standard envelope "
-                "as json, or render row/object views as table/tsv."
+                "Global option; may appear before or after the command path. Render "
+                "the standard envelope as json, or render row/object views as "
+                "table/tsv."
             ),
             parse_default="json",
             fixed_default="json",
@@ -496,9 +498,9 @@ _GLOBAL_OPTIONS = (
             kind="option",
             value_type="string",
             description=(
-                "Global option; place before COMMAND. Comma-separated row/object "
-                "fields to render or project. In json mode this narrows the "
-                "standard envelope data payload."
+                "Global option; may appear before or after the command path. "
+                "Comma-separated row/object fields to render or project. In json "
+                "mode this narrows the standard envelope data payload."
             ),
             parse_default=None,
             value_name="CSV",
@@ -514,8 +516,8 @@ _GLOBAL_OPTIONS = (
             kind="option",
             value_type="boolean",
             description=(
-                "Global option; place before COMMAND. Emit JSON without indentation; "
-                "valid only with --output-format json."
+                "Global option; may appear before or after the command path. Emit "
+                "JSON without indentation; valid only with --output-format json."
             ),
             parse_default=False,
             fixed_default=False,

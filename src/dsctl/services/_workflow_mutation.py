@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, TypedDict
 
-from dsctl.errors import UserInputError
+from dsctl.cli_surface import SCHEDULE_RESOURCE, WORKFLOW_RESOURCE
+from dsctl.errors import ConflictError, UserInputError
 from dsctl.models.workflow_patch import load_workflow_patch
 from dsctl.models.workflow_spec import load_workflow_spec
+from dsctl.services._serialization import enum_value
 from dsctl.services._workflow_compile import (
     WorkflowUpdatePayload,
     compile_workflow_update_payload,
@@ -28,9 +30,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from dsctl.models.workflow_patch import WorkflowPatchSpec
-    from dsctl.models.workflow_spec import WorkflowSpec
+    from dsctl.models.workflow_spec import WorkflowScheduleSpec, WorkflowSpec
     from dsctl.services.resolver import ResolvedProject
-    from dsctl.upstream.protocol import WorkflowDagRecord
+    from dsctl.upstream.protocol import ScheduleRecord, WorkflowDagRecord
 
 
 WorkflowMutationInputMode = Literal["patch", "file"]
@@ -104,20 +106,118 @@ def load_workflow_edit_spec_or_error(path: Path) -> WorkflowSpec:
             details={"file": str(path)},
             suggestion=_WORKFLOW_FILE_PARSE_SUGGESTION,
         ) from exc
-    if spec.schedule is not None:
-        message = (
-            "workflow edit --file does not mutate schedule blocks; remove "
-            "`schedule:` and use schedule commands separately."
-        )
-        raise UserInputError(
-            message,
-            details={"file": str(path), "unsupported_block": "schedule"},
-            suggestion=(
-                "Remove the schedule block, then use `dsctl schedule update|online|"
-                "offline` for schedule lifecycle changes."
-            ),
-        )
     return spec
+
+
+def prepare_workflow_file_edit(
+    spec: WorkflowSpec,
+    *,
+    attached_schedule: ScheduleRecord | None,
+    workflow_release_state: str | None,
+) -> WorkflowSpec:
+    """Verify an optional read-only schedule snapshot and return definition state."""
+    schedule_spec = spec.schedule
+    if schedule_spec is None:
+        return spec
+    if attached_schedule is None:
+        message = (
+            "Workflow edit was not sent because the file contains a schedule "
+            "snapshot but the workflow has no attached schedule."
+        )
+        raise ConflictError(
+            message,
+            details={
+                "resource": WORKFLOW_RESOURCE,
+                "dependency_resource": SCHEDULE_RESOURCE,
+                "reason": "attached_schedule_missing",
+                "mutation_applied": False,
+            },
+            suggestion=_WORKFLOW_SCHEDULE_SNAPSHOT_CONFLICT_SUGGESTION,
+        )
+
+    document_values = _workflow_schedule_spec_snapshot(schedule_spec)
+    current_values = _workflow_schedule_record_snapshot(attached_schedule)
+    mismatches: dict[str, dict[str, str | None]] = {}
+    for field_name, document_value in document_values.items():
+        current_value = current_values[field_name]
+        if document_value == current_value:
+            continue
+        if (
+            field_name == "release_state"
+            and document_value == "ONLINE"
+            and current_value == "OFFLINE"
+            and workflow_release_state == "OFFLINE"
+            and spec.workflow.release_state.value == "ONLINE"
+        ):
+            continue
+        mismatches[field_name] = {
+            "file": document_value,
+            "current": current_value,
+        }
+
+    if mismatches:
+        message = (
+            "Workflow edit was not sent because the file's read-only schedule "
+            "snapshot differs from the attached schedule."
+        )
+        raise ConflictError(
+            message,
+            details={
+                "resource": WORKFLOW_RESOURCE,
+                "dependency_resource": SCHEDULE_RESOURCE,
+                "reason": "schedule_snapshot_mismatch",
+                "schedule_id": attached_schedule.id,
+                "mismatched_fields": sorted(mismatches),
+                "mismatches": mismatches,
+                "mutation_applied": False,
+            },
+            suggestion=_WORKFLOW_SCHEDULE_SNAPSHOT_CONFLICT_SUGGESTION,
+        )
+    return spec.model_copy(update={"schedule": None})
+
+
+_WORKFLOW_SCHEDULE_SNAPSHOT_CONFLICT_SUGGESTION = (
+    "Export the workflow again and reapply only definition edits, or remove the "
+    "schedule block to preserve its current state without snapshot validation. "
+    "Use `dsctl schedule update|online|offline` for schedule changes."
+)
+
+
+def _workflow_schedule_spec_snapshot(
+    schedule: WorkflowScheduleSpec,
+) -> dict[str, str | None]:
+    release_state = (
+        None
+        if schedule.release_state is None and schedule.enabled is None
+        else schedule.desired_release_state().value
+    )
+    return {
+        "cron": schedule.cron,
+        "timezone": schedule.timezone,
+        "start": schedule.start,
+        "end": schedule.end,
+        "failure_strategy": (
+            None
+            if schedule.failure_strategy is None
+            else schedule.failure_strategy.value
+        ),
+        "priority": None if schedule.priority is None else schedule.priority.value,
+        "release_state": release_state,
+    }
+
+
+def _workflow_schedule_record_snapshot(
+    schedule: ScheduleRecord,
+) -> dict[str, str | None]:
+    return {
+        "cron": schedule.crontab,
+        "timezone": schedule.timezoneId,
+        "start": schedule.startTime,
+        "end": schedule.endTime,
+        "failure_strategy": enum_value(schedule.failureStrategy),
+        "priority": enum_value(schedule.workflowInstancePriority),
+        "release_state": enum_value(schedule.releaseState),
+    }
 
 
 def load_workflow_instance_edit_spec_or_error(path: Path) -> WorkflowSpec:
