@@ -34,8 +34,8 @@ if TYPE_CHECKING:
     from dsctl.upstream.protocol import (
         ScheduleRecord,
         WorkflowDagRecord,
+        WorkflowListRecord,
         WorkflowPayloadRecord,
-        WorkflowRecord,
     )
 
 
@@ -45,6 +45,9 @@ class WorkflowListItem(TypedDict):
     code: int
     name: str | None
     version: int | None
+    releaseState: str | None
+    scheduleReleaseState: str | None
+    scheduleId: int | None
 
 
 class ScheduleData(TypedDict):
@@ -99,8 +102,9 @@ class WorkflowDescribeData(TypedDict):
     relations: list[WorkflowRelationData]
 
 
-def serialize_workflow_ref(workflow: WorkflowRecord) -> WorkflowListItem:
+def serialize_workflow_list_item(workflow: WorkflowListRecord) -> WorkflowListItem:
     """Serialize one workflow list item."""
+    schedule = workflow.schedule
     return {
         "code": require_resource_int(
             workflow.code,
@@ -109,6 +113,9 @@ def serialize_workflow_ref(workflow: WorkflowRecord) -> WorkflowListItem:
         ),
         "name": workflow.name,
         "version": workflow.version,
+        "releaseState": enum_value(workflow.releaseState),
+        "scheduleReleaseState": enum_value(workflow.scheduleReleaseState),
+        "scheduleId": None if schedule is None else schedule.id,
     }
 
 

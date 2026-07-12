@@ -154,6 +154,7 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.worker_group import (
 from dsctl.generated.versions.ds_3_4_1.api.operations.workflow_definition import (
     CreateWorkflowDefinitionParams,
     GetTaskListByWorkflowDefinitionCodeParams,
+    QueryWorkflowDefinitionListPagingParams,
     ReleaseWorkflowDefinitionParams,
     UpdateWorkflowDefinitionParams,
 )
@@ -245,6 +246,7 @@ if TYPE_CHECKING:
         PageInfoTenant,
         PageInfoUser,
         PageInfoWorkerGroupPageDetail,
+        PageInfoWorkflowDefinition,
         PageInfoWorkflowInstance,
     )
     from dsctl.generated.versions.ds_3_4_1.api.operations._base import (
@@ -1865,9 +1867,26 @@ class _DS341WorkflowOperations:
 
     client: DS341Client
 
-    def list(self, *, project_code: int) -> list[DependentSimplifyDefinition]:
+    def list_refs(self, *, project_code: int) -> list[DependentSimplifyDefinition]:
         return self.client.workflow_definition.get_workflow_list_by_project_code(
             project_code
+        )
+
+    def list_page(
+        self,
+        *,
+        project_code: int,
+        page_no: int,
+        page_size: int,
+        search: str | None = None,
+    ) -> PageInfoWorkflowDefinition:
+        return self.client.workflow_definition.query_workflow_definition_list_paging(
+            project_code,
+            QueryWorkflowDefinitionListPagingParams(
+                searchVal=search,
+                pageNo=page_no,
+                pageSize=page_size,
+            ),
         )
 
     def get(self, *, code: int) -> WorkflowDefinition:

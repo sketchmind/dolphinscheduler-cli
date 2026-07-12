@@ -383,8 +383,13 @@ surface.
       plan, compiled counts, and resolved selectors; expose raw REST requests
       through one explicit detail view without duplicating `request` and
       `requests[0]`
-- [ ] add bounded lifecycle `next_actions` (two or three command patterns per
+- [x] add bounded lifecycle `next_actions` (two or three command patterns per
       transition) for create, run, watch, task inspection, and log retrieval
+- [x] add bounded row-fact `action_index` discovery to workflow, schedule,
+      workflow-instance, and task-instance list JSON without polluting row output
+- [ ] let task-instance read/control commands resolve directly from `--project`
+      as well as `--workflow-instance`, so standalone STREAM task rows can expose
+      savepoint and stop without inventing a workflow instance id
 - [ ] add an explicit read-only context validity check without making ordinary
       `dsctl context` perform remote calls
 - [x] audit log inspection and audit filter metadata discovery

@@ -230,9 +230,13 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             expected_action="workflow.list",
             label="workflow list",
         )
-        workflow_rows = require_list(
+        workflow_list_data = require_mapping(
             workflow_list_payload["data"],
-            label="workflow list data",
+            label="workflow list page",
+        )
+        workflow_rows = require_list(
+            workflow_list_data["totalList"],
+            label="workflow list rows",
         )
         assert any(
             require_mapping(item, label="workflow row").get("code") == workflow_code

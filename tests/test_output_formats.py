@@ -102,7 +102,23 @@ def test_render_command_does_not_append_resolved_context_to_row_output() -> None
     payload = success_payload(
         "workflow.list",
         CommandResult(
-            data=[{"code": 1, "name": "daily-etl", "version": 1}],
+            data={
+                "totalList": [
+                    {
+                        "code": 1,
+                        "name": "daily-etl",
+                        "version": 1,
+                        "releaseState": "ONLINE",
+                        "scheduleReleaseState": None,
+                        "scheduleId": None,
+                    }
+                ],
+                "total": 1,
+                "totalPage": 1,
+                "pageNo": 1,
+                "pageSize": 100,
+                "currentPage": 1,
+            },
             resolved={
                 "project": {
                     "code": 7,
@@ -125,6 +141,8 @@ def test_render_command_does_not_append_resolved_context_to_row_output() -> None
     )
 
     assert rendered.stderr == ""
+    assert "daily-etl" in rendered.stdout
+    assert "etl-prod" not in rendered.stdout
 
 
 @pytest.mark.parametrize("output_format", ["table", "tsv"])
@@ -162,6 +180,43 @@ def test_json_column_projection_preserves_next_actions_outside_data() -> None:
 
     assert output["data"] == {"workflowInstanceIds": [242]}
     assert output["next_actions"][0]["action"] == "workflow-instance.watch"
+
+
+def test_json_column_projection_preserves_action_index_outside_data() -> None:
+    payload = success_payload(
+        "workflow-instance.list",
+        CommandResult(
+            data={"totalList": [{"id": 263, "name": "daily-1", "state": "SUCCESS"}]}
+        ),
+    )
+
+    rendered = render_command(
+        payload,
+        action="workflow-instance.list",
+        options=RenderOptions(compact=True, columns=("id", "state")),
+    )
+    output = json.loads(rendered.stdout)
+
+    assert output["data"] == {"totalList": [{"id": 263, "state": "SUCCESS"}]}
+    assert output["action_index"]["groups"][0]["read"][0] == ("workflow-instance.get")
+
+
+@pytest.mark.parametrize("output_format", ["table", "tsv"])
+def test_row_output_does_not_append_action_index(output_format: OutputFormat) -> None:
+    payload = success_payload(
+        "workflow-instance.list",
+        CommandResult(data={"totalList": [{"id": 263, "state": "SUCCESS"}]}),
+    )
+
+    rendered = render_command(
+        payload,
+        action="workflow-instance.list",
+        options=RenderOptions(output_format=output_format),
+    )
+
+    assert "action_index" not in rendered.stdout
+    assert "workflow-instance.get" not in rendered.stdout
+    assert rendered.stderr == ""
 
 
 def test_render_command_reports_actual_row_count_on_a_later_page() -> None:

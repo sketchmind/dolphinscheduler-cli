@@ -211,12 +211,14 @@ Process-channel guarantees:
 - Typer/Click usage errors are written to stderr and exit with status 2
 - JSON keeps warnings and page metadata inside the envelope without duplicating
   them to stderr
-- applicable successful JSON results may include bounded `next_actions`; JSON
-  `--columns` projection keeps this envelope field and narrows only `data`
+- applicable successful JSON results may include bounded `next_actions` or an
+  `action_index`; JSON `--columns` projection keeps these envelope fields and
+  narrows only `data`
 - table and TSV keep stdout row-only and write partial/non-first-page and
-  warning diagnostics to stderr; they never append `next_actions` below rows
+  warning diagnostics to stderr; they never append navigation metadata below
+  rows
 - raw artifacts keep their exact success body on stdout and write any warnings
-  to stderr; they never append `next_actions`
+  to stderr; they never append navigation metadata
 
 JSON object member order is not a semantic contract. Consumers must read fields
 by name.
@@ -265,6 +267,53 @@ projection, raw view, and explicit target are retained. Ordering communicates
 recommendation priority, not a requirement to execute every item. A
 `mutates: true` item must complete before a later read that depends on its new
 state.
+
+Applicable row-oriented list results may also include this optional top-level
+field:
+
+```json
+{
+  "action_index": {
+    "scope": "data.totalList",
+    "target": {"resource": "workflow", "field": "code"},
+    "authorization": "not_evaluated",
+    "eligibility": "row_facts_only",
+    "groups": [
+      {"targets": "all", "read": ["workflow.get"]},
+      {"targets": [101], "mutate": ["workflow.online"]}
+    ],
+    "schema_command": "dsctl schema --command ACTION",
+    "group_command": "dsctl schema --group workflow",
+    "target_count": 2,
+    "indexed_target_count": 2,
+    "truncated": false
+  }
+}
+```
+
+`action_index` is a compact positive-discovery index, not an authorization or
+validation result. It is derived locally from the already returned rows and
+sends no additional request. `target_count` is the number of returned rows;
+`indexed_target_count` is the number of unique, valid selectors indexed, up to
+100 in stable row order. `truncated` reports whether additional valid selectors
+were omitted. A group's `targets` is either an explicit selector list or
+`"all"`, meaning every indexed target in this result, not every remote object.
+Actions with exactly the same targets share one group so selector lists are not
+repeated. Each action appears in one of four categories: `read`,
+`read_needs_input`, `mutate`, or `mutate_needs_input`. The latter two require
+mutation authorization; either `*_needs_input` category means the returned
+selector and row facts are insufficient and additional input is required.
+
+The index omits actions whose required row facts are missing or ambiguous.
+Malformed selectors are ignored, and a selector appearing in more than one row
+is excluded because its row facts are not unambiguous.
+`authorization: "not_evaluated"` means permissions were not checked, and
+`eligibility: "row_facts_only"` means other server-side facts may still reject
+execution. `schema_command` is a substitution template: replace `ACTION` with
+one selected grouped action to obtain its exact machine-readable contract.
+The group command is the broader fallback when the desired action is still
+unknown. Table, TSV, and raw output remain data-only rather than attempting to
+represent an interactive UI dropdown in plain text.
 
 Error shape:
 
@@ -336,8 +385,9 @@ Field rules:
 - DS objects projected into `data` keep DS-native field names.
 - CLI envelope fields such as `ok`, `action`, `resolved`, `warnings`, and
   selection metadata use CLI-owned naming.
-- `next_actions`, when present, is CLI-owned lifecycle navigation rather than
-  DS-native resource data; it remains outside both `data` and `resolved`
+- `next_actions` and `action_index`, when present, are CLI-owned navigation
+  rather than DS-native resource data; they remain outside both `data` and
+  `resolved`
 - high-risk mutations may return `confirmation_required` and expect the same
   command to be retried with `--confirm-risk TOKEN`
 - `warning_details` is a machine-readable list aligned positionally with
@@ -3094,12 +3144,24 @@ Selection rules:
 - `--project` wins
 - then stored context project
 - use `dsctl project list` to discover project names and codes
+- `--search` is passed to the upstream paged list operation
+- `--page-no` and `--page-size` select one page
+- `--all` exhausts pages up to the shared safety limit
 
-The `data` payload is a JSON array of workflow summaries:
+The `data` payload is standard page data. Rows live at `data.totalList`; page
+metadata includes `total`, `totalPage`, `pageNo`, `pageSize`, and
+`currentPage`. Current row fields are:
 
 - `code`
 - `name`
 - `version`
+- `releaseState`
+- `scheduleReleaseState`
+- `scheduleId`
+
+The public list uses the rich paged workflow endpoint. Name/code resolution
+uses a separate lightweight reference endpoint, so improving public discovery
+does not make every selector resolution fetch a rich page.
 
 ## `dsctl workflow get`
 
