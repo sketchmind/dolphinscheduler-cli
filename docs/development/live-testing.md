@@ -338,7 +338,7 @@ future.
 | --- | --- | --- | --- | --- |
 | workflow | `workflow list|get|describe|digest|create|edit|online|offline|run|run-task|backfill` | `etl-developer` | Yes | authoring, read-back, release-state transition, run, task-scoped run, backfill dry-run, and dry-run consistency |
 | task | `task list|get|update` | `etl-developer` | Yes | live task projection and safe update reflected by later reads |
-| schedule | `schedule list|get|preview|explain|create|update|delete|online|offline` | `etl-developer` | Yes | preview and explain aligned with create/update, and online schedules produce real workflow instances |
+| schedule | `schedule list|get|preview|explain|create|update|delete|online|offline` | `etl-developer` | Yes | preview and explain aligned with create/update, both no-environment and explicit-environment adapter paths, and online schedules producing real workflow instances |
 | workflow-instance | `workflow-instance list|get|parent|digest|edit|watch|stop|rerun|recover-failed|execute-task` | `etl-developer` | Yes | instance lifecycle transitions, finished-instance DAG edit semantics, runtime control, and parent/sub-workflow relation reads under real runtime conditions |
 | task-instance | `task-instance list|get|watch|sub-workflow|log|force-success|savepoint|stop` | `etl-developer` | Yes | instance inspection, child relation reads, log retrieval, and control actions under real runtime conditions |
 
@@ -434,9 +434,11 @@ live additions.
 - schedule create/preview/explain must use Quartz-style cron expressions in the
   current 3.4.1 cluster. The live suite uses forms such as `0 * * * * ?`
   rather than five-field cron strings.
-- schedule create also needs the workflow definition to be `ONLINE`, and the
-  current cluster requires explicit `tenantCode` plus a valid nonzero
-  `environmentCode`.
+- schedule create needs the workflow definition to be `ONLINE`. The DS 3.4.1
+  v2 create/update contracts also require a valid nonzero `environmentCode`,
+  but the project-scoped legacy contracts support DS-native schedules without
+  an environment. Live coverage therefore keeps both adapter paths: omitted
+  environment and an explicit positive environment code.
 - `alert-plugin definition list` discovers supported plugin definitions, while
   `alert-plugin schema PLUGIN` fetches the full DS UI parameter form for one
   definition when the upstream detail endpoint exposes it.

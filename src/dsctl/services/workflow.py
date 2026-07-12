@@ -38,6 +38,7 @@ from dsctl.services._runtime_defaults import (
 from dsctl.services._schedule_support import (
     ScheduleConfirmationData,
     ScheduleCreateInput,
+    build_schedule_create_spec,
     confirmed_preview_warning_details,
     confirmed_preview_warnings,
     preview_schedule,
@@ -887,6 +888,7 @@ def _create_workflow_result(
 
     if dry_run:
         return _workflow_create_dry_run_result(
+            runtime,
             file=file,
             spec=spec,
             resolved_project_data=resolved_project_data,
@@ -2377,11 +2379,12 @@ def _workflow_schedule_input(spec: WorkflowSpec) -> ScheduleCreateInput | None:
         priority=None if schedule.priority is None else schedule.priority.value,
         worker_group=None,
         tenant_code=None,
-        environment_code=0,
+        environment_code=None,
     )
 
 
 def _workflow_create_dry_run_requests(
+    runtime: ServiceRuntime,
     *,
     project_code: int,
     workflow_name: str,
@@ -2416,26 +2419,17 @@ def _workflow_create_dry_run_requests(
     if schedule_input is None:
         return requests
     created_schedule_id = f"<{workflow_name}:created_schedule_id>"
+    schedule_request = runtime.upstream.schedules.plan_create(
+        spec=build_schedule_create_spec(
+            project_code=project_code,
+            workflow_code=created_workflow_code,
+            schedule_input=schedule_input,
+        )
+    )
     requests.append(
-        build_dry_run_request(
-            method="POST",
-            path="/v2/schedules",
-            json_body={
-                "workflowDefinitionCode": created_workflow_code,
-                "crontab": schedule_input["crontab"],
-                "startTime": schedule_input["start_time"],
-                "endTime": schedule_input["end_time"],
-                "timezoneId": schedule_input["timezone_id"],
-                "failureStrategy": schedule_input["failure_strategy"],
-                "warningType": schedule_input["warning_type"],
-                "warningGroupId": schedule_input["warning_group_id"],
-                "workflowInstancePriority": schedule_input[
-                    "workflow_instance_priority"
-                ],
-                "workerGroup": schedule_input["worker_group"],
-                "tenantCode": schedule_input["tenant_code"],
-                "environmentCode": schedule_input["environment_code"],
-            },
+        require_json_object(
+            schedule_request,
+            label="schedule create dry-run request",
         )
     )
     if schedule_should_online:
@@ -2449,6 +2443,7 @@ def _workflow_create_dry_run_requests(
 
 
 def _workflow_create_dry_run_result(
+    runtime: ServiceRuntime,
     *,
     file: Path,
     spec: WorkflowSpec,
@@ -2468,6 +2463,7 @@ def _workflow_create_dry_run_result(
             label="workflow create form data",
         ),
         requests=_workflow_create_dry_run_requests(
+            runtime,
             project_code=project_code,
             workflow_name=spec.workflow.name,
             workflow_payload=workflow_payload,
@@ -2620,6 +2616,7 @@ def _apply_workflow_release_and_schedule(
         return
     created_schedule_id = _create_workflow_schedule(
         runtime,
+        project_code=project_code,
         workflow_code=resolved_workflow.code,
         workflow_name=resolved_workflow.name,
         schedule_input=schedule_input,
@@ -2641,24 +2638,18 @@ def _apply_workflow_release_and_schedule(
 def _create_workflow_schedule(
     runtime: ServiceRuntime,
     *,
+    project_code: int,
     workflow_code: int,
     workflow_name: str | None,
     schedule_input: ScheduleCreateInput,
 ) -> int:
     try:
         created_schedule = runtime.upstream.schedules.create(
-            workflow_code=workflow_code,
-            crontab=schedule_input["crontab"],
-            start_time=schedule_input["start_time"],
-            end_time=schedule_input["end_time"],
-            timezone_id=schedule_input["timezone_id"],
-            failure_strategy=schedule_input["failure_strategy"],
-            warning_type=schedule_input["warning_type"],
-            warning_group_id=schedule_input["warning_group_id"],
-            workflow_instance_priority=schedule_input["workflow_instance_priority"],
-            worker_group=schedule_input["worker_group"],
-            tenant_code=schedule_input["tenant_code"],
-            environment_code=schedule_input["environment_code"],
+            spec=build_schedule_create_spec(
+                project_code=project_code,
+                workflow_code=workflow_code,
+                schedule_input=schedule_input,
+            )
         )
     except ApiResultError as exc:
         raise translate_schedule_api_error(
@@ -2666,6 +2657,7 @@ def _create_workflow_schedule(
             operation="create",
             workflow_code=workflow_code,
             workflow_name=workflow_name,
+            environment_code=schedule_input["environment_code"],
         ) from exc
     return require_resource_int(
         created_schedule.id,

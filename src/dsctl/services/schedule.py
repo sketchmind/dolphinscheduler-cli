@@ -23,8 +23,10 @@ from dsctl.services._schedule_support import (
     ScheduleMutationData,
     SchedulePreviewInput,
     WarningTypeValue,
+    build_schedule_create_spec,
     confirmed_preview_warning_details,
     confirmed_preview_warnings,
+    normalize_environment_code,
     preview_schedule,
     require_high_frequency_confirmation,
     required_update_text,
@@ -727,6 +729,13 @@ def _explain_schedule_update_result(
         worker_group=worker_group,
         environment_code=environment_code,
     )
+    _validate_explicit_schedule_environment(
+        runtime,
+        requested_environment_code=environment_code,
+        effective_environment_code=schedule_input["environment_code"],
+        operation="explain",
+        schedule_id=schedule_id,
+    )
     project_code = _schedule_project_code(
         runtime,
         workflow_code=current.workflowDefinitionCode,
@@ -828,20 +837,11 @@ def _create_schedule_result(
     )
     try:
         payload = runtime.upstream.schedules.create(
-            workflow_code=resolved_workflow.code,
-            crontab=effective_input.schedule_input["crontab"],
-            start_time=effective_input.schedule_input["start_time"],
-            end_time=effective_input.schedule_input["end_time"],
-            timezone_id=effective_input.schedule_input["timezone_id"],
-            failure_strategy=effective_input.schedule_input["failure_strategy"],
-            warning_type=effective_input.schedule_input["warning_type"],
-            warning_group_id=effective_input.schedule_input["warning_group_id"],
-            workflow_instance_priority=effective_input.schedule_input[
-                "workflow_instance_priority"
-            ],
-            worker_group=effective_input.schedule_input["worker_group"],
-            tenant_code=effective_input.schedule_input["tenant_code"],
-            environment_code=effective_input.schedule_input["environment_code"],
+            spec=build_schedule_create_spec(
+                project_code=resolved_project.code,
+                workflow_code=resolved_workflow.code,
+                schedule_input=effective_input.schedule_input,
+            )
         )
     except ApiResultError as error:
         raise translate_schedule_api_error(
@@ -849,6 +849,7 @@ def _create_schedule_result(
             operation="create",
             workflow_code=resolved_workflow.code,
             workflow_name=resolved_workflow.name,
+            environment_code=effective_input.schedule_input["environment_code"],
         ) from error
     warnings = confirmed_preview_warnings(preview)
     return CommandResult(
@@ -892,44 +893,60 @@ def _update_schedule_result(
     adapter = runtime.upstream.schedules
     try:
         current = adapter.get(schedule_id=schedule_id)
-        schedule_input = _merged_schedule_update_input(
-            current,
-            cron=cron,
-            start=start,
-            end=end,
-            timezone=timezone,
-            failure_strategy=failure_strategy,
-            warning_type=warning_type,
-            warning_group_id=warning_group_id,
-            priority=priority,
-            worker_group=worker_group,
-            environment_code=environment_code,
-        )
-        preview = preview_schedule(
-            runtime,
-            project_code=_schedule_project_code(
-                runtime,
-                workflow_code=current.workflowDefinitionCode,
-                operation="update",
-                schedule_id=schedule_id,
-            ),
-            schedule_input={
-                "crontab": schedule_input["crontab"],
-                "start_time": schedule_input["start_time"],
-                "end_time": schedule_input["end_time"],
-                "timezone_id": schedule_input["timezone_id"],
-            },
-        )
-        require_high_frequency_confirmation(
-            action="schedule.update",
-            confirmation=confirm_risk,
-            preview=preview,
-            schedule_payload=_schedule_update_confirmation_payload(
-                schedule_id=schedule_id,
-                schedule_input=schedule_input,
-            ),
-        )
+    except ApiResultError as error:
+        raise translate_schedule_api_error(
+            error,
+            operation="update",
+            schedule_id=schedule_id,
+        ) from error
+    schedule_input = _merged_schedule_update_input(
+        current,
+        cron=cron,
+        start=start,
+        end=end,
+        timezone=timezone,
+        failure_strategy=failure_strategy,
+        warning_type=warning_type,
+        warning_group_id=warning_group_id,
+        priority=priority,
+        worker_group=worker_group,
+        environment_code=environment_code,
+    )
+    _validate_explicit_schedule_environment(
+        runtime,
+        requested_environment_code=environment_code,
+        effective_environment_code=schedule_input["environment_code"],
+        operation="update",
+        schedule_id=schedule_id,
+    )
+    project_code = _schedule_project_code(
+        runtime,
+        workflow_code=current.workflowDefinitionCode,
+        operation="update",
+        schedule_id=schedule_id,
+    )
+    preview = preview_schedule(
+        runtime,
+        project_code=project_code,
+        schedule_input={
+            "crontab": schedule_input["crontab"],
+            "start_time": schedule_input["start_time"],
+            "end_time": schedule_input["end_time"],
+            "timezone_id": schedule_input["timezone_id"],
+        },
+    )
+    require_high_frequency_confirmation(
+        action="schedule.update",
+        confirmation=confirm_risk,
+        preview=preview,
+        schedule_payload=_schedule_update_confirmation_payload(
+            schedule_id=schedule_id,
+            schedule_input=schedule_input,
+        ),
+    )
+    try:
         payload = adapter.update(
+            project_code=project_code,
             schedule_id=schedule_id,
             crontab=schedule_input["crontab"],
             start_time=schedule_input["start_time"],
@@ -940,6 +957,7 @@ def _update_schedule_result(
             warning_group_id=schedule_input["warning_group_id"],
             workflow_instance_priority=schedule_input["workflow_instance_priority"],
             worker_group=schedule_input["worker_group"],
+            tenant_code=schedule_input["tenant_code"],
             environment_code=schedule_input["environment_code"],
         )
     except ApiResultError as error:
@@ -947,6 +965,7 @@ def _update_schedule_result(
             error,
             operation="update",
             schedule_id=schedule_id,
+            environment_code=schedule_input["environment_code"],
         ) from error
     warnings = confirmed_preview_warnings(preview)
     return CommandResult(
@@ -1211,11 +1230,7 @@ def _schedule_input_with_runtime_defaults(
             priority=project_preference_overrides.workflow_instance_priority,
             worker_group=project_preference_overrides.worker_group,
             tenant_code=tenant_selection.value,
-            environment_code=(
-                0
-                if project_preference_overrides.environment_code is None
-                else project_preference_overrides.environment_code
-            ),
+            environment_code=project_preference_overrides.environment_code,
         ),
         tenant_selection=tenant_selection,
         project_preference_used_fields=tuple(project_preference_used_fields),
@@ -1418,10 +1433,7 @@ def _merged_schedule_update_input(
         "environment_code": (
             _current_environment_code(current)
             if environment_code is None
-            else require_non_negative_int(
-                environment_code,
-                label="environment_code",
-            )
+            else normalize_environment_code(environment_code)
         ),
     }
 
@@ -1486,8 +1498,29 @@ def _schedule_project_code(
         ) from error
 
 
-def _current_environment_code(schedule: SchedulePayloadRecord) -> int:
+def _current_environment_code(schedule: SchedulePayloadRecord) -> int | None:
     current = schedule.environmentCode
-    if current is None:
-        return 0
+    if current is None or current <= 0:
+        return None
     return current
+
+
+def _validate_explicit_schedule_environment(
+    runtime: ServiceRuntime,
+    *,
+    requested_environment_code: int | None,
+    effective_environment_code: int | None,
+    operation: str,
+    schedule_id: int,
+) -> None:
+    if requested_environment_code is None or effective_environment_code is None:
+        return
+    try:
+        runtime.upstream.environments.get(code=effective_environment_code)
+    except ApiResultError as error:
+        raise translate_schedule_api_error(
+            error,
+            operation=operation,
+            schedule_id=schedule_id,
+            environment_code=effective_environment_code,
+        ) from error

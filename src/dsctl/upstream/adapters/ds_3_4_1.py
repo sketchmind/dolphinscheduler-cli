@@ -23,7 +23,6 @@ from dsctl.generated.versions.ds_3_4_1.api.contracts.project import (
 )
 from dsctl.generated.versions.ds_3_4_1.api.contracts.schedule import (
     ScheduleCreateRequest,
-    ScheduleUpdateRequest,
 )
 from dsctl.generated.versions.ds_3_4_1.api.contracts.workflow_instance import (
     workflow_instance_query_request as workflow_instance_contracts,
@@ -108,8 +107,10 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.resources import (
     QueryResourceBaseDirParams,
 )
 from dsctl.generated.versions.ds_3_4_1.api.operations.scheduler import (
+    CreateScheduleParams,
     PreviewScheduleParams,
     QueryScheduleListPagingParams,
+    UpdateScheduleParams,
 )
 from dsctl.generated.versions.ds_3_4_1.api.operations.task_definition import (
     GenTaskCodeListParams,
@@ -210,7 +211,11 @@ from dsctl.generated.versions.ds_3_4_1.spi.enums.resource_type import ResourceTy
 from dsctl.upstream.generated_session import (
     GeneratedSessionAdapter as _GeneratedSessionAdapter,
 )
-from dsctl.upstream.protocol import StringEnumValue, UpstreamAdapter, UserListRecord
+from dsctl.upstream.protocol import (
+    StringEnumValue,
+    UpstreamAdapter,
+    UserListRecord,
+)
 
 if TYPE_CHECKING:
     import httpx
@@ -316,6 +321,7 @@ if TYPE_CHECKING:
     from dsctl.generated.versions.ds_3_4_1.dao.plugin_api.monitor.database_metrics import (  # noqa: E501
         DatabaseMetrics,
     )
+    from dsctl.support.json_types import JsonObject
     from dsctl.upstream.protocol import (
         AccessTokenOperations,
         AlertGroupOperations,
@@ -332,6 +338,8 @@ if TYPE_CHECKING:
         ProjectWorkerGroupOperations,
         QueueOperations,
         ResourceOperations,
+        ScheduleCreateRequestPlan,
+        ScheduleCreateSpec,
         ScheduleOperations,
         TaskGroupOperations,
         TaskGroupPageRecord,
@@ -2552,39 +2560,35 @@ class _DS341ScheduleOperations:
     def create(
         self,
         *,
-        workflow_code: int,
-        crontab: str,
-        start_time: str,
-        end_time: str,
-        timezone_id: str,
-        failure_strategy: str | None = None,
-        warning_type: str | None = None,
-        warning_group_id: int = 0,
-        workflow_instance_priority: str | None = None,
-        worker_group: str | None = None,
-        tenant_code: str | None = None,
-        environment_code: int = 0,
+        spec: ScheduleCreateSpec[int],
     ) -> Schedule:
-        return self.client.schedule_v2.create_schedule(
-            ScheduleCreateRequest(
-                workflowDefinitionCode=workflow_code,
-                crontab=crontab,
-                startTime=start_time,
-                endTime=end_time,
-                timezoneId=timezone_id,
-                failureStrategy=failure_strategy,
-                warningType=warning_type,
-                warningGroupId=warning_group_id,
-                workflowInstancePriority=workflow_instance_priority,
-                workerGroup=worker_group,
-                tenantCode=tenant_code,
-                environmentCode=environment_code,
+        request = _prepare_schedule_create(spec)
+        form, json_body = _schedule_create_plan_bodies(request)
+        if form is not None:
+            return self.client.scheduler.create_schedule(
+                spec.project_code,
+                CreateScheduleParams.model_validate(form),
             )
+        if json_body is None:
+            message = "validated schedule create plan is missing its JSON body"
+            raise RuntimeError(message)
+        return self.client.schedule_v2.create_schedule(
+            ScheduleCreateRequest.model_validate(json_body)
         )
+
+    def plan_create(
+        self,
+        *,
+        spec: ScheduleCreateSpec[int | str],
+    ) -> ScheduleCreateRequestPlan:
+        request = _prepare_schedule_create(spec)
+        _schedule_create_plan_bodies(request)
+        return request
 
     def update(
         self,
         *,
+        project_code: int,
         schedule_id: int,
         crontab: str,
         start_time: str,
@@ -2595,20 +2599,25 @@ class _DS341ScheduleOperations:
         warning_group_id: int = 0,
         workflow_instance_priority: str | None = None,
         worker_group: str | None = None,
-        environment_code: int = 0,
+        tenant_code: str | None = None,
+        environment_code: int | None = None,
     ) -> Schedule:
-        return self.client.schedule_v2.update_schedule(
+        return self.client.scheduler.update_schedule(
+            project_code,
             schedule_id,
-            ScheduleUpdateRequest(
-                crontab=crontab,
-                startTime=start_time,
-                endTime=end_time,
-                timezoneId=timezone_id,
+            UpdateScheduleParams(
+                schedule=_schedule_preview_expression(
+                    crontab=crontab,
+                    end_time=end_time,
+                    start_time=start_time,
+                    timezone_id=timezone_id,
+                ),
                 failureStrategy=failure_strategy,
                 warningType=warning_type,
                 warningGroupId=warning_group_id,
                 workflowInstancePriority=workflow_instance_priority,
                 workerGroup=worker_group,
+                tenantCode=tenant_code,
                 environmentCode=environment_code,
             ),
         )
@@ -2632,6 +2641,80 @@ def _schedule_project_code(client: DS341Client, *, schedule_id: int) -> int:
     schedule = client.schedule_v2.get_schedule(schedule_id)
     workflow = client.workflow_v2.get_workflow(schedule.workflowDefinitionCode)
     return workflow.projectCode
+
+
+def _prepare_schedule_create(
+    spec: ScheduleCreateSpec[int | str],
+) -> ScheduleCreateRequestPlan:
+    if not _has_explicit_schedule_environment(spec.environment_code):
+        form: JsonObject = {
+            "workflowDefinitionCode": spec.workflow_code,
+            "schedule": _schedule_preview_expression(
+                crontab=spec.crontab,
+                end_time=spec.end_time,
+                start_time=spec.start_time,
+                timezone_id=spec.timezone_id,
+            ),
+            "warningGroupId": spec.warning_group_id,
+        }
+        _add_schedule_create_optional_fields(form, spec=spec)
+        return {
+            "method": "POST",
+            "path": f"/projects/{spec.project_code}/schedules",
+            "form": form,
+        }
+
+    json_body: JsonObject = {
+        "workflowDefinitionCode": spec.workflow_code,
+        "crontab": spec.crontab,
+        "startTime": spec.start_time,
+        "endTime": spec.end_time,
+        "timezoneId": spec.timezone_id,
+        "warningGroupId": spec.warning_group_id,
+        "environmentCode": spec.environment_code,
+    }
+    _add_schedule_create_optional_fields(json_body, spec=spec)
+    return {
+        "method": "POST",
+        "path": "/v2/schedules",
+        "json": json_body,
+    }
+
+
+def _schedule_create_plan_bodies(
+    request: ScheduleCreateRequestPlan,
+) -> tuple[JsonObject | None, JsonObject | None]:
+    form = request.get("form")
+    json_body = request.get("json")
+    if (form is None) == (json_body is None):
+        message = "schedule create plan must contain exactly one of form or json"
+        raise RuntimeError(message)
+    return form, json_body
+
+
+def _add_schedule_create_optional_fields(
+    body: JsonObject,
+    *,
+    spec: ScheduleCreateSpec[int | str],
+) -> None:
+    for key, value in {
+        "failureStrategy": spec.failure_strategy,
+        "warningType": spec.warning_type,
+        "workflowInstancePriority": spec.workflow_instance_priority,
+        "workerGroup": spec.worker_group,
+        "tenantCode": spec.tenant_code,
+    }.items():
+        if value is not None:
+            body[key] = value
+
+
+def _has_explicit_schedule_environment(environment_code: int | None) -> bool:
+    if environment_code is None:
+        return False
+    if environment_code <= 0:
+        message = "schedule environment code must be None or a positive integer"
+        raise ValueError(message)
+    return True
 
 
 def _start_process_schedule_time() -> str:

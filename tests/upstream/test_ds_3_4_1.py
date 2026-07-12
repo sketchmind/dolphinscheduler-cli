@@ -16,6 +16,7 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.project import (
 )
 from dsctl.upstream.adapters.ds_3_4_1 import DS341Adapter
 from dsctl.upstream.generated_session import GeneratedSessionAdapter
+from dsctl.upstream.protocol import ScheduleCreateSpec
 from tests.support import make_profile
 
 
@@ -3582,7 +3583,139 @@ def test_adapter_user_methods_bridge_paging_and_raw_user_views() -> None:  # noq
     ]
 
 
-def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
+def test_adapter_schedule_without_environment_uses_legacy_form_endpoints() -> None:
+    profile = make_profile()
+    requests_seen: list[tuple[str, str]] = []
+
+    def schedule_payload(*, schedule_id: int, crontab: str) -> dict[str, object]:
+        return {
+            "id": schedule_id,
+            "workflowDefinitionCode": 101,
+            "workflowDefinitionName": "daily-sync",
+            "projectName": "etl-prod",
+            "crontab": crontab,
+            "startTime": "2024-01-01 00:00:00",
+            "endTime": "2025-01-01 00:00:00",
+            "timezoneId": "Asia/Shanghai",
+            "userId": 11,
+            "warningGroupId": 0,
+            "tenantCode": "tenant-prod",
+            "environmentCode": -1,
+        }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_seen.append((request.method, request.url.path))
+        form = parse_qs(request.content.decode("utf-8"), strict_parsing=True)
+        assert "environmentCode" not in form
+        assert form["tenantCode"] == ["tenant-prod"]
+        assert json.loads(form["schedule"][0]) == {
+            "crontab": "0 0 2 * * ?" if request.method == "POST" else "0 0 6 * * ?",
+            "startTime": "2024-01-01 00:00:00",
+            "endTime": "2025-01-01 00:00:00",
+            "timezoneId": "Asia/Shanghai",
+        }
+        if request.method == "POST":
+            assert request.url.path == "/dolphinscheduler/projects/7/schedules"
+            assert form["workflowDefinitionCode"] == ["101"]
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "msg": "success",
+                    "data": schedule_payload(
+                        schedule_id=2,
+                        crontab="0 0 2 * * ?",
+                    ),
+                },
+            )
+        assert request.method == "PUT"
+        assert request.url.path == "/dolphinscheduler/projects/7/schedules/1"
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "msg": "success",
+                "data": schedule_payload(
+                    schedule_id=1,
+                    crontab="0 0 6 * * ?",
+                ),
+            },
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = adapter.bind(profile, http_client=http_client)
+        create_spec = ScheduleCreateSpec(
+            project_code=7,
+            workflow_code=101,
+            crontab="0 0 2 * * ?",
+            start_time="2024-01-01 00:00:00",
+            end_time="2025-01-01 00:00:00",
+            timezone_id="Asia/Shanghai",
+            tenant_code="tenant-prod",
+            environment_code=None,
+        )
+        create_plan = session.schedules.plan_create(spec=create_spec)
+        placeholder_plan = session.schedules.plan_create(
+            spec=ScheduleCreateSpec(
+                project_code=7,
+                workflow_code="<nightly-sync:created_workflow_code>",
+                crontab="0 0 2 * * ?",
+                start_time="2024-01-01 00:00:00",
+                end_time="2025-01-01 00:00:00",
+                timezone_id="Asia/Shanghai",
+                tenant_code="tenant-prod",
+                environment_code=None,
+            )
+        )
+        created = session.schedules.create(spec=create_spec)
+        updated = session.schedules.update(
+            project_code=7,
+            schedule_id=1,
+            crontab="0 0 6 * * ?",
+            start_time="2024-01-01 00:00:00",
+            end_time="2025-01-01 00:00:00",
+            timezone_id="Asia/Shanghai",
+            tenant_code="tenant-prod",
+            environment_code=None,
+        )
+
+    assert created.id == 2
+    assert create_plan == {
+        "method": "POST",
+        "path": "/projects/7/schedules",
+        "form": {
+            "workflowDefinitionCode": 101,
+            "schedule": (
+                '{"crontab":"0 0 2 * * ?","endTime":"2025-01-01 00:00:00",'
+                '"startTime":"2024-01-01 00:00:00",'
+                '"timezoneId":"Asia/Shanghai"}'
+            ),
+            "warningGroupId": 0,
+            "tenantCode": "tenant-prod",
+        },
+    }
+    assert ("form" in create_plan) != ("json" in create_plan)
+    assert placeholder_plan["form"]["workflowDefinitionCode"] == (
+        "<nightly-sync:created_workflow_code>"
+    )
+    assert ("form" in placeholder_plan) != ("json" in placeholder_plan)
+    assert created.environmentCode == -1
+    assert updated.crontab == "0 0 6 * * ?"
+    assert updated.tenantCode == "tenant-prod"
+    assert updated.environmentCode == -1
+    assert requests_seen == [
+        ("POST", "/dolphinscheduler/projects/7/schedules"),
+        ("PUT", "/dolphinscheduler/projects/7/schedules/1"),
+    ]
+
+
+def test_adapter_schedule_methods_use_v2_create_and_legacy_update() -> None:
     profile = make_profile()
     requests_seen: list[tuple[str, str]] = []
 
@@ -3675,7 +3808,7 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
                 "endTime": "2025-01-01 00:00:00",
                 "timezoneId": "Asia/Shanghai",
                 "warningGroupId": 0,
-                "environmentCode": 0,
+                "environmentCode": 33,
             }
             return httpx.Response(
                 200,
@@ -3696,16 +3829,18 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
             )
         if (
             request.method == "PUT"
-            and request.url.path == "/dolphinscheduler/v2/schedules/1"
+            and request.url.path == "/dolphinscheduler/projects/7/schedules/1"
         ):
-            assert json.loads(request.content) == {
+            form = parse_qs(request.content.decode("utf-8"), strict_parsing=True)
+            assert json.loads(form["schedule"][0]) == {
                 "crontab": "0 0 6 * * ?",
                 "startTime": "2024-01-01 00:00:00",
                 "endTime": "2025-01-01 00:00:00",
                 "timezoneId": "Asia/Shanghai",
-                "warningGroupId": 0,
-                "environmentCode": 0,
             }
+            assert form["warningGroupId"] == ["0"]
+            assert form["environmentCode"] == ["33"]
+            assert form["tenantCode"] == ["tenant-prod"]
             return httpx.Response(
                 200,
                 json={
@@ -3753,19 +3888,26 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
             timezone_id="Asia/Shanghai",
         )
         fetched = session.schedules.get(schedule_id=1)
-        created = session.schedules.create(
+        create_spec = ScheduleCreateSpec(
+            project_code=7,
             workflow_code=101,
             crontab="0 0 2 * * ?",
             start_time="2024-01-01 00:00:00",
             end_time="2025-01-01 00:00:00",
             timezone_id="Asia/Shanghai",
+            environment_code=33,
         )
+        create_plan = session.schedules.plan_create(spec=create_spec)
+        created = session.schedules.create(spec=create_spec)
         updated = session.schedules.update(
+            project_code=7,
             schedule_id=1,
             crontab="0 0 6 * * ?",
             start_time="2024-01-01 00:00:00",
             end_time="2025-01-01 00:00:00",
             timezone_id="Asia/Shanghai",
+            tenant_code="tenant-prod",
+            environment_code=33,
         )
         deleted = session.schedules.delete(schedule_id=1)
 
@@ -3780,6 +3922,20 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
         "2024-01-05 02:00:00",
     ]
     assert fetched.id == 1
+    assert create_plan == {
+        "method": "POST",
+        "path": "/v2/schedules",
+        "json": {
+            "workflowDefinitionCode": 101,
+            "crontab": "0 0 2 * * ?",
+            "startTime": "2024-01-01 00:00:00",
+            "endTime": "2025-01-01 00:00:00",
+            "timezoneId": "Asia/Shanghai",
+            "warningGroupId": 0,
+            "environmentCode": 33,
+        },
+    }
+    assert ("form" in create_plan) != ("json" in create_plan)
     assert created.id == 2
     assert updated.crontab == "0 0 6 * * ?"
     assert deleted is True
@@ -3788,7 +3944,7 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
         ("POST", "/dolphinscheduler/projects/7/schedules/preview"),
         ("GET", "/dolphinscheduler/v2/schedules/1"),
         ("POST", "/dolphinscheduler/v2/schedules"),
-        ("PUT", "/dolphinscheduler/v2/schedules/1"),
+        ("PUT", "/dolphinscheduler/projects/7/schedules/1"),
         ("DELETE", "/dolphinscheduler/v2/schedules/1"),
     ]
 

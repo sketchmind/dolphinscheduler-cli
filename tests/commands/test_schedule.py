@@ -186,6 +186,17 @@ def test_schedule_create_help_points_to_related_discovery_commands() -> None:
     assert "environment list" in help_text
     assert "context only when project" in help_text
     assert "also comes from context" in help_text
+    assert "pass 0 to explicitly use no environment" in help_text
+    assert "bypass project preference" in help_text
+
+
+def test_schedule_update_help_explains_environment_clear_and_preserve() -> None:
+    result = runner.invoke(app, ["schedule", "update", "--help"])
+
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout)
+    assert "omit to keep the current value" in help_text
+    assert "pass 0 to clear the environment" in help_text
 
 
 def test_schedule_explain_help_distinguishes_create_and_update_selectors() -> None:

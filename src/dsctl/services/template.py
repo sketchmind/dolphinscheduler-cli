@@ -1300,8 +1300,9 @@ def _workflow_instance_patch_template_yaml() -> str:
 
 
 def _workflow_template_yaml(*, with_schedule: bool) -> str:
+    release_state = "ONLINE" if with_schedule else "OFFLINE"
     base = dedent(
-        """\
+        f"""\
         # Workflow YAML template for `dsctl workflow create --file ...`
         workflow:
           name: example-workflow
@@ -1309,9 +1310,9 @@ def _workflow_template_yaml(*, with_schedule: bool) -> str:
           description: Example workflow definition
           timeout: 0
           global_params:
-            bizdate: "${system.biz.date}"
+            bizdate: "${{system.biz.date}}"
           execution_type: PARALLEL
-          release_state: OFFLINE
+          release_state: {release_state}
         tasks:
           - name: extract
             type: SHELL

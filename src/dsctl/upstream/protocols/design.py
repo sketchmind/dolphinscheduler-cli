@@ -1,12 +1,52 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from dataclasses import dataclass
+from typing import (
+    TYPE_CHECKING,
+    Generic,
+    Literal,
+    NotRequired,
+    Protocol,
+    TypedDict,
+    TypeVar,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from dsctl.support.json_types import JsonValue
+    from dsctl.support.json_types import JsonObject, JsonValue
     from dsctl.upstream.protocols.base import StringEnumValue
+
+
+WorkflowCodeT_co = TypeVar("WorkflowCodeT_co", covariant=True)
+
+
+@dataclass(frozen=True)
+class ScheduleCreateSpec(Generic[WorkflowCodeT_co]):
+    """Version-stable input for one schedule create request."""
+
+    project_code: int
+    workflow_code: WorkflowCodeT_co
+    crontab: str
+    start_time: str
+    end_time: str
+    timezone_id: str
+    failure_strategy: str | None = None
+    warning_type: str | None = None
+    warning_group_id: int = 0
+    workflow_instance_priority: str | None = None
+    worker_group: str | None = None
+    tenant_code: str | None = None
+    environment_code: int | None = None
+
+
+class ScheduleCreateRequestPlan(TypedDict):
+    """Exact REST descriptor selected by one version adapter."""
+
+    method: Literal["POST"]
+    path: str
+    form: NotRequired[JsonObject]
+    json: NotRequired[JsonObject]
 
 
 class WorkflowRecord(Protocol):
@@ -674,24 +714,21 @@ class ScheduleOperations(Protocol):
     def create(
         self,
         *,
-        workflow_code: int,
-        crontab: str,
-        start_time: str,
-        end_time: str,
-        timezone_id: str,
-        failure_strategy: str | None = None,
-        warning_type: str | None = None,
-        warning_group_id: int = 0,
-        workflow_instance_priority: str | None = None,
-        worker_group: str | None = None,
-        tenant_code: str | None = None,
-        environment_code: int = 0,
+        spec: ScheduleCreateSpec[int],
     ) -> SchedulePayloadRecord:
         """Create one schedule bound to a workflow."""
+
+    def plan_create(
+        self,
+        *,
+        spec: ScheduleCreateSpec[int | str],
+    ) -> ScheduleCreateRequestPlan:
+        """Describe the exact version-selected REST request without sending it."""
 
     def update(
         self,
         *,
+        project_code: int,
         schedule_id: int,
         crontab: str,
         start_time: str,
@@ -702,7 +739,8 @@ class ScheduleOperations(Protocol):
         warning_group_id: int = 0,
         workflow_instance_priority: str | None = None,
         worker_group: str | None = None,
-        environment_code: int = 0,
+        tenant_code: str | None = None,
+        environment_code: int | None = None,
     ) -> SchedulePayloadRecord:
         """Update one schedule by id."""
 

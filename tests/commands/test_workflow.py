@@ -438,7 +438,12 @@ schedule:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert len(payload["data"]["requests"]) == 4
-    assert payload["data"]["requests"][2]["path"] == "/v2/schedules"
+    schedule_request = payload["data"]["requests"][2]
+    assert schedule_request["path"] == "/projects/7/schedules"
+    assert schedule_request["form"]["workflowDefinitionCode"] == (
+        "<nightly-sync:created_workflow_code>"
+    )
+    assert "environmentCode" not in schedule_request["form"]
     assert payload["data"]["requests"][3]["path"] == (
         "/projects/7/schedules/<nightly-sync:created_schedule_id>/online"
     )

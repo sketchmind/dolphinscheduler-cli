@@ -370,6 +370,14 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert scheduler_update_schedule_operation.return_type == "Result"
     assert scheduler_update_schedule_operation.inferred_return_type == "Schedule"
 
+    scheduler_create_schedule_operation = next(
+        operation
+        for operation in snapshot.operations
+        if operation.operation_id == "SchedulerController.createSchedule"
+    )
+    assert scheduler_create_schedule_operation.return_type == "Result"
+    assert scheduler_create_schedule_operation.logical_return_type == "Schedule"
+
     gen_task_code_list_operation = next(
         operation
         for operation in snapshot.operations

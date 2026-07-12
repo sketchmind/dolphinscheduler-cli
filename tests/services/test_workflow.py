@@ -2023,6 +2023,8 @@ schedule:
   timezone: UTC
   start: "2026-01-01 00:00:00"
   end: "2026-12-31 23:59:59"
+  failure_strategy: END
+  priority: HIGH
   enabled: true
 """.strip(),
         encoding="utf-8",
@@ -2033,10 +2035,21 @@ schedule:
     requests = _sequence(data["requests"])
 
     assert len(requests) == 4
-    assert _mapping(requests[2])["path"] == "/v2/schedules"
-    assert _mapping(_mapping(requests[2])["json"])["workflowDefinitionCode"] == (
+    schedule_request = _mapping(requests[2])
+    schedule_form = _mapping(schedule_request["form"])
+    assert schedule_request["path"] == "/projects/7/schedules"
+    assert schedule_form["workflowDefinitionCode"] == (
         "<nightly-sync:created_workflow_code>"
     )
+    assert "environmentCode" not in schedule_form
+    assert schedule_form["failureStrategy"] == "END"
+    assert schedule_form["workflowInstancePriority"] == "HIGH"
+    assert json.loads(str(schedule_form["schedule"])) == {
+        "crontab": "0 0 0 * * ?",
+        "endTime": "2026-12-31 23:59:59",
+        "startTime": "2026-01-01 00:00:00",
+        "timezoneId": "UTC",
+    }
     assert _mapping(requests[3])["path"] == (
         "/projects/7/schedules/<nightly-sync:created_schedule_id>/online"
     )

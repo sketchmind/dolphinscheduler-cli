@@ -375,9 +375,10 @@ def schedule_group() -> dict[str, object]:
                         "environment-code",
                         value_type="integer",
                         description=(
-                            "Environment code for create explain or updated value "
-                            "for update explain. Create explain can also inherit "
-                            "an enabled project preference when omitted."
+                            "Environment selection for create or update explain. "
+                            "For create, omission allows enabled project preference "
+                            "and zero explicitly selects no environment. For update, "
+                            "omission preserves the current value and zero clears it."
                         ),
                         discovery_command="dsctl environment list",
                     ),
@@ -469,8 +470,9 @@ def schedule_group() -> dict[str, object]:
                         "environment-code",
                         value_type="integer",
                         description=(
-                            "Environment code. Omit to keep the CLI fallback "
-                            "chain, including enabled project preference."
+                            "Environment selection. Omit to allow enabled project "
+                            "preference and otherwise use no environment; pass 0 to "
+                            "explicitly use no environment and bypass that preference."
                         ),
                         discovery_command="dsctl environment list",
                     ),
@@ -567,7 +569,8 @@ def schedule_group() -> dict[str, object]:
                         "environment-code",
                         value_type="integer",
                         description=(
-                            "Updated environment code. Omit to keep the current value."
+                            "Updated environment selection. Omit to keep the current "
+                            "value; pass 0 to clear the environment."
                         ),
                         discovery_command="dsctl environment list",
                     ),

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import javalang
+import pytest
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -31,6 +32,39 @@ def test_resolve_inferred_return_type_prefers_specific_types() -> None:
     )
 
     assert inferred == "Optional<Long>"
+
+
+def test_schedule_create_return_correction_requires_expected_upstream_shape(
+    tmp_path: Path,
+) -> None:
+    return_types = _load_module("ds_codegen.extract.return_type_resolution")
+
+    corrected = return_types.resolve_operation_logical_return_type(
+        operation_id="SchedulerController.createSchedule",
+        repo_root=tmp_path,
+        raw_return_type="Result",
+        inferred_return_type="SchedulerServiceImpl_insertSchedule_result",
+        import_map={},
+        package_name=None,
+    )
+
+    assert corrected == "Schedule"
+
+
+def test_schedule_create_return_correction_fails_closed_on_upstream_drift(
+    tmp_path: Path,
+) -> None:
+    return_types = _load_module("ds_codegen.extract.return_type_resolution")
+
+    with pytest.raises(RuntimeError, match="return-type correction no longer matches"):
+        return_types.resolve_operation_logical_return_type(
+            operation_id="SchedulerController.createSchedule",
+            repo_root=tmp_path,
+            raw_return_type="Result<Schedule>",
+            inferred_return_type="Schedule",
+            import_map={},
+            package_name=None,
+        )
 
 
 def test_extract_method_invocation_with_qualifier_handles_this_selector_chain() -> None:

@@ -50,6 +50,7 @@ def test_workflow_template_result_returns_valid_yaml_document() -> None:
     assert "# task_group_id: 12" in yaml_text
     assert document["workflow"]["name"] == "example-workflow"
     assert document["workflow"]["execution_type"] == "PARALLEL"
+    assert document["workflow"]["release_state"] == "OFFLINE"
     assert len(document["tasks"]) == 2
     assert document["tasks"][1]["depends_on"] == ["extract"]
     assert "schedule" not in document
@@ -68,6 +69,7 @@ def test_workflow_template_result_can_include_schedule_block() -> None:
     assert data["artifact"]["raw_command"] == (
         "dsctl template workflow --with-schedule --raw"
     )
+    assert document["workflow"]["release_state"] == "ONLINE"
     assert document["schedule"]["cron"] == "0 0 2 * * ?"
     assert document["schedule"]["enabled"] is False
 

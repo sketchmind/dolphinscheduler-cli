@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict, TypeVar
 
 from dsctl.cli_surface import SCHEDULE_RESOURCE
 from dsctl.errors import (
@@ -16,6 +16,7 @@ from dsctl.services._surface_metadata import CONFIRMATION_RETRY_OPTION
 from dsctl.services._validation import (
     require_non_empty_text,
     require_non_negative_int,
+    require_positive_int,
     require_quartz_cron_text,
 )
 from dsctl.services.confirmation import build_confirmation_token, require_confirmation
@@ -25,6 +26,7 @@ from dsctl.services.schedule_analysis import (
     build_schedule_preview_data,
     confirmed_high_frequency_warning,
 )
+from dsctl.upstream.protocol import ScheduleCreateSpec
 
 if TYPE_CHECKING:
     from dsctl.services.runtime import ServiceRuntime
@@ -33,6 +35,7 @@ if TYPE_CHECKING:
 FailureStrategyValue = str
 WarningTypeValue = str
 PriorityValue = str
+WorkflowCodeT = TypeVar("WorkflowCodeT")
 
 FAILURE_STRATEGIES = frozenset({"CONTINUE", "END"})
 WARNING_TYPES = frozenset({"NONE", "SUCCESS", "FAILURE", "ALL"})
@@ -49,6 +52,7 @@ WORKFLOW_DEFINITION_NOT_RELEASE = 50004
 SCHEDULE_STATE_ONLINE = 50023
 START_TIME_BIGGER_THAN_END_TIME_ERROR = 80003
 USER_NO_OPERATION_PERM = 30001
+QUERY_ENVIRONMENT_BY_CODE_ERROR = 1200009
 
 
 class ScheduleCreateInput(TypedDict):
@@ -64,7 +68,7 @@ class ScheduleCreateInput(TypedDict):
     workflow_instance_priority: str | None
     worker_group: str | None
     tenant_code: str | None
-    environment_code: int
+    environment_code: int | None
 
 
 class ScheduleCreateDraft(TypedDict):
@@ -105,7 +109,7 @@ class ScheduleMutationData(TypedDict):
     workflowInstancePriority: str | None
     workerGroup: str | None
     tenantCode: str | None
-    environmentCode: int
+    environmentCode: int | None
 
 
 ScheduleExplainNextAction = Literal["apply", "retry_with_confirmation"]
@@ -199,7 +203,7 @@ def validated_schedule_create_input(
     priority: str | None,
     worker_group: str | None,
     tenant_code: str | None,
-    environment_code: int,
+    environment_code: int | None,
 ) -> ScheduleCreateInput:
     """Validate one schedule create/update payload."""
     return {
@@ -228,10 +232,7 @@ def validated_schedule_create_input(
         ),
         "worker_group": optional_text(worker_group),
         "tenant_code": optional_text(tenant_code),
-        "environment_code": require_non_negative_int(
-            environment_code,
-            label="environment_code",
-        ),
+        "environment_code": normalize_environment_code(environment_code),
     }
 
 
@@ -291,6 +292,37 @@ def validated_schedule_create_draft(
     }
 
 
+def normalize_environment_code(value: int | None) -> int | None:
+    """Normalize the legacy CLI zero sentinel to no schedule environment."""
+    if value is None or value == 0:
+        return None
+    return require_positive_int(value, label="environment_code")
+
+
+def build_schedule_create_spec(
+    *,
+    project_code: int,
+    workflow_code: WorkflowCodeT,
+    schedule_input: ScheduleCreateInput,
+) -> ScheduleCreateSpec[WorkflowCodeT]:
+    """Adapt validated service input to the version-stable upstream interface."""
+    return ScheduleCreateSpec(
+        project_code=project_code,
+        workflow_code=workflow_code,
+        crontab=schedule_input["crontab"],
+        start_time=schedule_input["start_time"],
+        end_time=schedule_input["end_time"],
+        timezone_id=schedule_input["timezone_id"],
+        failure_strategy=schedule_input["failure_strategy"],
+        warning_type=schedule_input["warning_type"],
+        warning_group_id=schedule_input["warning_group_id"],
+        workflow_instance_priority=schedule_input["workflow_instance_priority"],
+        worker_group=schedule_input["worker_group"],
+        tenant_code=schedule_input["tenant_code"],
+        environment_code=schedule_input["environment_code"],
+    )
+
+
 def preview_schedule(
     runtime: ServiceRuntime,
     *,
@@ -326,7 +358,7 @@ def schedule_mutation_data(
     workflow_instance_priority: str | None,
     worker_group: str | None,
     tenant_code: str | None,
-    environment_code: int,
+    environment_code: int | None,
 ) -> ScheduleMutationData:
     """Render one normalized schedule mutation shape with DS-native field names."""
     return {
@@ -445,6 +477,7 @@ def translate_schedule_api_error(
     schedule_id: int | None = None,
     workflow_code: int | None = None,
     workflow_name: str | None = None,
+    environment_code: int | None = None,
 ) -> Exception:
     """Translate one upstream schedule API error into a stable CLI error."""
     details: dict[str, int | str] = {
@@ -457,6 +490,31 @@ def translate_schedule_api_error(
         details["workflow_code"] = workflow_code
     if workflow_name is not None:
         details["workflow_name"] = workflow_name
+    if environment_code is not None:
+        details["environment_code"] = environment_code
+
+    if error.result_code == QUERY_ENVIRONMENT_BY_CODE_ERROR:
+        target = (
+            f"Environment code {environment_code}"
+            if environment_code is not None
+            else "The selected environment"
+        )
+        suggestion = (
+            "Run `dsctl environment list` to choose an existing environment "
+            "code, or pass `--environment-code 0` to explicitly use no "
+            "environment."
+            if operation == "create"
+            else (
+                "Run `dsctl environment list` to choose an existing environment "
+                "code, pass `--environment-code 0` to clear the environment, "
+                "or omit the option to preserve the current environment."
+            )
+        )
+        return NotFoundError(
+            f"{target} does not exist.",
+            details=details,
+            suggestion=suggestion,
+        )
 
     translated = _translated_schedule_missing_or_conflict_error(
         error,
