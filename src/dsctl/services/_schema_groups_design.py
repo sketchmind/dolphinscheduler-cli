@@ -885,7 +885,10 @@ def workflow_group() -> dict[str, object]:
             command(
                 "export",
                 action="workflow.export",
-                summary="Export one workflow as an editable YAML document.",
+                summary=(
+                    "Export raw workflow YAML for clone/create or "
+                    "read-only schedule-aware edit."
+                ),
                 arguments=[
                     argument(
                         "workflow",
@@ -900,7 +903,12 @@ def workflow_group() -> dict[str, object]:
                 payload={
                     "format": "yaml",
                     "output": "raw_document",
-                    "target_command": "dsctl workflow edit WORKFLOW --file FILE",
+                    "target_commands": [
+                        "dsctl workflow create --file FILE",
+                        "dsctl workflow edit WORKFLOW --file FILE",
+                    ],
+                    "schedule_on_create": "desired_state",
+                    "schedule_on_edit": "read_only_snapshot",
                 },
             ),
             command(
@@ -984,7 +992,10 @@ def workflow_group() -> dict[str, object]:
                             "WORKFLOW` or `dsctl template workflow "
                             "--raw`; use --dry-run to inspect the compiled diff. "
                             "Full-file edits match task identity by exact task "
-                            "name and do not infer renames."
+                            "name and do not infer renames. An exported "
+                            "`schedule:` block is verified as a read-only "
+                            "snapshot and remains unchanged; use schedule "
+                            "commands to modify it."
                         ),
                     ),
                     project_option(),
@@ -993,7 +1004,10 @@ def workflow_group() -> dict[str, object]:
                         value_type="boolean",
                         description=(
                             "Compile the merged workflow edit payload without "
-                            "sending it."
+                            "sending it. When the full request is unnecessary, "
+                            "use `--columns diff,no_change,"
+                            "workflow_state_constraints,schedule_impacts` for a "
+                            "bounded review."
                         ),
                         default=False,
                     ),
@@ -1004,6 +1018,7 @@ def workflow_group() -> dict[str, object]:
                     "source_options": ["--patch PATH", "--file PATH"],
                     "patch_template_command": "dsctl template workflow-patch --raw",
                     "file_source_command": "dsctl workflow export WORKFLOW",
+                    "file_schedule": "read_only_snapshot",
                     "file_template_command": "dsctl template workflow --raw",
                     "target_commands": [
                         "dsctl workflow edit WORKFLOW --patch FILE",

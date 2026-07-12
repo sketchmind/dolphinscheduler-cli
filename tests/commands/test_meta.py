@@ -1,11 +1,12 @@
 import json
-import sys
 from pathlib import Path
 
 import pytest
+from typer.core import TyperGroup
+from typer.main import get_command
 from typer.testing import CliRunner
 
-from dsctl.app import _misplaced_root_option, app, main
+from dsctl.app import _normalize_root_options, app
 from tests.support import normalize_cli_help
 
 runner = CliRunner()
@@ -70,11 +71,12 @@ def test_compact_rejects_non_json_output() -> None:
 
 def test_root_help_describes_global_output_option_placement() -> None:
     result = runner.invoke(app, ["--help"])
+    help_text = normalize_cli_help(result.stdout)
 
     assert result.exit_code == 0
-    assert "--compact" in result.stdout
-    assert "Global option" in result.stdout
-    assert "COMMAND" in result.stdout
+    assert "--compact" in help_text
+    assert "Global option" in help_text
+    assert "before or after the command path" in help_text
 
 
 def test_root_help_routes_agents_to_narrow_discovery_and_navigation() -> None:
@@ -102,32 +104,66 @@ def test_workflow_create_help_separates_bounded_lint_from_full_dry_run() -> None
     assert "bounded DAG validation" in help_text
 
 
-def test_misplaced_root_option_detection() -> None:
-    assert (
-        _misplaced_root_option(["worker-group", "list", "--output-format", "table"])
-        == "--output-format"
-    )
-    assert _misplaced_root_option(["--output-format", "table", "version"]) is None
-    assert _misplaced_root_option(["version", "--compact"]) == "--compact"
-    assert _misplaced_root_option(["--compact", "version"]) is None
-
-
-def test_console_main_reports_misplaced_compact_on_stderr(
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        (["version", "--compact"], ["--compact", "version"]),
+        (
+            ["workflow", "list", "--output-format", "table", "--compact"],
+            ["--output-format", "table", "--compact", "workflow", "list"],
+        ),
+        (
+            ["version", "--output-format=tsv"],
+            ["--output-format=tsv", "version"],
+        ),
+        (
+            ["workflow", "get", "--", "--compact"],
+            ["workflow", "get", "--", "--compact"],
+        ),
+        (
+            ["workflow", "--compact", "list", "--all"],
+            ["--compact", "workflow", "list", "--all"],
+        ),
+        (
+            ["workflow", "list", "--all", "--compact"],
+            ["--compact", "workflow", "list", "--all"],
+        ),
+    ],
+)
+def test_normalize_root_options_accepts_either_placement(
+    args: list[str],
+    expected: list[str],
 ) -> None:
-    monkeypatch.setattr(sys, "argv", ["dsctl", "version", "--compact"])
+    root_command = get_command(app)
+    assert isinstance(root_command, TyperGroup)
+    assert _normalize_root_options(root_command, args) == expected
 
-    with pytest.raises(SystemExit) as exc_info:
-        main()
 
-    captured = capsys.readouterr()
-    assert exc_info.value.code == 2
-    assert captured.out == ""
-    assert captured.err == (
-        "--compact is a global dsctl option. Put it before the command group, "
-        "for example: dsctl --compact <command> ...\n"
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["workflow", "list", "--search", "--compact"],
+        ["workflow", "get", "--project", "--compact", "daily-sync"],
+        ["schema", "--command", "--compact"],
+        ["workflow", "list", "--search=--compact"],
+    ],
+)
+def test_normalize_root_options_preserves_leaf_option_values(args: list[str]) -> None:
+    root_command = get_command(app)
+    assert isinstance(root_command, TyperGroup)
+    assert _normalize_root_options(root_command, args) == args
+
+
+def test_global_render_options_can_follow_leaf_command() -> None:
+    result = runner.invoke(
+        app,
+        ["version", "--columns", "cli,ds", "--compact"],
     )
+
+    assert result.exit_code == 0
+    assert result.stderr == ""
+    payload = json.loads(result.stdout)
+    assert payload["data"] == {"cli": "0.2.0", "ds": "3.4.1"}
 
 
 @pytest.mark.parametrize("ds_version", ["3.3.2", "3.4.0"])

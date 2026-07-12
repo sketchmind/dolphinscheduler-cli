@@ -151,6 +151,7 @@ Export an existing workflow, edit the YAML, and apply the full edited document:
 
 ```bash
 dsctl workflow export daily-etl --project etl-prod > workflow.yaml
+# schedule: is verified as a read-only snapshot by workflow edit
 dsctl workflow edit daily-etl --project etl-prod --file workflow.yaml --dry-run
 dsctl workflow edit daily-etl --project etl-prod --file workflow.yaml
 ```
@@ -185,7 +186,8 @@ dsctl workflow-instance edit <workflow_instance_id> --file instance.yaml --dry-r
 ## Output
 
 Commands return a stable JSON envelope by default. Use global output options
-before the command group when a table or pipeline-oriented view is more useful:
+before or after the command path when a table or pipeline-oriented view is more
+useful (examples keep the canonical prefix form):
 
 ```bash
 dsctl --compact --columns id,name,state workflow-instance list --project etl-prod --page-size 10

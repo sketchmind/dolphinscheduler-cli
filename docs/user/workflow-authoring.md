@@ -283,8 +283,14 @@ live-only tasks are deleted after `--confirm-risk`. Full-file edit does not
 infer task renames. Use patch `tasks.rename[]` when a task name changes and the
 DS task `code + version` must be preserved.
 
-`workflow edit --file` rejects `schedule:` blocks. Use
-`schedule update|online|offline` for schedule lifecycle changes.
+`workflow edit --file` accepts the `schedule:` block emitted by workflow export
+as a read-only snapshot. It verifies that snapshot against the authoritative
+attached schedule, removes it before compiling the workflow definition update,
+and never changes schedule state or configuration. Changed or missing schedule
+state fails before any workflow mutation. Use `schedule update|online|offline`
+for intentional schedule changes. Deleting or nulling a field inside an exported
+schedule is a mismatch, not a request to ignore it; remove the complete block
+only when snapshot validation is intentionally unnecessary.
 
 Start from the matching patch template:
 
@@ -297,7 +303,7 @@ Use full-file edit when the entire definition should be reconciled:
 
 ```bash
 dsctl workflow export WORKFLOW > workflow.yaml
-# edit workflow.yaml and remove schedule: if present
+# edit workflow definition and tasks; leave schedule unchanged
 dsctl workflow edit WORKFLOW --file workflow.yaml --dry-run
 dsctl workflow edit WORKFLOW --file workflow.yaml
 ```

@@ -3520,9 +3520,123 @@ tasks:
     ]
 
 
-def test_edit_workflow_result_full_file_rejects_schedule_block(
+def test_edit_workflow_result_accepts_exported_schedule_as_read_only_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
 ) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+            )
+        ]
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+    )
+    exported = workflow_service.export_workflow_yaml_result(
+        "daily-sync",
+        project="etl-prod",
+    )
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(
+        str(_mapping(exported.data)["yaml"]),
+        encoding="utf-8",
+    )
+
+    result = workflow_service.edit_workflow_result(
+        "daily-sync",
+        file=workflow_path,
+        project="etl-prod",
+        dry_run=True,
+    )
+
+    data = _mapping(result.data)
+    assert data["dry_run"] is True
+    assert data["no_change"] is True
+    assert data["schedule_impacts"] == [
+        "workflow edit does not modify the attached schedule; use "
+        "`schedule update|online|offline` separately"
+    ]
+    assert fake_workflow_adapter.update_calls == []
+    assert len(schedule_adapter.list_calls) == 2
+
+
+def test_edit_workflow_result_rejects_changed_schedule_snapshot_before_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+            )
+        ]
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+    )
+    exported = workflow_service.export_workflow_yaml_result(
+        "daily-sync",
+        project="etl-prod",
+    )
+    document = yaml.safe_load(str(_mapping(exported.data)["yaml"]))
+    document["schedule"]["cron"] = "0 30 2 * * ?"
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    with pytest.raises(ConflictError) as captured:
+        workflow_service.edit_workflow_result(
+            "daily-sync",
+            file=workflow_path,
+            project="etl-prod",
+            dry_run=True,
+        )
+
+    error = captured.value
+    assert error.details["reason"] == "schedule_snapshot_mismatch"
+    assert error.details["mismatched_fields"] == ["cron"]
+    assert error.details["mutation_applied"] is False
+    assert fake_workflow_adapter.update_calls == []
+    assert fake_task_adapter.generate_code_calls == []
+
+
+def test_edit_workflow_result_rejects_schedule_snapshot_when_none_is_attached(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=FakeScheduleAdapter(schedules=[]),
+    )
     workflow_path = tmp_path / "workflow.yaml"
     workflow_path.write_text(
         """
@@ -3541,13 +3655,73 @@ schedule:
         encoding="utf-8",
     )
 
-    with pytest.raises(UserInputError, match="does not mutate schedule blocks"):
+    with pytest.raises(ConflictError) as captured:
         workflow_service.edit_workflow_result(
             "daily-sync",
             file=workflow_path,
             project="etl-prod",
             dry_run=True,
         )
+
+    assert captured.value.details["reason"] == "attached_schedule_missing"
+    assert captured.value.details["mutation_applied"] is False
+    assert fake_workflow_adapter.update_calls == []
+
+
+def test_edit_workflow_result_accepts_workflow_offline_schedule_cascade(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+            )
+        ]
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+    )
+    exported = workflow_service.export_workflow_yaml_result(
+        "daily-sync",
+        project="etl-prod",
+    )
+    document = yaml.safe_load(str(_mapping(exported.data)["yaml"]))
+    document["workflow"]["description"] = "updated from exported document"
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    workflow_service.offline_workflow_result("daily-sync", project="etl-prod")
+    result = workflow_service.edit_workflow_result(
+        "daily-sync",
+        file=workflow_path,
+        project="etl-prod",
+    )
+
+    assert _mapping(result.data)["description"] == "updated from exported document"
+    assert len(fake_workflow_adapter.update_calls) == 1
+    assert schedule_adapter.schedules[0].id == 23
+    assert schedule_adapter.schedules[0].crontab == "0 0 0 * * ?"
+    assert schedule_adapter.schedules[0].releaseState == FakeEnumValue("OFFLINE")
+    assert result.warnings == [
+        "workflow edit does not modify the attached schedule; use "
+        "`schedule update|online|offline` separately",
+        (
+            "this edit can bring the workflow back online, but any attached "
+            "schedule remains offline until `schedule online` is requested"
+        ),
+    ]
 
 
 def test_edit_workflow_result_requires_exactly_one_input_file(

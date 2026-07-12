@@ -38,9 +38,9 @@ def test_default_schema_is_a_bounded_progressive_index() -> None:
         "choices": ["json", "table", "tsv"],
         "default": "json",
         "normalization": "lowercase",
-        "placement": "before_command",
+        "placement": "anywhere",
     }
-    assert all(item["placement"] == "before_command" for item in global_options)
+    assert all(item["placement"] == "anywhere" for item in global_options)
     compact = next(item for item in global_options if item["flag"] == "--compact")
     assert compact["requires"] == {"--output-format": "json"}
     action_count = data["action_count"]
@@ -214,7 +214,7 @@ def test_command_schema_is_action_local_without_legacy_duplication() -> None:
     ]
     assert len(global_options) == 4
     assert any(
-        item["flag"] == "--output-format" and item["placement"] == "before_command"
+        item["flag"] == "--output-format" and item["placement"] == "anywhere"
         for item in global_options
     )
     links = [_require_dict(item) for item in _require_list(data["links"])]

@@ -302,7 +302,12 @@ reuses the schedule returned by its own mutation, while workflow offline
 refreshes the attached schedule after DS applies its cascading state change.
 Definition edit compilation deliberately excludes this independently persisted
 schedule from its live baseline; schedule constraints and output shaping consume
-the authoritative record at the workflow service boundary instead.
+the authoritative record at the workflow service boundary instead. A full-file
+edit may carry the `schedule:` emitted by workflow export, but the edit module
+treats it only as a concurrency snapshot: it verifies the authoritative fields,
+accepts DS's workflow-offline schedule cascade only when the exported document
+still requests both workflow and schedule `ONLINE`, strips the block, and never
+compiles or sends a schedule mutation.
 
 Workflow task identity allocation is split across the service and upstream
 layers. The compiler always receives an explicit allocator. Lint and dry-run

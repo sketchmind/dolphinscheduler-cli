@@ -194,7 +194,10 @@ def export_command(
         ),
     ] = None,
 ) -> None:
-    """Export one workflow as an editable YAML document."""
+    """Export raw YAML for clone/create or read-only schedule-aware edit.
+
+    Global display options do not alter successful YAML artifact output.
+    """
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_raw_result(
@@ -445,7 +448,9 @@ def edit_command(
                 "from `dsctl workflow export WORKFLOW` or `dsctl "
                 "template workflow --raw`; use --dry-run to inspect the "
                 "compiled diff. Full-file edits match task identity by exact "
-                "task name and do not infer renames."
+                "task name and do not infer renames. An exported `schedule:` "
+                "block is verified as a read-only snapshot and remains unchanged; "
+                "use schedule commands to modify it."
             ),
             readable=True,
             resolve_path=True,
@@ -462,7 +467,12 @@ def edit_command(
         bool,
         typer.Option(
             "--dry-run",
-            help="Compile the merged workflow edit payload without sending it.",
+            help=(
+                "Compile the merged workflow edit payload without sending it. "
+                "When the full request is unnecessary, use `--columns "
+                "diff,no_change,workflow_state_constraints,schedule_impacts` "
+                "for a bounded review."
+            ),
         ),
     ] = False,
     confirm_risk: Annotated[

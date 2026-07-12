@@ -274,9 +274,9 @@ def test_schema_result_describes_current_stable_surface() -> None:
     assert _find_option(global_options, "columns")["value_name"] == "CSV"
     compact_option = _find_option(global_options, "compact")
     assert compact_option["default"] is False
-    assert compact_option["placement"] == "before_command"
+    assert compact_option["placement"] == "anywhere"
     assert all(
-        _find_option(global_options, name)["placement"] == "before_command"
+        _find_option(global_options, name)["placement"] == "anywhere"
         for name in ("env-file", "output-format", "columns", "compact")
     )
     capabilities_command = _find_command(commands, "capabilities")
@@ -1109,6 +1109,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
         "source_options": ["--patch PATH", "--file PATH"],
         "patch_template_command": "dsctl template workflow-patch --raw",
         "file_source_command": "dsctl workflow export WORKFLOW",
+        "file_schedule": "read_only_snapshot",
         "file_template_command": "dsctl template workflow --raw",
         "target_commands": [
             "dsctl workflow edit WORKFLOW --patch FILE",
@@ -1143,7 +1144,12 @@ def test_schema_result_describes_current_stable_surface() -> None:
     assert workflow_export["payload"] == {
         "format": "yaml",
         "output": "raw_document",
-        "target_command": "dsctl workflow edit WORKFLOW --file FILE",
+        "target_commands": [
+            "dsctl workflow create --file FILE",
+            "dsctl workflow edit WORKFLOW --file FILE",
+        ],
+        "schedule_on_create": "desired_state",
+        "schedule_on_edit": "read_only_snapshot",
     }
     workflow_delete = _find_command(workflow_group["commands"], "delete")
     workflow_delete_options = _require_list(workflow_delete["options"])
@@ -1771,12 +1777,34 @@ def test_schema_result_command_rows_expose_payload_discovery() -> None:
     } in workflow_rows
     assert {
         "kind": "payload",
+        "name": "file_schedule",
+        "value": "read_only_snapshot",
+    } in workflow_rows
+    assert {
+        "kind": "payload",
         "name": "target_commands",
         "value": (
             "dsctl workflow edit WORKFLOW --patch FILE, "
             "dsctl workflow edit WORKFLOW --file FILE"
         ),
     } in workflow_rows
+
+    export_result = get_schema_result(command_action="workflow.export", full=True)
+    export_data = _require_dict(export_result.data)
+    export_rows = [_require_dict(row) for row in _require_list(export_data["rows"])]
+    assert {
+        "kind": "payload",
+        "name": "target_commands",
+        "value": (
+            "dsctl workflow create --file FILE, "
+            "dsctl workflow edit WORKFLOW --file FILE"
+        ),
+    } in export_rows
+    assert {
+        "kind": "payload",
+        "name": "schedule_on_edit",
+        "value": "read_only_snapshot",
+    } in export_rows
 
 
 def test_schema_result_can_list_group_and_command_discovery_rows() -> None:
