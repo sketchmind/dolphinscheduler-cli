@@ -962,11 +962,14 @@ def _action_index_item(
 ) -> _ActionCandidateData | None:
     if action not in _STABLE_LEAF_ACTIONS or not targets:
         return None
+    normalized_targets: Literal["all"] | list[int | str] = (
+        "all" if targets == "all" else list(targets)
+    )
     return _ActionCandidateData(
         action=action,
         mutates=mutates,
         needs_input=needs_input,
-        targets=targets if targets == "all" else list(targets),
+        targets=normalized_targets,
     )
 
 
