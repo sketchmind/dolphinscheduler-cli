@@ -5,13 +5,16 @@ The stable CLI surface is documented in the
 machine-readable behavior contract for command names, output envelopes, error
 shape, warnings, and dry-run behavior.
 
-Use the bounded `dsctl schema` index to find actions, `schema --group GROUP` to
-browse one family, and `schema --command ACTION` for exact arguments, options,
-choices, selector rules, payload hints, and output shape. Use
-`dsctl capabilities` for feature discovery; it is not an argument schema.
+When the command path is known, start with its leaf `--help`; this is the
+task-oriented projection for constructing the common next invocation. Use the
+bounded `dsctl schema` index to find unknown actions, `schema --group GROUP` to
+browse one unknown family, and `schema --command ACTION` when exact arguments,
+options, choices, selector rules, resolution precedence, payload hints, or
+output shape are required. Use `dsctl capabilities` for feature discovery; it
+is not an argument schema.
 
-For agent or scripted discovery, start with bounded self-description and
-expand only the section or complete inventory that is needed:
+For agent or scripted discovery, inspect only the immediate action and expand
+only the contract that is needed:
 
 ```bash
 dsctl capabilities
@@ -29,6 +32,12 @@ Action names are present in the default index and group views;
 `schema --list-commands` retains the detailed compatibility inventory.
 In an action-local response, use `data.command.invocation` for the exact CLI
 path and placeholders, and obey `data.command.constraints[]` before executing.
+An option with `resolution` is not a static parser default: its `precedence`
+lists the value sources consulted when the option is omitted. The current
+runtime source order is `flag`, `project_preference`, then `default`, and the
+`fallback` field carries the value used by that terminal source. If `default`
+also appears beside `resolution`, it is a schema-version-compatible projection
+of the same terminal value; `resolution` remains authoritative.
 `enum list ENUM` values come from `dsctl enum names`.
 
 ## Discovery

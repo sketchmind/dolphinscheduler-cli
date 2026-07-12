@@ -313,11 +313,27 @@ lifecycle results then carry complete, output-bounded `next_actions` commands;
 callers preserve a goal-aligned, authorized selection unchanged and serialize
 mutations before dependent reads.
 
-The canonical bounded JSON contract contains each fact once. In particular,
-action-local JSON owns one `command` object and does not carry duplicate
-renderer rows. The output adapter derives table, TSV, and explicit column
-projection rows from that object. Schema view-aware data shapes keep index,
-list, group, and command projection paths local to the output boundary.
+Interaction is help-first with schema on demand; implementation is
+contract-first. The pure `command_contract` deep module owns canonical root
+option facts, explicit action routes, ordered input facts, parser versus fixed
+default semantics, path rules, value-source resolution, and shell-safe command
+rendering. Typer help/parser metadata, bounded schema JSON, and lifecycle
+navigation are separate adapters at that seam. Strongly typed command callbacks
+remain explicit, and Click-tree parity tests verify that their observable parser
+contract matches the canonical facts. Migration is incremental; the four root
+options and `workflow.create` form the initial three-adapter tracer bullet.
+Commands with hidden compatibility flags or multiple aliases remain
+handwritten until the canonical grammar models visibility and aliases; they
+must not be forced through a lossy projection merely to increase coverage.
+
+Each modeled command fact has one construction source. The versioned wire
+contract may retain a compatibility projection of that fact—for example a
+legacy `default` beside the richer `resolution` object—but adapters do not
+redefine it. In particular, action-local JSON owns one `command` object and
+does not carry duplicate renderer rows. The output adapter derives table, TSV,
+and explicit column projection rows from that object. Schema view-aware data
+shapes keep index, list, group, and command projection paths local to the
+output boundary.
 
 `services.task_authoring` applies the same deep-module rule to task-type
 contracts. It builds canonical metadata, fields, and state rules once, then

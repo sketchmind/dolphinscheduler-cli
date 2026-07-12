@@ -1,10 +1,12 @@
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 
 from dsctl.cli_runtime import AppState, set_app_state
+from dsctl.command_contract import COMMAND_CATALOG, CommandBindingError
+from dsctl.commands._contract_adapter import typer_option
 from dsctl.commands.registry import register_all_commands
 from dsctl.errors import UserInputError
 from dsctl.output_formats import (
@@ -14,17 +16,15 @@ from dsctl.output_formats import (
 )
 
 _ROOT_OPTION_ARITY = {
-    "--env-file": 1,
-    "--output-format": 1,
-    "--columns": 1,
-    "--compact": 0,
+    option.flag: option.arity for option in COMMAND_CATALOG.global_options
 }
 _ROOT_OPTION_EXAMPLES = {
-    "--env-file": "dsctl --env-file cluster.env <command> ...",
-    "--output-format": "dsctl --output-format table <command> ...",
-    "--columns": "dsctl --columns id,name,state <command> ...",
-    "--compact": "dsctl --compact <command> ...",
+    option.flag: option.example for option in COMMAND_CATALOG.global_options
 }
+_ENV_FILE = COMMAND_CATALOG.global_option("env-file").input
+_OUTPUT_FORMAT = COMMAND_CATALOG.global_option("output-format").input
+_COLUMNS = COMMAND_CATALOG.global_option("columns").input
+_COMPACT = COMMAND_CATALOG.global_option("compact").input
 
 _ROOT_HELP = (
     "Generated-first REST-only DolphinScheduler CLI.\n\n"
@@ -51,50 +51,20 @@ def main_callback(
     ctx: typer.Context,
     env_file: Annotated[
         Path | None,
-        typer.Option(
-            "--env-file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Global option; place before COMMAND. Load DS_* settings from an "
-                "env file before reading the process environment."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
+        typer_option(_ENV_FILE),
     ] = None,
     output_format: Annotated[
         str,
-        typer.Option(
-            "--output-format",
-            help=(
-                "Global option; place before COMMAND. Render the standard envelope "
-                "as json, or render row/object views as table/tsv."
-            ),
-        ),
+        typer_option(_OUTPUT_FORMAT),
     ] = "json",
     columns: Annotated[
         str | None,
-        typer.Option(
-            "--columns",
-            help=(
-                "Global option; place before COMMAND. Comma-separated row/object "
-                "fields to render or project. In json mode this narrows the "
-                "standard envelope data payload."
-            ),
-        ),
+        typer_option(_COLUMNS),
     ] = None,
     *,
     compact: Annotated[
         bool,
-        typer.Option(
-            "--compact",
-            help=(
-                "Global option; place before COMMAND. Emit JSON without indentation; "
-                "valid only with --output-format json."
-            ),
-        ),
+        typer_option(_COMPACT),
     ] = False,
 ) -> None:
     """Initialize shared command state."""
@@ -129,15 +99,14 @@ register_all_commands(app)
 
 def _parse_output_format(value: str) -> OutputFormat:
     """Parse one Typer string option into the stable output-format literal."""
-    normalized = value.lower()
-    if normalized == "json":
-        return "json"
-    if normalized == "table":
-        return "table"
-    if normalized == "tsv":
-        return "tsv"
-    message = f"Unsupported output format: {value}"
-    raise typer.BadParameter(message)
+    try:
+        normalized = COMMAND_CATALOG.validate_global_values({"output-format": value})[
+            "output-format"
+        ]
+    except CommandBindingError as exc:
+        message = f"Unsupported output format: {value}"
+        raise typer.BadParameter(message) from exc
+    return cast("OutputFormat", normalized)
 
 
 def _misplaced_root_option(args: list[str]) -> str | None:

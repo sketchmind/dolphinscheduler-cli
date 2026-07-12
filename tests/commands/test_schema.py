@@ -356,6 +356,17 @@ def test_schema_command_default_table_prioritizes_compact_invocation_fields() ->
     assert "--date | --start+--end" in result.stdout
 
 
+def test_schema_command_table_exposes_runtime_value_resolution() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "schema", "--command", "workflow.run"],
+    )
+
+    assert result.exit_code == 0
+    assert "resolve=flag>pref>medium" in result.stdout
+    assert "resolve=flag>pref>none" in result.stdout
+
+
 def test_schema_command_table_output_supports_contract_columns() -> None:
     result = runner.invoke(
         app,

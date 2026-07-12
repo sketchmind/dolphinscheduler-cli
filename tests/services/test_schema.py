@@ -2206,6 +2206,39 @@ def test_schema_runtime_list_commands_expose_all_pages_option() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "action",
+    ["workflow.run", "workflow.run-task", "workflow.backfill"],
+)
+def test_workflow_run_schema_distinguishes_fallbacks_from_parser_defaults(
+    action: str,
+) -> None:
+    result = get_schema_result(command_action=action)
+    data = _require_dict(result.data)
+    command = _require_dict(data["command"])
+    options = _require_list(command["options"])
+
+    expected_fallbacks = {
+        "worker-group": "default",
+        "tenant": "default",
+        "priority": "medium",
+        "warning-type": "none",
+        "warning-group-id": None,
+        "environment-code": None,
+    }
+    for option_name, fallback in expected_fallbacks.items():
+        option = _find_option(options, option_name)
+        assert option["resolution"] == {
+            "precedence": ["flag", "project_preference", "default"],
+            "fallback": fallback,
+        }
+
+    # Schema v2 keeps these established fields as the terminal fallback while
+    # resolution makes clear that project preference is consulted first.
+    assert _find_option(options, "priority")["default"] == "medium"
+    assert _find_option(options, "warning-type")["default"] == "none"
+
+
 def _find_group(commands: object, name: str) -> dict[str, object]:
     assert isinstance(commands, list)
     for item in commands:

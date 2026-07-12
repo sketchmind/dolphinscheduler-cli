@@ -37,6 +37,7 @@ def test_default_schema_is_a_bounded_progressive_index() -> None:
         "value_name": "FORMAT",
         "choices": ["json", "table", "tsv"],
         "default": "json",
+        "normalization": "lowercase",
         "placement": "before_command",
     }
     assert all(item["placement"] == "before_command" for item in global_options)

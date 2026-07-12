@@ -40,6 +40,7 @@ from dsctl.cli_surface import (
     WORKFLOW_RESOURCE,
     stable_leaf_actions,
 )
+from dsctl.command_contract import COMMAND_CATALOG
 from dsctl.config import load_selected_ds_version
 from dsctl.data_shapes import (
     data_shape_schema_for_action,
@@ -111,6 +112,10 @@ from dsctl.services._schema_groups_runtime import (
 )
 from dsctl.services._schema_groups_runtime import (
     workflow_instance_group as _workflow_instance_group,
+)
+from dsctl.services._schema_primitives import (
+    bounded_global_option_from_contract,
+    full_global_option_from_contract,
 )
 from dsctl.services._schema_primitives import command as _command
 from dsctl.services._schema_primitives import option as _option
@@ -473,30 +478,14 @@ def _schema_ds_data(ds_version: str) -> JsonObject:
 def _bounded_global_options() -> list[JsonObject]:
     """Return the minimum global contract needed to construct an invocation."""
     return [
-        {
-            "flag": "--env-file",
-            "value_name": "PATH",
-            "placement": "before_command",
-        },
-        {
-            "flag": "--output-format",
-            "value_name": "FORMAT",
-            "choices": ["json", "table", "tsv"],
-            "default": "json",
-            "placement": "before_command",
-        },
-        {
-            "flag": "--columns",
-            "value_name": "CSV",
-            "placement": "before_command",
-        },
-        {
-            "flag": "--compact",
-            "type": "boolean",
-            "default": False,
-            "placement": "before_command",
-            "requires": {"--output-format": "json"},
-        },
+        require_json_object(
+            bounded_global_option_from_contract(option),
+            label=f"{option.flag} bounded global option",
+        )
+        for option in sorted(
+            COMMAND_CATALOG.global_options,
+            key=lambda item: item.schema_order,
+        )
     ]
 
 
@@ -597,6 +586,10 @@ def _schema_invocation(action: str, command: JsonObject) -> str:
 
 
 def _action_command(action: str) -> str:
+    try:
+        return COMMAND_CATALOG.command(action).command_path
+    except KeyError:
+        pass
     return f"dsctl {action.replace('.', ' ')}"
 
 
@@ -617,49 +610,11 @@ def _schema_data(*, ds_version: str) -> dict[str, object]:
         "supported_ds_versions": list(SUPPORTED_VERSIONS),
         "ds_versions": list(supported_version_metadata()),
         "global_options": [
-            _option(
-                "env-file",
-                value_type="path",
-                description=(
-                    "Load DS_* settings from an env file before reading the process "
-                    "environment."
-                ),
-                value_name="PATH",
-                placement="before_command",
-            ),
-            _option(
-                "output-format",
-                value_type="string",
-                description=(
-                    "Render output as json, table, or tsv. json keeps the full "
-                    "standard envelope unless --columns is used for explicit "
-                    "data projection."
-                ),
-                default="json",
-                choices=["json", "table", "tsv"],
-                value_name="FORMAT",
-                placement="before_command",
-            ),
-            _option(
-                "columns",
-                value_type="string",
-                description=(
-                    "Comma-separated row/object fields to render or project. "
-                    "In json mode this narrows the standard envelope data payload."
-                ),
-                value_name="CSV",
-                placement="before_command",
-            ),
-            _option(
-                "compact",
-                value_type="boolean",
-                description=(
-                    "Emit the standard JSON envelope without indentation. "
-                    "Valid only with --output-format json."
-                ),
-                default=False,
-                placement="before_command",
-            ),
+            full_global_option_from_contract(option)
+            for option in sorted(
+                COMMAND_CATALOG.global_options,
+                key=lambda item: item.schema_order,
+            )
         ],
         "selection": selection_schema_data(),
         "output": output_schema_data(),

@@ -4,10 +4,18 @@ import json
 import shlex
 from typing import TYPE_CHECKING
 
+from typer.testing import CliRunner
+
+from dsctl.app import app
+from dsctl.commands import workflow as workflow_commands
 from dsctl.output import CommandResult, success_payload
 from dsctl.result_navigation import next_actions_for
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
+    import pytest
+
     from dsctl.support.json_types import JsonObject, JsonValue
 
 
@@ -124,6 +132,76 @@ def test_workflow_create_dry_run_preserves_required_confirmation_token() -> None
         "--confirm-risk",
         " risk token ",
     ]
+
+
+def test_workflow_create_next_action_replays_through_the_real_parser(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_file = tmp_path / "cluster $(opaque).env"
+    workflow_file = tmp_path / "workflow it's $(opaque).yaml"
+    env_file.write_text("", encoding="utf-8")
+    workflow_file.write_text("name: replayed\n", encoding="utf-8")
+    confirmation_token = " risk\n'$(opaque)' "
+    captured: dict[str, object] = {}
+
+    def fake_create_workflow_result(
+        *,
+        file: Path,
+        project: str | None = None,
+        dry_run: bool = False,
+        confirm_risk: str | None = None,
+        env_file: str | None = None,
+    ) -> CommandResult:
+        captured.update(
+            {
+                "file": file,
+                "project": project,
+                "dry_run": dry_run,
+                "confirm_risk": confirm_risk,
+                "env_file": env_file,
+            }
+        )
+        return CommandResult(
+            data={
+                "code": 101,
+                "name": "replayed",
+                "releaseState": "OFFLINE",
+            }
+        )
+
+    monkeypatch.setattr(
+        workflow_commands,
+        "create_workflow_result",
+        fake_create_workflow_result,
+    )
+    actions = next_actions_for(
+        "workflow.create",
+        resolved={
+            "file": str(workflow_file),
+            "project": {"code": 7},
+        },
+        data={
+            "dry_run": True,
+            "schedule_preview": {"count": 5},
+            "schedule_confirmation": {
+                "required": True,
+                "token": confirmation_token,
+            },
+        },
+        env_file=str(env_file),
+    )
+
+    replay = CliRunner().invoke(app, shlex.split(actions[0]["command"])[1:])
+
+    assert replay.exit_code == 0, replay.output
+    assert captured == {
+        "file": workflow_file.resolve(),
+        "project": "7",
+        "dry_run": False,
+        "confirm_risk": confirmation_token,
+        "env_file": str(env_file.resolve()),
+    }
 
 
 def test_workflow_run_suggests_watch_only_for_one_instance() -> None:
@@ -359,6 +437,14 @@ def test_navigation_is_fail_closed_for_dry_run_unknown_or_malformed_facts() -> N
             },
         ),
         (
+            "workflow.create",
+            {
+                "file": "/workflows/luna\0.yaml",
+                "project": {"code": 7},
+            },
+            {"dry_run": True},
+        ),
+        (
             "workflow.online",
             {"project": {"code": 7}, "workflow": {"code": 101}},
             {"dry_run": True, "releaseState": "ONLINE"},
@@ -371,6 +457,16 @@ def test_navigation_is_fail_closed_for_dry_run_unknown_or_malformed_facts() -> N
 
     for action, resolved, data in cases:
         assert next_actions_for(action, resolved=resolved, data=data) == []
+
+    assert (
+        next_actions_for(
+            "workflow.run",
+            resolved={},
+            data={"workflowInstanceIds": [242]},
+            env_file="cluster\0.env",
+        )
+        == []
+    )
 
 
 def test_success_payload_adds_navigation_only_when_applicable() -> None:

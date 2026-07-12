@@ -116,6 +116,7 @@ STABLE_COMMAND_DOC_BLOCKS = {
     ),
 }
 RUNNER = CliRunner()
+HELP_OUTPUT_BYTE_BUDGET = 10 * 1024
 
 
 def test_services_do_not_inline_resource_slug_literals() -> None:
@@ -235,6 +236,22 @@ def test_schema_declared_commands_expose_help() -> None:
             failures.append(f"{' '.join(path)} ({action}) exited {result.exit_code}")
 
     assert failures == []
+
+
+def test_leaf_help_stays_within_the_agent_discovery_budget() -> None:
+    data = get_schema_result(full=True).data
+    assert isinstance(data, dict)
+    commands = data["commands"]
+    assert isinstance(commands, list)
+
+    oversized: list[str] = []
+    for path, _command in _iter_schema_command_paths(commands):
+        result = RUNNER.invoke(app, [*path, "--help"])
+        size = len(result.stdout.encode("utf-8"))
+        if size > HELP_OUTPUT_BYTE_BUDGET:
+            oversized.append(f"{' '.join(path)}: {size} bytes")
+
+    assert oversized == []
 
 
 def test_schema_selector_fields_expose_discovery_commands() -> None:
