@@ -632,6 +632,14 @@ def test_schema_result_describes_current_stable_surface() -> None:
         _find_option(schedule_create_options, "environment-code")["discovery_command"]
         == "dsctl environment list"
     )
+    assert "pass 0 to explicitly use no environment" in str(
+        _find_option(schedule_create_options, "environment-code")["description"]
+    )
+    schedule_update = _find_command(schedule_group["commands"], "update")
+    schedule_update_options = _require_list(schedule_update["options"])
+    assert "pass 0 to clear the environment" in str(
+        _find_option(schedule_update_options, "environment-code")["description"]
+    )
 
     project_parameter_group = _find_group(commands, "project-parameter")
     project_parameter_command_names = [

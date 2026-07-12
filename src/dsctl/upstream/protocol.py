@@ -8,6 +8,8 @@ from dsctl.upstream.protocols.base import (
 )
 from dsctl.upstream.protocols.design import (
     DependentLineageTaskRecord,
+    ScheduleCreateRequestPlan,
+    ScheduleCreateSpec,
     ScheduleOperations,
     SchedulePageRecord,
     SchedulePayloadRecord,
@@ -168,6 +170,8 @@ __all__ = [
     "ResourceItemRecord",
     "ResourceOperations",
     "ResourcePageRecord",
+    "ScheduleCreateRequestPlan",
+    "ScheduleCreateSpec",
     "ScheduleOperations",
     "SchedulePageRecord",
     "SchedulePayloadRecord",

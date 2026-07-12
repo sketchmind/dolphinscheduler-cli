@@ -3746,6 +3746,9 @@ Rules:
   `timeout_notify_strategy`, `cpu_quota`, and `memory_max`
 - `dsctl template workflow --with-schedule` includes one minimal optional
   `schedule:` block and returns `resolved.with_schedule=true`
+- that scheduled template sets `workflow.release_state: ONLINE`, which is
+  required before DS can create the schedule; the schedule itself remains
+  offline through `schedule.enabled: false`
 - the optional `schedule.cron` example uses DolphinScheduler Quartz cron syntax
 - `--raw` prints only the workflow YAML; it does not print the standard success
   envelope
@@ -4138,6 +4141,9 @@ Rules:
 - create-form omitted `warningType`, `warningGroupId`,
   `workflowInstancePriority`, `workerGroup`, and `environmentCode` may be
   supplied by enabled project preference before CLI built-in defaults
+- create-form `--environment-code 0` explicitly selects no environment and
+  bypasses an enabled project environment preference; update-form zero clears
+  the current environment, while omission preserves it
 - with `SCHEDULE_ID`, explain models `schedule.update` and merges omitted
   fields from the current remote schedule before preview and risk analysis
 - update-form explain also returns `data.currentSchedule`,
@@ -4231,6 +4237,12 @@ Rules:
 - omitted `warningType`, `warningGroupId`, `workflowInstancePriority`,
   `workerGroup`, `tenantCode`, and `environmentCode` may be supplied by
   enabled project preference before CLI built-in defaults
+- when no environment code is selected after preference resolution, the
+  schedule is created without an environment; the DS-version adapter chooses
+  the compatible generated endpoint rather than sending a synthetic code `0`
+- explicit `--environment-code 0` selects that no-environment state and
+  bypasses an enabled project environment preference; positive values select a
+  concrete DS environment
 - `--cron` must be a DolphinScheduler Quartz cron expression with 6 or 7
   fields and seconds first
 - the CLI does not expose `releaseState` as a create option; schedule
@@ -4263,6 +4275,11 @@ Rules:
 - `--failure-strategy`, `--warning-type`, and `--priority` use generated DS
   enum values exposed by `dsctl enum list`
 - omitted fields preserve current remote values
+- `--environment-code 0` clears the current environment; omitting the option
+  preserves the current environment instead
+- an existing schedule without an environment remains environment-free when
+  other fields are updated; the DS-version adapter uses the compatible
+  project-scoped update contract without exposing that version detail
 - at least one field change is required
 - `--confirm-risk TOKEN` accepts a token previously returned in a
   `confirmation_required` error

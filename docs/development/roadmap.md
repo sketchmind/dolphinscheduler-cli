@@ -278,7 +278,13 @@ definitions.
 **Grounding:**
 
 - in DS 3.4.1 schedule is a persisted trigger resource, not a workflow field
-- create/update/get use v2 schedule CRUD APIs
+- get/delete use v2 schedule CRUD APIs
+- create uses v2 when a positive environment code is present and the generated
+  legacy project-scoped operation when the schedule has no environment
+- update uses the generated legacy project-scoped operation because the DS
+  3.4.1 v2 update request cannot faithfully express no-environment schedules or
+  zero-valued fields such as a cleared warning group; an explicitly changed
+  positive environment is validated before mutation
 - list currently uses the legacy project-scoped paging endpoint by design:
   the v2 `filterSchedule` API is global and filters by `projectName like`,
   while the CLI contract for `schedule list` is explicitly "inside one
@@ -383,6 +389,10 @@ surface.
       plan, compiled counts, and resolved selectors; expose raw REST requests
       through one explicit detail view without duplicating `request` and
       `requests[0]`
+- [ ] in the next explicit CLI contract version, make list JSON use the
+      registered summary projection by default, keep `get` as full detail, and
+      retain `--columns '*'` as the complete-row escape hatch; do not add
+      resource-specific summary aliases that duplicate list interfaces
 - [x] add bounded lifecycle `next_actions` (two or three command patterns per
       transition) for create, run, watch, task inspection, and log retrieval
 - [x] add bounded row-fact `action_index` discovery to workflow, schedule,

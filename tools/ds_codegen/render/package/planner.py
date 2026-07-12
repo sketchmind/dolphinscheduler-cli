@@ -414,7 +414,6 @@ def _generated_view_class_name(
         "grantProject_result": "UsersGrantProjectResult",
         "revokeProjectById_result": "UsersRevokeProjectByIdResult",
         "revokeProject_result": "UsersRevokeProjectResult",
-        "insertSchedule_result": "ScheduleInsertResult",
         "createDagDefine_result": "WorkflowDefinitionCreateResult",
         "updateDagDefine_result": "WorkflowDefinitionUpdateResult",
         "ParamsOptions_created": f"{owner_name}Option",

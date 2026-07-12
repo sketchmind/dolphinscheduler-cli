@@ -239,6 +239,8 @@ cleaning values in command or adapter code.
 - binding a shared `DolphinSchedulerClient`
 - adapting generated clients into version-stable operation groups
 - normalizing version differences at the handwritten bridge
+- selecting between generated DS endpoints when one version exposes the same
+  domain operation through contracts with different semantics
 - resolving `DS_VERSION` to support metadata, adapter family, and generated
   contract version
 - exposing version-specific DS enum semantics needed by services without
@@ -252,6 +254,13 @@ must have support metadata before services can bind it. Compatibility families
 such as `workflow-3.3-plus` can share adapter logic when upstream REST
 semantics are stable; older `process-*` API families should be implemented as
 separate legacy adapters instead of service-layer branches.
+
+Endpoint selection is an adapter implementation detail. For example, DS 3.4.1
+cannot represent every schedule state through its v2 create/update request
+models: no-environment schedules and zero-valued update fields collide with v2
+primitive sentinels. Its generated legacy schedule operations preserve those
+DS-native states. The schedule interface keeps `None` as the version-stable
+meaning of “no environment”; callers do not choose legacy versus v2 routes.
 
 ### Services
 

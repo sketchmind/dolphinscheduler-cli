@@ -1,5 +1,7 @@
 import json
+from pathlib import Path
 
+import yaml
 from typer.testing import CliRunner
 
 from dsctl.app import app
@@ -26,7 +28,9 @@ def test_template_workflow_command_returns_yaml_document() -> None:
     assert "workflow:" in payload["data"]["yaml"]
     assert "tasks:" in payload["data"]["yaml"]
     assert payload["data"]["lines"][0]["line"].startswith("# Workflow YAML")
-    assert "schedule:" not in payload["data"]["yaml"]
+    document = yaml.safe_load(payload["data"]["yaml"])
+    assert document["workflow"]["release_state"] == "OFFLINE"
+    assert "schedule" not in document
 
 
 def test_template_workflow_command_can_include_schedule_block() -> None:
@@ -40,7 +44,9 @@ def test_template_workflow_command_can_include_schedule_block() -> None:
         payload["data"]["artifact"]["raw_command"]
         == "dsctl template workflow --with-schedule --raw"
     )
-    assert "schedule:" in payload["data"]["yaml"]
+    document = yaml.safe_load(payload["data"]["yaml"])
+    assert document["workflow"]["release_state"] == "ONLINE"
+    assert document["schedule"]["enabled"] is False
 
 
 def test_template_workflow_command_can_emit_raw_yaml() -> None:
@@ -53,6 +59,26 @@ def test_template_workflow_command_can_emit_raw_yaml() -> None:
     assert '"ok": true' not in result.stdout
     assert "workflow:" in result.stdout
     assert "tasks:" in result.stdout
+
+
+def test_template_workflow_with_schedule_round_trips_through_lint(
+    tmp_path: Path,
+) -> None:
+    template_result = runner.invoke(
+        app,
+        ["template", "workflow", "--with-schedule", "--raw"],
+    )
+    assert template_result.exit_code == 0
+    workflow_file = tmp_path / "workflow.yaml"
+    workflow_file.write_text(template_result.stdout, encoding="utf-8")
+
+    lint_result = runner.invoke(app, ["lint", "workflow", str(workflow_file)])
+
+    assert lint_result.exit_code == 0
+    payload = json.loads(lint_result.stdout)
+    assert payload["data"]["valid"] is True
+    assert payload["data"]["summary"]["releaseState"] == "ONLINE"
+    assert payload["data"]["summary"]["hasSchedule"] is True
 
 
 def test_template_workflow_patch_command_returns_patch_template() -> None:

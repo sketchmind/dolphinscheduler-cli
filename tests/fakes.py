@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
     from dsctl.config import ClusterProfile
     from dsctl.support.json_types import JsonObject, JsonValue
+    from dsctl.upstream.protocol import ScheduleCreateRequestPlan, ScheduleCreateSpec
 
 
 @dataclass(frozen=True)
@@ -6030,50 +6031,95 @@ class FakeScheduleAdapter:
     def create(
         self,
         *,
-        workflow_code: int,
-        crontab: str,
-        start_time: str,
-        end_time: str,
-        timezone_id: str,
-        failure_strategy: str | None = None,
-        warning_type: str | None = None,
-        warning_group_id: int = 0,
-        workflow_instance_priority: str | None = None,
-        worker_group: str | None = None,
-        tenant_code: str | None = None,
-        environment_code: int = 0,
+        spec: ScheduleCreateSpec[int],
     ) -> FakeSchedule:
         next_id = max((schedule.id or 0 for schedule in self.schedules), default=0) + 1
         created = FakeSchedule(
             id=next_id,
-            workflow_definition_code_value=workflow_code,
-            start_time_value=start_time,
-            end_time_value=end_time,
-            timezone_id_value=timezone_id,
-            crontab_value=crontab,
+            workflow_definition_code_value=spec.workflow_code,
+            start_time_value=spec.start_time,
+            end_time_value=spec.end_time,
+            timezone_id_value=spec.timezone_id,
+            crontab_value=spec.crontab,
             failure_strategy_value=(
-                None if failure_strategy is None else FakeEnumValue(failure_strategy)
+                None
+                if spec.failure_strategy is None
+                else FakeEnumValue(spec.failure_strategy)
             ),
             warning_type_value=(
-                None if warning_type is None else FakeEnumValue(warning_type)
+                None if spec.warning_type is None else FakeEnumValue(spec.warning_type)
             ),
             workflow_instance_priority_value=(
                 None
-                if workflow_instance_priority is None
-                else FakeEnumValue(workflow_instance_priority)
+                if spec.workflow_instance_priority is None
+                else FakeEnumValue(spec.workflow_instance_priority)
             ),
             release_state_value=FakeEnumValue("OFFLINE"),
-            warning_group_id_value=warning_group_id,
-            worker_group_value=worker_group,
-            tenant_code_value=tenant_code,
-            environment_code_value=environment_code,
+            warning_group_id_value=spec.warning_group_id,
+            worker_group_value=spec.worker_group,
+            tenant_code_value=spec.tenant_code,
+            environment_code_value=(
+                -1 if spec.environment_code is None else spec.environment_code
+            ),
+            project_code_value=spec.project_code,
         )
         self.schedules.append(created)
         return created
 
+    def plan_create(
+        self,
+        *,
+        spec: ScheduleCreateSpec[int | str],
+    ) -> ScheduleCreateRequestPlan:
+        optional_fields: JsonObject = {
+            key: value
+            for key, value in {
+                "failureStrategy": spec.failure_strategy,
+                "warningType": spec.warning_type,
+                "workflowInstancePriority": spec.workflow_instance_priority,
+                "workerGroup": spec.worker_group,
+                "tenantCode": spec.tenant_code,
+            }.items()
+            if value is not None
+        }
+        body: JsonObject = {
+            "workflowDefinitionCode": spec.workflow_code,
+            "crontab": spec.crontab,
+            "startTime": spec.start_time,
+            "endTime": spec.end_time,
+            "timezoneId": spec.timezone_id,
+            "warningGroupId": spec.warning_group_id,
+        }
+        if spec.environment_code is not None:
+            body["environmentCode"] = spec.environment_code
+            body.update(optional_fields)
+            return {"method": "POST", "path": "/v2/schedules", "json": body}
+        schedule = json.dumps(
+            {
+                "crontab": spec.crontab,
+                "endTime": spec.end_time,
+                "startTime": spec.start_time,
+                "timezoneId": spec.timezone_id,
+            },
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
+        form: JsonObject = {
+            "workflowDefinitionCode": spec.workflow_code,
+            "schedule": schedule,
+            "warningGroupId": spec.warning_group_id,
+        }
+        form.update(optional_fields)
+        return {
+            "method": "POST",
+            "path": f"/projects/{spec.project_code}/schedules",
+            "form": form,
+        }
+
     def update(
         self,
         *,
+        project_code: int,
         schedule_id: int,
         crontab: str,
         start_time: str,
@@ -6084,8 +6130,10 @@ class FakeScheduleAdapter:
         warning_group_id: int = 0,
         workflow_instance_priority: str | None = None,
         worker_group: str | None = None,
-        environment_code: int = 0,
+        tenant_code: str | None = None,
+        environment_code: int | None = None,
     ) -> FakeSchedule:
+        del project_code
         for index, schedule in enumerate(self.schedules):
             if schedule.id == schedule_id:
                 updated = replace(
@@ -6109,7 +6157,10 @@ class FakeScheduleAdapter:
                     ),
                     warning_group_id_value=warning_group_id,
                     worker_group_value=worker_group,
-                    environment_code_value=environment_code,
+                    tenant_code_value=tenant_code,
+                    environment_code_value=(
+                        -1 if environment_code is None else environment_code
+                    ),
                 )
                 self.schedules[index] = updated
                 return updated
