@@ -688,6 +688,11 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         field.name == "taskParams" and field.java_type == "JsonValue"
         for field in task_definition_model_canonical.fields
     )
+    assert any(
+        field.name == "taskParamMap"
+        and field.java_type == "Map<String, Optional<String>>"
+        for field in task_definition_model_canonical.fields
+    )
     workflow_task_relation_model = next(
         model for model in snapshot.models if model.name == "WorkflowTaskRelation"
     )

@@ -297,6 +297,20 @@ Error guarantees:
 - `error.suggestion` is present when the CLI can provide one concrete next step
   without guessing
 
+Generated response-contract failures use `error.type: api_transport_error` and
+may include these bounded diagnostic fields in `error.details`:
+
+- `validation_message`
+- `validation_error_count`
+- `validation_errors[]`, with `field`, `type`, and `message`
+- `validation_errors_truncated: true` when more than five validation errors
+  were present
+
+Validation diagnostics omit rejected values and use static messages. Field
+paths have bounded depth and length; non-identifier dynamic keys are redacted.
+When more than five errors exist, the CLI emits only the count and truncation
+flag instead of expanding the remote error set.
+
 When present, `error.source` currently uses this shape for remote DS failures:
 
 ```json
@@ -723,6 +737,13 @@ Rules:
   `YYYY` emits `parameter_time_format_week_year_token`, and calendar-year plus
   week-number patterns such as `$[yyyyww]` emit
   `parameter_time_format_calendar_year_with_week`
+- it warns when a local parameter value references its own property with
+  `parameter_local_self_reference`
+- it warns when a workflow global references itself with
+  `parameter_global_self_reference`
+- it warns when `SUB_WORKFLOW.task_params.localParams` is populated as if it
+  were a child-input mapping with
+  `sub_workflow_local_params_not_child_inputs`
 - it rejects schedule blocks on offline workflows because DS only allows
   schedule creation for online workflows
 - successful lint output includes `data.diagnostics[]`; pass diagnostics mirror
@@ -3201,6 +3222,10 @@ Rules:
 - workflow dynamic parameter time-format warnings use the same
   `parameter_time_format_*` codes as `lint workflow`, both in dry-run and
   applied create results
+- parameter semantic warnings use the same
+  `parameter_global_self_reference`,
+  `parameter_local_self_reference` and
+  `sub_workflow_local_params_not_child_inputs` codes as `lint workflow`
 
 The current stable YAML surface supports:
 
@@ -3434,6 +3459,10 @@ patch:
 - workflow dynamic parameter time-format warnings use the same
   `parameter_time_format_*` codes as `lint workflow`, both in dry-run and
   applied edit results
+- parameter semantic warnings use the same
+  `parameter_global_self_reference`,
+  `parameter_local_self_reference` and
+  `sub_workflow_local_params_not_child_inputs` codes as `lint workflow`
 - workflow edit does not mutate the attached schedule; schedule lifecycle stays
   on `schedule update|online|offline`
 
@@ -3763,6 +3792,16 @@ Rules:
 - task-level parameters belong under `task_params.localParams`
 - `task_params.varPool` is a runtime output pool and should normally stay empty
   in newly authored YAML
+- for ordinary, non-reserved user parameters, runtime precedence in DS 3.4.1 is
+  upstream output/varPool, startup parameter, local parameter, workflow global,
+  project parameter, then built-in parameter; varPool only replaces an already
+  declared same-name IN parameter
+- a same-name local self-reference such as `prop: label` plus `value: ${label}`
+  shadows the workflow global and can become circular
+- `SUB_WORKFLOW` task `localParams` do not become child inputs in DS 3.4.1;
+  children inherit parent workflow globals, startup parameters, and the parent
+  workflow-instance varPool automatically. Standalone child defaults belong in
+  the child's own `workflow.global_params`.
 - `$[...]` time placeholders such as `$[yyyyMMdd-1]` are DS-native runtime
   expressions and are preserved as strings by the CLI
 - DS uses Java-style date patterns inside `$[...]`: lowercase `yyyy` means
@@ -3955,13 +3994,19 @@ For `SHELL` and `PYTHON`, the `resource` variant uses the DS-native
 the minimal inline script path and compiles to `taskParams.rawScript` with an
 empty `resourceList`.
 
-The `params` variants expose DS-native task dynamic parameter fields:
+Except for `SUB_WORKFLOW`, the `params` variants expose DS-native task dynamic
+parameter fields:
 `task_params.localParams[]` and `task_params.varPool[]`. Parameter entries use
 the DS `Property` shape: `prop`, `direct`, `type`, and optional `value`.
 `direct` is `IN` or `OUT`; supported types are `VARCHAR`, `INTEGER`, `LONG`,
 `FLOAT`, `DOUBLE`, `DATE`, `TIME`, `TIMESTAMP`, `BOOLEAN`, `LIST`, and `FILE`.
 Script-like tasks can emit output parameters through log lines matching
 `${setValue(name=value)}` or `#{setValue(name=value)}`.
+
+The `SUB_WORKFLOW` `params` variant documents parent-to-child parameter
+inheritance and keeps `localParams` empty. In DS 3.4.1, child startup parameters
+come from the parent workflow globals, startup parameters, and varPool rather
+than the SUB_WORKFLOW task's own `localParams`.
 
 SQL templates and the SQL typed payload normalizer keep `localParams`,
 `varPool`, `preStatements`, and `postStatements` as non-null lists when omitted

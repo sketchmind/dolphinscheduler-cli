@@ -576,21 +576,36 @@ def _parameter_context_topic_data() -> ParameterContextTopicDetails:
             "startup": "Runtime parameters passed when starting a workflow.",
         },
         "priority": [
+            "Upstream Output / VarPool",
             "Startup Parameter",
             "Local Parameter",
-            "Parameter Context",
             "Global Parameter",
+            "Project Parameter",
+            "Built-in Parameter",
         ],
         "rules": [
             "Upstream-to-downstream passing is one-way along dependencies.",
             (
                 "For DS 3.3+ behavior, downstream tasks should declare an IN "
-                "parameter with the same prop to consume an upstream OUT value."
+                "parameter with the same prop to consume an upstream OUT value; "
+                "the upstream varPool value then overrides its local fallback."
             ),
             ("If no dependency path exists, local parameters are not passed upstream."),
             (
-                "A downstream local parameter with the same name overrides "
-                "upstream context."
+                "A self-referential local value such as prop=label and "
+                "value=${label} shadows the same-name global and can create a "
+                "circular placeholder; omit it to consume the global directly."
+            ),
+            (
+                "A child workflow automatically receives parent workflow globals, "
+                "startup parameters, and the parent workflow-instance varPool as "
+                "child startup parameters; matching child global defaults are "
+                "overridden."
+            ),
+            (
+                "SUB_WORKFLOW localParams do not become child inputs in DS 3.4.1; "
+                "set values supplied by a parent on that parent workflow or pass "
+                "them when starting it. Keep standalone defaults on the child."
             ),
         ],
     }

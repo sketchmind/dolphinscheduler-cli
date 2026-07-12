@@ -5,7 +5,7 @@ from urllib.parse import parse_qs
 
 import httpx
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError, field_validator
 
 from dsctl.client import DolphinSchedulerClient
 from dsctl.errors import ApiResultError, ApiTransportError
@@ -17,6 +17,24 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.project import (
 from dsctl.upstream.adapters.ds_3_4_1 import DS341Adapter
 from dsctl.upstream.generated_session import GeneratedSessionAdapter
 from tests.support import make_profile
+
+
+class _SecretValidationPayload(BaseModel):
+    value: str
+
+    @field_validator("value")
+    @classmethod
+    def reject_value(cls, value: str) -> str:
+        message = f"rejected secret value: {value}"
+        raise ValueError(message)
+
+
+class _DynamicMapValidationPayload(BaseModel):
+    values: dict[str, int]
+
+
+class _ManyValidationErrorsPayload(BaseModel):
+    values: list[int]
 
 
 def test_adapter_bridges_generated_get_requests_through_shared_transport() -> None:
@@ -373,6 +391,13 @@ def test_adapter_task_code_allocation_translates_malformed_payload() -> None:
     assert error.details == {
         "validation_message": "Response payload did not match generated API contract",
         "validation_error_count": 1,
+        "validation_errors": [
+            {
+                "field": "[0]",
+                "type": "int_type",
+                "message": "Response value has the wrong type.",
+            }
+        ],
     }
     assert error.source == {
         "kind": "remote",
@@ -424,6 +449,13 @@ def test_adapter_task_code_allocation_rejects_coercible_non_integer_codes(
     assert error.details == {
         "validation_message": "Response payload did not match generated API contract",
         "validation_error_count": 1,
+        "validation_errors": [
+            {
+                "field": "[0]",
+                "type": "int_type",
+                "message": "Response value has the wrong type.",
+            }
+        ],
     }
     assert isinstance(error.__cause__, ValidationError)
 
@@ -463,6 +495,100 @@ def test_generated_session_translates_missing_single_field_payload() -> None:
         "then retry."
     )
     assert error.__cause__ is None
+
+
+def test_generated_session_validation_details_do_not_echo_rejected_values() -> None:
+    secret = "cluster-token-super-secret"
+    with pytest.raises(ValidationError) as validation_info:
+        _SecretValidationPayload.model_validate({"value": secret})
+
+    profile = make_profile()
+    client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(lambda _request: httpx.Response(500)),
+    )
+    session = GeneratedSessionAdapter(client, base_url=profile.api_url)
+
+    with (
+        client,
+        pytest.raises(ApiTransportError) as error_info,
+    ):
+        session.raise_payload_error(
+            "Response payload did not match generated API contract",
+            validation_error_count=1,
+            cause=validation_info.value,
+        )
+
+    details_json = json.dumps(error_info.value.details)
+    assert secret not in details_json
+    assert error_info.value.details["validation_errors"] == [
+        {
+            "field": "value",
+            "type": "value_error",
+            "message": "Response value does not match the generated field contract.",
+        }
+    ]
+
+
+def test_generated_session_validation_paths_bound_dynamic_response_keys() -> None:
+    dynamic_key = "secret-key-" + ("x" * 500)
+    with pytest.raises(ValidationError) as validation_info:
+        _DynamicMapValidationPayload.model_validate(
+            {"values": {dynamic_key: "not-an-integer"}}
+        )
+
+    profile = make_profile()
+    client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(lambda _request: httpx.Response(500)),
+    )
+    session = GeneratedSessionAdapter(client, base_url=profile.api_url)
+
+    with (
+        client,
+        pytest.raises(ApiTransportError) as error_info,
+    ):
+        session.raise_payload_error(
+            "Response payload did not match generated API contract",
+            cause=validation_info.value,
+        )
+
+    details_json = json.dumps(error_info.value.details)
+    assert dynamic_key not in details_json
+    assert error_info.value.details["validation_errors"] == [
+        {
+            "field": "values.<dynamic-key>",
+            "type": "int_parsing",
+            "message": "Response value does not match the generated field contract.",
+        }
+    ]
+
+
+def test_generated_session_does_not_expand_large_validation_error_sets() -> None:
+    with pytest.raises(ValidationError) as validation_info:
+        _ManyValidationErrorsPayload.model_validate({"values": ["bad"] * 6})
+
+    profile = make_profile()
+    client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(lambda _request: httpx.Response(500)),
+    )
+    session = GeneratedSessionAdapter(client, base_url=profile.api_url)
+
+    with (
+        client,
+        pytest.raises(ApiTransportError) as error_info,
+    ):
+        session.raise_payload_error(
+            "Response payload did not match generated API contract",
+            cause=validation_info.value,
+        )
+
+    assert error_info.value.details == {
+        "validation_message": "Response payload did not match generated API contract",
+        "validation_error_count": 6,
+        "validation_errors_truncated": True,
+    }
 
 
 def test_generated_session_translates_legacy_status_error() -> None:
@@ -4119,6 +4245,7 @@ def test_generated_models_accept_json_data_serialized_fields_from_runtime_reads(
         "userId": 1,
         "taskType": "SHELL",
         "taskParams": task_params,
+        "taskParamMap": {"run_label": None},
     }
     dag_data = {
         "workflowTaskRelationList": [relation],

@@ -1211,6 +1211,48 @@ tasks:
     ]
 
 
+def test_create_workflow_dry_run_warns_on_sub_workflow_local_params(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    monkeypatch.setattr(workflow_service, "preview_task_codes", lambda count: [7102])
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=fake_schedule_adapter,
+    )
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: parent
+  project: etl-prod
+tasks:
+  - name: invoke-child
+    type: SUB_WORKFLOW
+    task_params:
+      workflowDefinitionCode: 123456789
+      localParams:
+        - prop: run_label
+          value: FROM_PARENT
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = workflow_service.create_workflow_result(file=spec_path, dry_run=True)
+
+    assert [detail["code"] for detail in result.warning_details] == [
+        "dry_run_no_request_sent",
+        "sub_workflow_local_params_not_child_inputs",
+    ]
+
+
 def test_create_workflow_result_compiles_switch_branch_names_to_codes(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

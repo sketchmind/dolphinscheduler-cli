@@ -9,8 +9,8 @@ from dsctl.errors import UserInputError
 from dsctl.models.workflow_spec import load_workflow_spec
 from dsctl.output import CommandResult, require_json_object
 from dsctl.services._parameter_warnings import (
-    ParameterExpressionWarningDetail,
-    workflow_parameter_expression_warnings,
+    ParameterWarningDetail,
+    workflow_parameter_warnings,
 )
 from dsctl.services._task_code_allocation import preview_task_codes
 from dsctl.services._workflow_compile import (
@@ -89,7 +89,7 @@ class WorkflowProjectSelectionWarningDetail(TypedDict):
 
 
 WorkflowLintWarningDetail: TypeAlias = (
-    WorkflowProjectSelectionWarningDetail | ParameterExpressionWarningDetail
+    WorkflowProjectSelectionWarningDetail | ParameterWarningDetail
 )
 
 
@@ -286,9 +286,7 @@ def _workflow_lint_warnings(
             }
         )
 
-    parameter_warnings, parameter_warning_details = (
-        workflow_parameter_expression_warnings(spec)
-    )
+    parameter_warnings, parameter_warning_details = workflow_parameter_warnings(spec)
     warnings.extend(parameter_warnings)
     details.extend(parameter_warning_details)
     return warnings, details

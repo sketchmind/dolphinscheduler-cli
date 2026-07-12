@@ -27,8 +27,8 @@ from dsctl.output import (
     require_json_value,
 )
 from dsctl.services._parameter_warnings import (
-    ParameterExpressionWarningDetail,
-    workflow_parameter_expression_warnings,
+    ParameterWarningDetail,
+    workflow_parameter_warnings,
 )
 from dsctl.services._runtime_defaults import (
     ProjectPreferenceDefaults,
@@ -852,9 +852,7 @@ def _create_workflow_result(
                 f"`dsctl workflow create --file {file_arg} --dry-run`."
             ),
         ) from error
-    parameter_warnings, parameter_warning_details = (
-        workflow_parameter_expression_warnings(spec)
-    )
+    parameter_warnings, parameter_warning_details = workflow_parameter_warnings(spec)
 
     if dry_run:
         return _workflow_create_dry_run_result(
@@ -962,8 +960,8 @@ def _edit_workflow_result(
     merged_spec = mutation.merged_spec
     diff = mutation.diff
     has_changes = mutation.has_changes
-    parameter_warnings, parameter_warning_details = (
-        workflow_parameter_expression_warnings(merged_spec)
+    parameter_warnings, parameter_warning_details = workflow_parameter_warnings(
+        merged_spec
     )
     workflow_state_constraint_details = _workflow_edit_state_constraint_details(
         live_payload,
@@ -2429,7 +2427,7 @@ def _workflow_create_dry_run_result(
     schedule_input: ScheduleCreateInput | None,
     schedule_preview: SchedulePreviewData | None,
     parameter_warnings: list[str],
-    parameter_warning_details: list[ParameterExpressionWarningDetail],
+    parameter_warning_details: list[ParameterWarningDetail],
 ) -> CommandResult:
     return dry_run_result(
         method="POST",
@@ -3098,7 +3096,7 @@ def _workflow_edit_dry_run_result(
     schedule_impact_details: list[WorkflowEditScheduleImpactData],
     no_change: bool,
     parameter_warnings: list[str],
-    parameter_warning_details: list[ParameterExpressionWarningDetail],
+    parameter_warning_details: list[ParameterWarningDetail],
 ) -> CommandResult:
     return dry_run_result(
         method="PUT",
@@ -3232,7 +3230,7 @@ def _workflow_edit_no_change_message(input_mode: str) -> str:
 
 
 def _parameter_expression_warning_json_details(
-    details: list[ParameterExpressionWarningDetail],
+    details: list[ParameterWarningDetail],
 ) -> list[JsonObject]:
     return [
         require_json_object(

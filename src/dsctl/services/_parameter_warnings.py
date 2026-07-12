@@ -33,12 +33,173 @@ class ParameterExpressionWarningDetail(TypedDict):
     suggestion: str
 
 
-def workflow_parameter_expression_warnings(
+class ParameterLocalSelfReferenceWarningDetail(TypedDict):
+    """Structured warning for a local parameter that references itself."""
+
+    code: Literal["parameter_local_self_reference"]
+    message: str
+    field: str
+    parameter: str
+    expression: str
+    suggestion: str
+
+
+class ParameterGlobalSelfReferenceWarningDetail(TypedDict):
+    """Structured warning for a workflow global that references itself."""
+
+    code: Literal["parameter_global_self_reference"]
+    message: str
+    field: str
+    parameter: str
+    expression: str
+    suggestion: str
+
+
+class SubWorkflowLocalParamsWarningDetail(TypedDict):
+    """Structured warning for SUB_WORKFLOW localParams mistaken as child inputs."""
+
+    code: Literal["sub_workflow_local_params_not_child_inputs"]
+    message: str
+    field: str
+    task: str
+    parameter_names: list[str]
+    suggestion: str
+
+
+ParameterWarningDetail = (
+    ParameterExpressionWarningDetail
+    | ParameterGlobalSelfReferenceWarningDetail
+    | ParameterLocalSelfReferenceWarningDetail
+    | SubWorkflowLocalParamsWarningDetail
+)
+
+
+def workflow_parameter_warnings(
     spec: WorkflowSpec,
-) -> tuple[list[str], list[ParameterExpressionWarningDetail]]:
-    """Return warnings for risky DS runtime parameter expressions in YAML specs."""
-    details = list(_workflow_parameter_expression_warning_details(spec))
+) -> tuple[list[str], list[ParameterWarningDetail]]:
+    """Return bounded warnings for risky workflow parameter authoring."""
+    details: list[ParameterWarningDetail] = [
+        *_workflow_parameter_expression_warning_details(spec),
+        *_workflow_parameter_semantic_warning_details(spec),
+    ]
     return [detail["message"] for detail in details], details
+
+
+def _workflow_parameter_semantic_warning_details(
+    spec: WorkflowSpec,
+) -> Iterator[
+    ParameterGlobalSelfReferenceWarningDetail
+    | ParameterLocalSelfReferenceWarningDetail
+    | SubWorkflowLocalParamsWarningDetail
+]:
+    yield from _workflow_global_self_reference_warning_details(spec)
+    for task_index, task in enumerate(spec.tasks):
+        task_params = task.task_params
+        if not isinstance(task_params, Mapping):
+            continue
+        local_params = task_params.get("localParams")
+        if not isinstance(local_params, Sequence) or isinstance(
+            local_params,
+            (bytes, bytearray, str),
+        ):
+            continue
+        if task.type == "SUB_WORKFLOW" and local_params:
+            field = f"tasks[{task_index}].task_params.localParams"
+            parameter_names = [
+                prop
+                for parameter in local_params
+                if isinstance(parameter, Mapping)
+                and isinstance((prop := parameter.get("prop")), str)
+            ]
+            message = (
+                f"{field} does not configure child workflow inputs in DS "
+                f"3.4.1; SUB_WORKFLOW task '{task.name}' ignores these local "
+                "parameters when it starts the child."
+            )
+            yield {
+                "code": "sub_workflow_local_params_not_child_inputs",
+                "message": message,
+                "field": field,
+                "task": task.name,
+                "parameter_names": parameter_names,
+                "suggestion": (
+                    "Move values supplied by this parent to workflow.global_params "
+                    "or pass them as parent startup parameters. Define reusable "
+                    "standalone fallbacks in the child workflow.global_params."
+                ),
+            }
+        for parameter_index, parameter in enumerate(local_params):
+            if not isinstance(parameter, Mapping):
+                continue
+            prop = parameter.get("prop")
+            value = parameter.get("value")
+            if not isinstance(prop, str) or not isinstance(value, str):
+                continue
+            expression = f"${{{prop}}}"
+            if expression not in value:
+                continue
+            field = (
+                f"tasks[{task_index}].task_params.localParams[{parameter_index}].value"
+            )
+            message = (
+                f"{field} contains the self-reference {expression}: the local "
+                f"parameter '{prop}' shadows the same-name workflow value. "
+                "Unless a higher-priority startup or upstream value replaces "
+                "it, DS resolves it as a circular placeholder."
+            )
+            yield {
+                "code": "parameter_local_self_reference",
+                "message": message,
+                "field": field,
+                "parameter": prop,
+                "expression": expression,
+                "suggestion": (
+                    "Remove this localParams entry to consume the same-name "
+                    "workflow global, or give it a concrete fallback. Use a "
+                    "different prop name when an explicit local alias is intended."
+                ),
+            }
+
+
+def _workflow_global_self_reference_warning_details(
+    spec: WorkflowSpec,
+) -> Iterator[ParameterGlobalSelfReferenceWarningDetail]:
+    global_params = spec.workflow.global_params
+    entries: Iterator[tuple[str, str, str | None]]
+    if isinstance(global_params, Mapping):
+        entries = (
+            (f"workflow.global_params.{name}", name, value)
+            for name, value in global_params.items()
+        )
+    elif global_params is None:
+        return
+    else:
+        entries = (
+            (f"workflow.global_params[{index}].value", parameter.prop, parameter.value)
+            for index, parameter in enumerate(global_params)
+        )
+    for field, parameter, value in entries:
+        if value is None:
+            continue
+        expression = f"${{{parameter}}}"
+        if expression not in value:
+            continue
+        message = (
+            f"{field} contains the self-reference {expression}. Unless a "
+            "higher-priority startup value replaces it, DS resolves the "
+            f"workflow global '{parameter}' as a circular placeholder."
+        )
+        yield {
+            "code": "parameter_global_self_reference",
+            "message": message,
+            "field": field,
+            "parameter": parameter,
+            "expression": expression,
+            "suggestion": (
+                "Replace the self-reference with a concrete workflow default, "
+                "or omit the global and require a workflow startup parameter."
+            ),
+        }
 
 
 def _workflow_parameter_expression_warning_details(
@@ -169,5 +330,9 @@ def _calendar_year_with_week_warning(
 
 __all__ = [
     "ParameterExpressionWarningDetail",
-    "workflow_parameter_expression_warnings",
+    "ParameterGlobalSelfReferenceWarningDetail",
+    "ParameterLocalSelfReferenceWarningDetail",
+    "ParameterWarningDetail",
+    "SubWorkflowLocalParamsWarningDetail",
+    "workflow_parameter_warnings",
 ]

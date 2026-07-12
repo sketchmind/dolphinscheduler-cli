@@ -154,6 +154,46 @@ tasks publish output values by writing `${setValue(name=value)}` or
 `#{setValue(name=value)}` to task logs. SQL tasks can publish output values from
 result columns whose names match OUT parameter `prop` values.
 
+For ordinary tasks, an upstream OUT value in the var pool overrides the local
+fallback of a same-name downstream IN parameter. Do not use a same-name
+self-reference such as `prop: run_label` with `value: ${run_label}` to forward a
+workflow global: the local value shadows that global and can become a circular
+placeholder. Omit the local entry to consume the workflow global directly, or
+use a different property name for an intentional local alias. `lint workflow`
+reports this self-reference.
+
+`SUB_WORKFLOW` is a DS 3.4.1 exception. Its task-level `localParams` do not
+become child inputs. The child automatically inherits the parent workflow's
+globals, startup parameters, and workflow-instance var pool as startup
+parameters, which override matching child global defaults. Define a reusable
+standalone fallback on the child itself:
+
+```yaml
+workflow:
+  name: child
+  global_params:
+    run_label: CHILD_DEFAULT
+```
+
+Set the value supplied by a particular parent under that parent's
+`workflow.global_params`, or pass it when starting the parent:
+
+```yaml
+workflow:
+  name: parent
+  global_params:
+    run_label: FROM_PARENT
+tasks:
+  - name: invoke-child
+    type: SUB_WORKFLOW
+    task_params:
+      workflowDefinitionCode: 123456789
+      localParams: []
+```
+
+`lint workflow` warns when a SUB_WORKFLOW task has non-empty `localParams`,
+because that shape does not configure the child in DS 3.4.1.
+
 DS also supports runtime time placeholders using `$[...]`, such as
 `$[yyyyMMdd-1]`, `$[add_months(yyyyMMdd,-1)]`, and
 `$[month_first_day(yyyy-MM-dd,-1)]`. The CLI preserves these expressions as

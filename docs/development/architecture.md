@@ -218,8 +218,16 @@ The generated runtime routes response-contract and result-envelope failures
 through explicit `SessionLike` hooks. Its standalone default adapter raises
 self-contained generated exceptions, while the production
 `GeneratedSessionAdapter` translates the same hooks into stable `dsctl`
-transport and result errors. Resource adapters must not add one-off catches for
-generated payload validation.
+transport and result errors. Response validation errors preserve a bounded,
+value-free list of sanitized field paths, types, and static messages so callers
+can diagnose a contract mismatch without echoing rejected values. Resource adapters must not
+add one-off catches for generated payload validation.
+
+When upstream Java declarations are less precise than observed JSON behavior,
+the generator may apply a narrowly keyed field normalization grounded in
+upstream implementation/tests and live response evidence. This keeps the
+runtime correction generated and local to the DS-native model instead of
+cleaning values in command or adapter code.
 
 ### Upstream
 

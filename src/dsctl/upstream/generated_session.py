@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, TypeGuard, cast
 from urllib.parse import urlsplit
+
+from pydantic import ValidationError
 
 from dsctl.errors import ApiResultError, ApiTransportError
 
@@ -75,8 +78,21 @@ class GeneratedSessionAdapter:
     ) -> NoReturn:
         """Translate one generated response-contract failure."""
         details: JsonObject = {"validation_message": message}
-        if validation_error_count is not None:
-            details["validation_error_count"] = validation_error_count
+        cause_error_count = (
+            cause.error_count() if isinstance(cause, ValidationError) else None
+        )
+        effective_error_count = (
+            cause_error_count
+            if cause_error_count is not None
+            else validation_error_count
+        )
+        if effective_error_count is not None:
+            details["validation_error_count"] = effective_error_count
+        validation_errors = _bounded_validation_errors(cause)
+        if validation_errors:
+            details["validation_errors"] = validation_errors
+        if cause_error_count is not None and cause_error_count > _MAX_VALIDATION_ERRORS:
+            details["validation_errors_truncated"] = True
         error = ApiTransportError(
             (
                 "DolphinScheduler response payload did not match the generated "
@@ -110,6 +126,66 @@ class GeneratedSessionAdapter:
             result_message=message,
             data=data,
         )
+
+
+_MAX_VALIDATION_ERRORS = 5
+_MAX_VALIDATION_PATH_PARTS = 12
+_MAX_VALIDATION_PATH_CHARS = 256
+_SAFE_VALIDATION_PATH_PART = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}\Z")
+
+
+def _bounded_validation_errors(cause: Exception | None) -> list[JsonObject]:
+    """Return bounded, value-free Pydantic error facts for CLI diagnostics."""
+    if not isinstance(cause, ValidationError):
+        return []
+    if cause.error_count() > _MAX_VALIDATION_ERRORS:
+        return []
+    errors = cause.errors(
+        include_url=False,
+        include_context=False,
+        include_input=False,
+    )
+    return [
+        {
+            "field": _validation_field_path(error.get("loc", ())),
+            "type": str(error.get("type", "unknown")),
+            "message": _safe_validation_message(str(error.get("type", "unknown"))),
+        }
+        for error in errors
+    ]
+
+
+def _safe_validation_message(error_type: str) -> str:
+    """Return a static diagnostic that cannot echo a rejected response value."""
+    if error_type == "missing":
+        return "Required response field is missing."
+    if error_type == "enum":
+        return "Response value is not an allowed enum member."
+    if error_type == "literal_error":
+        return "Response value does not match the required literal."
+    if error_type.endswith("_type"):
+        return "Response value has the wrong type."
+    return "Response value does not match the generated field contract."
+
+
+def _validation_field_path(location: Sequence[str | int]) -> str:
+    """Render one Pydantic location as a compact dotted/indexed field path."""
+    path = ""
+    for part in location[:_MAX_VALIDATION_PATH_PARTS]:
+        if isinstance(part, int):
+            path += f"[{part}]"
+            continue
+        text = (
+            part
+            if _SAFE_VALIDATION_PATH_PART.fullmatch(part) is not None
+            else "<dynamic-key>"
+        )
+        path += f".{text}" if path else text
+    if len(location) > _MAX_VALIDATION_PATH_PARTS:
+        path += ".<truncated>"
+    if len(path) > _MAX_VALIDATION_PATH_CHARS:
+        path = f"{path[: _MAX_VALIDATION_PATH_CHARS - 3]}..."
+    return path or "$"
 
 
 def _relative_path(url: str, *, base_url: str) -> str:
