@@ -21,7 +21,7 @@ class TaskDefinition(BaseEntityModel):
     taskType: str | None = Field(default=None, description='task type')
     taskParams: JsonValue | None = Field(default=None, description='user defined parameters')
     taskParamList: list[Property] | None = Field(default=None, description='user defined parameter list')
-    taskParamMap: dict[str, str] | None = Field(default=None, description='user defined parameter map')
+    taskParamMap: dict[str, str | None] | None = Field(default=None, description='user defined parameter map')
     flag: Flag | None = Field(default=None, description='task is valid: yes/no // todo: remove the flag field')
     taskPriority: Priority | None = Field(default=None, description='task priority')
     userName: str | None = Field(default=None, description='user name')

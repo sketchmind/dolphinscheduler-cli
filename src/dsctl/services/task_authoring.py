@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from difflib import get_close_matches
 from shlex import quote
 from typing import TYPE_CHECKING, TypedDict, cast
@@ -305,13 +305,26 @@ def task_type_summary_data(task_type: str) -> TaskTypeSummaryData:
         template_index_command="dsctl template task",
         parameter_command="dsctl template params",
         choice_sources=_choice_sources_for(normalized),
-        workflow_usage={
-            "paste_into": "workflow YAML tasks[]",
-            "validate": "dsctl lint workflow FILE",
-            "dry_run": "dsctl workflow create --file FILE --dry-run",
-        },
+        workflow_usage=_workflow_usage_for(normalized),
         rows=_summary_rows(normalized),
     )
+
+
+def _workflow_usage_for(task_type: str) -> dict[str, str]:
+    usage = {
+        "paste_into": "workflow YAML tasks[]",
+        "validate": "dsctl lint workflow FILE",
+        "dry_run": "dsctl workflow create --file FILE --dry-run",
+    }
+    if task_type == "SUB_WORKFLOW":
+        usage["child_parameters"] = (
+            "Set values supplied by this parent in workflow.global_params or pass "
+            "them when starting the parent. DS 3.4.1 forwards parent globals, "
+            "startup parameters, and workflow-instance varPool. Define standalone "
+            "fallbacks in the child workflow.global_params; SUB_WORKFLOW task "
+            "localParams are not child inputs."
+        )
+    return usage
 
 
 def _required_paths_by_payload_mode(
@@ -1072,6 +1085,10 @@ def _http_fields() -> tuple[_FieldSpec, ...]:
 
 
 def _sub_workflow_fields() -> tuple[_FieldSpec, ...]:
+    parameter_fields = tuple(
+        _sub_workflow_compatibility_field(field)
+        for field in _parameter_fields(include_resources=True)
+    )
     return (
         _FieldSpec(
             "task_params.workflowDefinitionCode",
@@ -1085,8 +1102,52 @@ def _sub_workflow_fields() -> tuple[_FieldSpec, ...]:
             compile_path="taskDefinitionJson[].taskParams.workflowDefinitionCode",
             description="Child workflow definition code.",
         ),
-        *_parameter_fields(include_resources=True),
+        *parameter_fields,
     )
+
+
+def _sub_workflow_compatibility_field(field: _FieldSpec) -> _FieldSpec:
+    context_command = ("dsctl template params --topic context",)
+    if field.path == "task_params.localParams[]":
+        return replace(
+            field,
+            related_commands=context_command,
+            description=(
+                "DS-native task-local properties. In DS 3.4.1 they do not "
+                "become child workflow inputs. Supply parent-specific values via "
+                "the parent workflow.global_params or startup parameters."
+            ),
+        )
+    if field.path.startswith("task_params.localParams[]."):
+        return replace(
+            field,
+            related_commands=context_command,
+            description=(
+                "Compatibility-only SUB_WORKFLOW localParams field; these entries "
+                "do not become child workflow inputs in DS 3.4.1."
+            ),
+        )
+    if field.path == "task_params.varPool[]":
+        return replace(
+            field,
+            related_commands=context_command,
+            description=(
+                "Compatibility-only task-definition field; this is not the "
+                "parent workflow-instance varPool forwarded to the child. Keep "
+                "it empty in new SUB_WORKFLOW YAML."
+            ),
+        )
+    if field.path.startswith("task_params.resourceList"):
+        return replace(
+            field,
+            choice_source=None,
+            related_commands=(),
+            description=(
+                "DS round-trip-only SUB_WORKFLOW resource field; the 3.4.1 "
+                "SUB_WORKFLOW plugin does not load task resources. Keep it empty."
+            ),
+        )
+    return field
 
 
 def _dependent_fields() -> tuple[_FieldSpec, ...]:

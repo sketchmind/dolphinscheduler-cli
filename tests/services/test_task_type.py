@@ -174,6 +174,69 @@ def test_task_type_summary_result_describes_local_authoring_contract() -> None:
     assert commands["full-schema"] == "dsctl task-type schema SQL --full"
 
 
+def test_sub_workflow_summary_explains_child_parameter_inheritance() -> None:
+    result = task_type_service.task_type_summary_result("SUB_WORKFLOW")
+    data = _mapping(result.data)
+    workflow_usage = _mapping(data["workflow_usage"])
+
+    assert workflow_usage["child_parameters"] == (
+        "Set values supplied by this parent in workflow.global_params or pass them "
+        "when starting the parent. DS 3.4.1 forwards parent globals, startup "
+        "parameters, and workflow-instance varPool. Define standalone fallbacks "
+        "in the child workflow.global_params; SUB_WORKFLOW task localParams are "
+        "not child inputs."
+    )
+
+
+def test_sub_workflow_local_params_schema_rejects_child_input_interpretation() -> None:
+    result = task_type_service.task_type_schema_result(
+        "SUB_WORKFLOW",
+        field="task_params.localParams[]",
+    )
+    fields = _sequence(_mapping(result.data)["fields"])
+
+    assert len(fields) == 1
+    field = _mapping(fields[0])
+    assert field["description"] == (
+        "DS-native task-local properties. In DS 3.4.1 they do not become child "
+        "workflow inputs. Supply parent-specific values via the parent "
+        "workflow.global_params or startup parameters."
+    )
+    assert "dsctl template params --topic context" in _sequence(
+        field["related_commands"]
+    )
+
+
+def test_sub_workflow_schema_marks_unused_ds_fields_as_round_trip_only() -> None:
+    local_value_result = task_type_service.task_type_schema_result(
+        "SUB_WORKFLOW",
+        field="task_params.localParams[].value",
+    )
+    var_pool_result = task_type_service.task_type_schema_result(
+        "SUB_WORKFLOW",
+        field="task_params.varPool[]",
+    )
+    resource_result = task_type_service.task_type_schema_result(
+        "SUB_WORKFLOW",
+        field="task_params.resourceList[].resourceName",
+    )
+
+    local_value = _mapping(_sequence(_mapping(local_value_result.data)["fields"])[0])
+    var_pool = _mapping(_sequence(_mapping(var_pool_result.data)["fields"])[0])
+    resource = _mapping(_sequence(_mapping(resource_result.data)["fields"])[0])
+    assert "do not become child workflow inputs" in str(local_value["description"])
+    assert "not the parent workflow-instance varPool" in str(var_pool["description"])
+    assert "round-trip-only" in str(resource["description"])
+    assert "choice_source" not in resource
+    assert "related_commands" not in resource
+
+    summary = _mapping(task_type_service.task_type_summary_result("SUB_WORKFLOW").data)
+    choice_sources = _sequence(summary["choice_sources"])
+    choice_paths = [_mapping(item)["path"] for item in choice_sources]
+    assert "task_params.workflowDefinitionCode" in choice_paths
+    assert not any("resourceList" in str(path) for path in choice_paths)
+
+
 @pytest.mark.parametrize(
     (
         "task_type",

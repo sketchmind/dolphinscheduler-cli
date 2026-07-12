@@ -213,6 +213,76 @@ tasks:
     }
 
 
+def test_lint_warns_when_sub_workflow_local_params_are_used_as_child_inputs(
+    tmp_path: Path,
+) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: parent
+  project: analytics
+tasks:
+  - name: invoke-child
+    type: SUB_WORKFLOW
+    task_params:
+      workflowDefinitionCode: 123456789
+      localParams:
+        - prop: run_label
+          direct: IN
+          type: VARCHAR
+          value: FROM_PARENT
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = lint_workflow_result(file=spec_path)
+
+    assert [detail["code"] for detail in result.warning_details] == [
+        "sub_workflow_local_params_not_child_inputs"
+    ]
+    data = _mapping(result.data)
+    diagnostics = _sequence(data["diagnostics"])
+    assert dict(_mapping(diagnostics[-1])) == {
+        "code": "sub_workflow_local_params_not_child_inputs",
+        "status": "warning",
+        "message": result.warnings[0],
+        "field": "tasks[0].task_params.localParams",
+        "suggestion": (
+            "Move values supplied by this parent to workflow.global_params or "
+            "pass them as parent startup parameters. Define reusable standalone "
+            "fallbacks in the child workflow.global_params."
+        ),
+    }
+
+
+def test_lint_warns_on_self_referential_workflow_global(tmp_path: Path) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: daily-etl
+  project: analytics
+  global_params:
+    run_label: prefix-${run_label}
+tasks:
+  - name: report
+    type: SHELL
+    command: echo ${run_label}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = lint_workflow_result(file=spec_path)
+
+    assert [detail["code"] for detail in result.warning_details] == [
+        "parameter_global_self_reference"
+    ]
+    data = _mapping(result.data)
+    diagnostics = _sequence(data["diagnostics"])
+    assert _mapping(diagnostics[-1])["field"] == "workflow.global_params.run_label"
+
+
 def test_lint_workflow_result_rejects_schedule_on_offline_workflow(
     tmp_path: Path,
 ) -> None:
