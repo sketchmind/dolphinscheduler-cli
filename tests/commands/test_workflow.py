@@ -51,9 +51,15 @@ def patch_workflow_service(monkeypatch: pytest.MonkeyPatch) -> None:
         schedule_release_state_value=FakeEnumValue("ONLINE"),
         execution_type_value=FakeEnumValue("PARALLEL"),
         schedule_value=FakeSchedule(
+            id=23,
             crontab_value="0 0 0 * * ?",
             release_state_value=FakeEnumValue("ONLINE"),
         ),
+    )
+    adhoc_workflow = FakeWorkflow(
+        code=102,
+        name="adhoc-backfill",
+        project_code_value=7,
     )
     tasks = [
         FakeTaskDefinition(
@@ -74,7 +80,7 @@ def patch_workflow_service(monkeypatch: pytest.MonkeyPatch) -> None:
         ),
     ]
     workflow_adapter = FakeWorkflowAdapter(
-        workflows=[workflow],
+        workflows=[workflow, adhoc_workflow],
         dags={
             101: FakeDag(
                 workflow_definition_value=workflow,
@@ -194,7 +200,41 @@ def test_workflow_list_command_returns_filtered_workflows() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.list"
     assert payload["resolved"]["project"]["source"] == "context"
-    assert payload["data"] == [{"code": 101, "name": "daily-sync", "version": 1}]
+    assert payload["data"] == {
+        "totalList": [
+            {
+                "code": 101,
+                "name": "daily-sync",
+                "version": 1,
+                "releaseState": "ONLINE",
+                "scheduleReleaseState": "ONLINE",
+                "scheduleId": 23,
+            }
+        ],
+        "total": 1,
+        "totalPage": 1,
+        "pageSize": 100,
+        "currentPage": 1,
+        "pageNo": 1,
+    }
+
+
+def test_workflow_list_command_supports_standard_paging_controls() -> None:
+    result = runner.invoke(
+        app,
+        ["workflow", "list", "--page-size", "1", "--all"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert [item["name"] for item in payload["data"]["totalList"]] == [
+        "daily-sync",
+        "adhoc-backfill",
+    ]
+    assert payload["data"]["total"] == 2
+    assert payload["data"]["pageSize"] == 2
+    assert payload["resolved"]["page_size"] == 1
+    assert payload["resolved"]["all"] is True
 
 
 def test_workflow_export_command_emits_yaml() -> None:

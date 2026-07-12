@@ -104,6 +104,7 @@ def fake_workflow_adapter() -> FakeWorkflowAdapter:
         schedule_release_state_value=FakeEnumValue("ONLINE"),
         execution_type_value=FakeEnumValue("PARALLEL"),
         schedule_value=FakeSchedule(
+            id=23,
             timezone_id_value="UTC",
             crontab_value="0 0 0 * * ?",
             release_state_value=FakeEnumValue("ONLINE"),
@@ -190,17 +191,33 @@ def test_list_workflows_result_uses_project_context_and_filters(
         context=SessionContext(project="etl-prod"),
     )
 
-    result = workflow_service.list_workflows_result(search="daily")
-    items = _sequence(result.data)
+    result = workflow_service.list_workflows_result(
+        search="daily",
+        page_no=1,
+        page_size=25,
+    )
+    data = _mapping(result.data)
+    items = _sequence(data["totalList"])
 
     assert _mapping(result.resolved["project"])["source"] == "context"
+    assert result.resolved["page_no"] == 1
+    assert result.resolved["page_size"] == 25
+    assert result.resolved["all"] is False
     assert list(items) == [
         {
             "code": 101,
             "name": "daily-sync",
             "version": 1,
+            "releaseState": "ONLINE",
+            "scheduleReleaseState": "ONLINE",
+            "scheduleId": 23,
         }
     ]
+    assert data["total"] == 1
+    assert data["totalPage"] == 1
+    assert data["pageSize"] == 25
+    assert data["currentPage"] == 1
+    assert data["pageNo"] == 1
 
 
 def test_export_workflow_yaml_result_can_render_yaml_export(

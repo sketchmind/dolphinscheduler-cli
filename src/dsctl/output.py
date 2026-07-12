@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.errors import DsctlError
-from dsctl.result_navigation import next_actions_for
+from dsctl.result_navigation import navigation_for
 from dsctl.support.json_types import is_json_value
 
 if TYPE_CHECKING:
@@ -72,17 +72,19 @@ def success_payload(
             for item in result.warning_details
         ],
     }
-    next_actions = next_actions_for(
-        action,
-        resolved=result.resolved,
-        data=result.data,
-        env_file=env_file,
-    )
-    if next_actions:
-        payload["next_actions"] = [
-            require_json_object(item, label="success payload next action")
-            for item in next_actions
-        ]
+    try:
+        navigation = require_json_object(
+            navigation_for(
+                action,
+                resolved=result.resolved,
+                data=result.data,
+                env_file=env_file,
+            ),
+            label="success payload navigation",
+        )
+    except Exception:
+        navigation = {}
+    payload.update(navigation)
     return payload
 
 

@@ -94,6 +94,14 @@ PAGE_LIST_DEFAULTS: dict[str, tuple[str, ...]] = {
         "duration",
         "host",
     ),
+    "workflow.list": (
+        "code",
+        "name",
+        "version",
+        "releaseState",
+        "scheduleReleaseState",
+        "scheduleId",
+    ),
 }
 
 COLLECTION_DEFAULTS: dict[str, tuple[str, ...]] = {
@@ -110,7 +118,6 @@ COLLECTION_DEFAULTS: dict[str, tuple[str, ...]] = {
         "taskDefinitionName",
         "projectCode",
     ),
-    "workflow.list": ("code", "name", "version"),
 }
 
 _STABLE_LEAF_ACTIONS = stable_leaf_actions()
@@ -134,6 +141,7 @@ OBJECT_DEFAULTS: dict[str, tuple[str, ...]] = {
     **_stable_get_defaults(COLLECTION_DEFAULTS),
     "datasource.get": ("id", "name", "type", "host", "port", "database"),
     "project-preference.get": (),
+    "workflow.get": ("code", "name", "version"),
     "workflow.lineage.get": (),
     "workflow.describe": ("workflow", "tasks", "relations"),
     "workflow.digest": (

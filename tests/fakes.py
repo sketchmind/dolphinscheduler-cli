@@ -3948,6 +3948,36 @@ class FakeWorkflow:
 
 
 @dataclass(frozen=True)
+class FakeWorkflowPage:
+    total_list_value: list[FakeWorkflow] | None
+    total: int | None
+    total_page_value: int | None
+    page_size_value: int | None
+    current_page_value: int | None
+    page_no_value: int | None = None
+
+    @property
+    def totalList(self) -> list[FakeWorkflow] | None:  # noqa: N802
+        return self.total_list_value
+
+    @property
+    def totalPage(self) -> int | None:  # noqa: N802
+        return self.total_page_value
+
+    @property
+    def pageSize(self) -> int | None:  # noqa: N802
+        return self.page_size_value
+
+    @property
+    def currentPage(self) -> int | None:  # noqa: N802
+        return self.current_page_value
+
+    @property
+    def pageNo(self) -> int | None:  # noqa: N802
+        return self.page_no_value
+
+
+@dataclass(frozen=True)
 class FakeTaskDefinition:
     code: int
     name: str | None
@@ -4285,12 +4315,44 @@ class FakeWorkflowAdapter:
     backfill_calls: list[dict[str, object]] = field(default_factory=list)
     release_calls: list[tuple[int, str]] = field(default_factory=list)
 
-    def list(self, *, project_code: int) -> list[FakeWorkflow]:
+    def list_refs(self, *, project_code: int) -> list[FakeWorkflow]:
         return [
             workflow
             for workflow in self.workflows
             if workflow.projectCode == project_code
         ]
+
+    def list_page(
+        self,
+        *,
+        project_code: int,
+        page_no: int,
+        page_size: int,
+        search: str | None = None,
+    ) -> FakeWorkflowPage:
+        filtered = [
+            workflow
+            for workflow in self.workflows
+            if workflow.projectCode == project_code
+        ]
+        if search is not None:
+            filtered = [
+                workflow
+                for workflow in filtered
+                if workflow.name is not None and search.lower() in workflow.name.lower()
+            ]
+        start = (page_no - 1) * page_size
+        stop = start + page_size
+        total = len(filtered)
+        total_pages = 0 if total == 0 else ((total - 1) // page_size) + 1
+        return FakeWorkflowPage(
+            total_list_value=filtered[start:stop],
+            total=total,
+            total_page_value=total_pages,
+            page_size_value=page_size,
+            current_page_value=page_no,
+            page_no_value=page_no,
+        )
 
     def get(self, *, code: int) -> FakeWorkflow:
         for workflow in self.workflows:

@@ -189,19 +189,22 @@ Foundation owns:
 - error types
 - JSON/YAML boundary helpers
 - output adapters and exact stdout/stderr/exit-code routing
-- pure, bounded lifecycle navigation derived from an already completed command
-  result
+- pure, bounded lifecycle and list-action navigation derived from an already
+  completed command result
 
 Foundation does not import upward into commands, services, or upstream.
 
-`result_navigation.py` is the single deep module for JSON `next_actions`. Its
+`result_navigation.py` is the single deep module for optional JSON navigation:
+bounded complete `next_actions` and grouped list `action_index` discovery. Its
 public interface accepts `action`, `resolved`, `data`, and the optional explicit
 env-file target; its private rules own safe fact extraction, lifecycle-state
 decisions, numeric selector preference, target preservation, shell encoding,
-deterministic ordering, de-duplication, and output limits. It performs no I/O
-and imports no service, upstream, or generated contracts. The standard
-success-envelope builder calls it once, so domain services do not need to
-remember an output-navigation hook and table/TSV/raw renderers remain
+deterministic ordering, de-duplication, and output limits. Action indexes are
+computed only from returned rows, cap unique selectors, and state explicitly
+that authorization and non-row eligibility were not evaluated. The module
+performs no I/O and imports no service, upstream, or generated contracts. The
+standard success-envelope builder calls it once, so domain services do not need
+to remember an output-navigation hook and table/TSV/raw renderers remain
 row/artifact-only.
 
 ### Generated
@@ -271,6 +274,13 @@ separate legacy adapters instead of service-layer branches.
 - direct generated imports
 - stdout rendering
 
+Workflow discovery has two explicit upstream seams. `list_refs` returns the
+minimal DS identity contract used by selector resolution; `list_page` returns
+the rich paged contract used by the public `workflow list` service. Keeping the
+operations separate avoids an ambiguous generic `list`, prevents rich public
+discovery from adding cost to every name lookup, and leaves pagination/output
+shaping in the service layer without N+1 detail requests.
+
 Workflow task identity allocation is split across the service and upstream
 layers. The compiler always receives an explicit allocator. Lint and dry-run
 use deterministic preview-only codes, while an applied workflow create,
@@ -317,9 +327,11 @@ The root help is the routing seam for callers that cannot read repository
 documentation. It directs agents to inspect only the immediate command through
 leaf help or an action-local schema, using one relevant group only when the
 action is unknown and without preloading downstream actions. Successful
-lifecycle results then carry complete, output-bounded `next_actions` commands;
-callers preserve a goal-aligned, authorized selection unchanged and serialize
-mutations before dependent reads.
+lifecycle results then carry complete, output-bounded `next_actions` commands.
+Row-oriented lists provide a bounded `action_index` so an agent can discover
+which stable actions apply to returned selectors before paying for another help
+or schema read. Callers preserve a goal-aligned, authorized `next_actions`
+selection unchanged and serialize mutations before dependent reads.
 
 Interaction is help-first with schema on demand; implementation is
 contract-first. The pure `command_contract` deep module owns canonical root

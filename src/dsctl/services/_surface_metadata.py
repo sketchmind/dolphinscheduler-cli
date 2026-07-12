@@ -13,7 +13,14 @@ from dsctl.cli_surface import (
     TOP_LEVEL_COMMANDS,
     WORKFLOW_INSTANCE_RESOURCE,
 )
-from dsctl.result_navigation import MAX_NEXT_ACTIONS, NEXT_ACTION_ITEM_FIELDS
+from dsctl.result_navigation import (
+    ACTION_INDEX_FIELDS,
+    ACTION_INDEX_GROUP_FIELDS,
+    ACTION_INDEX_TARGET_FIELDS,
+    MAX_ACTION_INDEX_TARGETS,
+    MAX_NEXT_ACTIONS,
+    NEXT_ACTION_ITEM_FIELDS,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -54,7 +61,10 @@ OUTPUT_SUCCESS_FIELDS: tuple[str, ...] = (
     "warnings",
     "warning_details",
 )
-OUTPUT_OPTIONAL_SUCCESS_FIELDS: tuple[str, ...] = ("next_actions",)
+OUTPUT_OPTIONAL_SUCCESS_FIELDS: tuple[str, ...] = (
+    "next_actions",
+    "action_index",
+)
 OUTPUT_ERROR_FIELDS: tuple[str, ...] = (
     *OUTPUT_SUCCESS_FIELDS,
     "error",
@@ -176,6 +186,18 @@ def output_schema_data() -> dict[str, object]:
             "row_output": False,
             "preserves_env_file": True,
         },
+        "action_index": {
+            "field": "action_index",
+            "presence": "successful_applicable_json_responses_only",
+            "max_indexed_targets": MAX_ACTION_INDEX_TARGETS,
+            "index_fields": list(ACTION_INDEX_FIELDS),
+            "target_fields": list(ACTION_INDEX_TARGET_FIELDS),
+            "group_fields": list(ACTION_INDEX_GROUP_FIELDS),
+            "all_targets_semantics": "all_indexed_targets",
+            "authorization": "not_evaluated",
+            "eligibility": "row_facts_only",
+            "row_output": False,
+        },
     }
 
 
@@ -198,6 +220,8 @@ def output_capabilities_data() -> dict[str, object]:
         "warning_details_alignment": True,
         "structured_errors": True,
         "structured_next_actions": True,
+        "structured_action_index": True,
+        "max_action_index_targets": MAX_ACTION_INDEX_TARGETS,
     }
 
 

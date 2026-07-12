@@ -47,6 +47,48 @@ def test_success_payload_uses_json_safe_result_shapes() -> None:
     }
 
 
+def test_success_payload_does_not_fail_when_optional_navigation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_navigation(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        message = "optional discovery failed"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("dsctl.output.navigation_for", fail_navigation)
+
+    payload = success_payload(
+        "workflow-instance.list",
+        CommandResult(data={"totalList": [{"id": 263, "state": "SUCCESS"}]}),
+    )
+
+    assert payload == {
+        "ok": True,
+        "action": "workflow-instance.list",
+        "resolved": {},
+        "data": {"totalList": [{"id": 263, "state": "SUCCESS"}]},
+        "warnings": [],
+        "warning_details": [],
+    }
+
+
+def test_success_payload_does_not_fail_when_optional_navigation_is_not_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "dsctl.output.navigation_for",
+        lambda *args, **kwargs: {"action_index": object()},
+    )
+
+    payload = success_payload(
+        "workflow-instance.list",
+        CommandResult(data={"totalList": [{"id": 263, "state": "SUCCESS"}]}),
+    )
+
+    assert "action_index" not in payload
+    assert payload["data"] == {"totalList": [{"id": 263, "state": "SUCCESS"}]}
+
+
 def test_command_result_rejects_misaligned_warning_details() -> None:
     with pytest.raises(ValueError, match="warning_details must align"):
         CommandResult(

@@ -29,6 +29,10 @@ class ScheduleRecord(Protocol):
     """Structural schedule subset exposed in workflow payloads."""
 
     @property
+    def id(self) -> int | None:
+        """Schedule id when the payload includes one."""
+
+    @property
     def startTime(self) -> str | None:  # noqa: N802
         """Schedule start time."""
 
@@ -59,10 +63,6 @@ class ScheduleRecord(Protocol):
 
 class SchedulePayloadRecord(ScheduleRecord, Protocol):
     """Structural schedule payload returned by upstream schedule operations."""
-
-    @property
-    def id(self) -> int | None:
-        """Schedule id."""
 
     @property
     def workflowDefinitionCode(self) -> int:  # noqa: N802
@@ -215,6 +215,50 @@ class WorkflowPayloadRecord(WorkflowRecord, Protocol):
     @property
     def schedule(self) -> ScheduleRecord | None:
         """Attached schedule data when available."""
+
+
+class WorkflowListRecord(WorkflowRecord, Protocol):
+    """Rich workflow row returned by the public paging endpoint."""
+
+    @property
+    def releaseState(self) -> StringEnumValue | None:  # noqa: N802
+        """Workflow release state."""
+
+    @property
+    def scheduleReleaseState(self) -> StringEnumValue | None:  # noqa: N802
+        """Attached schedule release state when available."""
+
+    @property
+    def schedule(self) -> ScheduleRecord | None:
+        """Attached schedule when available."""
+
+
+class WorkflowPageRecord(Protocol):
+    """Structural DS paging payload for public workflow lists."""
+
+    @property
+    def totalList(self) -> Sequence[WorkflowListRecord] | None:  # noqa: N802
+        """Page items."""
+
+    @property
+    def total(self) -> int | None:
+        """Total remote item count."""
+
+    @property
+    def totalPage(self) -> int | None:  # noqa: N802
+        """Remote total page count."""
+
+    @property
+    def pageSize(self) -> int | None:  # noqa: N802
+        """Remote page size."""
+
+    @property
+    def currentPage(self) -> int | None:  # noqa: N802
+        """Remote current page number."""
+
+    @property
+    def pageNo(self) -> int | None:  # noqa: N802
+        """Alternate remote page number field."""
 
 
 class WorkflowTaskRelationRecord(Protocol):
@@ -494,8 +538,18 @@ class WorkflowLineageOperations(Protocol):
 class WorkflowOperations(Protocol):
     """Bound workflow operations exposed to the service layer."""
 
-    def list(self, *, project_code: int) -> Sequence[WorkflowRecord]:
-        """Return workflows visible inside one project."""
+    def list_refs(self, *, project_code: int) -> Sequence[WorkflowRecord]:
+        """Return inexpensive workflow identities for selector resolution."""
+
+    def list_page(
+        self,
+        *,
+        project_code: int,
+        page_no: int,
+        page_size: int,
+        search: str | None = None,
+    ) -> WorkflowPageRecord:
+        """Return one rich public page of workflows inside one project."""
 
     def get(self, *, code: int) -> WorkflowPayloadRecord:
         """Fetch one workflow by code."""

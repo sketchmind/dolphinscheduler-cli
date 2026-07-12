@@ -7,6 +7,7 @@ from dsctl.cli_runtime import emit_raw_result, emit_result, get_app_state
 from dsctl.command_contract import COMMAND_CATALOG
 from dsctl.commands._contract_adapter import typer_option
 from dsctl.output import CommandResult
+from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 from dsctl.services.workflow import (
     backfill_workflow_result,
     create_workflow_result,
@@ -101,11 +102,34 @@ def list_command(
         str | None,
         typer.Option(
             "--search",
-            help="Filter workflows by name substring after fetching the project list.",
+            help="Filter workflows by name using the upstream search value.",
         ),
     ] = None,
+    page_no: Annotated[
+        int,
+        typer.Option(
+            "--page-no",
+            min=1,
+            help="Page number to fetch when not using --all.",
+        ),
+    ] = 1,
+    page_size: Annotated[
+        int,
+        typer.Option(
+            "--page-size",
+            min=1,
+            help="Page size to request from the upstream API.",
+        ),
+    ] = DEFAULT_PAGE_SIZE,
+    all_pages: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            help="Fetch all remaining pages up to the safety limit.",
+        ),
+    ] = False,
 ) -> None:
-    """List workflows inside one project."""
+    """List workflows with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -113,6 +137,9 @@ def list_command(
         lambda: list_workflows_result(
             project=project,
             search=search,
+            page_no=page_no,
+            page_size=page_size,
+            all_pages=all_pages,
             env_file=env_file,
         ),
     )

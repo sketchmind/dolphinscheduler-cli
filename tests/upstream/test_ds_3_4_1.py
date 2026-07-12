@@ -685,6 +685,100 @@ def test_adapter_project_worker_group_methods_bridge_get_and_post() -> None:
     ]
 
 
+def test_adapter_workflow_lists_keep_identity_refs_separate_from_rich_pages() -> None:
+    profile = make_profile()
+    requests_seen: list[tuple[str, str, dict[str, str]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_seen.append(
+            (
+                request.method,
+                request.url.path,
+                dict(request.url.params),
+            )
+        )
+        assert request.headers["token"] == profile.api_token
+        if request.url.path.endswith("query-workflow-definition-list"):
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "msg": "success",
+                    "data": [{"code": 101, "name": "daily-sync", "version": 4}],
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "msg": "success",
+                "data": {
+                    "totalList": [
+                        {
+                            "code": 101,
+                            "name": "daily-sync",
+                            "version": 4,
+                            "projectCode": 7,
+                            "releaseState": "ONLINE",
+                            "scheduleReleaseState": "OFFLINE",
+                            "schedule": {
+                                "id": 23,
+                                "workflowDefinitionCode": 101,
+                            },
+                        }
+                    ],
+                    "total": 1,
+                    "totalPage": 1,
+                    "pageSize": 25,
+                    "currentPage": 2,
+                    "pageNo": 2,
+                },
+            },
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = adapter.bind(profile, http_client=http_client)
+        refs = session.workflows.list_refs(project_code=7)
+        page = session.workflows.list_page(
+            project_code=7,
+            page_no=2,
+            page_size=25,
+            search="daily",
+        )
+
+    assert [(item.code, item.name, item.version) for item in refs] == [
+        (101, "daily-sync", 4)
+    ]
+    assert page.total == 1
+    page_items = page.totalList
+    assert page_items is not None
+    workflow = page_items[0]
+    assert workflow.releaseState is not None
+    assert workflow.releaseState.value == "ONLINE"
+    schedule = workflow.schedule
+    assert schedule is not None
+    assert schedule.id == 23
+    assert requests_seen == [
+        (
+            "GET",
+            "/dolphinscheduler/projects/7/workflow-definition/"
+            "query-workflow-definition-list",
+            {},
+        ),
+        (
+            "GET",
+            "/dolphinscheduler/projects/7/workflow-definition",
+            {"searchVal": "daily", "pageNo": "2", "pageSize": "25"},
+        ),
+    ]
+
+
 def test_adapter_workflow_lineage_methods_bridge_list_get_and_dependent_tasks() -> None:
     profile = make_profile()
     requests_seen: list[tuple[str, str]] = []

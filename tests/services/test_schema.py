@@ -139,7 +139,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "warnings",
             "warning_details",
         ],
-        "optional_success_fields": ["next_actions"],
+        "optional_success_fields": ["next_actions", "action_index"],
         "error_fields": [
             "ok",
             "action",
@@ -166,6 +166,35 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "authorization": "advisory",
             "row_output": False,
             "preserves_env_file": True,
+        },
+        "action_index": {
+            "field": "action_index",
+            "presence": "successful_applicable_json_responses_only",
+            "max_indexed_targets": 100,
+            "index_fields": [
+                "scope",
+                "target",
+                "authorization",
+                "eligibility",
+                "groups",
+                "schema_command",
+                "group_command",
+                "target_count",
+                "indexed_target_count",
+                "truncated",
+            ],
+            "target_fields": ["resource", "field"],
+            "group_fields": [
+                "targets",
+                "read",
+                "read_needs_input",
+                "mutate",
+                "mutate_needs_input",
+            ],
+            "all_targets_semantics": "all_indexed_targets",
+            "authorization": "not_evaluated",
+            "eligibility": "row_facts_only",
+            "row_output": False,
         },
     }
 
@@ -1387,6 +1416,8 @@ def test_schema_result_describes_current_stable_surface() -> None:
             "warning_details_alignment": True,
             "structured_errors": True,
             "structured_next_actions": True,
+            "structured_action_index": True,
+            "max_action_index_targets": 100,
         },
         "errors": {
             "structured": True,
@@ -1818,9 +1849,16 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
     workflow_data = _require_dict(workflow_result.data)
     workflow_command = _require_dict(workflow_data["command"])
     assert workflow_command["data_shape"] == {
-        "kind": "collection",
-        "row_path": "data",
-        "default_columns": ["code", "name", "version"],
+        "kind": "page",
+        "row_path": "data.totalList",
+        "default_columns": [
+            "code",
+            "name",
+            "version",
+            "releaseState",
+            "scheduleReleaseState",
+            "scheduleId",
+        ],
         "column_discovery": "runtime_row_keys",
     }
 
@@ -2106,6 +2144,15 @@ def test_schema_defaults_follow_runtime_constants() -> None:
     project_list_options = _require_list(project_list["options"])
     project_page_size = _find_option(project_list_options, "page-size")
     assert project_page_size["default"] == DEFAULT_PAGE_SIZE
+
+    workflow_group = _find_group(data["commands"], "workflow")
+    workflow_list = _find_command(workflow_group["commands"], "list")
+    workflow_list_options = _require_list(workflow_list["options"])
+    assert _find_option(workflow_list_options, "page-no")["default"] == 1
+    assert _find_option(workflow_list_options, "page-size")["default"] == (
+        DEFAULT_PAGE_SIZE
+    )
+    assert _find_option(workflow_list_options, "all")["default"] is False
 
     workflow_instance_group = _find_group(data["commands"], "workflow-instance")
     watch_command = _find_command(workflow_instance_group["commands"], "watch")

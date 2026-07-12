@@ -110,6 +110,15 @@ the current goal and has the required mutation authorization, agents should
 preserve that selected `command` unchanged. A `mutates: true` action must
 complete before reads that depend on its new state.
 
+Row-oriented list JSON may also include a bounded `action_index`. It groups
+stable leaf actions over eligible returned selectors instead of repeating an
+action list on every row. Choose one action from a group's `read`,
+`read_needs_input`, `mutate`, or `mutate_needs_input` category, then use the
+supplied `schema_command` template only when exact parameters are needed.
+Eligibility is derived from returned row facts; permissions and execution-time
+state remain authoritative on the server. Table and TSV rendering stay
+data-only.
+
 Use `capabilities` for lightweight feature discovery:
 
 ```bash

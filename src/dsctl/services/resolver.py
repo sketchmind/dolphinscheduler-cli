@@ -258,7 +258,7 @@ def workflow(
         return resolved_workflow(payload)
 
     matches = resolve_exact_matches(
-        adapter.list(project_code=project_code),
+        adapter.list_refs(project_code=project_code),
         matches=lambda candidate: (
             candidate.name == normalized_identifier and candidate.code is not None
         ),

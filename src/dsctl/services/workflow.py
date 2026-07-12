@@ -4,7 +4,7 @@ import json
 import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal, TypedDict, cast
+from typing import TYPE_CHECKING, Literal, TypeAlias, TypedDict, cast
 
 from dsctl.cli_surface import SCHEDULE_RESOURCE, TASK_RESOURCE, WORKFLOW_RESOURCE
 from dsctl.errors import (
@@ -59,6 +59,7 @@ from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_non_negative_int,
+    require_positive_int,
 )
 from dsctl.services._workflow_compile import (
     WorkflowCreatePayload,
@@ -89,7 +90,7 @@ from dsctl.services._workflow_render import (
     serialize_workflow_dag as _serialize_workflow_dag,
 )
 from dsctl.services._workflow_render import (
-    serialize_workflow_ref as _serialize_workflow_ref,
+    serialize_workflow_list_item as _serialize_workflow_list_item,
 )
 from dsctl.services._workflow_render import (
     workflow_yaml_document as _workflow_yaml_document,
@@ -98,6 +99,12 @@ from dsctl.services._workflow_validation import (
     require_schedule_block_create_compatible,
 )
 from dsctl.services.confirmation import require_confirmation
+from dsctl.services.pagination import (
+    DEFAULT_PAGE_SIZE,
+    MAX_AUTO_EXHAUST_PAGES,
+    PageData,
+    requested_page_data,
+)
 from dsctl.services.resolver import ResolvedProject, ResolvedTask, ResolvedWorkflow
 from dsctl.services.resolver import project as resolve_project
 from dsctl.services.resolver import task as resolve_task
@@ -167,6 +174,9 @@ class WorkflowRunData(TypedDict):
     """Stable payload emitted for one workflow run request."""
 
     workflowInstanceIds: list[int]
+
+
+WorkflowPageData: TypeAlias = PageData[WorkflowListItem]
 
 
 class WorkflowRunTaskDependencyWarningDetail(TypedDict):
@@ -292,15 +302,23 @@ def list_workflows_result(
     *,
     project: str | None = None,
     search: str | None = None,
+    page_no: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    all_pages: bool = False,
     env_file: str | None = None,
 ) -> CommandResult:
-    """List workflows inside one resolved project."""
+    """List workflows inside one resolved project with paging controls."""
     normalized_search = optional_text(search)
+    require_positive_int(page_no, label="page_no")
+    require_positive_int(page_size, label="page_size")
     return run_with_service_runtime(
         env_file,
         _list_workflows_result,
         project=project,
         search=normalized_search,
+        page_no=page_no,
+        page_size=page_size,
+        all_pages=all_pages,
     )
 
 
@@ -648,28 +666,41 @@ def _list_workflows_result(
     *,
     project: str | None,
     search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> CommandResult:
     selected_project = require_project_selection(project, runtime=runtime)
     resolved_project = resolve_project(
         selected_project.value,
         adapter=runtime.upstream.projects,
     )
-    workflows = runtime.upstream.workflows.list(project_code=resolved_project.code)
-
-    items: list[WorkflowListItem] = [
-        _serialize_workflow_ref(workflow)
-        for workflow in workflows
-        if search is None
-        or (workflow.name is not None and search.lower() in workflow.name.lower())
-    ]
+    adapter = runtime.upstream.workflows
+    data: WorkflowPageData = requested_page_data(
+        lambda current_page_no, current_page_size: adapter.list_page(
+            project_code=resolved_project.code,
+            page_no=current_page_no,
+            page_size=current_page_size,
+            search=search,
+        ),
+        page_no=page_no,
+        page_size=page_size,
+        all_pages=all_pages,
+        serialize_item=_serialize_workflow_list_item,
+        resource=WORKFLOW_RESOURCE,
+        max_pages=MAX_AUTO_EXHAUST_PAGES,
+    )
     return CommandResult(
-        data=require_json_value(items, label="workflow list data"),
+        data=require_json_object(data, label="workflow list data"),
         resolved={
             "project": _resolved_project_selection(
                 resolved_project,
                 selected_project,
             ),
             "search": search,
+            "page_no": page_no,
+            "page_size": page_size,
+            "all": all_pages,
         },
     )
 

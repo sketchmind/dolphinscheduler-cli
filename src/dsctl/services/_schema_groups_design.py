@@ -831,16 +831,35 @@ def workflow_group() -> dict[str, object]:
             command(
                 "list",
                 action="workflow.list",
-                summary="List workflows inside one project.",
+                summary=(
+                    "List workflows with optional filtering and pagination controls."
+                ),
                 options=[
                     project_option(),
                     option(
                         "search",
                         value_type="string",
                         description=(
-                            "Filter workflows by name substring after fetching "
-                            "the project list."
+                            "Filter workflows by name using the upstream search value."
                         ),
+                    ),
+                    option(
+                        "page-no",
+                        value_type="integer",
+                        description="Page number to fetch when not using --all.",
+                        default=1,
+                    ),
+                    option(
+                        "page-size",
+                        value_type="integer",
+                        description="Page size to request from the upstream API.",
+                        default=DEFAULT_PAGE_SIZE,
+                    ),
+                    option(
+                        "all",
+                        value_type="boolean",
+                        description="Fetch all remaining pages up to the safety limit.",
+                        default=False,
                     ),
                 ],
             ),

@@ -121,6 +121,8 @@ def test_capabilities_command_returns_full_surface_discovery() -> None:
         "warning_details_alignment": True,
         "structured_errors": True,
         "structured_next_actions": True,
+        "structured_action_index": True,
+        "max_action_index_targets": 100,
     }
     assert payload["data"]["self_description"] == {
         "schema": True,
