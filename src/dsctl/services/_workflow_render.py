@@ -123,12 +123,9 @@ def serialize_workflow_list_item(workflow: WorkflowListRecord) -> WorkflowListIt
 def serialize_workflow(
     workflow: WorkflowPayloadRecord,
     *,
-    schedule_override: ScheduleRecord | None = None,
+    attached_schedule: ScheduleRecord | None,
 ) -> WorkflowData:
-    """Serialize one workflow payload, preferring a known attached schedule."""
-    attached_schedule = (
-        workflow.schedule if schedule_override is None else schedule_override
-    )
+    """Serialize one workflow payload with authoritative attached-schedule state."""
     return {
         "id": workflow.id,
         "code": workflow.code,
@@ -145,17 +142,21 @@ def serialize_workflow(
         "projectName": workflow.projectName,
         "timeout": workflow.timeout,
         "releaseState": enum_value(workflow.releaseState),
-        "scheduleReleaseState": enum_value(
-            workflow.scheduleReleaseState
-            if schedule_override is None
-            else schedule_override.releaseState
+        "scheduleReleaseState": (
+            None
+            if attached_schedule is None
+            else enum_value(attached_schedule.releaseState)
         ),
         "executionType": enum_value(workflow.executionType),
         "schedule": _serialize_schedule(attached_schedule),
     }
 
 
-def serialize_workflow_dag(dag: WorkflowDagRecord) -> WorkflowDescribeData:
+def serialize_workflow_dag(
+    dag: WorkflowDagRecord,
+    *,
+    attached_schedule: ScheduleRecord | None,
+) -> WorkflowDescribeData:
     """Serialize one workflow DAG payload with expanded task relations."""
     workflow = dag.workflowDefinition
     if workflow is None:
@@ -173,7 +174,10 @@ def serialize_workflow_dag(dag: WorkflowDagRecord) -> WorkflowDescribeData:
         for relation in dag.workflowTaskRelationList or []
     ]
     return {
-        "workflow": serialize_workflow(workflow),
+        "workflow": serialize_workflow(
+            workflow,
+            attached_schedule=attached_schedule,
+        ),
         "tasks": tasks,
         "relations": relations,
     }
@@ -183,9 +187,13 @@ def workflow_yaml_document(
     dag: WorkflowDagRecord,
     *,
     project: ResolvedProject,
+    attached_schedule: ScheduleRecord | None,
 ) -> str:
     """Render one DS workflow DAG into the CLI YAML workflow document."""
-    description = serialize_workflow_dag(dag)
+    description = serialize_workflow_dag(
+        dag,
+        attached_schedule=attached_schedule,
+    )
     workflow_data = description["workflow"]
     tasks = description["tasks"]
     relations = description["relations"]
@@ -281,13 +289,14 @@ def workflow_live_baseline(
     *,
     project: ResolvedProject,
 ) -> WorkflowLiveBaseline:
-    """Round-trip one live workflow DAG into authoring spec plus task identity."""
+    """Round-trip one live workflow definition without attached schedule state."""
     task_identities = task_identities_by_name(dag)
     try:
         document = yaml.safe_load(
             workflow_yaml_document(
                 dag,
                 project=project,
+                attached_schedule=None,
             )
         )
     except yaml.YAMLError as exc:

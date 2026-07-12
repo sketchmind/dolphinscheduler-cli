@@ -4310,11 +4310,14 @@ class FakeWorkflowAdapter:
     delete_errors_by_code: dict[int, ApiResultError] | None = None
     online_errors_by_code: dict[int, ApiResultError] | None = None
     offline_errors_by_code: dict[int, ApiResultError] | None = None
+    get_errors_by_call: dict[int, Exception] = field(default_factory=dict)
+    schedule_adapter: FakeScheduleAdapter | None = None
     create_calls: list[dict[str, object]] = field(default_factory=list)
     update_calls: list[dict[str, object]] = field(default_factory=list)
     run_calls: list[dict[str, object]] = field(default_factory=list)
     backfill_calls: list[dict[str, object]] = field(default_factory=list)
     release_calls: list[tuple[int, str]] = field(default_factory=list)
+    get_calls: list[int] = field(default_factory=list)
 
     def list_refs(self, *, project_code: int) -> list[FakeWorkflow]:
         return [
@@ -4342,6 +4345,7 @@ class FakeWorkflowAdapter:
                 for workflow in filtered
                 if workflow.name is not None and search.lower() in workflow.name.lower()
             ]
+        filtered = [self._with_attached_schedule(workflow) for workflow in filtered]
         start = (page_no - 1) * page_size
         stop = start + page_size
         total = len(filtered)
@@ -4356,6 +4360,10 @@ class FakeWorkflowAdapter:
         )
 
     def get(self, *, code: int) -> FakeWorkflow:
+        self.get_calls.append(code)
+        call_error = self.get_errors_by_call.get(len(self.get_calls))
+        if call_error is not None:
+            raise call_error
         for workflow in self.workflows:
             if workflow.code == code:
                 return workflow
@@ -4656,6 +4664,12 @@ class FakeWorkflowAdapter:
                 continue
             self.workflows.pop(index)
             self.dags.pop(workflow_code, None)
+            if self.schedule_adapter is not None:
+                self.schedule_adapter.schedules = [
+                    schedule
+                    for schedule in self.schedule_adapter.schedules
+                    if schedule.workflowDefinitionCode != workflow_code
+                ]
             return
         raise ApiResultError(
             result_code=10018,
@@ -4721,10 +4735,39 @@ class FakeWorkflowAdapter:
                     dag,
                     workflow_definition_value=updated,
                 )
+            if release_state == "OFFLINE" and self.schedule_adapter is not None:
+                self.schedule_adapter.schedules = [
+                    replace(
+                        attached,
+                        release_state_value=FakeEnumValue("OFFLINE"),
+                    )
+                    if attached.workflowDefinitionCode == workflow_code
+                    else attached
+                    for attached in self.schedule_adapter.schedules
+                ]
             return
         raise ApiResultError(
             result_code=10018,
             result_message=f"workflow code {workflow_code} not found",
+        )
+
+    def _with_attached_schedule(self, workflow: FakeWorkflow) -> FakeWorkflow:
+        if self.schedule_adapter is None:
+            return workflow
+        attached = next(
+            (
+                schedule
+                for schedule in self.schedule_adapter.schedules
+                if schedule.workflowDefinitionCode == workflow.code
+            ),
+            None,
+        )
+        return replace(
+            workflow,
+            schedule_value=attached,
+            schedule_release_state_value=(
+                None if attached is None else attached.releaseState
+            ),
         )
 
 
@@ -5958,6 +6001,11 @@ def _matches_task_instance_query(
 class FakeScheduleAdapter:
     schedules: list[FakeSchedule]
     preview_times_value: Sequence[str] | None = None
+    ignore_workflow_filter: bool = False
+    list_error: Exception | None = None
+    list_errors_by_call: dict[int, Exception] = field(default_factory=dict)
+    list_totals_by_call: dict[int, int | None] = field(default_factory=dict)
+    list_calls: list[dict[str, object]] = field(default_factory=list)
 
     def list(
         self,
@@ -5968,12 +6016,26 @@ class FakeScheduleAdapter:
         workflow_code: int | None = None,
         search: str | None = None,
     ) -> FakeSchedulePage:
+        self.list_calls.append(
+            {
+                "project_code": project_code,
+                "page_no": page_no,
+                "page_size": page_size,
+                "workflow_code": workflow_code,
+                "search": search,
+            }
+        )
+        if self.list_error is not None:
+            raise self.list_error
+        call_error = self.list_errors_by_call.get(len(self.list_calls))
+        if call_error is not None:
+            raise call_error
         filtered = [
             schedule
             for schedule in self.schedules
             if schedule.project_code_value == project_code
         ]
-        if workflow_code is not None:
+        if workflow_code is not None and not self.ignore_workflow_filter:
             filtered = [
                 schedule
                 for schedule in filtered
@@ -5989,10 +6051,17 @@ class FakeScheduleAdapter:
         start = (page_no - 1) * page_size
         stop = start + page_size
         total = len(filtered)
-        total_pages = 0 if total == 0 else ((total - 1) // page_size) + 1
+        reported_total = self.list_totals_by_call.get(len(self.list_calls), total)
+        total_pages = (
+            None
+            if reported_total is None
+            else 0
+            if reported_total == 0
+            else ((reported_total - 1) // page_size) + 1
+        )
         return FakeSchedulePage(
             total_list_value=filtered[start:stop],
-            total=total,
+            total=reported_total,
             total_page_value=total_pages,
             page_size_value=page_size,
             current_page_value=page_no,
@@ -6345,6 +6414,23 @@ def empty_schedule_adapter() -> FakeScheduleAdapter:
     return FakeScheduleAdapter(schedules=[])
 
 
+def schedule_adapter_from_workflows(
+    workflow_adapter: FakeWorkflowAdapter,
+) -> FakeScheduleAdapter:
+    schedules = [
+        replace(
+            schedule,
+            workflow_definition_code_value=workflow.code,
+            workflow_definition_name_value=workflow.name,
+            project_name_value=workflow.projectName,
+            project_code_value=workflow.projectCode,
+        )
+        for workflow in workflow_adapter.workflows
+        if (schedule := workflow.schedule) is not None
+    ]
+    return FakeScheduleAdapter(schedules=schedules)
+
+
 def empty_workflow_instance_adapter() -> FakeWorkflowInstanceAdapter:
     return FakeWorkflowInstanceAdapter(workflow_instances=[])
 
@@ -6387,6 +6473,13 @@ def fake_service_runtime(
     workflow_instance_adapter: FakeWorkflowInstanceAdapter | None = None,
     task_instance_adapter: FakeTaskInstanceAdapter | None = None,
 ) -> Iterator[ServiceRuntime]:
+    bound_workflow_adapter = workflow_adapter or empty_workflow_adapter()
+    bound_schedule_adapter = (
+        schedule_adapter
+        if schedule_adapter is not None
+        else schedule_adapter_from_workflows(bound_workflow_adapter)
+    )
+    bound_workflow_adapter.schedule_adapter = bound_schedule_adapter
     yield ServiceRuntime(
         profile=profile,
         context=context or SessionContext(),
@@ -6419,12 +6512,12 @@ def fake_service_runtime(
             users=user_adapter or empty_user_adapter(),
             audits=audit_adapter or empty_audit_adapter(),
             monitor=monitor_adapter or empty_monitor_adapter(),
-            workflows=workflow_adapter or empty_workflow_adapter(),
+            workflows=bound_workflow_adapter,
             workflow_lineages=(
                 workflow_lineage_adapter or empty_workflow_lineage_adapter()
             ),
             tasks=task_adapter or empty_task_adapter(),
-            schedules=schedule_adapter or empty_schedule_adapter(),
+            schedules=bound_schedule_adapter,
             workflow_instances=workflow_instance_adapter
             or empty_workflow_instance_adapter(),
             task_instances=task_instance_adapter or empty_task_instance_adapter(),

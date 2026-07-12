@@ -52,6 +52,9 @@ def patch_workflow_service(monkeypatch: pytest.MonkeyPatch) -> None:
         execution_type_value=FakeEnumValue("PARALLEL"),
         schedule_value=FakeSchedule(
             id=23,
+            start_time_value="2026-01-01 00:00:00",
+            end_time_value="2026-12-31 23:59:59",
+            timezone_id_value="UTC",
             crontab_value="0 0 0 * * ?",
             release_state_value=FakeEnumValue("ONLINE"),
         ),
@@ -1011,6 +1014,10 @@ def test_workflow_online_command_returns_refreshed_payload(
         schedule_release_state_value=FakeEnumValue("OFFLINE"),
         execution_type_value=FakeEnumValue("PARALLEL"),
         schedule_value=FakeSchedule(
+            id=23,
+            start_time_value="2026-01-01 00:00:00",
+            end_time_value="2026-12-31 23:59:59",
+            timezone_id_value="UTC",
             crontab_value="0 0 0 * * ?",
             release_state_value=FakeEnumValue("OFFLINE"),
         ),
@@ -1342,6 +1349,10 @@ def test_workflow_edit_command_suggests_dry_run_for_remote_validation_error(
         schedule_release_state_value=FakeEnumValue("OFFLINE"),
         execution_type_value=FakeEnumValue("PARALLEL"),
         schedule_value=FakeSchedule(
+            id=23,
+            start_time_value="2026-01-01 00:00:00",
+            end_time_value="2026-12-31 23:59:59",
+            timezone_id_value="UTC",
             crontab_value="0 0 0 * * ?",
             release_state_value=FakeEnumValue("OFFLINE"),
         ),

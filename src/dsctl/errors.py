@@ -241,6 +241,7 @@ class ApiHttpError(DsctlError):
         status_code: int,
         body: JsonValue | None = None,
         details: Mapping[str, object] | None = None,
+        suggestion: str | None = None,
     ) -> None:
         """Attach HTTP status metadata to a transport failure."""
         error_details: dict[str, object] = {"status_code": status_code}
@@ -248,7 +249,7 @@ class ApiHttpError(DsctlError):
             error_details["body"] = body
         if details is not None:
             error_details.update(dict(details))
-        super().__init__(message, details=error_details)
+        super().__init__(message, details=error_details, suggestion=suggestion)
         self.status_code = status_code
         self.body = body
         self.source = _http_error_source(status_code=status_code)

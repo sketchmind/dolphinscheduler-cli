@@ -4,11 +4,13 @@ import json
 import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal, TypeAlias, TypedDict, cast
+from typing import TYPE_CHECKING, Literal, NoReturn, TypeAlias, TypedDict, cast
 
 from dsctl.cli_surface import SCHEDULE_RESOURCE, TASK_RESOURCE, WORKFLOW_RESOURCE
 from dsctl.errors import (
+    ApiHttpError,
     ApiResultError,
+    ApiTransportError,
     ConflictError,
     InvalidStateError,
     NotFoundError,
@@ -96,6 +98,10 @@ from dsctl.services._workflow_render import (
 from dsctl.services._workflow_render import (
     workflow_yaml_document as _workflow_yaml_document,
 )
+from dsctl.services._workflow_schedule import (
+    AttachedScheduleLookupPhase,
+    load_attached_schedule,
+)
 from dsctl.services._workflow_validation import (
     require_schedule_block_create_compatible,
 )
@@ -130,6 +136,7 @@ if TYPE_CHECKING:
     from dsctl.support.yaml_io import JsonObject
     from dsctl.upstream.protocol import (
         SchedulePayloadRecord,
+        ScheduleRecord,
         WorkflowDagRecord,
         WorkflowPayloadRecord,
     )
@@ -719,8 +726,17 @@ def _get_workflow_result(
         project=project,
     )
     payload = runtime.upstream.workflows.get(code=target.resolved_workflow.code)
+    attached_schedule = _load_target_attached_schedule(
+        runtime,
+        target=target,
+        action="workflow.get",
+        phase="read",
+    )
     data = require_json_object(
-        _serialize_workflow(payload),
+        _serialize_workflow(
+            payload,
+            attached_schedule=attached_schedule,
+        ),
         label="workflow data",
     )
 
@@ -754,11 +770,18 @@ def _export_workflow_yaml_result(
         project_code=target.resolved_project.code,
         code=target.resolved_workflow.code,
     )
+    attached_schedule = _load_target_attached_schedule(
+        runtime,
+        target=target,
+        action="workflow.export",
+        phase="read",
+    )
     data = require_json_object(
         WorkflowYamlExportData(
             yaml=_workflow_yaml_document(
                 dag,
                 project=target.resolved_project,
+                attached_schedule=attached_schedule,
             )
         ),
         label="workflow yaml export",
@@ -793,8 +816,17 @@ def _describe_workflow_result(
         project_code=target.resolved_project.code,
         code=target.resolved_workflow.code,
     )
+    attached_schedule = _load_target_attached_schedule(
+        runtime,
+        target=target,
+        action="workflow.describe",
+        phase="read",
+    )
     data = require_json_object(
-        _serialize_workflow_dag(dag),
+        _serialize_workflow_dag(
+            dag,
+            attached_schedule=attached_schedule,
+        ),
         label="workflow describe data",
     )
 
@@ -828,8 +860,19 @@ def _digest_workflow_result(
         project_code=target.resolved_project.code,
         code=target.resolved_workflow.code,
     )
+    attached_schedule = _load_target_attached_schedule(
+        runtime,
+        target=target,
+        action="workflow.digest",
+        phase="read",
+    )
     data = require_json_object(
-        _digest_workflow(_serialize_workflow_dag(dag)),
+        _digest_workflow(
+            _serialize_workflow_dag(
+                dag,
+                attached_schedule=attached_schedule,
+            )
+        ),
         label="workflow digest data",
     )
     return CommandResult(
@@ -937,7 +980,7 @@ def _create_workflow_result(
         data=require_json_object(
             _serialize_workflow(
                 payload_data,
-                schedule_override=created_schedule,
+                attached_schedule=created_schedule,
             ),
             label="workflow data",
         ),
@@ -985,6 +1028,12 @@ def _edit_workflow_result(
         code=target.resolved_workflow.code,
     )
     live_payload = runtime.upstream.workflows.get(code=target.resolved_workflow.code)
+    attached_schedule = _load_target_attached_schedule(
+        runtime,
+        target=target,
+        action="workflow.edit",
+        phase="pre_mutation",
+    )
     mutation = _compile_workflow_edit_mutation(
         dag=dag,
         project=target.resolved_project,
@@ -1002,13 +1051,14 @@ def _edit_workflow_result(
     )
     workflow_state_constraint_details = _workflow_edit_state_constraint_details(
         live_payload,
+        attached_schedule=attached_schedule,
         has_changes=has_changes,
     )
     workflow_state_constraints = _workflow_edit_constraint_messages(
         workflow_state_constraint_details
     )
     schedule_impact_details = _workflow_edit_schedule_impact_details(
-        live_payload,
+        attached_schedule,
         desired_release_state=desired_release_state,
     )
     schedule_impacts = _workflow_edit_schedule_impact_messages(schedule_impact_details)
@@ -1052,7 +1102,10 @@ def _edit_workflow_result(
         no_change_warning = _workflow_edit_no_change_message(mutation.input_mode)
         return CommandResult(
             data=require_json_object(
-                _serialize_workflow(live_payload),
+                _serialize_workflow(
+                    live_payload,
+                    attached_schedule=attached_schedule,
+                ),
                 label="workflow data",
             ),
             resolved=resolved_data,
@@ -1113,7 +1166,10 @@ def _edit_workflow_result(
     refreshed = runtime.upstream.workflows.get(code=target.resolved_workflow.code)
     return CommandResult(
         data=require_json_object(
-            _serialize_workflow(refreshed),
+            _serialize_workflow(
+                refreshed,
+                attached_schedule=attached_schedule,
+            ),
             label="workflow data",
         ),
         resolved=resolved_data,
@@ -2189,6 +2245,12 @@ def _delete_workflow_result(
     adapter = runtime.upstream.workflows
     try:
         current = adapter.get(code=target.resolved_workflow.code)
+        attached_schedule = _load_target_attached_schedule(
+            runtime,
+            target=target,
+            action="workflow.delete",
+            phase="pre_mutation",
+        )
         adapter.delete(
             project_code=target.resolved_project.code,
             workflow_code=target.resolved_workflow.code,
@@ -2203,7 +2265,10 @@ def _delete_workflow_result(
         data=require_json_object(
             DeleteWorkflowData(
                 deleted=True,
-                workflow=_serialize_workflow(current),
+                workflow=_serialize_workflow(
+                    current,
+                    attached_schedule=attached_schedule,
+                ),
             ),
             label="workflow delete data",
         ),
@@ -2233,6 +2298,12 @@ def _set_workflow_release_state_result(
         project=project,
     )
     payload = runtime.upstream.workflows.get(code=target.resolved_workflow.code)
+    attached_schedule = _load_target_attached_schedule(
+        runtime,
+        target=target,
+        action=f"workflow.{action}",
+        phase="pre_mutation",
+    )
     try:
         if action == "online":
             runtime.upstream.workflows.online(
@@ -2250,10 +2321,26 @@ def _set_workflow_release_state_result(
             workflow=target.resolved_workflow,
             action=action,
         )
-    refreshed = runtime.upstream.workflows.get(code=target.resolved_workflow.code)
+    refreshed = _refresh_workflow_after_release(
+        runtime,
+        project=target.resolved_project,
+        workflow=target.resolved_workflow,
+        action=action,
+    )
+    refreshed_attached_schedule = attached_schedule
+    if action == "offline" and attached_schedule is not None:
+        refreshed_attached_schedule = _load_target_attached_schedule(
+            runtime,
+            target=target,
+            action="workflow.offline",
+            phase="post_mutation_refresh",
+        )
     return CommandResult(
         data=require_json_object(
-            _serialize_workflow(refreshed),
+            _serialize_workflow(
+                refreshed,
+                attached_schedule=refreshed_attached_schedule,
+            ),
             label="workflow data",
         ),
         resolved={
@@ -2266,8 +2353,15 @@ def _set_workflow_release_state_result(
                 target.selected_workflow,
             ),
         },
-        warnings=_workflow_release_warnings(payload, action=action),
-        warning_details=_workflow_release_warning_details(payload, action=action),
+        warnings=_workflow_release_warnings(
+            attached_schedule,
+            action=action,
+        ),
+        warning_details=_workflow_release_warning_details(
+            payload,
+            attached_schedule=attached_schedule,
+            action=action,
+        ),
     )
 
 
@@ -2691,6 +2785,23 @@ def _resolved_project_selection(
     return with_selection_source(cast("SelectionData", project.to_data()), selection)
 
 
+def _load_target_attached_schedule(
+    runtime: ServiceRuntime,
+    *,
+    target: _ResolvedWorkflowTarget,
+    action: str,
+    phase: AttachedScheduleLookupPhase,
+) -> SchedulePayloadRecord | None:
+    return load_attached_schedule(
+        adapter=runtime.upstream.schedules,
+        project_code=target.resolved_project.code,
+        workflow_code=target.resolved_workflow.code,
+        workflow_name=target.resolved_workflow.name,
+        action=action,
+        phase=phase,
+    )
+
+
 def _resolve_workflow_target(
     runtime: ServiceRuntime,
     *,
@@ -2894,6 +3005,96 @@ def _raise_workflow_release_error(
             ),
         ) from error
     raise error
+
+
+def _refresh_workflow_after_release(
+    runtime: ServiceRuntime,
+    *,
+    project: ResolvedProject,
+    workflow: ResolvedWorkflow,
+    action: Literal["online", "offline"],
+) -> WorkflowPayloadRecord:
+    try:
+        return runtime.upstream.workflows.get(code=workflow.code)
+    except (ApiHttpError, ApiResultError, ApiTransportError) as error:
+        _raise_workflow_release_refresh_error(
+            error,
+            project=project,
+            workflow=workflow,
+            action=action,
+        )
+
+
+def _raise_workflow_release_refresh_error(
+    error: ApiHttpError | ApiResultError | ApiTransportError,
+    *,
+    project: ResolvedProject,
+    workflow: ResolvedWorkflow,
+    action: Literal["online", "offline"],
+) -> NoReturn:
+    details: JsonObject = {
+        "resource": WORKFLOW_RESOURCE,
+        "project": project.name,
+        "project_code": project.code,
+        "code": workflow.code,
+        "name": workflow.name,
+        "action": action,
+        "operation": f"workflow.{action}",
+        "phase": "post_mutation_refresh",
+        "mutation_applied": True,
+    }
+    if isinstance(error, ApiResultError):
+        details["upstream_result_code"] = error.result_code
+        details["upstream_result_message"] = error.result_message
+    else:
+        details["upstream_error_type"] = error.error_type
+        details["upstream_error_details"] = error.details
+    suggestion = (
+        f"The workflow {action} mutation completed. Do not retry it before running "
+        f"`dsctl workflow get {workflow.code} --project {project.code}` and "
+        f"`dsctl schedule list --project {project.code} --workflow {workflow.code}` "
+        "to verify current state."
+    )
+    if (
+        isinstance(error, ApiResultError)
+        and error.result_code == WORKFLOW_DEFINITION_NOT_EXIST
+    ):
+        message = (
+            f"Workflow {action} completed, but workflow '{workflow.name}' could "
+            "not be found during result refresh."
+        )
+        raise NotFoundError(
+            message,
+            details=details,
+            suggestion=suggestion,
+        ) from error
+    if isinstance(error, ApiResultError) and error.result_code == 30001:
+        message = (
+            f"Workflow {action} completed, but current user cannot refresh "
+            f"workflow '{workflow.name}'."
+        )
+        raise PermissionDeniedError(
+            message,
+            details=details,
+            suggestion=suggestion,
+        ) from error
+    message = (
+        f"Workflow {action} completed, but the CLI could not refresh the resulting "
+        "workflow state."
+    )
+    if isinstance(error, ApiHttpError):
+        raise ApiHttpError(
+            message,
+            status_code=error.status_code,
+            body=error.body,
+            details=details,
+            suggestion=suggestion,
+        ) from error
+    raise ApiTransportError(
+        message,
+        details=details,
+        suggestion=suggestion,
+    ) from error
 
 
 def _is_subworkflow_not_online_release_error(error: ApiResultError) -> bool:
@@ -3168,13 +3369,18 @@ def _workflow_edit_dry_run_result(
 def _workflow_edit_state_constraint_details(
     workflow: WorkflowPayloadRecord,
     *,
+    attached_schedule: ScheduleRecord | None,
     has_changes: bool,
 ) -> list[WorkflowEditConstraintData]:
     if not has_changes:
         return []
     if enum_value(workflow.releaseState) != "ONLINE":
         return []
-    current_schedule_release_state = enum_value(workflow.scheduleReleaseState)
+    current_schedule_release_state = (
+        None
+        if attached_schedule is None
+        else enum_value(attached_schedule.releaseState)
+    )
     constraints: list[WorkflowEditConstraintData] = [
         {
             "code": "workflow_must_be_offline",
@@ -3206,13 +3412,13 @@ def _workflow_edit_state_constraint_details(
 
 
 def _workflow_edit_schedule_impact_details(
-    workflow: WorkflowPayloadRecord,
+    attached_schedule: ScheduleRecord | None,
     *,
     desired_release_state: str | None,
 ) -> list[WorkflowEditScheduleImpactData]:
-    if workflow.schedule is None:
+    if attached_schedule is None:
         return []
-    current_schedule_release_state = enum_value(workflow.scheduleReleaseState)
+    current_schedule_release_state = enum_value(attached_schedule.releaseState)
     impacts: list[WorkflowEditScheduleImpactData] = [
         {
             "code": "attached_schedule_not_modified",
@@ -3319,13 +3525,17 @@ def _raise_workflow_edit_online_error(
 
 
 def _workflow_release_warnings(
-    workflow: WorkflowPayloadRecord,
+    attached_schedule: ScheduleRecord | None,
     *,
     action: Literal["online", "offline"],
 ) -> list[str]:
-    schedule_release_state = enum_value(workflow.scheduleReleaseState)
+    schedule_release_state = (
+        None
+        if attached_schedule is None
+        else enum_value(attached_schedule.releaseState)
+    )
     if action == "online":
-        if workflow.schedule is not None and schedule_release_state != "ONLINE":
+        if attached_schedule is not None and schedule_release_state != "ONLINE":
             return [
                 "workflow brought online; any attached schedule remains offline "
                 "until `schedule online` is requested"
@@ -3339,12 +3549,17 @@ def _workflow_release_warnings(
 def _workflow_release_warning_details(
     workflow: WorkflowPayloadRecord,
     *,
+    attached_schedule: ScheduleRecord | None,
     action: Literal["online", "offline"],
 ) -> list[JsonObject]:
-    schedule_release_state = enum_value(workflow.scheduleReleaseState)
+    schedule_release_state = (
+        None
+        if attached_schedule is None
+        else enum_value(attached_schedule.releaseState)
+    )
     workflow_release_state = enum_value(workflow.releaseState)
     if action == "online":
-        if workflow.schedule is not None and schedule_release_state != "ONLINE":
+        if attached_schedule is not None and schedule_release_state != "ONLINE":
             return [
                 require_json_object(
                     WorkflowReleaseWarningDetail(

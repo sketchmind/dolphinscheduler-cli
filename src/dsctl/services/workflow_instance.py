@@ -679,6 +679,7 @@ def _export_workflow_instance_yaml_result(
             yaml=workflow_yaml_document(
                 dag,
                 project=resolved_project,
+                attached_schedule=None,
             )
         ),
         label="workflow-instance yaml export",
