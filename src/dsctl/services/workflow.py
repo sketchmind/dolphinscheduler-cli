@@ -129,6 +129,7 @@ if TYPE_CHECKING:
     from dsctl.services.selection import SelectionData
     from dsctl.support.yaml_io import JsonObject
     from dsctl.upstream.protocol import (
+        SchedulePayloadRecord,
         WorkflowDagRecord,
         WorkflowPayloadRecord,
     )
@@ -923,7 +924,7 @@ def _create_workflow_result(
         adapter=runtime.upstream.workflows,
         project_code=resolved_project.code,
     )
-    _apply_workflow_release_and_schedule(
+    created_schedule = _apply_workflow_release_and_schedule(
         runtime,
         project_code=resolved_project.code,
         resolved_workflow=resolved_workflow,
@@ -934,7 +935,10 @@ def _create_workflow_result(
     payload_data = runtime.upstream.workflows.get(code=resolved_workflow.code)
     return CommandResult(
         data=require_json_object(
-            _serialize_workflow(payload_data),
+            _serialize_workflow(
+                payload_data,
+                schedule_override=created_schedule,
+            ),
             label="workflow data",
         ),
         resolved={
@@ -2599,7 +2603,7 @@ def _apply_workflow_release_and_schedule(
     resolved_workflow: ResolvedWorkflow,
     spec: WorkflowSpec,
     schedule_input: ScheduleCreateInput | None,
-) -> None:
+) -> SchedulePayloadRecord | None:
     if spec.workflow.release_state.value == "ONLINE":
         try:
             runtime.upstream.workflows.online(
@@ -2613,8 +2617,8 @@ def _apply_workflow_release_and_schedule(
                 action="online",
             )
     if schedule_input is None:
-        return
-    created_schedule_id = _create_workflow_schedule(
+        return None
+    created_schedule = _create_workflow_schedule(
         runtime,
         project_code=project_code,
         workflow_code=resolved_workflow.code,
@@ -2622,9 +2626,16 @@ def _apply_workflow_release_and_schedule(
         schedule_input=schedule_input,
     )
     if spec.schedule is None or spec.schedule.desired_release_state().value != "ONLINE":
-        return
+        return created_schedule
+    created_schedule_id = require_resource_int(
+        created_schedule.id,
+        resource=SCHEDULE_RESOURCE,
+        field_name="schedule.id",
+    )
     try:
-        runtime.upstream.schedules.online(schedule_id=created_schedule_id)
+        online_schedule = runtime.upstream.schedules.online(
+            schedule_id=created_schedule_id
+        )
     except ApiResultError as exc:
         raise translate_schedule_api_error(
             exc,
@@ -2633,6 +2644,12 @@ def _apply_workflow_release_and_schedule(
             workflow_code=resolved_workflow.code,
             workflow_name=resolved_workflow.name,
         ) from exc
+    require_resource_int(
+        online_schedule.id,
+        resource=SCHEDULE_RESOURCE,
+        field_name="schedule.id",
+    )
+    return online_schedule
 
 
 def _create_workflow_schedule(
@@ -2642,7 +2659,7 @@ def _create_workflow_schedule(
     workflow_code: int,
     workflow_name: str | None,
     schedule_input: ScheduleCreateInput,
-) -> int:
+) -> SchedulePayloadRecord:
     try:
         created_schedule = runtime.upstream.schedules.create(
             spec=build_schedule_create_spec(
@@ -2659,11 +2676,12 @@ def _create_workflow_schedule(
             workflow_name=workflow_name,
             environment_code=schedule_input["environment_code"],
         ) from exc
-    return require_resource_int(
+    require_resource_int(
         created_schedule.id,
         resource=SCHEDULE_RESOURCE,
         field_name="schedule.id",
     )
+    return created_schedule
 
 
 def _resolved_project_selection(
