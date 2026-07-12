@@ -309,6 +309,11 @@ definitions.
 - [x] Schedule section in YAML (`workflow.yaml` → `schedule:` block)
 - [x] `dsctl workflow create --file workflow.yaml` auto-creates schedule if
       `schedule:` is present
+- [ ] Add one service-internal authoritative attached-schedule lookup seam for
+      workflow get/describe/digest/export/edit/release behavior. DS 3.4.1
+      detail and DAG responses do not join the independently persisted
+      schedule; define partial-read versus fail-closed safety semantics before
+      adding the extra request, and keep it out of selector resolution.
 
 **Done when:**
 ```bash

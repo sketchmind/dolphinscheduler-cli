@@ -53,6 +53,7 @@ class WorkflowListItem(TypedDict):
 class ScheduleData(TypedDict):
     """JSON object emitted for one attached schedule."""
 
+    id: int | None
     startTime: str | None
     endTime: str | None
     timezoneId: str | None
@@ -119,8 +120,15 @@ def serialize_workflow_list_item(workflow: WorkflowListRecord) -> WorkflowListIt
     }
 
 
-def serialize_workflow(workflow: WorkflowPayloadRecord) -> WorkflowData:
-    """Serialize one workflow payload."""
+def serialize_workflow(
+    workflow: WorkflowPayloadRecord,
+    *,
+    schedule_override: ScheduleRecord | None = None,
+) -> WorkflowData:
+    """Serialize one workflow payload, preferring a known attached schedule."""
+    attached_schedule = (
+        workflow.schedule if schedule_override is None else schedule_override
+    )
     return {
         "id": workflow.id,
         "code": workflow.code,
@@ -137,9 +145,13 @@ def serialize_workflow(workflow: WorkflowPayloadRecord) -> WorkflowData:
         "projectName": workflow.projectName,
         "timeout": workflow.timeout,
         "releaseState": enum_value(workflow.releaseState),
-        "scheduleReleaseState": enum_value(workflow.scheduleReleaseState),
+        "scheduleReleaseState": enum_value(
+            workflow.scheduleReleaseState
+            if schedule_override is None
+            else schedule_override.releaseState
+        ),
         "executionType": enum_value(workflow.executionType),
-        "schedule": _serialize_schedule(workflow.schedule),
+        "schedule": _serialize_schedule(attached_schedule),
     }
 
 
@@ -301,6 +313,7 @@ def _serialize_schedule(schedule: ScheduleRecord | None) -> ScheduleData | None:
     if schedule is None:
         return None
     return {
+        "id": schedule.id,
         "startTime": schedule.startTime,
         "endTime": schedule.endTime,
         "timezoneId": schedule.timezoneId,

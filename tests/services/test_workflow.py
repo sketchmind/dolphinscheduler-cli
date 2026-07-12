@@ -458,6 +458,7 @@ def test_digest_workflow_result_returns_compact_graph_summary(
         "executionType": "PARALLEL",
         "timeout": 30,
         "schedule": {
+            "id": 23,
             "startTime": None,
             "endTime": None,
             "timezoneId": "UTC",
@@ -2244,13 +2245,19 @@ schedule:
     assert fake_schedule_adapter.schedules == []
 
 
-def test_create_workflow_result_can_create_and_online_schedule(
+@pytest.mark.parametrize(
+    ("schedule_enabled_yaml", "expected_schedule_state"),
+    [("false", "OFFLINE"), ("true", "ONLINE")],
+)
+def test_create_workflow_result_returns_final_created_schedule(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
     fake_workflow_adapter: FakeWorkflowAdapter,
     fake_task_adapter: FakeTaskAdapter,
     fake_schedule_adapter: FakeScheduleAdapter,
+    schedule_enabled_yaml: str,
+    expected_schedule_state: str,
 ) -> None:
     codes = iter([7401])
     monkeypatch.setattr(
@@ -2267,7 +2274,7 @@ def test_create_workflow_result_can_create_and_online_schedule(
     )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
-        """
+        f"""
 workflow:
   name: nightly-sync
   project: etl-prod
@@ -2281,19 +2288,37 @@ schedule:
   timezone: UTC
   start: "2026-01-01 00:00:00"
   end: "2026-12-31 23:59:59"
-  enabled: true
+  failure_strategy: CONTINUE
+  priority: MEDIUM
+  enabled: {schedule_enabled_yaml}
 """.strip(),
         encoding="utf-8",
     )
 
     result = workflow_service.create_workflow_result(file=spec_path)
+    data = _mapping(result.data)
+    schedule = _mapping(data["schedule"])
 
+    assert fake_workflow_adapter.get(code=103).schedule is None
     assert _mapping(result.resolved["workflow"])["source"] == "file"
     assert fake_workflow_adapter.release_calls[-1] == (103, "ONLINE")
     assert len(fake_schedule_adapter.schedules) == 1
     assert fake_schedule_adapter.schedules[0].workflowDefinitionCode == 103
     assert fake_schedule_adapter.schedules[0].releaseState is not None
-    assert fake_schedule_adapter.schedules[0].releaseState.value == "ONLINE"
+    assert (
+        fake_schedule_adapter.schedules[0].releaseState.value == expected_schedule_state
+    )
+    assert data["scheduleReleaseState"] == expected_schedule_state
+    assert schedule == {
+        "id": 1,
+        "startTime": "2026-01-01 00:00:00",
+        "endTime": "2026-12-31 23:59:59",
+        "timezoneId": "UTC",
+        "crontab": "0 0 0 * * ?",
+        "failureStrategy": "CONTINUE",
+        "workflowInstancePriority": "MEDIUM",
+        "releaseState": expected_schedule_state,
+    }
 
 
 def test_create_workflow_result_rejects_dependency_cycles_locally(

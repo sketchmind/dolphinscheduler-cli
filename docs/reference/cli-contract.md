@@ -3177,6 +3177,9 @@ Selection rules:
 Output:
 
 - default output returns the workflow payload in the standard JSON envelope
+- every non-null nested workflow `schedule` summary includes an `id` field;
+  it may be `null` when the upstream read payload omits schedule identity, and
+  workflow YAML export intentionally omits that persisted identity
 
 ## `dsctl workflow export`
 
@@ -3276,6 +3279,11 @@ Rules:
 - if `schedule.release_state` or `schedule.enabled` requests an online
   schedule, the CLI creates the schedule, then brings it online as a final
   step
+- an applied create returns the final workflow payload; when the YAML contains
+  a `schedule:` block, `data.schedule` is the created attached-schedule summary
+  (including `id`) and `data.scheduleReleaseState` reflects its final
+  `OFFLINE` or `ONLINE` state even when the upstream workflow detail response
+  does not embed schedules
 - high-frequency schedules reuse the standard `confirmation_required` flow and
   expect the same command to be retried with `--confirm-risk TOKEN`
 - the same high-frequency confirmation rule applies to `--dry-run`
