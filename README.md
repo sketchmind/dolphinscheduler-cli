@@ -1,12 +1,13 @@
 # dolphinscheduler-cli
 
-`dolphinscheduler-cli` provides `dsctl`, a command-line interface for Apache
-DolphinScheduler.
+`dolphinscheduler-cli` provides `dsctl`, an independent, REST-only command-line
+interface for Apache DolphinScheduler. It supports configuration, workflow
+authoring, schedules, runtime inspection, and operational recovery with stable
+output and error contracts for humans, scripts, and agents.
 
-Use it for configuration, workflow authoring, runtime inspection, and
-operational recovery through DolphinScheduler REST APIs.
-
-This is an independent CLI project for Apache DolphinScheduler.
+Python 3.11 or newer is required. DolphinScheduler `3.4.1` is the fully
+live-tested target; see [Version Compatibility](docs/user/version-compatibility.md)
+for the experimental compatibility tiers.
 
 ## Install
 
@@ -24,14 +25,7 @@ pipx install dolphinscheduler-cli
 dsctl version
 ```
 
-For local development, install from a source checkout:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .[dev]
-dsctl version
-```
+For a source checkout, use the [Development](#development) setup below.
 
 ## Configure
 
@@ -44,11 +38,10 @@ export DS_VERSION="3.4.1"
 dsctl doctor
 ```
 
-`DS_VERSION` defaults to `3.4.1`. It can currently select `3.4.1`, `3.4.0`,
-or `3.3.2`; those versions share the generated `3.4.1` contract adapter until
-an upstream REST difference requires a separate adapter. `3.4.1` has full,
-live-tested support; `3.4.0` and `3.3.2` remain selectable experimental targets
-until their live smoke suites pass.
+`DS_VERSION` defaults to `3.4.1`. Versions `3.4.0` and `3.3.2` are selectable
+experimental targets; see
+[Version Compatibility](docs/user/version-compatibility.md) for the current
+support policy.
 
 You can also load connection settings from a dotenv-style file:
 
@@ -58,68 +51,76 @@ dsctl --env-file cluster.env context
 
 ## Quick Start
 
+First verify the connection and discover existing resources without changing
+cluster state:
+
 ```bash
 dsctl doctor
 dsctl project list
-dsctl use project etl-prod
-dsctl workflow list
-dsctl workflow run daily-etl
-dsctl workflow-instance watch <workflow_instance_id>
-dsctl workflow-instance digest <workflow_instance_id>
-dsctl task-instance list --workflow-instance <workflow_instance_id>
-dsctl task-instance log <task_instance_id> --raw
+
+# Replace these example values with names returned by the list commands.
+project=etl-prod
+workflow=daily-etl
+dsctl workflow list --project "$project"
+dsctl workflow get "$workflow" --project "$project"
 ```
+
+`project` and `workflow` above are ordinary shell variables used only to keep
+the example consistent; they are not required `dsctl` environment variables.
+Use `dsctl use project NAME` only when you intentionally want later commands to
+reuse stored project context. Running a workflow is covered under
+[Runtime Operations](#runtime-operations).
 
 ## Discover Commands
 
-Start with `--help` for concise command entry points. This representation is
-also effective for agents when it contains enough information to construct the
-next invocation:
+Start at the narrowest level you already know. These are alternatives, not a
+sequence that must be executed in full:
 
 ```bash
-dsctl --help
-dsctl workflow --help
+# Known command: construct the invocation here.
 dsctl workflow edit --help
+
+# Known resource family, unknown action: browse one group.
+dsctl workflow --help
+
+# Unknown resource family: browse the root.
+dsctl --help
 ```
 
 Leaf help is the task-oriented first projection for both humans and agents; it
 should be enough to construct the common invocation without learning a
-project-specific discovery protocol. `schema` is the structured, versioned
-reflection of the CLI facts modeled for machine consumption, not a mandatory
-preflight before every command.
+project-specific discovery protocol.
 
-Use `schema` when exact machine-readable arguments, choices, constraints,
-payload hints, or output shape metadata are needed. JSON is not inherently more
-token-efficient than help text: inspect only the action being executed next.
-Use a group view only when the action is unknown, and the root index only when
-the group itself is unknown:
+| Need | Use |
+| --- | --- |
+| Invoke a known command | Leaf `--help` |
+| Obtain its exact machine contract | `schema --command ACTION` |
+| Find an action in a known family | Group help or `schema --group GROUP` |
+| Ask whether a feature exists or is supported | `capabilities` |
+
+`schema` is the structured, versioned reflection of CLI arguments, choices,
+constraints, payload hints, and output shapes. It is not a mandatory preflight,
+and JSON is not inherently more token-efficient than help text. Choose only the
+narrowest query needed for the current decision:
 
 ```bash
-dsctl schema
-dsctl schema --list-groups
-dsctl schema --group workflow
+# Known action.
 dsctl schema --command workflow.edit
 dsctl schema --command task-type.schema
+
+# Known group, unknown action.
+dsctl schema --group workflow
+
+# Unknown group.
+dsctl schema
+dsctl schema --list-groups
 ```
 
 `dsctl schema --full` retains the expanded whole-surface contract for audits
 and generators; it is not the normal agent discovery path.
 
-Successful JSON may include bounded `next_actions`. When a suggestion matches
-the current goal and has the required mutation authorization, agents should
-preserve that selected `command` unchanged. A `mutates: true` action must
-complete before reads that depend on its new state.
-
-Row-oriented list JSON may also include a bounded `action_index`. It groups
-stable leaf actions over eligible returned selectors instead of repeating an
-action list on every row. Choose one action from a group's `read`,
-`read_needs_input`, `mutate`, or `mutate_needs_input` category, then use the
-supplied `schema_command` template only when exact parameters are needed.
-Eligibility is derived from returned row facts; permissions and execution-time
-state remain authoritative on the server. Table and TSV rendering stay
-data-only.
-
-Use `capabilities` for lightweight feature discovery:
+Use `capabilities` only for product-level feature and version discovery. It is
+neither an argument schema nor a required step before executing a known command:
 
 ```bash
 dsctl capabilities
@@ -130,6 +131,15 @@ The default is a bounded summary. Use `dsctl capabilities --full` only when
 the complete expanded inventory is required; `--summary` remains available as
 an explicit spelling of the default view.
 
+Successful JSON may include bounded `next_actions` or a list-level
+`action_index`. Follow a suggested command only when it matches the current goal
+and has the required mutation authorization; use its `schema_command` only when
+exact inputs are still unknown. Server permissions and execution-time state
+remain authoritative. A `mutates: true` action must complete before dependent
+reads, and table/TSV output remains data-only. See the
+[CLI Contract](docs/reference/cli-contract.md) for the complete navigation
+categories and safety contract.
+
 ## Workflow Authoring
 
 Create workflow YAML from templates and lint it locally before sending it to
@@ -137,22 +147,29 @@ DolphinScheduler. Dry-run is the verbose DS request-plan view when that payload
 must be inspected:
 
 ```bash
-dsctl template task SHELL --raw
-dsctl task-type schema SQL
-dsctl task-type schema SHELL --field 'task_params.resourceList[].resourceName'
-dsctl task-type schema SQL --json-schema
 dsctl template workflow --raw > workflow.yaml
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --project etl-prod --dry-run
 dsctl workflow create --file workflow.yaml --project etl-prod
 ```
 
+Inspect task fragments and type-specific fields only when the authored workflow
+needs them:
+
+```bash
+dsctl template task SHELL --raw
+dsctl task-type schema SHELL
+```
+
 Export an existing workflow, edit the YAML, and apply the full edited document:
+
+An exported `schedule:` block is verified as a read-only snapshot during edit;
+schedule changes remain explicit schedule operations.
 
 ```bash
 dsctl workflow export daily-etl --project etl-prod > workflow.yaml
-# schedule: is verified as a read-only snapshot by workflow edit
-dsctl workflow edit daily-etl --project etl-prod --file workflow.yaml --dry-run
+dsctl --columns diff,no_change,workflow_state_constraints,schedule_impacts \
+  workflow edit daily-etl --project etl-prod --file workflow.yaml --dry-run
 dsctl workflow edit daily-etl --project etl-prod --file workflow.yaml
 ```
 
@@ -163,46 +180,86 @@ dsctl template workflow-patch --raw > patch.yaml
 dsctl workflow edit daily-etl --project etl-prod --patch patch.yaml --dry-run
 ```
 
-## Runtime Operations
+## Schedule Operations
+
+Discover and inspect the attached schedule before changing it. The numeric
+value below is an ordinary shell variable for this example, not `dsctl`
+configuration:
 
 ```bash
-dsctl workflow run daily-etl --project etl-prod
-dsctl workflow run-task daily-etl --project etl-prod --task load
-dsctl workflow-instance list --project etl-prod
-dsctl workflow-instance digest <workflow_instance_id>
-dsctl workflow-instance watch <workflow_instance_id>
-dsctl workflow-instance recover-failed <workflow_instance_id>
-dsctl task-instance list --workflow-instance <workflow_instance_id>
-dsctl task-instance log <task_instance_id> --raw
+project=etl-prod
+workflow=daily-etl
+dsctl schedule list --project "$project" --workflow "$workflow"
+
+# Replace 26 with the id returned by schedule list.
+schedule_id=26
+dsctl schedule get "$schedule_id"
+dsctl schedule preview "$schedule_id"
+dsctl schedule explain "$schedule_id" --cron '0 0 2 * * ?'
 ```
 
-Export a workflow instance before editing runtime task definitions:
+`schedule explain` reviews the proposed mutation without changing remote state.
+When applying a change, follow its confirmation guidance. An online schedule
+must be taken offline before `schedule update`, and activation remains an
+explicit `schedule online` operation.
+
+## Runtime Operations
+
+Running a workflow changes cluster state. Copy one id from
+`data.workflowInstanceIds` in the run response into the ordinary shell variable
+shown below:
 
 ```bash
-dsctl workflow-instance export <workflow_instance_id> > instance.yaml
-dsctl workflow-instance edit <workflow_instance_id> --file instance.yaml --dry-run
+project=etl-prod
+workflow=daily-etl
+dsctl workflow run "$workflow" --project "$project"
+
+# Replace 901 with an id returned by workflow run.
+workflow_instance_id=901
+dsctl workflow-instance digest "$workflow_instance_id"
+dsctl workflow-instance watch "$workflow_instance_id"
+dsctl task-instance list --workflow-instance "$workflow_instance_id"
+```
+
+Copy a task-instance id from the list response when raw logs are needed. Export
+a workflow instance before editing runtime task definitions:
+
+```bash
+# Reuse or replace these ids with values from the preceding responses.
+workflow_instance_id=901
+# Replace 902 with an id returned by task-instance list.
+task_instance_id=902
+dsctl task-instance log "$task_instance_id" --raw
+
+dsctl workflow-instance export "$workflow_instance_id" > instance.yaml
+dsctl workflow-instance edit "$workflow_instance_id" --file instance.yaml --dry-run
 ```
 
 ## Output
 
-Commands return a stable JSON envelope by default. Use global output options
-before or after the command path when a table or pipeline-oriented view is more
-useful (examples keep the canonical prefix form):
+Structured commands return a stable JSON envelope by default. Raw artifact
+operations such as `workflow export`, `workflow-instance export`, templates with
+`--raw`, and `task-instance log --raw` instead write their native YAML or text
+body on success. Global display options do not change a successful raw artifact;
+structured failures still use the stable error contract.
+
+For structured results, global output options may appear before or after the
+command path. Examples keep the canonical prefix form:
 
 ```bash
 dsctl --compact --columns id,name,state workflow-instance list --project etl-prod --page-size 10
 dsctl --output-format table workflow-instance list --project etl-prod
-dsctl --output-format tsv --columns id,name,state task-instance list --workflow-instance <workflow_instance_id>
 dsctl --columns id,name,state workflow-instance list --project etl-prod
-dsctl --output-format tsv --columns '*' task-instance list --workflow-instance <workflow_instance_id>
+dsctl --output-format tsv --columns '*' task-instance list --workflow-instance 901
 ```
 
-For agents, prefer compact JSON with explicit columns and a small page size.
-This keeps the standard envelope, types, pagination, resolved selections,
-warnings, and structured errors while avoiding wide DS response objects.
-Standard JSON uses UTF-8 directly instead of escaping ordinary non-ASCII text.
-For token reduction, select only needed columns and reduce page size first;
-compact JSON is the final lossless whitespace optimization.
+For agents reading structured row or object results, prefer explicit columns and
+a small page size, then add compact JSON when useful. This keeps the standard
+envelope, types, pagination, resolved selections, warnings, and structured
+errors while avoiding wide DS response objects. Standard JSON uses UTF-8
+directly instead of escaping ordinary non-ASCII text. Column projection and
+page size provide the largest reductions; compact JSON is the final lossless
+whitespace optimization.
 
 Successful data and raw artifacts are written to stdout. Structured command
 errors are written to stderr with a nonzero exit code. Table and TSV stdout
@@ -253,35 +310,11 @@ Reference documentation:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .[dev]
+python -m pip install -e '.[dev]'
 python tools/check_quality_gate.py
 ```
 
-Generate the tracked DS contract package after changing the generator:
-
-```bash
-python tools/generate_ds_contract.py --package-output build/ds_contract/package_sample
-python tools/check_generated_freshness.py
-```
-
-For destructive cluster-backed coverage, export the live-test environment
-variables and run:
-
-```bash
-python tools/check_quality_gate.py --include-live
-```
-
-## Packaging
-
-Build and inspect local distributions before publishing:
-
-```bash
-python -m build
-python -m twine check dist/*
-python tools/check_package_contents.py dist/*
-python -m pip install dist/dolphinscheduler_cli-*.whl
-dsctl version
-```
-
-Use TestPyPI before the first public PyPI release. See
-[docs/development/release.md](docs/development/release.md).
+See [Contributing](CONTRIBUTING.md) for the development workflow,
+[Tooling](docs/development/tooling.md) for code generation and live checks, and
+the [Release Process](docs/development/release.md) for package verification and
+the TestPyPI-first publication flow.
