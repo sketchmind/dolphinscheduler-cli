@@ -1,5 +1,5 @@
 ---
-name: use-dsctl
+name: dsctl
 description: dsctl operations for Apache DolphinScheduler cluster resources, workflow authoring, schedule lifecycle, and workflow-run monitoring, diagnosis, or recovery.
 ---
 
