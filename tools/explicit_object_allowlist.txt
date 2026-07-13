@@ -1,5 +1,6 @@
 # Reviewed allowlist for intentional explicit `object` usage.
 # Each line is path|context|snippet.
+src/dsctl/app.py|_GlobalOptionGroup.parse_args(ctx)|object
 src/dsctl/client.py|_require_json_value(value)|object
 src/dsctl/output.py|require_json_object(value)|object
 src/dsctl/output.py|require_json_value(value)|object

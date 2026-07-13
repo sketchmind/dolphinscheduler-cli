@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import (
     Path,  # noqa: TC003 - Typer resolves callback annotations at runtime.
 )
-from typing import TYPE_CHECKING, Annotated, cast
+from typing import Annotated, cast
 
 import typer
 from typer.core import TyperCommand, TyperGroup, TyperOption
@@ -18,9 +18,6 @@ from dsctl.output_formats import (
     RenderOptions,
     parse_columns,
 )
-
-if TYPE_CHECKING:
-    from click import Context as ClickContext
 
 _ROOT_OPTION_ARITY = {
     option.flag: option.arity for option in COMMAND_CATALOG.global_options
@@ -46,9 +43,15 @@ _ROOT_HELP = (
 class _GlobalOptionGroup(TyperGroup):
     """Let root rendering/config options appear anywhere before `--`."""
 
-    def parse_args(self, ctx: ClickContext, args: list[str]) -> list[str]:
+    def parse_args(self, ctx: object, args: list[str]) -> list[str]:
         """Move catalogued root options ahead of the command before Click parses."""
-        return super().parse_args(ctx, _normalize_root_options(self, args))
+        # Typer 0.26 vendors Click, so its parser context no longer shares one
+        # public nominal type with the minimum supported Typer release.
+        parser_context = cast("typer.Context", ctx)
+        return super().parse_args(
+            parser_context,
+            _normalize_root_options(self, args),
+        )
 
 
 app = typer.Typer(
