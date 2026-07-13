@@ -1,4 +1,4 @@
 interface:
   display_name: "Use dsctl"
-  short_description: "Operate DolphinScheduler safely through dsctl"
-  default_prompt: "Use $use-dsctl to complete this DolphinScheduler task safely and efficiently."
+  short_description: "Operate DolphinScheduler through dsctl"
+  default_prompt: "Use $use-dsctl to complete this DolphinScheduler task through a verified closed loop."

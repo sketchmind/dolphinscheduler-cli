@@ -104,7 +104,12 @@ materializes Quartz jobs.
 dolphinscheduler-cli/
 ├── .agents/skills/use-dsctl/
 │   ├── SKILL.md
-│   └── agents/openai.yaml
+│   ├── agents/openai.yaml
+│   └── references/
+│       ├── errors.md
+│       ├── runtime.md
+│       ├── schedules.md
+│       └── workflows.md
 ├── README.md
 ├── AGENTS.md
 ├── docs/
@@ -418,11 +423,16 @@ the `dsctl` process interface and its progressive self-description.
 
 The skill lives outside `src/dsctl/` because it is neither Python runtime code
 nor a second command adapter. It does not wrap `dsctl`, copy the command catalog,
-or depend on generated/upstream packages. Complex workflow and runtime tasks
-route conditionally to the canonical user guides instead of duplicating them.
-The repository location is the authoring and source-checkout discovery seam; a
-future installable distribution belongs in a plugin rather than the Python
-wheel.
+or depend on generated/upstream packages. Its conditional agent guidance is
+bundled under `references/`, so the skill directory remains self-contained when
+installed independently from the PyPI package. Those references encode agent
+decision processes; live help, action schema, capabilities, and output remain
+the command-contract authority.
+
+The repository location is the authoring and source-checkout discovery seam,
+not a shared release unit. Installable distribution belongs in a plugin rather
+than the Python wheel, and every relative Markdown pointer in the skill must
+resolve inside the independently copyable skill directory.
 
 ## Dependency Rules
 
