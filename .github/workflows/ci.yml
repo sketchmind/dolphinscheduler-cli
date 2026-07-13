@@ -4,9 +4,7 @@ on:
   push:
     branches:
       - main
-      - dev
       - "release/**"
-      - "hotfix/**"
   pull_request:
 
 jobs:
