@@ -48,7 +48,7 @@ From an existing source checkout:
 cd dolphinscheduler-cli
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .[dev]
+python -m pip install -e '.[dev]'
 dsctl version
 ```
 

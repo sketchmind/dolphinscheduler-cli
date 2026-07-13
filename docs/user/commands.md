@@ -108,7 +108,7 @@ dsctl task-instance log <task_instance_id> --raw
 
 ## Output Contract
 
-All stable commands return the standard JSON envelope by default:
+Structured commands return the standard JSON envelope by default:
 
 ```json
 {
@@ -124,8 +124,12 @@ All stable commands return the standard JSON envelope by default:
 Errors use a stable `error.type` and include structured details when the CLI can
 derive them without guessing.
 
-For scan-friendly terminal output, pass a global output renderer before the
-command group:
+Raw artifact operations such as workflow exports, templates with `--raw`, and
+raw task logs keep their native success body. Global display options do not
+change that body; failures remain structured.
+
+For scan-friendly terminal output, pass a global output renderer before or after
+the command path. Examples use the canonical prefix form:
 
 ```bash
 dsctl --compact --columns id,name,state workflow-instance list --project etl-prod --page-size 10
