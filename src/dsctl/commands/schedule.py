@@ -144,7 +144,11 @@ def preview_command(
         str | None,
         typer.Option(
             "--project",
-            help=PROJECT_HELP,
+            help=(
+                "Project name or code for ad hoc preview only. When schedule_id "
+                "is omitted, falls back to stored project context; do not pass "
+                "--project with schedule_id."
+            ),
         ),
     ] = None,
     cron: Annotated[

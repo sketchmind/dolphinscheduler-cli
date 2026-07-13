@@ -233,7 +233,17 @@ def schedule_group() -> dict[str, object]:
                     )
                 ],
                 options=[
-                    project_option(),
+                    option(
+                        "project",
+                        value_type="string",
+                        description=(
+                            "Project name or code for ad hoc preview only. When "
+                            "schedule_id is omitted, falls back to stored project "
+                            "context; do not pass --project with schedule_id."
+                        ),
+                        selector="name_or_code",
+                        discovery_command="dsctl project list",
+                    ),
                     option(
                         "cron",
                         value_type="string",

@@ -2156,6 +2156,14 @@ def test_schema_describes_mode_specific_workflow_selectors() -> None:
     assert "--patch" not in workflow_description
 
     schedule_group = _find_group(data["commands"], "schedule")
+    schedule_preview = _find_command(schedule_group["commands"], "preview")
+    preview_options = _require_list(schedule_preview["options"])
+    preview_project_option = _find_option(preview_options, "project")
+    assert "ad hoc preview only" in _require_str(preview_project_option["description"])
+    assert "do not pass --project with schedule_id" in _require_str(
+        preview_project_option["description"]
+    )
+
     schedule_explain = _find_command(schedule_group["commands"], "explain")
     explain_options = _require_list(schedule_explain["options"])
     workflow_option = _find_option(explain_options, "workflow")

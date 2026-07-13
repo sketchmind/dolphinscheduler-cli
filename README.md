@@ -305,6 +305,10 @@ Reference documentation:
 - [Error Model](docs/reference/error-model.md)
 - [Future Capabilities](docs/reference/future-capabilities.md)
 
+Repository agent workflow:
+
+- [Use dsctl Skill](.agents/skills/use-dsctl/SKILL.md)
+
 ## Development
 
 ```bash

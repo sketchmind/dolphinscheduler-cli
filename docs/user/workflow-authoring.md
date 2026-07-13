@@ -4,24 +4,47 @@ This guide describes the stable YAML authoring surface used by
 `dsctl workflow create`, `dsctl workflow edit`, `dsctl lint workflow`, and
 `dsctl template`.
 
-Use the command output as the first source of truth when generating YAML:
+Use the narrowest command output needed for the current authoring decision.
+Start a new workflow without a schedule using:
 
 ```bash
-dsctl capabilities
-dsctl schema --command workflow.create
-dsctl task-type list
-dsctl template task
-dsctl task-type get SQL
-dsctl task-type schema SQL
-dsctl task-type schema SHELL --field 'task_params.resourceList[].resourceName'
-dsctl task-type schema SQL --json-schema
-dsctl template params
-dsctl template task SHELL --variant resource --raw
+dsctl template workflow --raw > workflow.yaml
+```
+
+Or start one with an attached schedule using:
+
+```bash
+dsctl template workflow --with-schedule --raw > workflow.yaml
+```
+
+Then validate the selected artifact before applying it:
+
+```bash
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --dry-run
+```
+
+Inspect task and parameter details only when the selected workflow needs them:
+
+```bash
+dsctl template task SHELL --variant resource --raw
+dsctl task-type schema SHELL --field 'task_params.resourceList[].resourceName'
+dsctl template params --topic output
+```
+
+For an existing workflow, choose the edit mode that matches the intended
+change:
+
+```bash
+dsctl workflow export WORKFLOW > workflow.yaml
 dsctl template workflow-patch --raw > patch.yaml
 dsctl workflow edit WORKFLOW --patch patch.yaml --dry-run
 ```
+
+These are decision branches, not a preflight list to run in full. Use leaf help
+for a known command, action schema only when exact constraints or payload facts
+are still needed, and capabilities only when feature or version support is the
+question.
 
 ## Discovery Flow
 
@@ -39,6 +62,12 @@ view is a complete JSON document and therefore does not support table/TSV or
 JSON envelope. Use `dsctl template workflow --raw > workflow.yaml` when you want
 only the YAML file content. The template is intentionally small so generated
 files do not include unrelated optional fields.
+
+When a new workflow needs an attached schedule, start from
+`dsctl template workflow --with-schedule --raw`. That template sets
+`workflow.release_state: ONLINE`, which DolphinScheduler requires before the
+schedule can be created, while leaving the schedule itself offline. Do not
+export an unrelated workflow merely to discover the schedule YAML shape.
 
 Use `dsctl template workflow-patch --raw > patch.yaml` before
 `workflow edit --patch`. Use
