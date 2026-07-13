@@ -102,6 +102,9 @@ materializes Quartz jobs.
 
 ```text
 dolphinscheduler-cli/
+├── .agents/skills/use-dsctl/
+│   ├── SKILL.md
+│   └── agents/openai.yaml
 ├── README.md
 ├── AGENTS.md
 ├── docs/
@@ -404,6 +407,22 @@ ambiguity/misoperation risk all count. Byte-budget tests bound common responses
 without removing information needed to construct the next correct command.
 Layout compaction is secondary: semantic projection and avoiding duplicate
 representations normally save more task tokens than removing JSON whitespace.
+
+### Repository Agent Skill
+
+`.agents/skills/use-dsctl` is the repo-scoped instruction module for agents that
+operate DolphinScheduler through the installed CLI. Its interface is the skill
+metadata and one goal-oriented operating loop; the implementation knowledge for
+commands, versions, REST transport, selectors, output, and errors remains behind
+the `dsctl` process interface and its progressive self-description.
+
+The skill lives outside `src/dsctl/` because it is neither Python runtime code
+nor a second command adapter. It does not wrap `dsctl`, copy the command catalog,
+or depend on generated/upstream packages. Complex workflow and runtime tasks
+route conditionally to the canonical user guides instead of duplicating them.
+The repository location is the authoring and source-checkout discovery seam; a
+future installable distribution belongs in a plugin rather than the Python
+wheel.
 
 ## Dependency Rules
 

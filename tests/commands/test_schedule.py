@@ -150,6 +150,15 @@ def test_schedule_preview_command_returns_times_and_analysis() -> None:
     assert payload["data"]["analysis"]["risk_level"] == "none"
 
 
+def test_schedule_preview_help_distinguishes_existing_and_ad_hoc_modes() -> None:
+    result = runner.invoke(app, ["schedule", "preview", "--help"])
+
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout).lower()
+    assert "project name or code for ad hoc preview only" in help_text
+    assert "do not pass --project with schedule_id" in help_text
+
+
 def test_schedule_preview_command_rejects_mixing_id_and_schedule_fields() -> None:
     result = runner.invoke(
         app,
