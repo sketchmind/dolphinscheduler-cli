@@ -25,6 +25,7 @@ COMMON_FORBIDDEN_ROOT_SEGMENTS = frozenset(
         "config",
         "dist",
         "references",
+        "skills",
     }
 )
 WHEEL_FORBIDDEN_ROOT_SEGMENTS = COMMON_FORBIDDEN_ROOT_SEGMENTS | frozenset(

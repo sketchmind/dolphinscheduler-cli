@@ -123,6 +123,33 @@ def test_sdist_package_content_check_rejects_local_env_files(
     assert any("config/live-admin.env" in error for error in result.errors)
 
 
+def test_sdist_package_content_check_rejects_separate_agent_skill(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module()
+    sdist_path = tmp_path / "dolphinscheduler_cli-0.2.0.tar.gz"
+    _write_sdist(
+        sdist_path,
+        [
+            "pyproject.toml",
+            "MANIFEST.in",
+            "README.md",
+            "LICENSE",
+            "src/dsctl/__init__.py",
+            "docs/development/release.md",
+            "docs/development/tooling.md",
+            "tools/check_package_contents.py",
+            "tests/packaging/test_pyproject_metadata.py",
+            "skills/dsctl/SKILL.md",
+        ],
+    )
+
+    result = checker.check_distribution(sdist_path)
+
+    assert not result.ok
+    assert any("skills/dsctl/SKILL.md" in error for error in result.errors)
+
+
 def _write_zip(path: Path, names: list[str]) -> None:
     with zipfile.ZipFile(path, mode="w") as archive:
         for name in names:

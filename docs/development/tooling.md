@@ -41,8 +41,8 @@ metadata. Development-only tools, tests, upstream references, local env files,
 and caches must not be included in the wheel.
 
 The source distribution may contain tests and tools for downstream auditing,
-but must not contain local env files, `references/`, build outputs, caches, or
-machine-local context files.
+but must not contain the separately distributed `skills/` tree, local env
+files, `references/`, build outputs, caches, or machine-local context files.
 
 Run the package content check after building distributions:
 

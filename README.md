@@ -305,9 +305,9 @@ Reference documentation:
 - [Error Model](docs/reference/error-model.md)
 - [Future Capabilities](docs/reference/future-capabilities.md)
 
-Repository agent workflow:
+Separately installable agent skill source:
 
-- [DolphinScheduler CLI Skill](.agents/skills/dsctl/SKILL.md)
+- [DolphinScheduler CLI Skill](skills/dsctl/SKILL.md)
 
 ## Development
 
