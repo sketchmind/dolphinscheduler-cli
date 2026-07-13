@@ -90,12 +90,12 @@ def test_project_parameter_get_command_reports_not_found_suggestion() -> None:
     result = runner.invoke(app, ["project-parameter", "get", "missing"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "project-parameter.get"
     assert payload["error"]["type"] == "not_found"
     assert payload["error"]["suggestion"] == (
-        "Retry with `project-parameter list` in the selected project to inspect "
-        "available values, or pass the numeric code if known."
+        "Retry with `dsctl project-parameter list --project 7` to inspect available "
+        "values, or pass the numeric code if known."
     )
 
 
@@ -148,7 +148,7 @@ def test_project_parameter_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["project-parameter", "delete", "warehouse_db"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "project-parameter.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

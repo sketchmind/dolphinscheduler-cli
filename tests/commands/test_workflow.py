@@ -1,4 +1,5 @@
 import json
+import shlex
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,6 @@ from typer.testing import CliRunner
 from dsctl.app import app
 from dsctl.context import SessionContext
 from dsctl.errors import ApiResultError
-from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services import runtime as runtime_service
 from dsctl.services import workflow as workflow_service
 from tests.fakes import (
@@ -51,9 +51,18 @@ def patch_workflow_service(monkeypatch: pytest.MonkeyPatch) -> None:
         schedule_release_state_value=FakeEnumValue("ONLINE"),
         execution_type_value=FakeEnumValue("PARALLEL"),
         schedule_value=FakeSchedule(
+            id=23,
+            start_time_value="2026-01-01 00:00:00",
+            end_time_value="2026-12-31 23:59:59",
+            timezone_id_value="UTC",
             crontab_value="0 0 0 * * ?",
             release_state_value=FakeEnumValue("ONLINE"),
         ),
+    )
+    adhoc_workflow = FakeWorkflow(
+        code=102,
+        name="adhoc-backfill",
+        project_code_value=7,
     )
     tasks = [
         FakeTaskDefinition(
@@ -74,7 +83,7 @@ def patch_workflow_service(monkeypatch: pytest.MonkeyPatch) -> None:
         ),
     ]
     workflow_adapter = FakeWorkflowAdapter(
-        workflows=[workflow],
+        workflows=[workflow, adhoc_workflow],
         dags={
             101: FakeDag(
                 workflow_definition_value=workflow,
@@ -194,7 +203,41 @@ def test_workflow_list_command_returns_filtered_workflows() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.list"
     assert payload["resolved"]["project"]["source"] == "context"
-    assert payload["data"] == [{"code": 101, "name": "daily-sync", "version": 1}]
+    assert payload["data"] == {
+        "totalList": [
+            {
+                "code": 101,
+                "name": "daily-sync",
+                "version": 1,
+                "releaseState": "ONLINE",
+                "scheduleReleaseState": "ONLINE",
+                "scheduleId": 23,
+            }
+        ],
+        "total": 1,
+        "totalPage": 1,
+        "pageSize": 100,
+        "currentPage": 1,
+        "pageNo": 1,
+    }
+
+
+def test_workflow_list_command_supports_standard_paging_controls() -> None:
+    result = runner.invoke(
+        app,
+        ["workflow", "list", "--page-size", "1", "--all"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert [item["name"] for item in payload["data"]["totalList"]] == [
+        "daily-sync",
+        "adhoc-backfill",
+    ]
+    assert payload["data"]["total"] == 2
+    assert payload["data"]["pageSize"] == 2
+    assert payload["resolved"]["page_size"] == 1
+    assert payload["resolved"]["all"] is True
 
 
 def test_workflow_export_command_emits_yaml() -> None:
@@ -217,9 +260,12 @@ def test_workflow_get_help_points_to_workflow_discovery() -> None:
     result = runner.invoke(app, ["workflow", "get", "--help"])
 
     assert result.exit_code == 0
-    assert "workflow list" in result.stdout
-    assert "--raw" not in result.stdout
-    assert "--format" not in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "workflow list" in help_text
+    assert "context only when project also comes from" in help_text
+    assert "otherwise pass WORKFLOW" in help_text
+    assert "--raw" not in help_text
+    assert "--format" not in help_text
 
 
 def test_workflow_export_help_points_to_workflow_discovery() -> None:
@@ -229,7 +275,16 @@ def test_workflow_export_help_points_to_workflow_discovery() -> None:
     help_text = normalize_cli_help(result.stdout)
     assert "workflow list" in help_text
     assert "--project" in help_text
+    assert "raw YAML" in help_text
+    assert "read-only schedule-aware edit" in help_text
+    assert "display options do not alter" in help_text
     assert "--raw" not in help_text
+
+    edit_result = runner.invoke(app, ["workflow", "edit", "--help"])
+    assert edit_result.exit_code == 0
+    edit_help = normalize_cli_help(edit_result.stdout)
+    assert "read-only snapshot" in edit_help
+    assert "--columns diff,no_change" in edit_help
 
 
 def test_workflow_digest_command_returns_compact_graph_summary() -> None:
@@ -303,8 +358,12 @@ def test_workflow_create_command_can_dry_run_yaml_spec(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    codes = iter([7201])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    codes = iter([7201, 7202, 7203])
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
         """
@@ -312,9 +371,16 @@ workflow:
   name: nightly-sync
   project: etl-prod
 tasks:
-  - name: extract
+  - name: orbital-check
     type: SHELL
-    command: echo extract
+    command: echo orbit=stable
+  - name: payload-check
+    type: SHELL
+    command: echo payload=ready
+  - name: mission-summary
+    type: SHELL
+    command: echo LUNA_CLI_EVAL_OK
+    depends_on: [orbital-check, payload-check]
 """.strip(),
         encoding="utf-8",
     )
@@ -329,7 +395,20 @@ tasks:
     assert payload["action"] == "workflow.create"
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["request"]["path"] == "/projects/7/workflow-definition"
-    assert len(payload["data"]["requests"]) == 1
+    assert "requests" not in payload["data"]
+    assert len(result.stdout.encode("utf-8")) < 4_608
+    assert shlex.split(payload["next_actions"][0]["command"]) == [
+        "dsctl",
+        "--compact",
+        "--columns",
+        "code,name,releaseState",
+        "workflow",
+        "create",
+        "--file",
+        str(spec_path),
+        "--project",
+        "7",
+    ]
 
 
 def test_workflow_create_command_can_dry_run_schedule_plan(
@@ -337,7 +416,11 @@ def test_workflow_create_command_can_dry_run_schedule_plan(
     tmp_path: Path,
 ) -> None:
     codes = iter([7202])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
         """
@@ -367,7 +450,12 @@ schedule:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert len(payload["data"]["requests"]) == 4
-    assert payload["data"]["requests"][2]["path"] == "/v2/schedules"
+    schedule_request = payload["data"]["requests"][2]
+    assert schedule_request["path"] == "/projects/7/schedules"
+    assert schedule_request["form"]["workflowDefinitionCode"] == (
+        "<nightly-sync:created_workflow_code>"
+    )
+    assert "environmentCode" not in schedule_request["form"]
     assert payload["data"]["requests"][3]["path"] == (
         "/projects/7/schedules/<nightly-sync:created_schedule_id>/online"
     )
@@ -431,7 +519,7 @@ schedule:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "confirmation_required"
     assert payload["error"]["details"]["risk_type"] == "high_frequency_schedule"
     assert payload["error"]["details"]["confirm_flag"].startswith("--confirm-risk ")
@@ -466,7 +554,7 @@ schedule:
     result = runner.invoke(app, ["workflow", "create", "--file", str(spec_path)])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (
@@ -527,7 +615,7 @@ tasks:
     result = runner.invoke(app, ["workflow", "create", "--file", str(spec_path)])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "workflow task relation invalid"
@@ -655,7 +743,7 @@ def test_workflow_backfill_command_reports_missing_time_selection() -> None:
     result = runner.invoke(app, ["workflow", "backfill"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.backfill"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (
@@ -670,7 +758,7 @@ def test_workflow_run_task_command_reports_scope_choices() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.run-task"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (
@@ -682,7 +770,7 @@ def test_workflow_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["workflow", "delete"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "Workflow deletion requires --force"
@@ -744,7 +832,7 @@ def test_workflow_delete_command_suggests_offline_before_delete(
     result = runner.invoke(app, ["workflow", "delete", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -797,7 +885,7 @@ def test_workflow_delete_command_suggests_schedule_cleanup_for_online_schedule(
     result = runner.invoke(app, ["workflow", "delete", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -853,7 +941,7 @@ def test_workflow_delete_command_suggests_instance_inspection_for_running_instan
     result = runner.invoke(app, ["workflow", "delete", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -909,7 +997,7 @@ def test_workflow_delete_command_suggests_lineage_for_referenced_workflow(
     result = runner.invoke(app, ["workflow", "delete", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.delete"
     assert payload["error"]["type"] == "conflict"
     assert payload["error"]["suggestion"] == (
@@ -935,6 +1023,10 @@ def test_workflow_online_command_returns_refreshed_payload(
         schedule_release_state_value=FakeEnumValue("OFFLINE"),
         execution_type_value=FakeEnumValue("PARALLEL"),
         schedule_value=FakeSchedule(
+            id=23,
+            start_time_value="2026-01-01 00:00:00",
+            end_time_value="2026-12-31 23:59:59",
+            timezone_id_value="UTC",
             crontab_value="0 0 0 * * ?",
             release_state_value=FakeEnumValue("OFFLINE"),
         ),
@@ -1043,7 +1135,7 @@ def test_workflow_online_command_suggests_bringing_subworkflows_online(
     result = runner.invoke(app, ["workflow", "online"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.online"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -1145,6 +1237,45 @@ patch:
     ]
 
 
+def test_workflow_edit_command_supports_bounded_dry_run_projection(
+    tmp_path: Path,
+) -> None:
+    patch_path = tmp_path / "workflow.patch.yaml"
+    patch_path.write_text(
+        """
+patch:
+  workflow:
+    set:
+      description: Daily ETL workflow v2
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "workflow",
+            "edit",
+            "--patch",
+            str(patch_path),
+            "--dry-run",
+            "--columns",
+            "diff,no_change,workflow_state_constraints,schedule_impacts",
+            "--compact",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert set(payload["data"]) == {
+        "diff",
+        "no_change",
+        "workflow_state_constraints",
+        "schedule_impacts",
+    }
+    assert "request" not in payload["data"]
+
+
 def test_workflow_edit_command_can_dry_run_full_file_diff(tmp_path: Path) -> None:
     workflow_path = tmp_path / "workflow.yaml"
     workflow_path.write_text(
@@ -1183,7 +1314,7 @@ def test_workflow_edit_command_requires_one_edit_input() -> None:
     result = runner.invoke(app, ["workflow", "edit", "daily-sync", "--dry-run"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "Pass exactly one of --patch or --file."
@@ -1207,7 +1338,7 @@ patch:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -1237,7 +1368,7 @@ def test_workflow_edit_command_rejects_invalid_patch_yaml_with_dry_run_suggestio
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "Workflow patch YAML root must be a mapping"
@@ -1266,6 +1397,10 @@ def test_workflow_edit_command_suggests_dry_run_for_remote_validation_error(
         schedule_release_state_value=FakeEnumValue("OFFLINE"),
         execution_type_value=FakeEnumValue("PARALLEL"),
         schedule_value=FakeSchedule(
+            id=23,
+            start_time_value="2026-01-01 00:00:00",
+            end_time_value="2026-12-31 23:59:59",
+            timezone_id_value="UTC",
             crontab_value="0 0 0 * * ?",
             release_state_value=FakeEnumValue("OFFLINE"),
         ),
@@ -1340,7 +1475,7 @@ patch:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "workflow task relation invalid"
@@ -1373,7 +1508,7 @@ patch:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert "requires timeout > 0" in payload["error"]["message"]
@@ -1406,7 +1541,7 @@ patch:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.edit"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (

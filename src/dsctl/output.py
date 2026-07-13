@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypedDict
 
-import typer
-
 from dsctl.errors import DsctlError
+from dsctl.result_navigation import navigation_for
 from dsctl.support.json_types import is_json_value
 
 if TYPE_CHECKING:
@@ -56,21 +54,14 @@ class DryRunWarningDetail(TypedDict):
     request_sent: bool
 
 
-def print_json(payload: JsonValue) -> None:
-    """Render a JSON-safe payload to stdout using the standard CLI format."""
-    typer.echo(
-        json.dumps(
-            require_json_value(payload, label="json payload"),
-            indent=2,
-            sort_keys=True,
-            ensure_ascii=True,
-        )
-    )
-
-
-def success_payload(action: str, result: CommandResult) -> JsonObject:
+def success_payload(
+    action: str,
+    result: CommandResult,
+    *,
+    env_file: str | None = None,
+) -> JsonObject:
     """Build the standard success envelope for a completed command."""
-    return {
+    payload: JsonObject = {
         "ok": True,
         "action": action,
         "resolved": result.resolved,
@@ -81,6 +72,20 @@ def success_payload(action: str, result: CommandResult) -> JsonObject:
             for item in result.warning_details
         ],
     }
+    try:
+        navigation = require_json_object(
+            navigation_for(
+                action,
+                resolved=result.resolved,
+                data=result.data,
+                env_file=env_file,
+            ),
+            label="success payload navigation",
+        )
+    except Exception:
+        navigation = {}
+    payload.update(navigation)
+    return payload
 
 
 def error_payload(
@@ -145,9 +150,17 @@ def dry_run_result(
         "request": request,
     }
     if requests is not None:
-        data["requests"] = [
+        request_plan = [
             require_json_object(item, label="dry-run request item") for item in requests
         ]
+        if not request_plan:
+            message = "dry-run request plan cannot be empty"
+            raise ValueError(message)
+        if request_plan[0] != request:
+            message = "dry-run request plan must begin with the primary request"
+            raise ValueError(message)
+        if len(request_plan) > 1:
+            data["requests"] = request_plan
     if extra_data is not None:
         for key, value in extra_data.items():
             if key in data:

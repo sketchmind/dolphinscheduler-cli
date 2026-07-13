@@ -154,6 +154,41 @@ def test_workflow_instance_list_command_returns_page_payload() -> None:
     assert payload["data"]["totalList"][0]["id"] == 901
 
 
+def test_workflow_instance_get_command_preserves_ambiguous_v2_lookup_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_adapter = FakeProjectAdapter(
+        projects=[FakeProject(code=7, name="etl-prod")]
+    )
+    workflow_instance_adapter = FakeWorkflowInstanceAdapter(workflow_instances=[])
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise ApiResultError(
+            result_code=10116,
+            result_message="query workflow instance by id error:null",
+        )
+
+    monkeypatch.setattr(workflow_instance_adapter, "get", fail_get)
+    monkeypatch.setattr(
+        runtime_service,
+        "open_service_runtime",
+        lambda env_file=None: fake_service_runtime(
+            project_adapter,
+            profile=make_profile(),
+            workflow_instance_adapter=workflow_instance_adapter,
+        ),
+    )
+
+    result = runner.invoke(app, ["workflow-instance", "get", "999999"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "workflow-instance.get"
+    assert payload["error"]["type"] == "api_result_error"
+    assert payload["error"]["source"]["result_code"] == 10116
+
+
 def test_workflow_instance_list_command_supports_all_pages() -> None:
     result = runner.invoke(
         app,
@@ -204,7 +239,7 @@ def test_workflow_instance_list_command_reports_supported_state_names() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (
@@ -335,7 +370,7 @@ def test_workflow_instance_parent_command_rejects_regular_instance(
     result = runner.invoke(app, ["workflow-instance", "parent", "901"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow-instance.parent"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -373,6 +408,7 @@ def test_workflow_instance_digest_command_returns_runtime_summary() -> None:
             "startTime": None,
             "endTime": None,
             "duration": None,
+            "logAvailable": False,
         }
     ]
 
@@ -529,7 +565,7 @@ tasks:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "Pass exactly one of --patch or --file."
 
@@ -560,7 +596,7 @@ patch:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Use `dsctl workflow edit --patch ...` for definition-level fields "
@@ -714,12 +750,12 @@ def test_workflow_instance_watch_command_reports_timeout_suggestion(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow-instance.watch"
     assert payload["error"]["type"] == "timeout"
     assert payload["error"]["suggestion"] == (
         "Retry with a larger --timeout-seconds value or inspect the current "
-        "state with `workflow-instance get 901`."
+        "state with `dsctl workflow-instance get 901`."
     )
 
 
@@ -803,7 +839,7 @@ def test_workflow_instance_recover_failed_command_reports_failure_requirement() 
     result = runner.invoke(app, ["workflow-instance", "recover-failed", "903"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow-instance.recover-failed"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["message"] == (
@@ -894,7 +930,7 @@ def test_workflow_instance_execute_task_command_reports_scope_choices() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "workflow-instance.execute-task"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == (

@@ -34,8 +34,8 @@ if TYPE_CHECKING:
     from dsctl.upstream.protocol import (
         ScheduleRecord,
         WorkflowDagRecord,
+        WorkflowListRecord,
         WorkflowPayloadRecord,
-        WorkflowRecord,
     )
 
 
@@ -45,11 +45,15 @@ class WorkflowListItem(TypedDict):
     code: int
     name: str | None
     version: int | None
+    releaseState: str | None
+    scheduleReleaseState: str | None
+    scheduleId: int | None
 
 
 class ScheduleData(TypedDict):
     """JSON object emitted for one attached schedule."""
 
+    id: int | None
     startTime: str | None
     endTime: str | None
     timezoneId: str | None
@@ -99,8 +103,9 @@ class WorkflowDescribeData(TypedDict):
     relations: list[WorkflowRelationData]
 
 
-def serialize_workflow_ref(workflow: WorkflowRecord) -> WorkflowListItem:
+def serialize_workflow_list_item(workflow: WorkflowListRecord) -> WorkflowListItem:
     """Serialize one workflow list item."""
+    schedule = workflow.schedule
     return {
         "code": require_resource_int(
             workflow.code,
@@ -109,11 +114,18 @@ def serialize_workflow_ref(workflow: WorkflowRecord) -> WorkflowListItem:
         ),
         "name": workflow.name,
         "version": workflow.version,
+        "releaseState": enum_value(workflow.releaseState),
+        "scheduleReleaseState": enum_value(workflow.scheduleReleaseState),
+        "scheduleId": None if schedule is None else schedule.id,
     }
 
 
-def serialize_workflow(workflow: WorkflowPayloadRecord) -> WorkflowData:
-    """Serialize one workflow payload."""
+def serialize_workflow(
+    workflow: WorkflowPayloadRecord,
+    *,
+    attached_schedule: ScheduleRecord | None,
+) -> WorkflowData:
+    """Serialize one workflow payload with authoritative attached-schedule state."""
     return {
         "id": workflow.id,
         "code": workflow.code,
@@ -130,13 +142,21 @@ def serialize_workflow(workflow: WorkflowPayloadRecord) -> WorkflowData:
         "projectName": workflow.projectName,
         "timeout": workflow.timeout,
         "releaseState": enum_value(workflow.releaseState),
-        "scheduleReleaseState": enum_value(workflow.scheduleReleaseState),
+        "scheduleReleaseState": (
+            None
+            if attached_schedule is None
+            else enum_value(attached_schedule.releaseState)
+        ),
         "executionType": enum_value(workflow.executionType),
-        "schedule": _serialize_schedule(workflow.schedule),
+        "schedule": _serialize_schedule(attached_schedule),
     }
 
 
-def serialize_workflow_dag(dag: WorkflowDagRecord) -> WorkflowDescribeData:
+def serialize_workflow_dag(
+    dag: WorkflowDagRecord,
+    *,
+    attached_schedule: ScheduleRecord | None,
+) -> WorkflowDescribeData:
     """Serialize one workflow DAG payload with expanded task relations."""
     workflow = dag.workflowDefinition
     if workflow is None:
@@ -154,7 +174,10 @@ def serialize_workflow_dag(dag: WorkflowDagRecord) -> WorkflowDescribeData:
         for relation in dag.workflowTaskRelationList or []
     ]
     return {
-        "workflow": serialize_workflow(workflow),
+        "workflow": serialize_workflow(
+            workflow,
+            attached_schedule=attached_schedule,
+        ),
         "tasks": tasks,
         "relations": relations,
     }
@@ -164,9 +187,13 @@ def workflow_yaml_document(
     dag: WorkflowDagRecord,
     *,
     project: ResolvedProject,
+    attached_schedule: ScheduleRecord | None,
 ) -> str:
     """Render one DS workflow DAG into the CLI YAML workflow document."""
-    description = serialize_workflow_dag(dag)
+    description = serialize_workflow_dag(
+        dag,
+        attached_schedule=attached_schedule,
+    )
     workflow_data = description["workflow"]
     tasks = description["tasks"]
     relations = description["relations"]
@@ -262,13 +289,14 @@ def workflow_live_baseline(
     *,
     project: ResolvedProject,
 ) -> WorkflowLiveBaseline:
-    """Round-trip one live workflow DAG into authoring spec plus task identity."""
+    """Round-trip one live workflow definition without attached schedule state."""
     task_identities = task_identities_by_name(dag)
     try:
         document = yaml.safe_load(
             workflow_yaml_document(
                 dag,
                 project=project,
+                attached_schedule=None,
             )
         )
     except yaml.YAMLError as exc:
@@ -294,6 +322,7 @@ def _serialize_schedule(schedule: ScheduleRecord | None) -> ScheduleData | None:
     if schedule is None:
         return None
     return {
+        "id": schedule.id,
         "startTime": schedule.startTime,
         "endTime": schedule.endTime,
         "timezoneId": schedule.timezoneId,

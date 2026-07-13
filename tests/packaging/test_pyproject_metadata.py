@@ -4,6 +4,8 @@ import tomllib
 from pathlib import Path
 from typing import cast
 
+from dsctl import __version__
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -11,6 +13,12 @@ def test_pyproject_exposes_dsctl_console_script() -> None:
     project = _load_project_metadata()
 
     assert project["scripts"] == {"dsctl": "dsctl.app:main"}
+
+
+def test_pyproject_version_matches_runtime_version() -> None:
+    project = _load_project_metadata()
+
+    assert project["version"] == __version__
 
 
 def test_pyproject_has_public_package_metadata() -> None:

@@ -32,6 +32,8 @@ LIVE_DATASOURCE_USER_ENV = "DS_LIVE_DATASOURCE_USER"
 LIVE_DATASOURCE_PASSWORD_ENV = "DS_LIVE_DATASOURCE_PASSWORD"
 DEFAULT_LIVE_DATASOURCE_TYPE = "MYSQL"
 DEFAULT_LIVE_DATASOURCE_PORT = 3306
+ALERT_TEST_SENDING_FAILED = 110014
+ALERT_SERVER_NOT_EXIST = 110017
 
 
 @dataclass(frozen=True)
@@ -591,14 +593,27 @@ def test_admin_alert_plugin_and_group_lifecycle_round_trip(
                 env_file=live_admin_env_file,
             ),
             expected_action="alert-plugin.test",
-            expected_type="conflict",
             label="alert-plugin test",
         )
         plugin_test_source = require_mapping(
             plugin_test_error["source"],
             label="alert-plugin test source",
         )
-        assert plugin_test_source["result_code"] == 110014
+        result_code = require_int_value(
+            plugin_test_source.get("result_code"),
+            label="alert-plugin test result code",
+        )
+        expected_error_types = {
+            ALERT_TEST_SENDING_FAILED: "conflict",
+            ALERT_SERVER_NOT_EXIST: "invalid_state",
+        }
+        assert result_code in expected_error_types
+        assert plugin_test_error["type"] == expected_error_types[result_code]
+        if result_code == ALERT_SERVER_NOT_EXIST:
+            assert plugin_test_error["suggestion"] == (
+                "Create or start at least one live alert server before retrying the "
+                "alert-plugin test."
+            )
 
         group_delete_payload = require_ok_payload(
             run_dsctl(

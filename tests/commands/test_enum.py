@@ -52,7 +52,7 @@ def test_enum_list_command_rejects_unknown_enum() -> None:
     result = runner.invoke(app, ["enum", "list", "missing-enum"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "enum.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (

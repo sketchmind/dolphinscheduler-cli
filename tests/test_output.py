@@ -6,7 +6,7 @@ from dsctl.errors import ConfigError, NotFoundError, ResolutionError
 from dsctl.output import CommandResult, dry_run_result, error_payload, success_payload
 
 if TYPE_CHECKING:
-    from dsctl.support.json_types import JsonValue
+    from dsctl.support.json_types import JsonObject, JsonValue
 else:
     JsonValue = object
 
@@ -45,6 +45,48 @@ def test_success_payload_uses_json_safe_result_shapes() -> None:
             }
         ],
     }
+
+
+def test_success_payload_does_not_fail_when_optional_navigation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_navigation(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        message = "optional discovery failed"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("dsctl.output.navigation_for", fail_navigation)
+
+    payload = success_payload(
+        "workflow-instance.list",
+        CommandResult(data={"totalList": [{"id": 263, "state": "SUCCESS"}]}),
+    )
+
+    assert payload == {
+        "ok": True,
+        "action": "workflow-instance.list",
+        "resolved": {},
+        "data": {"totalList": [{"id": 263, "state": "SUCCESS"}]},
+        "warnings": [],
+        "warning_details": [],
+    }
+
+
+def test_success_payload_does_not_fail_when_optional_navigation_is_not_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "dsctl.output.navigation_for",
+        lambda *args, **kwargs: {"action_index": object()},
+    )
+
+    payload = success_payload(
+        "workflow-instance.list",
+        CommandResult(data={"totalList": [{"id": 263, "state": "SUCCESS"}]}),
+    )
+
+    assert "action_index" not in payload
+    assert payload["data"] == {"totalList": [{"id": 263, "state": "SUCCESS"}]}
 
 
 def test_command_result_rejects_misaligned_warning_details() -> None:
@@ -110,6 +152,87 @@ def test_dry_run_result_appends_extra_warning_details() -> None:
     ]
 
 
+def test_dry_run_result_omits_duplicate_single_request_plan() -> None:
+    request = cast(
+        "JsonObject",
+        {
+            "method": "POST",
+            "path": "/projects/7/workflow-definition",
+            "form": {"name": "luna"},
+        },
+    )
+
+    result = dry_run_result(
+        method="POST",
+        path="/projects/7/workflow-definition",
+        form_data={"name": "luna"},
+        requests=[request],
+    )
+
+    data = cast("JsonObject", result.data)
+    assert data["request"] == request
+    assert "requests" not in data
+
+
+def test_dry_run_result_preserves_ordered_multi_request_plan() -> None:
+    first = cast(
+        "JsonObject",
+        {
+            "method": "POST",
+            "path": "/projects/7/workflow-definition",
+            "form": {"name": "luna"},
+        },
+    )
+    second = cast(
+        "JsonObject",
+        {
+            "method": "POST",
+            "path": "/projects/7/workflow-definition/101/release",
+            "form": {"releaseState": "ONLINE"},
+        },
+    )
+
+    result = dry_run_result(
+        method="POST",
+        path="/projects/7/workflow-definition",
+        form_data={"name": "luna"},
+        requests=[first, second],
+    )
+
+    data = cast("JsonObject", result.data)
+    assert data["request"] == first
+    assert data["requests"] == [first, second]
+
+
+def test_dry_run_result_rejects_request_plan_with_different_first_request() -> None:
+    with pytest.raises(
+        ValueError,
+        match="must begin with the primary request",
+    ):
+        dry_run_result(
+            method="POST",
+            path="/projects/7/workflow-definition",
+            form_data={"name": "luna"},
+            requests=[
+                {
+                    "method": "POST",
+                    "path": "/different",
+                    "form": {"name": "luna"},
+                }
+            ],
+        )
+
+
+def test_dry_run_result_rejects_empty_request_plan() -> None:
+    with pytest.raises(ValueError, match="request plan cannot be empty"):
+        dry_run_result(
+            method="POST",
+            path="/projects/7/workflow-definition",
+            form_data={"name": "luna"},
+            requests=[],
+        )
+
+
 def test_error_payload_includes_exception_class_for_unexpected_errors() -> None:
     payload = error_payload("context", ValueError("boom"))
 
@@ -164,10 +287,46 @@ def test_error_payload_infers_lookup_suggestion_from_not_found_details() -> None
         "message": "Project 'missing' was not found",
         "details": {"resource": "project", "name": "missing"},
         "suggestion": (
-            "Retry with `project list` to inspect available values, or pass "
+            "Retry with `dsctl project list` to inspect available values, or pass "
             "the numeric code if known."
         ),
     }
+
+
+@pytest.mark.parametrize(
+    ("details", "expected_command"),
+    [
+        (
+            {"resource": "workflow", "name": "missing", "project_code": 7},
+            "dsctl workflow list --project 7",
+        ),
+        (
+            {
+                "resource": "task",
+                "name": "missing",
+                "project_code": 7,
+                "workflow_code": 101,
+            },
+            "dsctl task list --project 7 --workflow 101",
+        ),
+        (
+            {
+                "resource": "task-instance",
+                "id": 999,
+                "workflow_instance_id": 901,
+            },
+            "dsctl task-instance list --workflow-instance 901",
+        ),
+    ],
+)
+def test_not_found_suggestion_preserves_numeric_scope_tuple(
+    details: dict[str, object],
+    expected_command: str,
+) -> None:
+    error = NotFoundError("missing", details=details)
+
+    assert error.suggestion is not None
+    assert f"`{expected_command}`" in error.suggestion
 
 
 def test_error_payload_infers_lookup_suggestion_from_resolution_details() -> None:

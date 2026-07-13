@@ -13,6 +13,14 @@ from dsctl.cli_surface import (
     TOP_LEVEL_COMMANDS,
     WORKFLOW_INSTANCE_RESOURCE,
 )
+from dsctl.result_navigation import (
+    ACTION_INDEX_FIELDS,
+    ACTION_INDEX_GROUP_FIELDS,
+    ACTION_INDEX_TARGET_FIELDS,
+    MAX_ACTION_INDEX_TARGETS,
+    MAX_NEXT_ACTIONS,
+    NEXT_ACTION_ITEM_FIELDS,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -53,13 +61,20 @@ OUTPUT_SUCCESS_FIELDS: tuple[str, ...] = (
     "warnings",
     "warning_details",
 )
+OUTPUT_OPTIONAL_SUCCESS_FIELDS: tuple[str, ...] = (
+    "next_actions",
+    "action_index",
+)
 OUTPUT_ERROR_FIELDS: tuple[str, ...] = (
     *OUTPUT_SUCCESS_FIELDS,
     "error",
 )
 TOP_LEVEL_COMMAND_SUMMARIES: dict[str, str] = {
-    "version": "Return CLI and supported DolphinScheduler version metadata.",
-    "context": "Return the effective config profile and stored session context.",
+    "version": "Return CLI and selectable DolphinScheduler version metadata.",
+    "context": (
+        "Return the locally resolved target for subsequent commands without "
+        "remote validation."
+    ),
     "doctor": "Return structured local and remote diagnostics for the current runtime.",
     "schema": "Return the stable machine-readable schema for the current CLI surface.",
     "capabilities": "Return stable version and surface capability discovery.",
@@ -147,7 +162,14 @@ def output_schema_data() -> dict[str, object]:
         "default_format": "json",
         "format_option": "--output-format",
         "columns_option": "--columns",
+        "compact_option": "--compact",
+        "compact_json": True,
+        "json_encoding": "utf-8",
+        "default_json_layout": "pretty",
+        "error_channel": "stderr",
+        "row_diagnostics_channel": "stderr",
         "success_fields": list(OUTPUT_SUCCESS_FIELDS),
+        "optional_success_fields": list(OUTPUT_OPTIONAL_SUCCESS_FIELDS),
         "error_fields": list(OUTPUT_ERROR_FIELDS),
         "ok_values": {
             "success": True,
@@ -156,6 +178,29 @@ def output_schema_data() -> dict[str, object]:
         "warning_details_aligned": True,
         "data_shape_metadata": True,
         "json_column_projection": True,
+        "next_actions": {
+            "field": "next_actions",
+            "presence": "successful_applicable_json_responses_only",
+            "max_items": MAX_NEXT_ACTIONS,
+            "ordered": True,
+            "item_fields": list(NEXT_ACTION_ITEM_FIELDS),
+            "command_kind": "complete_shell_invocation",
+            "authorization": "advisory",
+            "row_output": False,
+            "preserves_env_file": True,
+        },
+        "action_index": {
+            "field": "action_index",
+            "presence": "successful_applicable_json_responses_only",
+            "max_indexed_targets": MAX_ACTION_INDEX_TARGETS,
+            "index_fields": list(ACTION_INDEX_FIELDS),
+            "target_fields": list(ACTION_INDEX_TARGET_FIELDS),
+            "group_fields": list(ACTION_INDEX_GROUP_FIELDS),
+            "all_targets_semantics": "all_indexed_targets",
+            "authorization": "not_evaluated",
+            "eligibility": "row_facts_only",
+            "row_output": False,
+        },
     }
 
 
@@ -165,6 +210,11 @@ def output_capabilities_data() -> dict[str, object]:
         "standard_envelope": True,
         "formats": ["json", "table", "tsv"],
         "default_format": "json",
+        "compact_json": True,
+        "json_encoding": "utf-8",
+        "default_json_layout": "pretty",
+        "error_channel": "stderr",
+        "row_diagnostics_channel": "stderr",
         "data_shape_metadata": True,
         "display_columns": True,
         "json_column_projection": True,
@@ -172,6 +222,9 @@ def output_capabilities_data() -> dict[str, object]:
         "warnings": True,
         "warning_details_alignment": True,
         "structured_errors": True,
+        "structured_next_actions": True,
+        "structured_action_index": True,
+        "max_action_index_targets": MAX_ACTION_INDEX_TARGETS,
     }
 
 

@@ -34,6 +34,12 @@ class VersionSupport:
     support_level: SupportLevel
     tested: bool
 
+    def __post_init__(self) -> None:
+        """Reject stable support claims that lack live-test evidence."""
+        if self.support_level in {"full", "legacy_core"} and not self.tested:
+            message = f"support level {self.support_level!r} requires tested=True"
+            raise ValueError(message)
+
     def as_dict(self) -> VersionSupportData:
         """Return a JSON-serializable representation for discovery commands."""
         return {
@@ -53,7 +59,7 @@ _SUPPORT_BY_VERSION: dict[str, VersionSupport] = {
         adapter=cast("UpstreamAdapter[object]", _DS_3_4_1),
         contract_version="3.4.1",
         family="workflow-3.3-plus",
-        support_level="full",
+        support_level="experimental",
         tested=False,
     ),
     "3.4.0": VersionSupport(
@@ -61,7 +67,7 @@ _SUPPORT_BY_VERSION: dict[str, VersionSupport] = {
         adapter=cast("UpstreamAdapter[object]", _DS_3_4_1),
         contract_version="3.4.1",
         family="workflow-3.3-plus",
-        support_level="full",
+        support_level="experimental",
         tested=False,
     ),
     "3.4.1": VersionSupport(
@@ -78,7 +84,7 @@ SUPPORTED_VERSIONS = tuple(sorted(_SUPPORT_BY_VERSION))
 
 
 def get_adapter(version: str) -> UpstreamAdapter[object]:
-    """Return the adapter for a supported DolphinScheduler version."""
+    """Return the adapter for a selectable DolphinScheduler version."""
     return get_version_support(version).adapter
 
 
@@ -88,7 +94,7 @@ def get_default_version_support() -> VersionSupport:
 
 
 def get_version_support(version: str) -> VersionSupport:
-    """Return support metadata for a supported DolphinScheduler version."""
+    """Return support metadata for a selectable DolphinScheduler version."""
     normalized = normalize_version(version)
     support = _SUPPORT_BY_VERSION.get(normalized)
     if support is not None:

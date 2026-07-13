@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import TYPE_CHECKING, Literal, cast
 
 import javalang
@@ -67,6 +68,8 @@ _BASE_DATASOURCE_PARAM_DTO_IMPORT = (
     "org.apache.dolphinscheduler.plugin.datasource.api.datasource."
     "BaseDataSourceParamDTO"
 )
+_PAGE_INFO_IMPORT = "org.apache.dolphinscheduler.api.utils.PageInfo"
+_TASK_DEFINITION_IMPORT = "org.apache.dolphinscheduler.dao.entity.TaskDefinition"
 DeclarationKind = Literal["class", "enum"]
 _NON_NULL_ANNOTATIONS = {"NonNull", "Nonnull", "NotNull"}
 _NULLABLE_ANNOTATIONS = {"CheckForNull", "Nullable"}
@@ -580,28 +583,21 @@ def _normalize_model_fields(
     import_path: str,
     fields: list[DtoFieldSpec],
 ) -> list[DtoFieldSpec]:
-    if import_path != "org.apache.dolphinscheduler.api.utils.PageInfo":
-        return fields
-    return [
-        (
-            DtoFieldSpec(
-                name=field.name,
-                java_type=field.java_type,
-                wire_name=field.wire_name,
-                required=field.required,
-                default_value=field.default_value,
-                nullable=True,
-                default_factory=field.default_factory,
-                description=field.description,
-                example=field.example,
-                allowable_values=field.allowable_values,
-                documentation=field.documentation,
-            )
-            if field.wire_name == "currentPage"
-            else field
-        )
-        for field in fields
-    ]
+    return [_normalize_model_field(import_path, field) for field in fields]
+
+
+def _normalize_model_field(
+    import_path: str,
+    field: DtoFieldSpec,
+) -> DtoFieldSpec:
+    if import_path == _PAGE_INFO_IMPORT and field.wire_name == "currentPage":
+        return replace(field, nullable=True)
+    if import_path == _TASK_DEFINITION_IMPORT and field.wire_name == "taskParamMap":
+        # DS derives this map from Property values. A declared IN parameter may
+        # legally have no default, so the JSON map contains null values even
+        # though the Java member is declared as Map<String, String>.
+        return replace(field, java_type="Map<String, Optional<String>>")
+    return field
 
 
 def _extract_dto_field_spec(field: javalang.tree.FieldDeclaration) -> DtoFieldSpec:

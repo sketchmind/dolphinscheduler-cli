@@ -11,14 +11,14 @@ def register_meta_commands(app: typer.Typer) -> None:
 
 
 def version_command(ctx: typer.Context) -> None:
-    """Print CLI and supported DolphinScheduler version metadata."""
+    """Print CLI and selectable DolphinScheduler version metadata."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result("version", lambda: get_version_result(env_file=env_file))
 
 
 def context_command(ctx: typer.Context) -> None:
-    """Print the effective config profile and stored session context."""
+    """Show the local target for later commands; no remote validation."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result("context", lambda: get_context_result(env_file=env_file))

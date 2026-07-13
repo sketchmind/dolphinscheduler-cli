@@ -20,6 +20,39 @@ Prepare a normal release with this flow:
 6. Create the GitHub Release to publish to PyPI.
 7. Merge `main` back into `dev`.
 
+The version section in `CHANGELOG.md` is the source for the GitHub Release
+body. Keep an empty `Unreleased` section above it so post-release work has an
+explicit landing place.
+
+### `0.3.0` History Reconciliation
+
+`v0.2.0` on `main` and the `011ab4f` synchronization commit on `dev` have
+identical trees but parallel parent histories. A normal merge treats the same
+changes as independent work and produces widespread conflicts. For `0.3.0`
+only, build the release branch from `main`, replay the commits after the
+tree-equivalent synchronization point, and verify the result before making
+release-only edits:
+
+```bash
+git switch -c release/0.3.0 main
+git cherry-pick 011ab4f..0d49cea
+git diff --exit-code 0d49cea HEAD
+```
+
+After the release preparation commit passes every gate, review the remaining
+tree diff against `dev`. It must contain only the intended version, release
+documentation, and release-safety checks. Then record `dev` as merged while
+retaining the already verified release tree:
+
+```bash
+git diff --stat dev..release/0.3.0
+git merge -s ours dev -m "Reconcile dev history for v0.3.0"
+```
+
+The `ours` strategy is justified here only by the preceding tree-equivalence
+proof; it is not a general conflict-resolution method. Once this merge reaches
+`main`, `dev` can fast-forward to `main` and the normal branch flow resumes.
+
 Prepare an urgent patch with this flow:
 
 1. Cut `hotfix/<version>` from `main`.
@@ -45,6 +78,7 @@ Prepare an urgent patch with this flow:
 
 ```bash
 python tools/check_quality_gate.py
+python tools/check_release_version.py --tag vX.Y.Z
 python -m build
 python -m twine check dist/*
 python tools/check_package_contents.py dist/*
@@ -127,7 +161,8 @@ Recommended release trigger:
 
 1. Update `CHANGELOG.md`.
 2. Update `pyproject.toml` and `src/dsctl/__init__.py` to the release version.
-3. Push a signed tag such as `v0.1.0`.
+3. Verify `python tools/check_release_version.py --tag vX.Y.Z`, then push the
+   matching signed tag.
 4. Create a GitHub Release from the tag.
 5. Let the `Publish` workflow build and upload the distributions.
 6. Verify `pipx install dolphinscheduler-cli` exposes `dsctl`.

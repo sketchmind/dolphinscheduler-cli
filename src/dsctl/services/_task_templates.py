@@ -601,17 +601,19 @@ def _sub_workflow_params_template_yaml() -> str:
     return _task_template_with_runtime_controls(
         dedent(
             """\
-            # Task template for SUB_WORKFLOW with dynamic parameters
+            # Task template for SUB_WORKFLOW parameter inheritance
+            # Set values supplied by this parent in workflow.global_params or
+            # pass them as parent startup parameters. Put standalone defaults
+            # in the child workflow.global_params.
+            # SUB_WORKFLOW localParams do not become child inputs in DS 3.4.1.
+            # The inherited varPool is the parent workflow-instance varPool,
+            # not task_params.varPool below; keep compatibility fields empty.
             name: child-workflow-params-task
             type: SUB_WORKFLOW
-            description: Run one child workflow and pass local parameters
+            description: Run one child workflow with inherited parent parameters
             task_params:
               workflowDefinitionCode: 1000000000001
-              localParams:
-                - prop: bizdate
-                  direct: IN
-                  type: VARCHAR
-                  value: ${system.biz.date}
+              localParams: []
               resourceList: []
               varPool: []
             worker_group: default
@@ -1080,11 +1082,11 @@ _VARIANTS: dict[str, tuple[TaskTemplateVariant, ...]] = {
         TaskTemplateVariant(
             name="params",
             summary=(
-                "SUB_WORKFLOW example with explicit localParams and varPool fields."
+                "SUB_WORKFLOW values inherited from parent workflow globals, "
+                "startup parameters, and workflow-instance varPool."
             ),
             builder=_sub_workflow_params_template_yaml,
             payload_modes=("task_params",),
-            parameter_fields=_task_parameter_fields(),
         ),
         TaskTemplateVariant(
             name="child-workflow",

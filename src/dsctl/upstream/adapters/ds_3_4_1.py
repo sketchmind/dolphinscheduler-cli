@@ -4,8 +4,7 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import IO, TYPE_CHECKING, TypeGuard, cast
-from urllib.parse import urlsplit
+from typing import IO, TYPE_CHECKING, cast
 
 from pydantic import TypeAdapter
 
@@ -13,9 +12,6 @@ from dsctl.client import (
     BinaryResponse,
     DolphinSchedulerClient,
     HttpFormValue,
-    HttpQueryParams,
-    HttpQueryValue,
-    HttpRequestData,
     MultipartFiles,
 )
 from dsctl.errors import ApiResultError, ApiTransportError
@@ -27,7 +23,6 @@ from dsctl.generated.versions.ds_3_4_1.api.contracts.project import (
 )
 from dsctl.generated.versions.ds_3_4_1.api.contracts.schedule import (
     ScheduleCreateRequest,
-    ScheduleUpdateRequest,
 )
 from dsctl.generated.versions.ds_3_4_1.api.contracts.workflow_instance import (
     workflow_instance_query_request as workflow_instance_contracts,
@@ -112,10 +107,13 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.resources import (
     QueryResourceBaseDirParams,
 )
 from dsctl.generated.versions.ds_3_4_1.api.operations.scheduler import (
+    CreateScheduleParams,
     PreviewScheduleParams,
     QueryScheduleListPagingParams,
+    UpdateScheduleParams,
 )
 from dsctl.generated.versions.ds_3_4_1.api.operations.task_definition import (
+    GenTaskCodeListParams,
     UpdateTaskWithUpstreamParams,
 )
 from dsctl.generated.versions.ds_3_4_1.api.operations.task_group import (
@@ -157,6 +155,7 @@ from dsctl.generated.versions.ds_3_4_1.api.operations.worker_group import (
 from dsctl.generated.versions.ds_3_4_1.api.operations.workflow_definition import (
     CreateWorkflowDefinitionParams,
     GetTaskListByWorkflowDefinitionCodeParams,
+    QueryWorkflowDefinitionListPagingParams,
     ReleaseWorkflowDefinitionParams,
     UpdateWorkflowDefinitionParams,
 )
@@ -209,11 +208,16 @@ from dsctl.generated.versions.ds_3_4_1.registry.api.enums.registry_node_type imp
     RegistryNodeType,
 )
 from dsctl.generated.versions.ds_3_4_1.spi.enums.resource_type import ResourceType
-from dsctl.upstream.protocol import StringEnumValue, UpstreamAdapter, UserListRecord
+from dsctl.upstream.generated_session import (
+    GeneratedSessionAdapter as _GeneratedSessionAdapter,
+)
+from dsctl.upstream.protocol import (
+    StringEnumValue,
+    UpstreamAdapter,
+    UserListRecord,
+)
 
 if TYPE_CHECKING:
-    from typing import Unpack
-
     import httpx
 
     from dsctl.config import ClusterProfile
@@ -247,10 +251,10 @@ if TYPE_CHECKING:
         PageInfoTenant,
         PageInfoUser,
         PageInfoWorkerGroupPageDetail,
+        PageInfoWorkflowDefinition,
         PageInfoWorkflowInstance,
     )
     from dsctl.generated.versions.ds_3_4_1.api.operations._base import (
-        RequestKwargs,
         SessionLike,
     )
     from dsctl.generated.versions.ds_3_4_1.api.views.alert_plugin_instance import (
@@ -317,7 +321,7 @@ if TYPE_CHECKING:
     from dsctl.generated.versions.ds_3_4_1.dao.plugin_api.monitor.database_metrics import (  # noqa: E501
         DatabaseMetrics,
     )
-    from dsctl.support.json_types import JsonValue
+    from dsctl.support.json_types import JsonObject
     from dsctl.upstream.protocol import (
         AccessTokenOperations,
         AlertGroupOperations,
@@ -334,6 +338,8 @@ if TYPE_CHECKING:
         ProjectWorkerGroupOperations,
         QueueOperations,
         ResourceOperations,
+        ScheduleCreateRequestPlan,
+        ScheduleCreateSpec,
         ScheduleOperations,
         TaskGroupOperations,
         TaskGroupPageRecord,
@@ -362,45 +368,6 @@ if TYPE_CHECKING:
     DependentSimplifyDefinition = (
         dependent_simplify_definition_models.DependentSimplifyDefinition
     )
-
-
-class _GeneratedSessionAdapter:
-    """Adapt the shared `DolphinSchedulerClient` to the generated session protocol."""
-
-    def __init__(self, client: DolphinSchedulerClient, *, base_url: str) -> None:
-        self._client = client
-        self._base_url = base_url.rstrip("/")
-
-    def request(
-        self,
-        method: str,
-        url: str,
-        headers: dict[str, str],
-        **kwargs: Unpack[RequestKwargs],
-    ) -> JsonValue:
-        """Route a generated operation call through the shared HTTP client."""
-        try:
-            payload = self._client.request_payload(
-                method,
-                _relative_path(url, base_url=self._base_url),
-                params=_query_params_or_none(kwargs.pop("params", None)),
-                json_body=_json_value_or_none(kwargs.pop("json", None)),
-                form_data=_request_data_or_none(kwargs.pop("data", None)),
-                content=kwargs.pop("content", None),
-                files=_multipart_files_or_none(kwargs.pop("files", None)),
-                headers=headers,
-            )
-            _reject_unexpected_request_kwargs(kwargs)
-        except TypeError as exc:
-            message = f"Generated request shape did not match adapter contract: {exc}"
-            raise ApiTransportError(
-                message,
-                details={
-                    "method": method.upper(),
-                    "url": url,
-                },
-            ) from exc
-        return payload
 
 
 @dataclass(frozen=True)
@@ -1908,9 +1875,26 @@ class _DS341WorkflowOperations:
 
     client: DS341Client
 
-    def list(self, *, project_code: int) -> list[DependentSimplifyDefinition]:
+    def list_refs(self, *, project_code: int) -> list[DependentSimplifyDefinition]:
         return self.client.workflow_definition.get_workflow_list_by_project_code(
             project_code
+        )
+
+    def list_page(
+        self,
+        *,
+        project_code: int,
+        page_no: int,
+        page_size: int,
+        search: str | None = None,
+    ) -> PageInfoWorkflowDefinition:
+        return self.client.workflow_definition.query_workflow_definition_list_paging(
+            project_code,
+            QueryWorkflowDefinitionListPagingParams(
+                searchVal=search,
+                pageNo=page_no,
+                pageSize=page_size,
+            ),
         )
 
     def get(self, *, code: int) -> WorkflowDefinition:
@@ -2142,11 +2126,82 @@ class _DS341WorkflowLineageOperations:
         )
 
 
+def _task_code_response_error(
+    message: str,
+    *,
+    project_code: int,
+    requested_count: int,
+    received_count: int,
+) -> ApiTransportError:
+    """Describe one malformed task-code allocation response."""
+    return ApiTransportError(
+        message,
+        details={
+            "endpoint": (f"/projects/{project_code}/task-definition/gen-task-codes"),
+            "project_code": project_code,
+            "requested_count": requested_count,
+            "received_count": received_count,
+        },
+        source={
+            "kind": "remote",
+            "system": "dolphinscheduler",
+            "layer": "response",
+        },
+        suggestion=(
+            "Verify DS_VERSION matches the server, check DolphinScheduler API "
+            "health, then retry."
+        ),
+    )
+
+
 @dataclass(frozen=True)
 class _DS341TaskOperations:
     """Bound task operations backed by generated task clients."""
 
     client: DS341Client
+
+    def generate_codes(self, *, project_code: int, count: int) -> list[int]:
+        task_codes: list[int] = []
+        remaining = count
+        while remaining > 0:
+            batch_size = min(remaining, 100)
+            batch = self.client.task_definition.gen_task_code_list(
+                project_code,
+                GenTaskCodeListParams(genNum=batch_size),
+            )
+            if len(batch) != batch_size:
+                message = (
+                    "DolphinScheduler returned "
+                    f"{len(batch)} task codes when {batch_size} were requested"
+                )
+                raise _task_code_response_error(
+                    message,
+                    project_code=project_code,
+                    requested_count=batch_size,
+                    received_count=len(batch),
+                )
+            if any(code <= 0 or code > 2**63 - 1 for code in batch):
+                message = (
+                    "DolphinScheduler returned a task code outside the positive "
+                    "signed 64-bit integer range"
+                )
+                raise _task_code_response_error(
+                    message,
+                    project_code=project_code,
+                    requested_count=batch_size,
+                    received_count=len(batch),
+                )
+            if len(set(batch)) != len(batch) or set(task_codes).intersection(batch):
+                message = "DolphinScheduler returned duplicate task codes"
+                raise _task_code_response_error(
+                    message,
+                    project_code=project_code,
+                    requested_count=batch_size,
+                    received_count=len(batch),
+                )
+            task_codes.extend(batch)
+            remaining -= batch_size
+        return task_codes
 
     def list(
         self,
@@ -2330,6 +2385,24 @@ class _DS341WorkflowInstanceOperations:
         )
 
 
+def _is_empty_task_instance_get_response(
+    error: ApiTransportError,
+    *,
+    project_code: int,
+    task_instance_id: int,
+) -> bool:
+    """Recognize the nullable DS 3.4.1 task-instance v2 lookup response."""
+    return (
+        error.message == "Response body was not valid JSON"
+        and error.details.get("method") == "POST"
+        and error.details.get("path")
+        == f"v2/projects/{project_code}/task-instances/{task_instance_id}"
+        and error.details.get("status_code") == 200
+        and error.details.get("body") == ""
+        and error.details.get("retryable") is False
+    )
+
+
 @dataclass(frozen=True)
 class _DS341TaskInstanceOperations:
     """Bound task-instance operations backed by generated runtime clients."""
@@ -2380,11 +2453,20 @@ class _DS341TaskInstanceOperations:
         *,
         project_code: int,
         task_instance_id: int,
-    ) -> TaskInstance:
-        return self.client.task_instance_v2.query_task_instance_by_code(
-            project_code,
-            task_instance_id,
-        )
+    ) -> TaskInstance | None:
+        try:
+            return self.client.task_instance_v2.query_task_instance_by_code(
+                project_code,
+                task_instance_id,
+            )
+        except ApiTransportError as error:
+            if _is_empty_task_instance_get_response(
+                error,
+                project_code=project_code,
+                task_instance_id=task_instance_id,
+            ):
+                return None
+            raise
 
     def log_chunk(
         self,
@@ -2478,39 +2560,35 @@ class _DS341ScheduleOperations:
     def create(
         self,
         *,
-        workflow_code: int,
-        crontab: str,
-        start_time: str,
-        end_time: str,
-        timezone_id: str,
-        failure_strategy: str | None = None,
-        warning_type: str | None = None,
-        warning_group_id: int = 0,
-        workflow_instance_priority: str | None = None,
-        worker_group: str | None = None,
-        tenant_code: str | None = None,
-        environment_code: int = 0,
+        spec: ScheduleCreateSpec[int],
     ) -> Schedule:
-        return self.client.schedule_v2.create_schedule(
-            ScheduleCreateRequest(
-                workflowDefinitionCode=workflow_code,
-                crontab=crontab,
-                startTime=start_time,
-                endTime=end_time,
-                timezoneId=timezone_id,
-                failureStrategy=failure_strategy,
-                warningType=warning_type,
-                warningGroupId=warning_group_id,
-                workflowInstancePriority=workflow_instance_priority,
-                workerGroup=worker_group,
-                tenantCode=tenant_code,
-                environmentCode=environment_code,
+        request = _prepare_schedule_create(spec)
+        form, json_body = _schedule_create_plan_bodies(request)
+        if form is not None:
+            return self.client.scheduler.create_schedule(
+                spec.project_code,
+                CreateScheduleParams.model_validate(form),
             )
+        if json_body is None:
+            message = "validated schedule create plan is missing its JSON body"
+            raise RuntimeError(message)
+        return self.client.schedule_v2.create_schedule(
+            ScheduleCreateRequest.model_validate(json_body)
         )
+
+    def plan_create(
+        self,
+        *,
+        spec: ScheduleCreateSpec[int | str],
+    ) -> ScheduleCreateRequestPlan:
+        request = _prepare_schedule_create(spec)
+        _schedule_create_plan_bodies(request)
+        return request
 
     def update(
         self,
         *,
+        project_code: int,
         schedule_id: int,
         crontab: str,
         start_time: str,
@@ -2521,20 +2599,25 @@ class _DS341ScheduleOperations:
         warning_group_id: int = 0,
         workflow_instance_priority: str | None = None,
         worker_group: str | None = None,
-        environment_code: int = 0,
+        tenant_code: str | None = None,
+        environment_code: int | None = None,
     ) -> Schedule:
-        return self.client.schedule_v2.update_schedule(
+        return self.client.scheduler.update_schedule(
+            project_code,
             schedule_id,
-            ScheduleUpdateRequest(
-                crontab=crontab,
-                startTime=start_time,
-                endTime=end_time,
-                timezoneId=timezone_id,
+            UpdateScheduleParams(
+                schedule=_schedule_preview_expression(
+                    crontab=crontab,
+                    end_time=end_time,
+                    start_time=start_time,
+                    timezone_id=timezone_id,
+                ),
                 failureStrategy=failure_strategy,
                 warningType=warning_type,
                 warningGroupId=warning_group_id,
                 workflowInstancePriority=workflow_instance_priority,
                 workerGroup=worker_group,
+                tenantCode=tenant_code,
                 environmentCode=environment_code,
             ),
         )
@@ -2558,6 +2641,80 @@ def _schedule_project_code(client: DS341Client, *, schedule_id: int) -> int:
     schedule = client.schedule_v2.get_schedule(schedule_id)
     workflow = client.workflow_v2.get_workflow(schedule.workflowDefinitionCode)
     return workflow.projectCode
+
+
+def _prepare_schedule_create(
+    spec: ScheduleCreateSpec[int | str],
+) -> ScheduleCreateRequestPlan:
+    if not _has_explicit_schedule_environment(spec.environment_code):
+        form: JsonObject = {
+            "workflowDefinitionCode": spec.workflow_code,
+            "schedule": _schedule_preview_expression(
+                crontab=spec.crontab,
+                end_time=spec.end_time,
+                start_time=spec.start_time,
+                timezone_id=spec.timezone_id,
+            ),
+            "warningGroupId": spec.warning_group_id,
+        }
+        _add_schedule_create_optional_fields(form, spec=spec)
+        return {
+            "method": "POST",
+            "path": f"/projects/{spec.project_code}/schedules",
+            "form": form,
+        }
+
+    json_body: JsonObject = {
+        "workflowDefinitionCode": spec.workflow_code,
+        "crontab": spec.crontab,
+        "startTime": spec.start_time,
+        "endTime": spec.end_time,
+        "timezoneId": spec.timezone_id,
+        "warningGroupId": spec.warning_group_id,
+        "environmentCode": spec.environment_code,
+    }
+    _add_schedule_create_optional_fields(json_body, spec=spec)
+    return {
+        "method": "POST",
+        "path": "/v2/schedules",
+        "json": json_body,
+    }
+
+
+def _schedule_create_plan_bodies(
+    request: ScheduleCreateRequestPlan,
+) -> tuple[JsonObject | None, JsonObject | None]:
+    form = request.get("form")
+    json_body = request.get("json")
+    if (form is None) == (json_body is None):
+        message = "schedule create plan must contain exactly one of form or json"
+        raise RuntimeError(message)
+    return form, json_body
+
+
+def _add_schedule_create_optional_fields(
+    body: JsonObject,
+    *,
+    spec: ScheduleCreateSpec[int | str],
+) -> None:
+    for key, value in {
+        "failureStrategy": spec.failure_strategy,
+        "warningType": spec.warning_type,
+        "workflowInstancePriority": spec.workflow_instance_priority,
+        "workerGroup": spec.worker_group,
+        "tenantCode": spec.tenant_code,
+    }.items():
+        if value is not None:
+            body[key] = value
+
+
+def _has_explicit_schedule_environment(environment_code: int | None) -> bool:
+    if environment_code is None:
+        return False
+    if environment_code <= 0:
+        message = "schedule environment code must be None or a positive integer"
+        raise ValueError(message)
+    return True
 
 
 def _start_process_schedule_time() -> str:
@@ -2640,90 +2797,6 @@ def _schedule_preview_expression(
     )
 
 
-def _relative_path(url: str, *, base_url: str) -> str:
-    if url == base_url:
-        return ""
-    prefix = f"{base_url}/"
-    if url.startswith(prefix):
-        return url.removeprefix(prefix)
-    return urlsplit(url).path.lstrip("/")
-
-
-def _query_params_or_none(value: object) -> HttpQueryParams | None:
-    if value is None:
-        return None
-    if not isinstance(value, Mapping):
-        message = f"Expected query param mapping, got {type(value)!r}"
-        raise TypeError(message)
-    cleaned: dict[str, HttpQueryValue] = {}
-    for key, item in value.items():
-        if not isinstance(key, str):
-            message = f"Expected string query param key, got {type(key)!r}"
-            raise TypeError(message)
-        if _is_http_query_scalar(item):
-            cleaned[key] = item
-            continue
-        if isinstance(item, Sequence) and not isinstance(
-            item,
-            (str, bytes, bytearray),
-        ):
-            sequence = list(item)
-            if all(_is_http_query_scalar(entry) for entry in sequence):
-                cleaned[key] = sequence
-                continue
-        message = f"Unsupported query param value type for {key!r}: {type(item)!r}"
-        raise TypeError(message)
-    return cleaned
-
-
-def _request_data_or_none(
-    value: object,
-) -> HttpRequestData | None:
-    if value is None:
-        return None
-    if isinstance(value, Mapping):
-        cleaned: dict[str, HttpFormValue] = {}
-        for key, item in value.items():
-            if not isinstance(key, str):
-                message = f"Expected string form field key, got {type(key)!r}"
-                raise TypeError(message)
-            if _is_http_form_scalar(item):
-                cleaned[key] = item
-                continue
-            if isinstance(item, Sequence) and not isinstance(
-                item,
-                (str, bytes, bytearray),
-            ):
-                sequence = list(item)
-                if all(_is_http_form_scalar(entry) for entry in sequence):
-                    cleaned[key] = sequence
-                    continue
-            message = f"Unsupported form field value type for {key!r}: {type(item)!r}"
-            raise TypeError(message)
-        return cleaned
-    if isinstance(value, str | bytes | bytearray):
-        return value
-    message = f"Expected request data payload, got {type(value)!r}"
-    raise TypeError(message)
-
-
-def _multipart_files_or_none(value: object) -> MultipartFiles | None:
-    if value is None:
-        return None
-    if isinstance(value, Mapping):
-        return cast("MultipartFiles", value)
-    message = f"Expected multipart file mapping, got {type(value)!r}"
-    raise TypeError(message)
-
-
-def _reject_unexpected_request_kwargs(kwargs: RequestKwargs) -> None:
-    if not kwargs:
-        return
-    keys = ", ".join(sorted(kwargs))
-    message = f"Unsupported generated request arguments: {keys}"
-    raise TypeError(message)
-
-
 def _plugin_type_member(plugin_type: str) -> PluginType:
     try:
         return PluginType[plugin_type]
@@ -2736,15 +2809,6 @@ def _comma_join(values: Sequence[str] | None) -> str | None:
     if not values:
         return None
     return ",".join(values)
-
-
-def _json_value_or_none(value: object) -> JsonValue | None:
-    if value is None:
-        return None
-    if _is_json_value(value):
-        return value
-    message = f"Expected JSON payload, got {type(value)!r}"
-    raise TypeError(message)
 
 
 def _worker_groups_json(worker_groups: Sequence[str] | None) -> str | None:
@@ -3319,26 +3383,6 @@ def _json_mapping(value: object, *, label: str) -> Mapping[str, object]:
         message = f"{label} must use string keys"
         raise ApiTransportError(message)
     return cast("Mapping[str, object]", value)
-
-
-def _is_json_value(value: object) -> TypeGuard[JsonValue]:
-    if value is None or isinstance(value, str | int | float | bool):
-        return True
-    if isinstance(value, Mapping):
-        return all(
-            isinstance(key, str) and _is_json_value(item) for key, item in value.items()
-        )
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        return all(_is_json_value(item) for item in value)
-    return False
-
-
-def _is_http_query_scalar(value: object) -> bool:
-    return value is None or isinstance(value, str | int | float | bool)
-
-
-def _is_http_form_scalar(value: object) -> bool:
-    return value is None or isinstance(value, str | bytes | int | float | bool)
 
 
 __all__ = ["DS341Adapter"]

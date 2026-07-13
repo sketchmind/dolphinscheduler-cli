@@ -16,6 +16,7 @@ from tests.live.support import (
 )
 from tests.live.workflow_support import (
     delete_project_eventually,
+    delete_workflow_eventually,
     write_parallel_task_group_workflow_spec,
     write_shell_workflow_spec,
     write_single_shell_workflow_spec,
@@ -130,7 +131,16 @@ def _wait_for_queue_rows(
 ) -> list[dict[str, object]]:
     result = wait_for_result(
         repo_root,
-        ["task-group", "queue", "list", task_group, "--page-size", "20"],
+        [
+            "task-group",
+            "queue",
+            "list",
+            task_group,
+            "--status",
+            "WAIT_QUEUE",
+            "--page-size",
+            "20",
+        ],
         env_file=env_file,
         timeout_seconds=timeout_seconds,
         interval_seconds=2.0,
@@ -381,22 +391,11 @@ def test_etl_running_runtime_control_surfaces_round_trip(
                 timeout_seconds=70.0,
             )
         if workflow_created and not workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                ["workflow", "offline", workflow_name, "--project", project_name],
-                env_file=live_etl_env_file,
-            )
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=project_name,
+                workflow=workflow_name,
             )
             workflow_deleted = True
         if project_created:
@@ -768,28 +767,11 @@ def test_etl_recovery_execute_task_and_rerun_surfaces_round_trip(
         )
     finally:
         if fail_workflow_created and not fail_workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                [
-                    "workflow",
-                    "offline",
-                    fail_workflow_name,
-                    "--project",
-                    fail_project_name,
-                ],
-                env_file=live_etl_env_file,
-            )
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    fail_workflow_name,
-                    "--project",
-                    fail_project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=fail_project_name,
+                workflow=fail_workflow_name,
             )
             fail_workflow_deleted = True
         if fail_project_created:
@@ -799,28 +781,11 @@ def test_etl_recovery_execute_task_and_rerun_surfaces_round_trip(
                 project=fail_project_name,
             )
         if success_workflow_created and not success_workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                [
-                    "workflow",
-                    "offline",
-                    success_workflow_name,
-                    "--project",
-                    success_project_name,
-                ],
-                env_file=live_etl_env_file,
-            )
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    success_workflow_name,
-                    "--project",
-                    success_project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=success_project_name,
+                workflow=success_workflow_name,
             )
             success_workflow_deleted = True
         if success_project_created:
@@ -1021,22 +986,11 @@ def test_etl_task_group_queue_control_surfaces_round_trip(
         assert workflow_watch_data["state"] == "SUCCESS"
     finally:
         if workflow_created and not workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                ["workflow", "offline", workflow_name, "--project", project_name],
-                env_file=live_etl_env_file,
-            )
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=project_name,
+                workflow=workflow_name,
             )
             workflow_deleted = True
         if task_group_created:

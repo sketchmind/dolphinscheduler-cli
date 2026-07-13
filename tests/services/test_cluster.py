@@ -9,7 +9,12 @@ from tests.fakes import (
 )
 from tests.support import make_profile
 
-from dsctl.errors import ConflictError, UserInputError
+from dsctl.errors import (
+    ApiResultError,
+    ConflictError,
+    PermissionDeniedError,
+    UserInputError,
+)
 from dsctl.services import cluster as cluster_service
 from dsctl.services import runtime as runtime_service
 
@@ -119,6 +124,31 @@ def test_get_cluster_result_resolves_name_then_fetches_cluster(
         "operator": None,
         "createTime": None,
         "updateTime": None,
+    }
+
+
+def test_get_cluster_result_translates_numeric_resolver_permission_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeClusterAdapter(clusters=[])
+
+    def fail_get(*, code: int) -> FakeCluster:
+        del code
+        raise ApiResultError(
+            result_code=cluster_service.USER_NO_OPERATION_PERM,
+            result_message="user has no operation privilege",
+        )
+
+    monkeypatch.setattr(adapter, "get", fail_get)
+    _install_cluster_service_fakes(monkeypatch, adapter)
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        cluster_service.get_cluster_result("7")
+
+    assert exc_info.value.details == {
+        "resource": "cluster",
+        "operation": "get",
+        "name": "7",
     }
 
 

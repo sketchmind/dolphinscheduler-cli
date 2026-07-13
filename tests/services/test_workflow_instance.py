@@ -1,5 +1,5 @@
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -27,6 +27,7 @@ from dsctl.errors import (
     ConfirmationRequiredError,
     InvalidStateError,
     NotFoundError,
+    PermissionDeniedError,
     UserInputError,
     WaitTimeoutError,
 )
@@ -464,6 +465,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
                     state_value=FakeEnumValue("RUNNING_EXECUTION"),
                     retry_times_value=0,
                     host="worker-1",
+                    log_path_value="/logs/3001.log",
                     start_time_value="2026-04-11 10:00:00",
                     duration_value="15s",
                 ),
@@ -489,6 +491,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
                     state_value=FakeEnumValue("FAILURE"),
                     retry_times_value=2,
                     host="worker-2",
+                    log_path_value="/logs/3003.log",
                     end_time_value="2026-04-11 10:01:00",
                     duration_value="8s",
                 ),
@@ -548,6 +551,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": "2026-04-11 10:00:00",
             "endTime": None,
             "duration": "15s",
+            "logAvailable": True,
         }
     ]
     assert data["queuedTasks"] == [
@@ -562,6 +566,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": None,
             "endTime": None,
             "duration": None,
+            "logAvailable": False,
         }
     ]
     assert data["failedTasks"] == [
@@ -576,6 +581,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": None,
             "endTime": "2026-04-11 10:01:00",
             "duration": "8s",
+            "logAvailable": True,
         }
     ]
     assert data["retriedTasks"] == [
@@ -590,6 +596,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": None,
             "endTime": "2026-04-11 10:01:00",
             "duration": "8s",
+            "logAvailable": True,
         },
         {
             "id": 3004,
@@ -602,6 +609,7 @@ def test_digest_workflow_instance_result_returns_runtime_summary(
             "startTime": None,
             "endTime": "2026-04-11 10:02:00",
             "duration": "3s",
+            "logAvailable": False,
         },
     ]
 
@@ -619,6 +627,132 @@ def test_get_workflow_instance_result_reports_missing_instance(
 
     with pytest.raises(NotFoundError, match="was not found"):
         workflow_instance_service.get_workflow_instance_result(999)
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        workflow_instance_service.get_workflow_instance_result,
+        workflow_instance_service.digest_workflow_instance_result,
+        workflow_instance_service.watch_workflow_instance_result,
+    ],
+)
+def test_workflow_instance_reads_preserve_ambiguous_v2_lookup_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    operation: Callable[..., object],
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=10116,
+        result_message="query workflow instance by id error:null",
+    )
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_workflow_instance_adapter, "get", fail_get)
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(ApiResultError) as exc_info:
+        operation(999)
+
+    assert exc_info.value is upstream_error
+
+
+def test_workflow_instance_read_preserves_non_missing_v2_fallback_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=10116,
+        result_message="query workflow instance by id error:database unavailable",
+    )
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_workflow_instance_adapter, "get", fail_get)
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(ApiResultError) as exc_info:
+        workflow_instance_service.get_workflow_instance_result(999)
+
+    assert exc_info.value is upstream_error
+
+
+@pytest.mark.parametrize("result_code", [30001, 30002])
+def test_get_workflow_instance_result_translates_permission_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    result_code: int,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=result_code,
+        result_message="workflow instance lookup failed",
+    )
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_workflow_instance_adapter, "get", fail_get)
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        workflow_instance_service.get_workflow_instance_result(901)
+
+    assert exc_info.value.details == {
+        "resource": "workflow-instance",
+        "id": 901,
+    }
+    assert exc_info.value.suggestion == (
+        "Ask a DolphinScheduler administrator to grant access to the workflow "
+        "instance's project, then retry."
+    )
+
+
+def test_get_workflow_instance_result_preserves_unknown_api_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=999999,
+        result_message="workflow instance lookup failed",
+    )
+
+    def fail_get(*, workflow_instance_id: int) -> FakeWorkflowInstance:
+        del workflow_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_workflow_instance_adapter, "get", fail_get)
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(ApiResultError) as exc_info:
+        workflow_instance_service.get_workflow_instance_result(901)
+
+    assert exc_info.value is upstream_error
 
 
 def test_stop_workflow_instance_result_requests_stop_and_returns_refresh(
@@ -703,6 +837,53 @@ def test_rerun_workflow_instance_result_reports_runtime_control_conflict(
         "`dsctl workflow-instance watch ID` to inspect the current state, wait "
         "for the active runtime control command to finish, then retry "
         "`dsctl workflow-instance rerun ID`."
+    )
+
+
+def test_rerun_workflow_instance_result_maps_missing_master_to_invalid_state(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    result_message = "master does not exist"
+
+    def rerun_without_master(*, workflow_instance_id: int) -> None:
+        del workflow_instance_id
+        raise ApiResultError(
+            result_code=10025,
+            result_message=result_message,
+        )
+
+    monkeypatch.setattr(
+        fake_workflow_instance_adapter,
+        "rerun",
+        rerun_without_master,
+    )
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_instance_service.rerun_workflow_instance_result(902)
+
+    assert exc_info.value.details == {
+        "resource": "workflow-instance",
+        "id": 902,
+        "action": "rerun",
+        "operation": "workflow-instance.rerun",
+    }
+    assert exc_info.value.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "result",
+        "result_code": 10025,
+        "result_message": result_message,
+    }
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed, then retry `dsctl workflow-instance rerun ID`."
     )
 
 
@@ -802,7 +983,7 @@ def test_watch_workflow_instance_result_times_out(
         )
     assert exc_info.value.suggestion == (
         "Retry with a larger --timeout-seconds value or inspect the current "
-        "state with `workflow-instance get 901`."
+        "state with `dsctl workflow-instance get 901`."
     )
 
 
@@ -948,6 +1129,57 @@ def test_execute_task_in_workflow_instance_result_requires_online_definition(
     )
 
 
+def test_execute_task_preserves_unrelated_missing_master_code(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    task_adapter = FakeTaskAdapter(
+        workflow_tasks={
+            101: [
+                FakeTaskDefinition(
+                    code=201,
+                    name="extract",
+                    project_code_value=7,
+                )
+            ]
+        }
+    )
+
+    def execute_task_error(
+        *,
+        project_code: int,
+        workflow_instance_id: int,
+        task_code: int,
+        scope: str,
+    ) -> None:
+        del project_code, workflow_instance_id, task_code, scope
+        raise ApiResultError(
+            result_code=10025,
+            result_message="master does not exist",
+        )
+
+    monkeypatch.setattr(
+        fake_workflow_instance_adapter,
+        "execute_task",
+        execute_task_error,
+    )
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_adapter=task_adapter,
+    )
+
+    with pytest.raises(ApiResultError, match="master does not exist") as exc_info:
+        workflow_instance_service.execute_task_in_workflow_instance_result(
+            902,
+            task="extract",
+        )
+
+    assert exc_info.value.result_code == 10025
+
+
 def test_recover_failed_workflow_instance_result_requests_recovery(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -977,6 +1209,53 @@ def test_recover_failed_workflow_instance_result_requests_recovery(
 
     assert workflow_instance_adapter.recovered_failed_ids == [903]
     assert data["state"] == "RUNNING_EXECUTION"
+
+
+def test_recover_failed_workflow_instance_maps_missing_master(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+) -> None:
+    workflow_instance_adapter = FakeWorkflowInstanceAdapter(
+        workflow_instances=[
+            FakeWorkflowInstance(
+                id=903,
+                workflow_definition_code_value=101,
+                workflow_definition_version_value=1,
+                project_code_value=7,
+                state_value=FakeEnumValue("FAILURE"),
+                run_times_value=1,
+                name="daily-sync-903",
+                executor_id_value=11,
+            )
+        ]
+    )
+
+    def recover_without_master(*, workflow_instance_id: int) -> None:
+        del workflow_instance_id
+        raise ApiResultError(
+            result_code=10025,
+            result_message="master does not exist",
+        )
+
+    monkeypatch.setattr(
+        workflow_instance_adapter,
+        "recover_failed",
+        recover_without_master,
+    )
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=workflow_instance_adapter,
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_instance_service.recover_failed_workflow_instance_result(903)
+
+    assert exc_info.value.details["operation"] == "workflow-instance.recover-failed"
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed, then retry `dsctl workflow-instance recover-failed ID`."
+    )
 
 
 def test_recover_failed_workflow_instance_result_rejects_non_failure_state(
@@ -1272,6 +1551,52 @@ patch:
     assert data["timeout"] == 45
     assert result.resolved["syncDefine"] is True
     assert _mapping(result.resolved["workflow"])["version"] == 2
+
+
+def test_edit_workflow_instance_allocates_codes_for_new_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    task_adapter = FakeTaskAdapter(
+        workflow_tasks={},
+        generated_codes=[8_201],
+    )
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_adapter=task_adapter,
+    )
+    patch_file = tmp_path / "workflow-instance.patch.yaml"
+    patch_file.write_text(
+        """
+patch:
+  tasks:
+    create:
+      - name: verify
+        type: SHELL
+        command: echo verify
+        depends_on: [load]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    workflow_instance_service.edit_workflow_instance_result(
+        902,
+        patch=patch_file,
+    )
+    definition_payload = json.loads(
+        str(fake_workflow_instance_adapter.update_calls[0]["task_definition_json"])
+    )
+
+    assert task_adapter.generate_code_calls == [{"project_code": 7, "count": 1}]
+    assert [(task["name"], task["code"]) for task in definition_payload] == [
+        ("extract", 201),
+        ("load", 202),
+        ("verify", 8_201),
+    ]
 
 
 def test_edit_workflow_instance_result_dry_run_compiles_full_file(

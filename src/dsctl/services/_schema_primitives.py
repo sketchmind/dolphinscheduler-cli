@@ -2,6 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
+from dsctl.command_contract import (
+    CommandContract,
+    GlobalOptionContract,
+    InputContract,
+    MissingDefault,
+    ValueResolution,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -92,6 +100,9 @@ def command(
     options: list[dict[str, object]] | None = None,
     payload: JsonObject | None = None,
     payload_schema: JsonObject | None = None,
+    mutates: bool | None = None,
+    mutation_target: str | None = None,
+    remote_requests: bool | None = None,
 ) -> dict[str, object]:
     """Build one schema command payload."""
     data: JsonObject = {
@@ -106,7 +117,120 @@ def command(
         data["payload"] = payload
     if payload_schema is not None:
         data["payload_schema"] = payload_schema
+    if mutates is not None:
+        data["mutates"] = mutates
+    if mutation_target is not None:
+        data["mutation_target"] = mutation_target
+    if remote_requests is not None:
+        data["remote_requests"] = remote_requests
     return cast("dict[str, object]", data)
+
+
+def command_from_contract(contract: CommandContract) -> JsonObject:
+    """Project one canonical command contract into the stable schema shape."""
+    return cast(
+        "JsonObject",
+        command(
+            contract.name,
+            action=contract.action,
+            summary=contract.summary,
+            arguments=cast(
+                "list[dict[str, object]]",
+                [_argument_from_contract(item) for item in contract.arguments],
+            ),
+            options=cast(
+                "list[dict[str, object]]",
+                [option_from_contract(item) for item in contract.options],
+            ),
+        ),
+    )
+
+
+def bounded_global_option_from_contract(
+    contract: GlobalOptionContract,
+) -> JsonObject:
+    """Project one root option into the bounded invocation schema."""
+    data: JsonObject = {
+        "flag": contract.flag,
+        "placement": "anywhere",
+    }
+    input_contract = contract.input
+    if input_contract.value_name is not None:
+        data["value_name"] = input_contract.value_name
+    if input_contract.choices:
+        data["choices"] = list(input_contract.choices)
+    if input_contract.normalization != "identity":
+        data["normalization"] = input_contract.normalization
+    if not isinstance(input_contract.fixed_default, MissingDefault):
+        data["default"] = cast("JsonValue", input_contract.fixed_default)
+    if input_contract.value_type == "boolean":
+        data["type"] = "boolean"
+    if contract.requirement is not None:
+        required_name, required_value = contract.requirement
+        data["requires"] = {f"--{required_name}": required_value}
+    return data
+
+
+def full_global_option_from_contract(
+    contract: GlobalOptionContract,
+) -> JsonObject:
+    """Project one root option into the expanded schema representation."""
+    input_contract = contract.input
+    data = option_from_contract(input_contract)
+    data["placement"] = "anywhere"
+    if contract.requirement is not None:
+        required_name, required_value = contract.requirement
+        data["requires"] = {f"--{required_name}": required_value}
+    return data
+
+
+def _argument_from_contract(contract: InputContract) -> JsonObject:
+    return cast(
+        "JsonObject",
+        argument(
+            contract.name,
+            value_type=contract.value_type,
+            description=contract.description,
+            required=contract.required,
+            selector=contract.selector,
+            choices=contract.choices or None,
+            discovery_command=contract.discovery_command,
+        ),
+    )
+
+
+def option_from_contract(contract: InputContract) -> JsonObject:
+    """Project one canonical option, preserving explicit null defaults."""
+    data = cast(
+        "JsonObject",
+        option(
+            contract.name,
+            value_type=contract.value_type,
+            description=contract.description,
+            required=contract.required,
+            value_name=contract.value_name,
+            selector=contract.selector,
+            choices=contract.choices or None,
+            multiple=contract.multiple,
+            discovery_command=contract.discovery_command,
+            resolution=contract.resolution,
+            normalization=(
+                None if contract.normalization == "identity" else contract.normalization
+            ),
+        ),
+    )
+    if not isinstance(contract.fixed_default, MissingDefault):
+        data["default"] = cast("JsonValue", contract.fixed_default)
+    if contract.path_rules is not None:
+        rules = contract.path_rules
+        data["input_policy"] = {
+            "exists": rules.exists,
+            "file_okay": rules.file_okay,
+            "dir_okay": rules.dir_okay,
+            "readable": rules.readable,
+            "resolve_path": rules.resolve_path,
+        }
+    return data
 
 
 def argument(
@@ -150,6 +274,10 @@ def option(
     examples: Sequence[str] | None = None,
     supported_keys: Sequence[str] | None = None,
     discovery_command: str | None = None,
+    placement: str | None = None,
+    minimum: int | None = None,
+    resolution: ValueResolution | None = None,
+    normalization: str | None = None,
 ) -> dict[str, object]:
     """Build one schema option payload."""
     data: dict[str, object] = {
@@ -160,12 +288,21 @@ def option(
         "required": required,
         "description": description,
     }
-    if default is not None:
-        data["default"] = default
-    if value_name is not None:
-        data["value_name"] = value_name
-    if selector is not None:
-        data["selector"] = selector
+    data.update(
+        {
+            key: value
+            for key, value in (
+                ("default", default),
+                ("value_name", value_name),
+                ("selector", selector),
+                ("discovery_command", discovery_command),
+                ("placement", placement),
+                ("minimum", minimum),
+                ("normalization", normalization),
+            )
+            if value is not None
+        }
+    )
     if choices is not None:
         data["choices"] = list(choices)
     if multiple:
@@ -174,6 +311,9 @@ def option(
         data["examples"] = list(examples)
     if supported_keys is not None:
         data["supported_keys"] = list(supported_keys)
-    if discovery_command is not None:
-        data["discovery_command"] = discovery_command
+    if resolution is not None:
+        data["resolution"] = {
+            "precedence": list(resolution.precedence),
+            "fallback": resolution.fallback,
+        }
     return data

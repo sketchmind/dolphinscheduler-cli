@@ -27,7 +27,8 @@ PROJECT_HELP = (
 SCHEDULE_ID_HELP = "Schedule id. Use `dsctl schedule list` to discover values."
 WORKFLOW_HELP = (
     "Workflow name or code. Run `dsctl workflow list` in the selected project "
-    "to discover values; falls back to workflow context."
+    "to discover values. When omitted, uses workflow context only when project "
+    "also comes from context; otherwise pass --workflow."
 )
 
 
@@ -143,7 +144,11 @@ def preview_command(
         str | None,
         typer.Option(
             "--project",
-            help=PROJECT_HELP,
+            help=(
+                "Project name or code for ad hoc preview only. When schedule_id "
+                "is omitted, falls back to stored project context; do not pass "
+                "--project with schedule_id."
+            ),
         ),
     ] = None,
     cron: Annotated[
@@ -213,9 +218,11 @@ def explain_command(
         typer.Option(
             "--workflow",
             help=(
-                "Workflow name or code. Run `dsctl workflow list` in the "
-                "selected project to discover values; falls back to workflow "
-                "context for create explain."
+                "Workflow name or code for create explain only. Run `dsctl "
+                "workflow list` in the selected project to discover values. "
+                "When SCHEDULE_ID is omitted, uses workflow context only when "
+                "project also comes from context; do not pass --workflow with "
+                "SCHEDULE_ID."
             ),
         ),
     ] = None,
@@ -223,7 +230,12 @@ def explain_command(
         str | None,
         typer.Option(
             "--project",
-            help=PROJECT_HELP,
+            help=(
+                "Project name or code for create explain only. Run `dsctl "
+                "project list` to discover values. When SCHEDULE_ID is omitted, "
+                "falls back to stored project context; do not pass --project "
+                "with SCHEDULE_ID."
+            ),
         ),
     ] = None,
     cron: Annotated[
@@ -317,10 +329,11 @@ def explain_command(
             "--environment-code",
             min=0,
             help=(
-                "Environment code for create explain or updated value for "
-                "update explain. Create explain can also inherit enabled "
-                "project preference when omitted; run `dsctl environment list` "
-                "to discover values."
+                "Environment selection for create or update explain. For create, "
+                "omit to allow enabled project preference and pass 0 to "
+                "explicitly use no environment. For update, omit to preserve the "
+                "current value and pass 0 to clear it. Run `dsctl environment "
+                "list` to discover positive codes."
             ),
         ),
     ] = None,
@@ -455,9 +468,10 @@ def create_command(
             "--environment-code",
             min=0,
             help=(
-                "Environment code. Omit to keep the CLI fallback chain, "
-                "including enabled project preference; run `dsctl environment "
-                "list` to discover values."
+                "Environment selection. Omit to allow enabled project preference "
+                "and otherwise create without an environment; pass 0 to "
+                "explicitly use no environment and bypass project preference. "
+                "Run `dsctl environment list` to discover positive codes."
             ),
         ),
     ] = None,
@@ -581,8 +595,9 @@ def update_command(
             "--environment-code",
             min=0,
             help=(
-                "Updated environment code. Run `dsctl environment list` to "
-                "discover values; omit to keep the current value."
+                "Updated environment selection. Omit to keep the current value; "
+                "pass 0 to clear the environment. Run `dsctl environment list` "
+                "to discover positive codes."
             ),
         ),
     ] = None,

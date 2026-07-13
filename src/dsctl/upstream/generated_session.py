@@ -1,0 +1,304 @@
+from __future__ import annotations
+
+import re
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, TypeGuard, cast
+from urllib.parse import urlsplit
+
+from pydantic import ValidationError
+
+from dsctl.errors import ApiResultError, ApiTransportError
+
+if TYPE_CHECKING:
+    from typing import NoReturn, Unpack
+
+    from dsctl.client import (
+        DolphinSchedulerClient,
+        HttpFormValue,
+        HttpQueryParams,
+        HttpQueryValue,
+        HttpRequestData,
+        MultipartFiles,
+    )
+    from dsctl.generated.versions.ds_3_4_1.api.operations._base import RequestKwargs
+    from dsctl.support.json_types import JsonObject, JsonValue
+
+
+class GeneratedSessionAdapter:
+    """Adapt the shared `DolphinSchedulerClient` to the generated session protocol."""
+
+    def __init__(self, client: DolphinSchedulerClient, *, base_url: str) -> None:
+        """Create a generated-session bridge over one shared HTTP client."""
+        self._client = client
+        self._base_url = base_url.rstrip("/")
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        **kwargs: Unpack[RequestKwargs],
+    ) -> JsonValue:
+        """Route a generated operation call through the shared HTTP client."""
+        try:
+            relative_path = _relative_path(url, base_url=self._base_url)
+            params = _query_params_or_none(kwargs.pop("params", None))
+            json_body = _json_value_or_none(kwargs.pop("json", None))
+            form_data = _request_data_or_none(kwargs.pop("data", None))
+            content = kwargs.pop("content", None)
+            files = _multipart_files_or_none(kwargs.pop("files", None))
+            _reject_unexpected_request_kwargs(kwargs)
+            payload = self._client.request_payload(
+                method,
+                relative_path,
+                params=params,
+                json_body=json_body,
+                form_data=form_data,
+                content=content,
+                files=files,
+                headers=headers,
+            )
+        except TypeError as exc:
+            message = f"Generated request shape did not match adapter contract: {exc}"
+            raise ApiTransportError(
+                message,
+                details={
+                    "method": method.upper(),
+                    "url": url,
+                },
+            ) from exc
+        return payload
+
+    def raise_payload_error(
+        self,
+        message: str,
+        *,
+        validation_error_count: int | None = None,
+        cause: Exception | None = None,
+    ) -> NoReturn:
+        """Translate one generated response-contract failure."""
+        details: JsonObject = {"validation_message": message}
+        cause_error_count = (
+            cause.error_count() if isinstance(cause, ValidationError) else None
+        )
+        effective_error_count = (
+            cause_error_count
+            if cause_error_count is not None
+            else validation_error_count
+        )
+        if effective_error_count is not None:
+            details["validation_error_count"] = effective_error_count
+        validation_errors = _bounded_validation_errors(cause)
+        if validation_errors:
+            details["validation_errors"] = validation_errors
+        if cause_error_count is not None and cause_error_count > _MAX_VALIDATION_ERRORS:
+            details["validation_errors_truncated"] = True
+        error = ApiTransportError(
+            (
+                "DolphinScheduler response payload did not match the generated "
+                "API contract."
+            ),
+            details=details,
+            source={
+                "kind": "remote",
+                "system": "dolphinscheduler",
+                "layer": "response",
+            },
+            suggestion=(
+                "Verify DS_VERSION matches the server, check DolphinScheduler "
+                "API health, then retry."
+            ),
+        )
+        if cause is None:
+            raise error
+        raise error from cause
+
+    def raise_result_error(
+        self,
+        *,
+        code: int | None,
+        message: str,
+        data: JsonValue,
+    ) -> NoReturn:
+        """Translate one generated DS result-envelope failure."""
+        raise ApiResultError(
+            result_code=code,
+            result_message=message,
+            data=data,
+        )
+
+
+_MAX_VALIDATION_ERRORS = 5
+_MAX_VALIDATION_PATH_PARTS = 12
+_MAX_VALIDATION_PATH_CHARS = 256
+_SAFE_VALIDATION_PATH_PART = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}\Z")
+
+
+def _bounded_validation_errors(cause: Exception | None) -> list[JsonObject]:
+    """Return bounded, value-free Pydantic error facts for CLI diagnostics."""
+    if not isinstance(cause, ValidationError):
+        return []
+    if cause.error_count() > _MAX_VALIDATION_ERRORS:
+        return []
+    errors = cause.errors(
+        include_url=False,
+        include_context=False,
+        include_input=False,
+    )
+    return [
+        {
+            "field": _validation_field_path(error.get("loc", ())),
+            "type": str(error.get("type", "unknown")),
+            "message": _safe_validation_message(str(error.get("type", "unknown"))),
+        }
+        for error in errors
+    ]
+
+
+def _safe_validation_message(error_type: str) -> str:
+    """Return a static diagnostic that cannot echo a rejected response value."""
+    if error_type == "missing":
+        return "Required response field is missing."
+    if error_type == "enum":
+        return "Response value is not an allowed enum member."
+    if error_type == "literal_error":
+        return "Response value does not match the required literal."
+    if error_type.endswith("_type"):
+        return "Response value has the wrong type."
+    return "Response value does not match the generated field contract."
+
+
+def _validation_field_path(location: Sequence[str | int]) -> str:
+    """Render one Pydantic location as a compact dotted/indexed field path."""
+    path = ""
+    for part in location[:_MAX_VALIDATION_PATH_PARTS]:
+        if isinstance(part, int):
+            path += f"[{part}]"
+            continue
+        text = (
+            part
+            if _SAFE_VALIDATION_PATH_PART.fullmatch(part) is not None
+            else "<dynamic-key>"
+        )
+        path += f".{text}" if path else text
+    if len(location) > _MAX_VALIDATION_PATH_PARTS:
+        path += ".<truncated>"
+    if len(path) > _MAX_VALIDATION_PATH_CHARS:
+        path = f"{path[: _MAX_VALIDATION_PATH_CHARS - 3]}..."
+    return path or "$"
+
+
+def _relative_path(url: str, *, base_url: str) -> str:
+    if url == base_url:
+        return ""
+    prefix = f"{base_url}/"
+    if url.startswith(prefix):
+        return url.removeprefix(prefix)
+    return urlsplit(url).path.lstrip("/")
+
+
+def _query_params_or_none(value: object) -> HttpQueryParams | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        message = f"Expected query param mapping, got {type(value)!r}"
+        raise TypeError(message)
+    cleaned: dict[str, HttpQueryValue] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            message = f"Expected string query param key, got {type(key)!r}"
+            raise TypeError(message)
+        if _is_http_query_scalar(item):
+            cleaned[key] = item
+            continue
+        if isinstance(item, Sequence) and not isinstance(
+            item,
+            (str, bytes, bytearray),
+        ):
+            sequence = list(item)
+            if all(_is_http_query_scalar(entry) for entry in sequence):
+                cleaned[key] = sequence
+                continue
+        message = f"Unsupported query param value type for {key!r}: {type(item)!r}"
+        raise TypeError(message)
+    return cleaned
+
+
+def _request_data_or_none(
+    value: object,
+) -> HttpRequestData | None:
+    if value is None:
+        return None
+    if isinstance(value, Mapping):
+        cleaned: dict[str, HttpFormValue] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                message = f"Expected string form field key, got {type(key)!r}"
+                raise TypeError(message)
+            if _is_http_form_scalar(item):
+                cleaned[key] = item
+                continue
+            if isinstance(item, Sequence) and not isinstance(
+                item,
+                (str, bytes, bytearray),
+            ):
+                sequence = list(item)
+                if all(_is_http_form_scalar(entry) for entry in sequence):
+                    cleaned[key] = sequence
+                    continue
+            message = f"Unsupported form field value type for {key!r}: {type(item)!r}"
+            raise TypeError(message)
+        return cleaned
+    if isinstance(value, str | bytes | bytearray):
+        return value
+    message = f"Expected request data payload, got {type(value)!r}"
+    raise TypeError(message)
+
+
+def _multipart_files_or_none(value: object) -> MultipartFiles | None:
+    if value is None:
+        return None
+    if isinstance(value, Mapping):
+        return cast("MultipartFiles", value)
+    message = f"Expected multipart file mapping, got {type(value)!r}"
+    raise TypeError(message)
+
+
+def _reject_unexpected_request_kwargs(kwargs: RequestKwargs) -> None:
+    if not kwargs:
+        return
+    keys = ", ".join(sorted(kwargs))
+    message = f"Unsupported generated request arguments: {keys}"
+    raise TypeError(message)
+
+
+def _json_value_or_none(value: object) -> JsonValue | None:
+    if value is None:
+        return None
+    if _is_json_value(value):
+        return value
+    message = f"Expected JSON payload, got {type(value)!r}"
+    raise TypeError(message)
+
+
+def _is_json_value(value: object) -> TypeGuard[JsonValue]:
+    if value is None or isinstance(value, str | int | float | bool):
+        return True
+    if isinstance(value, Mapping):
+        return all(
+            isinstance(key, str) and _is_json_value(item) for key, item in value.items()
+        )
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return all(_is_json_value(item) for item in value)
+    return False
+
+
+def _is_http_query_scalar(value: object) -> bool:
+    return value is None or isinstance(value, str | int | float | bool)
+
+
+def _is_http_form_scalar(value: object) -> bool:
+    return value is None or isinstance(value, str | bytes | int | float | bool)
+
+
+__all__ = ["GeneratedSessionAdapter"]

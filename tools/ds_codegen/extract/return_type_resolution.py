@@ -16,6 +16,20 @@ if TYPE_CHECKING:
     from ds_codegen.ir import ResponseProjection
 
 
+# The legacy scheduler controller returns raw Result, while its service stores the
+# created Schedule under Constants.DATA_LIST via scheduleMapper.selectById(...).
+# BaseMapper lives outside the upstream checkout, so AST inference cannot recover
+# that inherited generic return type. Keep this source-grounded correction local
+# to the one imprecise controller operation instead of weakening generated types.
+_OPERATION_LOGICAL_RETURN_TYPE_CORRECTIONS = {
+    "SchedulerController.createSchedule": (
+        "Result",
+        "SchedulerServiceImpl_insertSchedule_result",
+        "Schedule",
+    ),
+}
+
+
 def unwrap_result_like_type(java_type: str) -> str | None:
     """Return the payload type for direct result-like wrappers."""
 
@@ -30,6 +44,7 @@ def unwrap_result_like_type(java_type: str) -> str | None:
 
 def resolve_operation_logical_return_type(
     *,
+    operation_id: str,
     repo_root: Path,
     raw_return_type: str,
     inferred_return_type: str | None,
@@ -37,6 +52,20 @@ def resolve_operation_logical_return_type(
     package_name: str | None,
 ) -> str:
     """Resolve the logical payload returned by an operation after DS envelope unwrap."""
+
+    correction = _OPERATION_LOGICAL_RETURN_TYPE_CORRECTIONS.get(operation_id)
+    if correction is not None:
+        expected_raw_type, expected_inferred_type, corrected_return_type = correction
+        if (raw_return_type, inferred_return_type) != (
+            expected_raw_type,
+            expected_inferred_type,
+        ):
+            message = (
+                f"{operation_id} return-type correction no longer matches "
+                "the expected upstream controller/service shape"
+            )
+            raise RuntimeError(message)
+        return corrected_return_type
 
     direct_payload_type = unwrap_result_like_type(raw_return_type)
     if inferred_return_type is not None and not _is_weak_logical_type_candidate(

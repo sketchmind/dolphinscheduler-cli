@@ -92,23 +92,21 @@ def test_cluster_create_command_returns_created_cluster() -> None:
     assert payload["data"]["config"] == "kube-ops"
 
 
-def test_cluster_create_command_accepts_config_file() -> None:
-    with runner.isolated_filesystem():
-        config = '{"k8s":"config","yarn":""}'
-        with Path("cluster-config.json").open("w", encoding="utf-8") as handle:
-            handle.write(config)
+def test_cluster_create_command_accepts_config_file(isolated_cwd: Path) -> None:
+    config = '{"k8s":"config","yarn":""}'
+    (isolated_cwd / "cluster-config.json").write_text(config, encoding="utf-8")
 
-        result = runner.invoke(
-            app,
-            [
-                "cluster",
-                "create",
-                "--name",
-                "ops",
-                "--config-file",
-                "cluster-config.json",
-            ],
-        )
+    result = runner.invoke(
+        app,
+        [
+            "cluster",
+            "create",
+            "--name",
+            "ops",
+            "--config-file",
+            "cluster-config.json",
+        ],
+    )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -119,7 +117,7 @@ def test_cluster_create_command_requires_one_config_source() -> None:
     result = runner.invoke(app, ["cluster", "create", "--name", "ops"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "cluster.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -128,27 +126,30 @@ def test_cluster_create_command_requires_one_config_source() -> None:
     )
 
 
-def test_cluster_create_command_rejects_conflicting_config_sources() -> None:
-    with runner.isolated_filesystem():
-        with Path("cluster-config.json").open("w", encoding="utf-8") as handle:
-            handle.write('{"k8s":"","yarn":""}')
+def test_cluster_create_command_rejects_conflicting_config_sources(
+    isolated_cwd: Path,
+) -> None:
+    (isolated_cwd / "cluster-config.json").write_text(
+        '{"k8s":"","yarn":""}',
+        encoding="utf-8",
+    )
 
-        result = runner.invoke(
-            app,
-            [
-                "cluster",
-                "create",
-                "--name",
-                "ops",
-                "--config",
-                "{}",
-                "--config-file",
-                "cluster-config.json",
-            ],
-        )
+    result = runner.invoke(
+        app,
+        [
+            "cluster",
+            "create",
+            "--name",
+            "ops",
+            "--config",
+            "{}",
+            "--config-file",
+            "cluster-config.json",
+        ],
+    )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Pass inline config with --config or read it from --config-file."
@@ -174,22 +175,20 @@ def test_cluster_update_command_returns_updated_cluster() -> None:
     assert payload["data"]["config"] == "kube-changed"
 
 
-def test_cluster_update_command_accepts_config_file() -> None:
-    with runner.isolated_filesystem():
-        config = '{"k8s":"changed","yarn":""}'
-        with Path("cluster-config.json").open("w", encoding="utf-8") as handle:
-            handle.write(config)
+def test_cluster_update_command_accepts_config_file(isolated_cwd: Path) -> None:
+    config = '{"k8s":"changed","yarn":""}'
+    (isolated_cwd / "cluster-config.json").write_text(config, encoding="utf-8")
 
-        result = runner.invoke(
-            app,
-            [
-                "cluster",
-                "update",
-                "k8s-prod",
-                "--config-file",
-                "cluster-config.json",
-            ],
-        )
+    result = runner.invoke(
+        app,
+        [
+            "cluster",
+            "update",
+            "k8s-prod",
+            "--config-file",
+            "cluster-config.json",
+        ],
+    )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -210,7 +209,7 @@ def test_cluster_update_command_rejects_conflicting_description_flags() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "cluster.update"
     assert payload["error"]["type"] == "user_input_error"
 
@@ -219,7 +218,7 @@ def test_cluster_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["cluster", "delete", "k8s-prod"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "cluster.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

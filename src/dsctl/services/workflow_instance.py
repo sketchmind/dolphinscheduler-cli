@@ -15,6 +15,7 @@ from dsctl.errors import (
 from dsctl.output import CommandResult, dry_run_result, require_json_object
 from dsctl.services._runtime_support import (
     get_workflow_instance,
+    master_unavailable_error,
     require_workflow_definition_code,
     require_workflow_instance_project_code,
 )
@@ -24,6 +25,10 @@ from dsctl.services._serialization import (
     optional_text,
     serialize_task_instance,
     serialize_workflow_instance,
+)
+from dsctl.services._task_code_allocation import (
+    allocate_server_task_codes,
+    preview_task_codes,
 )
 from dsctl.services._validation import (
     optional_ds_datetime,
@@ -71,6 +76,7 @@ from dsctl.upstream.runtime_enums import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from dsctl.models.workflow_patch import WorkflowPatchSpec
@@ -311,10 +317,12 @@ def watch_workflow_instance_result(
     normalized_interval_seconds = require_positive_int(
         interval_seconds,
         label="interval_seconds",
+        input_hint="--interval-seconds",
     )
     normalized_timeout_seconds = require_non_negative_int(
         timeout_seconds,
         label="timeout_seconds",
+        input_hint="--timeout-seconds",
     )
     return run_with_service_runtime(
         env_file,
@@ -672,6 +680,7 @@ def _export_workflow_instance_yaml_result(
             yaml=workflow_yaml_document(
                 dag,
                 project=resolved_project,
+                attached_schedule=None,
             )
         ),
         label="workflow-instance yaml export",
@@ -1106,6 +1115,7 @@ def _edit_workflow_instance_result(
         project=resolved_project,
         patch=patch,
         spec=spec,
+        allocate_task_codes=preview_task_codes,
     )
     compiled_payload = mutation.payload
     merged_spec = mutation.merged_spec
@@ -1176,6 +1186,19 @@ def _edit_workflow_instance_result(
         workflow_code=require_workflow_definition_code(payload.workflowDefinitionCode),
         sync_definition=sync_definition,
     )
+
+    compiled_payload = _compile_workflow_instance_edit_mutation(
+        dag=dag,
+        project=resolved_project,
+        patch=patch,
+        spec=spec,
+        allocate_task_codes=lambda count: allocate_server_task_codes(
+            count,
+            adapter=runtime.upstream.tasks,
+            project_code=project_code,
+            action="workflow-instance.edit",
+        ),
+    ).payload
 
     try:
         saved_workflow = runtime.upstream.workflow_instances.update(
@@ -1263,7 +1286,7 @@ def _watch_workflow_instance_result(
                 suggestion=(
                     "Retry with a larger --timeout-seconds value or inspect the "
                     "current state with "
-                    f"`workflow-instance get {workflow_instance_id}`."
+                    f"`dsctl workflow-instance get {workflow_instance_id}`."
                 ),
             )
         time.sleep(interval_seconds)
@@ -1350,6 +1373,22 @@ def _raise_workflow_instance_action_error(
     task_code: int | None = None,
 ) -> None:
     command = _workflow_instance_action_command(action)
+    if action in {"rerun", "recover-failed"}:
+        unavailable = master_unavailable_error(
+            exc,
+            operation=f"workflow-instance.{action}",
+            details={
+                "resource": WORKFLOW_INSTANCE_RESOURCE,
+                "id": workflow_instance_id,
+                "action": action,
+            },
+            suggestion=(
+                "Run `dsctl monitor server master` and wait until at least one "
+                f"master is listed, then retry `{command}`."
+            ),
+        )
+        if unavailable is not None:
+            raise unavailable from exc
     if exc.result_code == WORKFLOW_INSTANCE_EXECUTING_COMMAND:
         message = (
             "This workflow instance is already executing another runtime control "
@@ -1518,10 +1557,12 @@ def _compile_workflow_instance_edit_mutation(
     project: ResolvedProject,
     patch: WorkflowPatchSpec | None,
     spec: WorkflowSpec | None,
+    allocate_task_codes: Callable[[int], Sequence[int]],
 ) -> WorkflowMutationPlan:
     if patch is not None:
         return compile_workflow_mutation_plan(
             dag,
+            allocate_task_codes=allocate_task_codes,
             project=project,
             patch=patch,
             release_state=None,
@@ -1533,6 +1574,7 @@ def _compile_workflow_instance_edit_mutation(
         raise RuntimeError(message)
     mutation = compile_workflow_file_mutation_plan(
         dag,
+        allocate_task_codes=allocate_task_codes,
         project=project,
         desired=spec,
         release_state=None,

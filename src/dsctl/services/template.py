@@ -298,7 +298,7 @@ def parameter_syntax_index_data() -> ParameterSyntaxIndexData:
         "recommended_flow": [
             "Run `dsctl template params` first and select only the needed topic.",
             "Run `dsctl template task TYPE --variant params` for task-specific YAML.",
-            "Run `dsctl task-type schema TYPE` for full task field rules.",
+            "Run `dsctl task-type schema TYPE` for bounded task field rules.",
             "Run `dsctl lint workflow FILE` before sending the workflow to DS.",
             "Run `dsctl workflow create --file FILE --dry-run` before mutation.",
         ],
@@ -576,21 +576,36 @@ def _parameter_context_topic_data() -> ParameterContextTopicDetails:
             "startup": "Runtime parameters passed when starting a workflow.",
         },
         "priority": [
+            "Upstream Output / VarPool",
             "Startup Parameter",
             "Local Parameter",
-            "Parameter Context",
             "Global Parameter",
+            "Project Parameter",
+            "Built-in Parameter",
         ],
         "rules": [
             "Upstream-to-downstream passing is one-way along dependencies.",
             (
                 "For DS 3.3+ behavior, downstream tasks should declare an IN "
-                "parameter with the same prop to consume an upstream OUT value."
+                "parameter with the same prop to consume an upstream OUT value; "
+                "the upstream varPool value then overrides its local fallback."
             ),
             ("If no dependency path exists, local parameters are not passed upstream."),
             (
-                "A downstream local parameter with the same name overrides "
-                "upstream context."
+                "A self-referential local value such as prop=label and "
+                "value=${label} shadows the same-name global and can create a "
+                "circular placeholder; omit it to consume the global directly."
+            ),
+            (
+                "A child workflow automatically receives parent workflow globals, "
+                "startup parameters, and the parent workflow-instance varPool as "
+                "child startup parameters; matching child global defaults are "
+                "overridden."
+            ),
+            (
+                "SUB_WORKFLOW localParams do not become child inputs in DS 3.4.1; "
+                "set values supplied by a parent on that parent workflow or pass "
+                "them when starting it. Keep standalone defaults on the child."
             ),
         ],
     }
@@ -1285,8 +1300,9 @@ def _workflow_instance_patch_template_yaml() -> str:
 
 
 def _workflow_template_yaml(*, with_schedule: bool) -> str:
+    release_state = "ONLINE" if with_schedule else "OFFLINE"
     base = dedent(
-        """\
+        f"""\
         # Workflow YAML template for `dsctl workflow create --file ...`
         workflow:
           name: example-workflow
@@ -1294,9 +1310,9 @@ def _workflow_template_yaml(*, with_schedule: bool) -> str:
           description: Example workflow definition
           timeout: 0
           global_params:
-            bizdate: "${system.biz.date}"
+            bizdate: "${{system.biz.date}}"
           execution_type: PARALLEL
-          release_state: OFFLINE
+          release_state: {release_state}
         tasks:
           - name: extract
             type: SHELL

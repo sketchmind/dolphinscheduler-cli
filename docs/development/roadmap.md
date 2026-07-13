@@ -40,7 +40,7 @@ the upstream adapter compiles, and `dsctl version` works end to end.
 **Done when:**
 ```bash
 dsctl version
-# → {"ok": true, "action": "version", "data": {"cli": "0.2.0", "ds": "3.4.1"}}
+# → {"ok": true, "action": "version", "data": {"cli": "<cli_version>", "ds": "3.4.1"}}
 
 dsctl context
 # → {"ok": true, "action": "context", "data": {"api_url": "...", "project": null, "workflow": null, ...}}
@@ -128,6 +128,10 @@ dsctl use --clear
 - [x] YAML `schedule:` block support during `workflow create`
 - [x] extend task-type coverage for DS logical/compound nodes:
       `SUB_WORKFLOW`, `DEPENDENT`, `SWITCH`, `CONDITIONS`
+- [ ] Deepen workflow compilation into one pure prepared-compilation object
+      that validates once, owns active/unavailable task identities, and can
+      materialize either preview or server-allocated task codes without
+      duplicating phase-order knowledge across mutation services.
 
 **Done when:**
 ```bash
@@ -274,7 +278,13 @@ definitions.
 **Grounding:**
 
 - in DS 3.4.1 schedule is a persisted trigger resource, not a workflow field
-- create/update/get use v2 schedule CRUD APIs
+- get/delete use v2 schedule CRUD APIs
+- create uses v2 when a positive environment code is present and the generated
+  legacy project-scoped operation when the schedule has no environment
+- update uses the generated legacy project-scoped operation because the DS
+  3.4.1 v2 update request cannot faithfully express no-environment schedules or
+  zero-valued fields such as a cleared warning group; an explicitly changed
+  positive environment is validated before mutation
 - list currently uses the legacy project-scoped paging endpoint by design:
   the v2 `filterSchedule` API is global and filters by `projectName like`,
   while the CLI contract for `schedule list` is explicitly "inside one
@@ -299,6 +309,14 @@ definitions.
 - [x] Schedule section in YAML (`workflow.yaml` → `schedule:` block)
 - [x] `dsctl workflow create --file workflow.yaml` auto-creates schedule if
       `schedule:` is present
+- [x] Add one service-internal authoritative attached-schedule lookup seam for
+      workflow get/describe/digest/export/edit/release behavior. DS 3.4.1
+      detail and DAG responses do not join the independently persisted
+      schedule; reads and safety-sensitive mutations fail closed when lookup is
+      unavailable, and selector resolution remains lightweight.
+- [x] Make complete scheduled workflow exports valid full-file edit inputs by
+      verifying `schedule:` as a read-only snapshot before definition compile;
+      schedule changes remain explicit schedule commands.
 
 **Done when:**
 ```bash
@@ -366,22 +384,57 @@ surface.
 - [ ] broader `dsctl explain` for execution-context and parameter reasoning
 - [x] `dsctl lint` for local workflow design-time checks
 - [x] `dsctl doctor` for runtime and governance diagnostics
-- [x] `dsctl schema` — JSON tool definition output for the current stable surface
+- [x] `dsctl schema` — bounded index and action-local JSON contracts, with
+      explicit `--full` expansion for the current stable surface
 - [x] `dsctl enum names`, `dsctl enum list <enum>` — enum value discovery
 - [x] `dsctl task-type list` — live DS task-type discovery with favourite flags
 - [x] `dsctl task-type get|schema` — local task authoring summaries, field
       contracts, state rules, choices, and compile mappings
+- [x] make task authoring discovery progressive: keep one canonical field
+      contract and add explicit field, JSON Schema, compile, and full views
+      instead of repeating the same metadata in one large response
+- [ ] make complex mutation dry-runs semantic by default: return the ordered
+      plan, compiled counts, and resolved selectors; expose raw REST requests
+      through one explicit detail view without duplicating `request` and
+      `requests[0]`
+- [ ] in the next explicit CLI contract version, make list JSON use the
+      registered summary projection by default, keep `get` as full detail, and
+      retain `--columns '*'` as the complete-row escape hatch; do not add
+      resource-specific summary aliases that duplicate list interfaces
+- [x] add bounded lifecycle `next_actions` (two or three command patterns per
+      transition) for create, run, watch, task inspection, and log retrieval
+- [x] add bounded row-fact `action_index` discovery to workflow, schedule,
+      workflow-instance, and task-instance list JSON without polluting row output
+- [ ] let task-instance read/control commands resolve directly from `--project`
+      as well as `--workflow-instance`, so standalone STREAM task rows can expose
+      savepoint and stop without inventing a workflow instance id
+- [ ] add an explicit read-only context validity check without making ordinary
+      `dsctl context` perform remote calls
+- [ ] in the next explicit CLI contract version, simplify persisted selection
+      context after a compatibility and migration review:
+  - keep `dsctl context` as the local, read-only answer to “which target will a
+    later command use?”, including source provenance and an explicit statement
+    that no remote validation occurred
+  - prefer one workspace-bound project selection over the current exact-CWD
+    project layer plus global user layer, and bind it to a stable workspace or
+    profile identity rather than an incidental process directory
+  - remove ambient workflow selection; workflow selectors are task-specific
+    enough to remain explicit on commands, files, or returned commands
+  - collapse duplicate clear spellings as part of the same breaking change;
+    do not silently change the stable `0.2` surface
 - [x] audit log inspection and audit filter metadata discovery
 - [x] workflow lineage inspection and dependent-task discovery
 - [ ] `--non-interactive` mode (never prompt stdin)
 - [ ] Error hints with concrete next-step guidance
   - [x] config, resolver, selection, delete-force, confirmation, timeout, and
         common discovery/input errors emit `error.suggestion`
-- [ ] Claude Code skill: `/ds` entry point wrapping dsctl
-- [ ] Skill knowledge files for complex operations
+- [x] repository-distributed `dsctl` agent skill with a closed-loop operating
+      contract independent from the PyPI CLI installation
+- [x] progressively disclosed skill references for workflow authoring,
+      schedules, runtime recovery, and structured errors
 - [ ] End-to-end LLM agent test: create workflow → trigger → check → report
 
-**Done when:** A Claude Code skill can autonomously:
+**Done when:** The `dsctl` skill can autonomously:
 1. Create a multi-task workflow from natural language description.
 2. Trigger it and wait for completion.
 3. Check status, retrieve logs on failure, and report results.
@@ -526,11 +579,15 @@ The project is **production-ready** when all of these are true:
 - [ ] Every command returns structured JSON envelope (no exceptions)
   - [x] all registered command callbacks are structurally required to route
         through `emit_result`
-- [x] `dsctl schema` outputs complete tool definition
+- [x] `dsctl schema` provides progressive discovery and complete action-local
+      contracts; `schema --full` outputs the expanded tool definition
+- [ ] complete schema parity for every deterministic cross-field command
+      validator; high-impact mode, source, update, selector, and force guards
+      are already machine-readable through `command.constraints`
 - [x] `dsctl template` covers all upstream default task types
 - [ ] Error responses include machine-actionable `type` and `suggestion`
 - [ ] `--dry-run` available on all mutating commands
-- [ ] Claude Code `/ds` skill works end-to-end
+- [ ] the repository-distributed `dsctl` skill works end-to-end
 
 ### Quality
 - [x] ruff 30+ rule sets pass with zero violations

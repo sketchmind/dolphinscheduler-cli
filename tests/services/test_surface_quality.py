@@ -8,7 +8,7 @@ from itertools import product
 from pathlib import Path
 from typing import TypedDict
 
-from tests.support import normalize_cli_help
+from tests.support import normalize_cli_help, strip_cli_ansi
 from typer.testing import CliRunner
 
 from dsctl.app import app
@@ -116,6 +116,7 @@ STABLE_COMMAND_DOC_BLOCKS = {
     ),
 }
 RUNNER = CliRunner()
+HELP_OUTPUT_BYTE_BUDGET = 10 * 1024
 
 
 def test_services_do_not_inline_resource_slug_literals() -> None:
@@ -170,7 +171,7 @@ def test_services_do_not_import_generated_directly() -> None:
 
 
 def test_paginated_schema_commands_expose_standard_all_option() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -205,7 +206,7 @@ def test_paginated_schema_commands_expose_standard_all_option() -> None:
 
 
 def test_literal_emit_result_actions_are_declared_in_schema() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -222,7 +223,7 @@ def test_literal_emit_result_actions_are_declared_in_schema() -> None:
 
 
 def test_schema_declared_commands_expose_help() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -237,8 +238,24 @@ def test_schema_declared_commands_expose_help() -> None:
     assert failures == []
 
 
+def test_leaf_help_stays_within_the_agent_discovery_budget() -> None:
+    data = get_schema_result(full=True).data
+    assert isinstance(data, dict)
+    commands = data["commands"]
+    assert isinstance(commands, list)
+
+    oversized: list[str] = []
+    for path, _command in _iter_schema_command_paths(commands):
+        result = RUNNER.invoke(app, [*path, "--help"])
+        size = len(strip_cli_ansi(result.stdout).encode("utf-8"))
+        if size > HELP_OUTPUT_BYTE_BUDGET:
+            oversized.append(f"{' '.join(path)}: {size} bytes")
+
+    assert oversized == []
+
+
 def test_schema_selector_fields_expose_discovery_commands() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -259,7 +276,7 @@ def test_schema_selector_fields_expose_discovery_commands() -> None:
 
 
 def test_schema_choice_fields_are_discoverable_from_help_or_schema() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
@@ -295,7 +312,7 @@ def test_schema_choice_fields_are_discoverable_from_help_or_schema() -> None:
 
 
 def test_schema_discovery_commands_point_to_existing_help_surfaces() -> None:
-    data = get_schema_result().data
+    data = get_schema_result(full=True).data
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)

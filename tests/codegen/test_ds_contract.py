@@ -8,9 +8,10 @@ import sys
 from collections import Counter
 from pathlib import Path
 from types import ModuleType
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 
 import pytest
+from pydantic import TypeAdapter, ValidationError
 
 
 class _FakeSession:
@@ -34,6 +35,29 @@ class _FakeSession:
             }
         )
         return self.payload
+
+    def raise_payload_error(
+        self,
+        message: str,
+        *,
+        validation_error_count: int | None = None,
+        cause: Exception | None = None,
+    ) -> NoReturn:
+        del validation_error_count
+        error = RuntimeError(message)
+        if cause is None:
+            raise error
+        raise error from cause
+
+    def raise_result_error(
+        self,
+        *,
+        code: int | None,
+        message: str,
+        data: object,
+    ) -> NoReturn:
+        del code, data
+        raise RuntimeError(message)
 
 
 def _load_codegen_module() -> ModuleType:
@@ -345,6 +369,14 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     )
     assert scheduler_update_schedule_operation.return_type == "Result"
     assert scheduler_update_schedule_operation.inferred_return_type == "Schedule"
+
+    scheduler_create_schedule_operation = next(
+        operation
+        for operation in snapshot.operations
+        if operation.operation_id == "SchedulerController.createSchedule"
+    )
+    assert scheduler_create_schedule_operation.return_type == "Result"
+    assert scheduler_create_schedule_operation.logical_return_type == "Schedule"
 
     gen_task_code_list_operation = next(
         operation
@@ -662,6 +694,11 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     )
     assert any(
         field.name == "taskParams" and field.java_type == "JsonValue"
+        for field in task_definition_model_canonical.fields
+    )
+    assert any(
+        field.name == "taskParamMap"
+        and field.java_type == "Map<String, Optional<String>>"
         for field in task_definition_model_canonical.fields
     )
     workflow_task_relation_model = next(
@@ -1052,6 +1089,12 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     executor_operations_text = (
         version_root / "api" / "operations" / "executor.py"
     ).read_text()
+    task_definition_operations_text = (
+        version_root / "api" / "operations" / "task_definition.py"
+    ).read_text()
+    operations_init_text = (
+        version_root / "api" / "operations" / "__init__.py"
+    ).read_text()
     environment_operations_text = (
         version_root / "api" / "operations" / "environment.py"
     ).read_text()
@@ -1391,12 +1434,15 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     )
     assert "def _require_request_mapping(" in base_operations_text
     assert "class ApiResultError(RuntimeError):" in base_operations_text
+    assert "class ApiPayloadValidationError(RuntimeError):" in base_operations_text
     assert "class ResponseLike(" not in base_operations_text
     assert "class _RequestsSessionAdapter:" in base_operations_text
     assert "session = _RequestsSessionAdapter()" in base_operations_text
     assert "return self._unwrap_payload(payload)" in (base_operations_text)
     assert "def request(" in base_operations_text
     assert "    ) -> JsonValue: ..." in base_operations_text
+    assert "def raise_payload_error(" in base_operations_text
+    assert "def raise_result_error(" in base_operations_text
     assert (
         "def _request("
         "self, method: str, path: str, **kwargs: Unpack[ClientRequestKwargs]"
@@ -1414,17 +1460,16 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         in base_operations_text
     )
     assert 'T = TypeVar("T")' in base_operations_text
-    assert (
-        "from pydantic import BaseModel, ConfigDict, TypeAdapter"
-        in base_operations_text
-    )
+    assert "from pydantic import (" in base_operations_text
+    assert "ValidationError," in base_operations_text
     assert "from typing import (" in base_operations_text
     assert "TypeGuard," in base_operations_text
     assert "TypedDict," in base_operations_text
     assert "Unpack," in base_operations_text
     assert "class BaseParamsModel(BaseModel):" in base_operations_text
     assert 'extra="forbid"' in base_operations_text
-    assert "return adapter.validate_python(value)" in base_operations_text
+    assert "except ValidationError as error:" in base_operations_text
+    assert "self._session.raise_payload_error(" in base_operations_text
     assert "headers.update(extra_headers)" in base_operations_text
     assert "return self._session.request(" in base_operations_text
     assert "_require_json_value(" in base_operations_text
@@ -1433,6 +1478,12 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert 'label="request payload"' in base_operations_text
     assert 'label="json payload"' in base_operations_text
     assert "raise ApiResultError(" in base_operations_text
+    assert "from pydantic import Field, StrictInt, TypeAdapter" in (
+        task_definition_operations_text
+    )
+    assert "TypeAdapter(list[StrictInt])" in task_definition_operations_text
+    assert "TypeAdapter(list[int])" in executor_operations_text
+    assert "ApiPayloadValidationError, ApiResultError" in operations_init_text
     assert "query_params=query_params" not in project_v2_operations_text
     assert "params=query_params" in project_v2_operations_text
     assert "def create_project(" in project_v2_operations_text
@@ -1508,6 +1559,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         package_workflow_lineage_operations_module = importlib.import_module(
             "generated.versions.ds_3_4_1.api.operations.workflow_lineage"
         )
+        package_task_definition_operations_module = importlib.import_module(
+            "generated.versions.ds_3_4_1.api.operations.task_definition"
+        )
         package_workflow_definition_views_module = importlib.import_module(
             "generated.versions.ds_3_4_1.api.views.workflow_definition"
         )
@@ -1536,6 +1590,10 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         )
         assert hasattr(package_views_module, "WorkflowDefinitionSimpleItem")
         assert hasattr(package_operations_module, "ExecutorOperations")
+        assert (
+            package_operations_module.ApiResultError
+            is package_base_operations_module.ApiResultError
+        )
         assert hasattr(upstream_protocol_module, "UpstreamAdapter")
         assert upstream_registry_module.SUPPORTED_VERSIONS == ("3.4.1",)
         adapter = upstream_registry_module.get_adapter("ds_3_4_1")
@@ -1549,6 +1607,25 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         assert isinstance(client, package_client_module.DS341Client)
         assert client.base_url == "http://example.test/dolphinscheduler"
         assert client.token == issued_token
+
+        for invalid_task_code in (True, "1001", 1001.0):
+            strict_task_code_session = _FakeSession([invalid_task_code])
+            strict_task_code_client = package_client_module.DS341Client(
+                "http://example.test/dolphinscheduler",
+                issued_token,
+                session=strict_task_code_session,
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="Response payload did not match generated API contract",
+            ) as exc_info:
+                strict_task_code_client.task_definition.gen_task_code_list(
+                    7,
+                    package_task_definition_operations_module.GenTaskCodeListParams(
+                        genNum=1
+                    ),
+                )
+            assert isinstance(exc_info.value.__cause__, ValidationError)
 
         fake_session = _FakeSession(
             {
@@ -1727,8 +1804,39 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
                 headers={"token": issued_token},
                 data={"userName": "demo", "userPassword": "secret"},
             )
-        assert exc_info.value.code == 10018
-        assert exc_info.value.result_message == "project missing"
-        assert exc_info.value.data is None
+        result_error = cast("Any", exc_info.value)
+        assert result_error.code == 10018
+        assert result_error.result_message == "project missing"
+        assert result_error.data is None
+
+        base_client = package_base_operations_module.BaseRequestsClient(
+            "http://example.test/dolphinscheduler",
+            issued_token,
+            session=session_adapter,
+        )
+        with pytest.raises(
+            package_base_operations_module.ApiPayloadValidationError
+        ) as exc_info:
+            base_client._validate_payload({}, TypeAdapter(int))
+        payload_error = cast("Any", exc_info.value)
+        assert payload_error.validation_error_count == 1
+        assert isinstance(payload_error.__cause__, ValidationError)
+
+        with pytest.raises(
+            package_base_operations_module.ApiPayloadValidationError
+        ) as exc_info:
+            base_client._project_single_data({})
+        payload_error = cast("Any", exc_info.value)
+        assert payload_error.validation_error_count is None
+        assert payload_error.__cause__ is None
+
+        with pytest.raises(package_base_operations_module.ApiResultError) as exc_info:
+            base_client._project_status_data(
+                {"status": "FAILURE", "msg": "legacy failure", "data": []}
+            )
+        result_error = cast("Any", exc_info.value)
+        assert result_error.code is None
+        assert result_error.result_message == "legacy failure"
+        assert result_error.data == []
     finally:
         sys.path.pop(0)

@@ -997,6 +997,7 @@ def _unwrap_result_like_type(java_type: str) -> str | None:
 
 def _resolve_operation_logical_return_type(
     *,
+    operation_id: str,
     repo_root: Path,
     raw_return_type: str,
     inferred_return_type: str | None,
@@ -1004,6 +1005,7 @@ def _resolve_operation_logical_return_type(
     package_name: str | None,
 ) -> str:
     return _return_type_resolution.resolve_operation_logical_return_type(
+        operation_id=operation_id,
         repo_root=repo_root,
         raw_return_type=raw_return_type,
         inferred_return_type=inferred_return_type,

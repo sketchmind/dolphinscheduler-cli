@@ -96,7 +96,7 @@ def test_access_token_list_command_reports_permission_denied(
     result = runner.invoke(app, ["access-token", "list"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "access-token.list"
     assert payload["error"]["type"] == "permission_denied"
     assert payload["error"]["source"] == {
@@ -112,11 +112,11 @@ def test_access_token_get_command_reports_not_found_suggestion() -> None:
     result = runner.invoke(app, ["access-token", "get", "99"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "access-token.get"
     assert payload["error"]["type"] == "not_found"
     assert payload["error"]["suggestion"] == (
-        "Retry with `access-token list` to inspect available values and verify "
+        "Retry with `dsctl access-token list` to inspect available values and verify "
         "the selected id."
     )
 
@@ -179,7 +179,7 @@ def test_access_token_update_command_requires_change() -> None:
     result = runner.invoke(app, ["access-token", "update", "11"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "access-token.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -202,7 +202,7 @@ def test_access_token_update_command_rejects_conflicting_token_flags() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "access-token.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -215,7 +215,7 @@ def test_access_token_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["access-token", "delete", "11"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "access-token.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

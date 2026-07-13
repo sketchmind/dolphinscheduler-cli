@@ -5,16 +5,37 @@ from urllib.parse import parse_qs
 
 import httpx
 import pytest
+from pydantic import BaseModel, ValidationError, field_validator
 
 from dsctl.client import DolphinSchedulerClient
-from dsctl.errors import ApiTransportError
+from dsctl.errors import ApiResultError, ApiTransportError
 from dsctl.generated.versions.ds_3_4_1.api.operations.login import LoginParams
 from dsctl.generated.versions.ds_3_4_1.api.operations.project import (
     CreateProjectParams,
     QueryProjectListPagingParams,
 )
-from dsctl.upstream.adapters.ds_3_4_1 import DS341Adapter, _GeneratedSessionAdapter
+from dsctl.upstream.adapters.ds_3_4_1 import DS341Adapter
+from dsctl.upstream.generated_session import GeneratedSessionAdapter
+from dsctl.upstream.protocol import ScheduleCreateSpec
 from tests.support import make_profile
+
+
+class _SecretValidationPayload(BaseModel):
+    value: str
+
+    @field_validator("value")
+    @classmethod
+    def reject_value(cls, value: str) -> str:
+        message = f"rejected secret value: {value}"
+        raise ValueError(message)
+
+
+class _DynamicMapValidationPayload(BaseModel):
+    values: dict[str, int]
+
+
+class _ManyValidationErrorsPayload(BaseModel):
+    values: list[int]
 
 
 def test_adapter_bridges_generated_get_requests_through_shared_transport() -> None:
@@ -142,6 +163,465 @@ def test_adapter_task_type_methods_bridge_favourite_endpoint() -> None:
     assert requests_seen == [("GET", "/dolphinscheduler/favourite/taskTypes")]
 
 
+def test_adapter_task_code_allocation_batches_server_requests() -> None:
+    profile = make_profile()
+    requested_batch_sizes: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == (
+            "/dolphinscheduler/projects/7/task-definition/gen-task-codes"
+        )
+        batch_size = int(request.url.params["genNum"])
+        requested_batch_sizes.append(batch_size)
+        start = sum(requested_batch_sizes[:-1]) + 1_000
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "msg": "success",
+                "data": list(range(start, start + batch_size)),
+            },
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = adapter.bind(profile, http_client=http_client)
+        task_codes = session.tasks.generate_codes(project_code=7, count=205)
+
+    assert requested_batch_sizes == [100, 100, 5]
+    assert task_codes == list(range(1_000, 1_205))
+
+
+def test_adapter_task_code_allocation_rejects_wrong_server_count() -> None:
+    profile = make_profile()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["genNum"] == "2"
+        return httpx.Response(
+            200,
+            json={"code": 0, "msg": "success", "data": [1_001]},
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with (
+        http_client,
+        pytest.raises(
+            ApiTransportError,
+            match="returned 1 task codes when 2 were requested",
+        ) as exc_info,
+    ):
+        adapter.bind(profile, http_client=http_client).tasks.generate_codes(
+            project_code=7,
+            count=2,
+        )
+
+    error = exc_info.value
+    assert error.details == {
+        "endpoint": "/projects/7/task-definition/gen-task-codes",
+        "project_code": 7,
+        "requested_count": 2,
+        "received_count": 1,
+    }
+    assert error.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "response",
+    }
+    assert error.suggestion == (
+        "Verify DS_VERSION matches the server, check DolphinScheduler API health, "
+        "then retry."
+    )
+
+
+def test_adapter_task_code_allocation_rejects_duplicate_server_codes() -> None:
+    profile = make_profile()
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"code": 0, "msg": "success", "data": [1_001, 1_001]},
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with (
+        http_client,
+        pytest.raises(
+            ApiTransportError,
+            match="duplicate task codes",
+        ) as exc_info,
+    ):
+        adapter.bind(profile, http_client=http_client).tasks.generate_codes(
+            project_code=7,
+            count=2,
+        )
+
+    assert exc_info.value.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "response",
+    }
+
+
+@pytest.mark.parametrize("task_code", [0, -1, 2**63])
+def test_adapter_task_code_allocation_rejects_out_of_range_codes(
+    task_code: int,
+) -> None:
+    profile = make_profile()
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"code": 0, "msg": "success", "data": [task_code]},
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with (
+        http_client,
+        pytest.raises(
+            ApiTransportError,
+            match="outside the positive signed 64-bit integer range",
+        ) as exc_info,
+    ):
+        adapter.bind(profile, http_client=http_client).tasks.generate_codes(
+            project_code=7,
+            count=1,
+        )
+
+    error = exc_info.value
+    assert error.details == {
+        "endpoint": "/projects/7/task-definition/gen-task-codes",
+        "project_code": 7,
+        "requested_count": 1,
+        "received_count": 1,
+    }
+    assert error.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "response",
+    }
+
+
+def test_adapter_task_code_allocation_rejects_duplicates_across_batches() -> None:
+    profile = make_profile()
+    request_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        if request_count == 1:
+            assert request.url.params["genNum"] == "100"
+            data = list(range(1_000, 1_100))
+        else:
+            assert request.url.params["genNum"] == "1"
+            data = [1_000]
+        return httpx.Response(
+            200,
+            json={"code": 0, "msg": "success", "data": data},
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with (
+        http_client,
+        pytest.raises(
+            ApiTransportError,
+            match="duplicate task codes",
+        ),
+    ):
+        adapter.bind(profile, http_client=http_client).tasks.generate_codes(
+            project_code=7,
+            count=101,
+        )
+
+    assert request_count == 2
+
+
+def test_adapter_task_code_allocation_translates_malformed_payload() -> None:
+    profile = make_profile()
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"code": 0, "msg": "success", "data": [{}]},
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with (
+        http_client,
+        pytest.raises(
+            ApiTransportError,
+            match="response payload did not match the generated API contract",
+        ) as exc_info,
+    ):
+        adapter.bind(profile, http_client=http_client).tasks.generate_codes(
+            project_code=7,
+            count=1,
+        )
+
+    error = exc_info.value
+    assert error.details == {
+        "validation_message": "Response payload did not match generated API contract",
+        "validation_error_count": 1,
+        "validation_errors": [
+            {
+                "field": "[0]",
+                "type": "int_type",
+                "message": "Response value has the wrong type.",
+            }
+        ],
+    }
+    assert error.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "response",
+    }
+    assert error.suggestion == (
+        "Verify DS_VERSION matches the server, check DolphinScheduler API health, "
+        "then retry."
+    )
+    assert isinstance(error.__cause__, ValidationError)
+
+
+@pytest.mark.parametrize(
+    "malformed_task_code",
+    [True, "1001", 1001.0],
+    ids=["bool", "string", "float"],
+)
+def test_adapter_task_code_allocation_rejects_coercible_non_integer_codes(
+    malformed_task_code: object,
+) -> None:
+    profile = make_profile()
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"code": 0, "msg": "success", "data": [malformed_task_code]},
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with (
+        http_client,
+        pytest.raises(
+            ApiTransportError,
+            match="response payload did not match the generated API contract",
+        ) as exc_info,
+    ):
+        adapter.bind(profile, http_client=http_client).tasks.generate_codes(
+            project_code=7,
+            count=1,
+        )
+
+    error = exc_info.value
+    assert error.details == {
+        "validation_message": "Response payload did not match generated API contract",
+        "validation_error_count": 1,
+        "validation_errors": [
+            {
+                "field": "[0]",
+                "type": "int_type",
+                "message": "Response value has the wrong type.",
+            }
+        ],
+    }
+    assert isinstance(error.__cause__, ValidationError)
+
+
+def test_generated_session_translates_missing_single_field_payload() -> None:
+    profile = make_profile()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/dolphinscheduler/projects/7/lineages/list"
+        return httpx.Response(
+            200,
+            json={"code": 0, "msg": "success", "data": {}},
+        )
+
+    client = DS341Adapter().create_client(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(
+        ApiTransportError,
+        match="response payload did not match the generated API contract",
+    ) as exc_info:
+        client.workflow_lineage.query_work_flow_lineage(7)
+
+    error = exc_info.value
+    assert error.details == {
+        "validation_message": "single-field payload must contain data",
+    }
+    assert error.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "response",
+    }
+    assert error.suggestion == (
+        "Verify DS_VERSION matches the server, check DolphinScheduler API health, "
+        "then retry."
+    )
+    assert error.__cause__ is None
+
+
+def test_generated_session_validation_details_do_not_echo_rejected_values() -> None:
+    secret = "cluster-token-super-secret"
+    with pytest.raises(ValidationError) as validation_info:
+        _SecretValidationPayload.model_validate({"value": secret})
+
+    profile = make_profile()
+    client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(lambda _request: httpx.Response(500)),
+    )
+    session = GeneratedSessionAdapter(client, base_url=profile.api_url)
+
+    with (
+        client,
+        pytest.raises(ApiTransportError) as error_info,
+    ):
+        session.raise_payload_error(
+            "Response payload did not match generated API contract",
+            validation_error_count=1,
+            cause=validation_info.value,
+        )
+
+    details_json = json.dumps(error_info.value.details)
+    assert secret not in details_json
+    assert error_info.value.details["validation_errors"] == [
+        {
+            "field": "value",
+            "type": "value_error",
+            "message": "Response value does not match the generated field contract.",
+        }
+    ]
+
+
+def test_generated_session_validation_paths_bound_dynamic_response_keys() -> None:
+    dynamic_key = "secret-key-" + ("x" * 500)
+    with pytest.raises(ValidationError) as validation_info:
+        _DynamicMapValidationPayload.model_validate(
+            {"values": {dynamic_key: "not-an-integer"}}
+        )
+
+    profile = make_profile()
+    client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(lambda _request: httpx.Response(500)),
+    )
+    session = GeneratedSessionAdapter(client, base_url=profile.api_url)
+
+    with (
+        client,
+        pytest.raises(ApiTransportError) as error_info,
+    ):
+        session.raise_payload_error(
+            "Response payload did not match generated API contract",
+            cause=validation_info.value,
+        )
+
+    details_json = json.dumps(error_info.value.details)
+    assert dynamic_key not in details_json
+    assert error_info.value.details["validation_errors"] == [
+        {
+            "field": "values.<dynamic-key>",
+            "type": "int_parsing",
+            "message": "Response value does not match the generated field contract.",
+        }
+    ]
+
+
+def test_generated_session_does_not_expand_large_validation_error_sets() -> None:
+    with pytest.raises(ValidationError) as validation_info:
+        _ManyValidationErrorsPayload.model_validate({"values": ["bad"] * 6})
+
+    profile = make_profile()
+    client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(lambda _request: httpx.Response(500)),
+    )
+    session = GeneratedSessionAdapter(client, base_url=profile.api_url)
+
+    with (
+        client,
+        pytest.raises(ApiTransportError) as error_info,
+    ):
+        session.raise_payload_error(
+            "Response payload did not match generated API contract",
+            cause=validation_info.value,
+        )
+
+    assert error_info.value.details == {
+        "validation_message": "Response payload did not match generated API contract",
+        "validation_error_count": 6,
+        "validation_errors_truncated": True,
+    }
+
+
+def test_generated_session_translates_legacy_status_error() -> None:
+    profile = make_profile()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/dolphinscheduler/projects/7/worker-group"
+        return httpx.Response(
+            200,
+            json={"status": "FAILURE", "msg": "project denied", "data": []},
+        )
+
+    client = DS341Adapter().create_client(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ApiResultError, match="project denied") as exc_info:
+        client.project_worker_group.query_assigned_worker_groups(7)
+
+    error = exc_info.value
+    assert error.result_code is None
+    assert error.data == []
+    assert error.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "result",
+        "result_code": None,
+        "result_message": "project denied",
+    }
+
+
 def test_adapter_project_worker_group_methods_bridge_get_and_post() -> None:
     profile = make_profile()
     requests_seen: list[tuple[str, str]] = []
@@ -203,6 +683,100 @@ def test_adapter_project_worker_group_methods_bridge_get_and_post() -> None:
         ("GET", "/dolphinscheduler/projects/7/worker-group"),
         ("POST", "/dolphinscheduler/projects/7/worker-group"),
         ("POST", "/dolphinscheduler/projects/7/worker-group"),
+    ]
+
+
+def test_adapter_workflow_lists_keep_identity_refs_separate_from_rich_pages() -> None:
+    profile = make_profile()
+    requests_seen: list[tuple[str, str, dict[str, str]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_seen.append(
+            (
+                request.method,
+                request.url.path,
+                dict(request.url.params),
+            )
+        )
+        assert request.headers["token"] == profile.api_token
+        if request.url.path.endswith("query-workflow-definition-list"):
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "msg": "success",
+                    "data": [{"code": 101, "name": "daily-sync", "version": 4}],
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "msg": "success",
+                "data": {
+                    "totalList": [
+                        {
+                            "code": 101,
+                            "name": "daily-sync",
+                            "version": 4,
+                            "projectCode": 7,
+                            "releaseState": "ONLINE",
+                            "scheduleReleaseState": "OFFLINE",
+                            "schedule": {
+                                "id": 23,
+                                "workflowDefinitionCode": 101,
+                            },
+                        }
+                    ],
+                    "total": 1,
+                    "totalPage": 1,
+                    "pageSize": 25,
+                    "currentPage": 2,
+                    "pageNo": 2,
+                },
+            },
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = adapter.bind(profile, http_client=http_client)
+        refs = session.workflows.list_refs(project_code=7)
+        page = session.workflows.list_page(
+            project_code=7,
+            page_no=2,
+            page_size=25,
+            search="daily",
+        )
+
+    assert [(item.code, item.name, item.version) for item in refs] == [
+        (101, "daily-sync", 4)
+    ]
+    assert page.total == 1
+    page_items = page.totalList
+    assert page_items is not None
+    workflow = page_items[0]
+    assert workflow.releaseState is not None
+    assert workflow.releaseState.value == "ONLINE"
+    schedule = workflow.schedule
+    assert schedule is not None
+    assert schedule.id == 23
+    assert requests_seen == [
+        (
+            "GET",
+            "/dolphinscheduler/projects/7/workflow-definition/"
+            "query-workflow-definition-list",
+            {},
+        ),
+        (
+            "GET",
+            "/dolphinscheduler/projects/7/workflow-definition",
+            {"searchVal": "daily", "pageNo": "2", "pageSize": "25"},
+        ),
     ]
 
 
@@ -882,11 +1456,17 @@ def test_adapter_rejects_transport_and_client_together() -> None:
 
 def test_generated_session_reports_contract_mismatches_as_transport_errors() -> None:
     profile = make_profile()
+    requests_seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_seen.append(request)
+        return httpx.Response(200, json={})
+
     client = DolphinSchedulerClient(
         profile,
-        transport=httpx.MockTransport(lambda request: httpx.Response(200, json={})),
+        transport=httpx.MockTransport(handler),
     )
-    session = _GeneratedSessionAdapter(client, base_url=profile.api_url)
+    session = GeneratedSessionAdapter(client, base_url=profile.api_url)
     unchecked_session = cast("Any", session)
 
     with pytest.raises(ApiTransportError, match="adapter contract") as exc_info:
@@ -901,6 +1481,7 @@ def test_generated_session_reports_contract_mismatches_as_transport_errors() -> 
         "method": "GET",
         "url": f"{profile.api_url}/projects",
     }
+    assert requests_seen == []
 
 
 def test_adapter_project_methods_use_v2_endpoints() -> None:
@@ -3002,7 +3583,139 @@ def test_adapter_user_methods_bridge_paging_and_raw_user_views() -> None:  # noq
     ]
 
 
-def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
+def test_adapter_schedule_without_environment_uses_legacy_form_endpoints() -> None:
+    profile = make_profile()
+    requests_seen: list[tuple[str, str]] = []
+
+    def schedule_payload(*, schedule_id: int, crontab: str) -> dict[str, object]:
+        return {
+            "id": schedule_id,
+            "workflowDefinitionCode": 101,
+            "workflowDefinitionName": "daily-sync",
+            "projectName": "etl-prod",
+            "crontab": crontab,
+            "startTime": "2024-01-01 00:00:00",
+            "endTime": "2025-01-01 00:00:00",
+            "timezoneId": "Asia/Shanghai",
+            "userId": 11,
+            "warningGroupId": 0,
+            "tenantCode": "tenant-prod",
+            "environmentCode": -1,
+        }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_seen.append((request.method, request.url.path))
+        form = parse_qs(request.content.decode("utf-8"), strict_parsing=True)
+        assert "environmentCode" not in form
+        assert form["tenantCode"] == ["tenant-prod"]
+        assert json.loads(form["schedule"][0]) == {
+            "crontab": "0 0 2 * * ?" if request.method == "POST" else "0 0 6 * * ?",
+            "startTime": "2024-01-01 00:00:00",
+            "endTime": "2025-01-01 00:00:00",
+            "timezoneId": "Asia/Shanghai",
+        }
+        if request.method == "POST":
+            assert request.url.path == "/dolphinscheduler/projects/7/schedules"
+            assert form["workflowDefinitionCode"] == ["101"]
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "msg": "success",
+                    "data": schedule_payload(
+                        schedule_id=2,
+                        crontab="0 0 2 * * ?",
+                    ),
+                },
+            )
+        assert request.method == "PUT"
+        assert request.url.path == "/dolphinscheduler/projects/7/schedules/1"
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "msg": "success",
+                "data": schedule_payload(
+                    schedule_id=1,
+                    crontab="0 0 6 * * ?",
+                ),
+            },
+        )
+
+    adapter = DS341Adapter()
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = adapter.bind(profile, http_client=http_client)
+        create_spec = ScheduleCreateSpec(
+            project_code=7,
+            workflow_code=101,
+            crontab="0 0 2 * * ?",
+            start_time="2024-01-01 00:00:00",
+            end_time="2025-01-01 00:00:00",
+            timezone_id="Asia/Shanghai",
+            tenant_code="tenant-prod",
+            environment_code=None,
+        )
+        create_plan = session.schedules.plan_create(spec=create_spec)
+        placeholder_plan = session.schedules.plan_create(
+            spec=ScheduleCreateSpec(
+                project_code=7,
+                workflow_code="<nightly-sync:created_workflow_code>",
+                crontab="0 0 2 * * ?",
+                start_time="2024-01-01 00:00:00",
+                end_time="2025-01-01 00:00:00",
+                timezone_id="Asia/Shanghai",
+                tenant_code="tenant-prod",
+                environment_code=None,
+            )
+        )
+        created = session.schedules.create(spec=create_spec)
+        updated = session.schedules.update(
+            project_code=7,
+            schedule_id=1,
+            crontab="0 0 6 * * ?",
+            start_time="2024-01-01 00:00:00",
+            end_time="2025-01-01 00:00:00",
+            timezone_id="Asia/Shanghai",
+            tenant_code="tenant-prod",
+            environment_code=None,
+        )
+
+    assert created.id == 2
+    assert create_plan == {
+        "method": "POST",
+        "path": "/projects/7/schedules",
+        "form": {
+            "workflowDefinitionCode": 101,
+            "schedule": (
+                '{"crontab":"0 0 2 * * ?","endTime":"2025-01-01 00:00:00",'
+                '"startTime":"2024-01-01 00:00:00",'
+                '"timezoneId":"Asia/Shanghai"}'
+            ),
+            "warningGroupId": 0,
+            "tenantCode": "tenant-prod",
+        },
+    }
+    assert ("form" in create_plan) != ("json" in create_plan)
+    assert placeholder_plan["form"]["workflowDefinitionCode"] == (
+        "<nightly-sync:created_workflow_code>"
+    )
+    assert ("form" in placeholder_plan) != ("json" in placeholder_plan)
+    assert created.environmentCode == -1
+    assert updated.crontab == "0 0 6 * * ?"
+    assert updated.tenantCode == "tenant-prod"
+    assert updated.environmentCode == -1
+    assert requests_seen == [
+        ("POST", "/dolphinscheduler/projects/7/schedules"),
+        ("PUT", "/dolphinscheduler/projects/7/schedules/1"),
+    ]
+
+
+def test_adapter_schedule_methods_use_v2_create_and_legacy_update() -> None:
     profile = make_profile()
     requests_seen: list[tuple[str, str]] = []
 
@@ -3095,7 +3808,7 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
                 "endTime": "2025-01-01 00:00:00",
                 "timezoneId": "Asia/Shanghai",
                 "warningGroupId": 0,
-                "environmentCode": 0,
+                "environmentCode": 33,
             }
             return httpx.Response(
                 200,
@@ -3116,16 +3829,18 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
             )
         if (
             request.method == "PUT"
-            and request.url.path == "/dolphinscheduler/v2/schedules/1"
+            and request.url.path == "/dolphinscheduler/projects/7/schedules/1"
         ):
-            assert json.loads(request.content) == {
+            form = parse_qs(request.content.decode("utf-8"), strict_parsing=True)
+            assert json.loads(form["schedule"][0]) == {
                 "crontab": "0 0 6 * * ?",
                 "startTime": "2024-01-01 00:00:00",
                 "endTime": "2025-01-01 00:00:00",
                 "timezoneId": "Asia/Shanghai",
-                "warningGroupId": 0,
-                "environmentCode": 0,
             }
+            assert form["warningGroupId"] == ["0"]
+            assert form["environmentCode"] == ["33"]
+            assert form["tenantCode"] == ["tenant-prod"]
             return httpx.Response(
                 200,
                 json={
@@ -3173,19 +3888,26 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
             timezone_id="Asia/Shanghai",
         )
         fetched = session.schedules.get(schedule_id=1)
-        created = session.schedules.create(
+        create_spec = ScheduleCreateSpec(
+            project_code=7,
             workflow_code=101,
             crontab="0 0 2 * * ?",
             start_time="2024-01-01 00:00:00",
             end_time="2025-01-01 00:00:00",
             timezone_id="Asia/Shanghai",
+            environment_code=33,
         )
+        create_plan = session.schedules.plan_create(spec=create_spec)
+        created = session.schedules.create(spec=create_spec)
         updated = session.schedules.update(
+            project_code=7,
             schedule_id=1,
             crontab="0 0 6 * * ?",
             start_time="2024-01-01 00:00:00",
             end_time="2025-01-01 00:00:00",
             timezone_id="Asia/Shanghai",
+            tenant_code="tenant-prod",
+            environment_code=33,
         )
         deleted = session.schedules.delete(schedule_id=1)
 
@@ -3200,6 +3922,20 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
         "2024-01-05 02:00:00",
     ]
     assert fetched.id == 1
+    assert create_plan == {
+        "method": "POST",
+        "path": "/v2/schedules",
+        "json": {
+            "workflowDefinitionCode": 101,
+            "crontab": "0 0 2 * * ?",
+            "startTime": "2024-01-01 00:00:00",
+            "endTime": "2025-01-01 00:00:00",
+            "timezoneId": "Asia/Shanghai",
+            "warningGroupId": 0,
+            "environmentCode": 33,
+        },
+    }
+    assert ("form" in create_plan) != ("json" in create_plan)
     assert created.id == 2
     assert updated.crontab == "0 0 6 * * ?"
     assert deleted is True
@@ -3208,7 +3944,7 @@ def test_adapter_schedule_methods_mix_v1_paging_with_v2_crud() -> None:
         ("POST", "/dolphinscheduler/projects/7/schedules/preview"),
         ("GET", "/dolphinscheduler/v2/schedules/1"),
         ("POST", "/dolphinscheduler/v2/schedules"),
-        ("PUT", "/dolphinscheduler/v2/schedules/1"),
+        ("PUT", "/dolphinscheduler/projects/7/schedules/1"),
         ("DELETE", "/dolphinscheduler/v2/schedules/1"),
     ]
 
@@ -3759,6 +4495,7 @@ def test_generated_models_accept_json_data_serialized_fields_from_runtime_reads(
         "userId": 1,
         "taskType": "SHELL",
         "taskParams": task_params,
+        "taskParamMap": {"run_label": None},
     }
     dag_data = {
         "workflowTaskRelationList": [relation],
@@ -3997,6 +4734,7 @@ def test_adapter_task_instance_methods_bridge_v2_and_logger_endpoints() -> None:
     assert page.total == 1
     assert page.totalList is not None
     assert page.totalList[0].name == "extract"
+    assert task_instance is not None
     assert task_instance.workflowInstanceId == 901
     assert log.lineNum == 2
     assert log.message == "line-1\nline-2"
@@ -4008,6 +4746,51 @@ def test_adapter_task_instance_methods_bridge_v2_and_logger_endpoints() -> None:
         ("POST", "/dolphinscheduler/projects/7/task-instances/3001/savepoint"),
         ("POST", "/dolphinscheduler/projects/7/task-instances/3001/stop"),
     ]
+
+
+def test_adapter_task_instance_get_normalizes_only_empty_200_body_to_none() -> None:
+    profile = make_profile()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == (
+            "/dolphinscheduler/v2/projects/7/task-instances/999999"
+        )
+        return httpx.Response(200, content=b"")
+
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = DS341Adapter().bind(profile, http_client=http_client)
+        task_instance = session.task_instances.get(
+            project_code=7,
+            task_instance_id=999999,
+        )
+
+    assert task_instance is None
+
+
+def test_adapter_task_instance_get_preserves_nonempty_invalid_json_error() -> None:
+    profile = make_profile()
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"not-json")
+
+    http_client = DolphinSchedulerClient(
+        profile,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with http_client:
+        session = DS341Adapter().bind(profile, http_client=http_client)
+        with pytest.raises(ApiTransportError, match="not valid JSON"):
+            session.task_instances.get(
+                project_code=7,
+                task_instance_id=999999,
+            )
 
 
 def test_adapter_resource_methods_use_resource_endpoints() -> None:

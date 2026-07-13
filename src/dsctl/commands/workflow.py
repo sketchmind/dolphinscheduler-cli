@@ -4,7 +4,10 @@ from typing import Annotated
 import typer
 
 from dsctl.cli_runtime import emit_raw_result, emit_result, get_app_state
+from dsctl.command_contract import COMMAND_CATALOG
+from dsctl.commands._contract_adapter import typer_option
 from dsctl.output import CommandResult
+from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 from dsctl.services.workflow import (
     backfill_workflow_result,
     create_workflow_result,
@@ -67,13 +70,16 @@ WORKER_GROUP_HELP = (
 )
 WORKFLOW_HELP = (
     "Workflow name or numeric code. Run `dsctl workflow list` in the selected "
-    "project to discover values; falls back to workflow context when omitted."
+    "project to discover values. When omitted, uses workflow context only when "
+    "project also comes from context; otherwise pass WORKFLOW."
 )
 WORKFLOW_EDIT_HELP = (
     "Workflow name or numeric code. Run `dsctl workflow list` in the selected "
-    "project to discover values. Required with --file; with --patch, falls "
-    "back to workflow context when omitted."
+    "project to discover values. Required with --file; with --patch, uses "
+    "workflow context only when project also comes from context; otherwise "
+    "pass WORKFLOW."
 )
+_WORKFLOW_CREATE = COMMAND_CATALOG.command("workflow.create")
 
 
 def register_workflow_commands(app: typer.Typer) -> None:
@@ -96,11 +102,34 @@ def list_command(
         str | None,
         typer.Option(
             "--search",
-            help="Filter workflows by name substring after fetching the project list.",
+            help="Filter workflows by name using the upstream search value.",
         ),
     ] = None,
+    page_no: Annotated[
+        int,
+        typer.Option(
+            "--page-no",
+            min=1,
+            help="Page number to fetch when not using --all.",
+        ),
+    ] = 1,
+    page_size: Annotated[
+        int,
+        typer.Option(
+            "--page-size",
+            min=1,
+            help="Page size to request from the upstream API.",
+        ),
+    ] = DEFAULT_PAGE_SIZE,
+    all_pages: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            help="Fetch all remaining pages up to the safety limit.",
+        ),
+    ] = False,
 ) -> None:
-    """List workflows inside one project."""
+    """List workflows with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -108,6 +137,9 @@ def list_command(
         lambda: list_workflows_result(
             project=project,
             search=search,
+            page_no=page_no,
+            page_size=page_size,
+            all_pages=all_pages,
             env_file=env_file,
         ),
     )
@@ -162,7 +194,10 @@ def export_command(
         ),
     ] = None,
 ) -> None:
-    """Export one workflow as an editable YAML document."""
+    """Export raw YAML for clone/create or read-only schedule-aware edit.
+
+    Global display options do not alter successful YAML artifact output.
+    """
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_raw_result(
@@ -332,60 +367,32 @@ def lineage_dependent_tasks_command(
     )
 
 
-@workflow_app.command("create")
+@workflow_app.command(_WORKFLOW_CREATE.name, help=_WORKFLOW_CREATE.summary)
 def create_command(
     ctx: typer.Context,
     *,
     file: Annotated[
         Path,
-        typer.Option(
-            "--file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to one workflow YAML specification file. Start from "
-                "`dsctl template workflow --raw`; add task fragments with "
-                "`dsctl template task`, and inspect task fields with "
-                "`dsctl task-type schema TYPE`."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
+        typer_option(_WORKFLOW_CREATE.input("file")),
     ],
     project: Annotated[
         str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Override workflow.project from the YAML file. Run `dsctl "
-                "project list` to discover values."
-            ),
-        ),
+        typer_option(_WORKFLOW_CREATE.input("project")),
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option(
-            "--dry-run",
-            help="Compile the workflow payload without sending the create request.",
-        ),
+        typer_option(_WORKFLOW_CREATE.input("dry-run")),
     ] = False,
     confirm_risk: Annotated[
         str | None,
-        typer.Option(
-            "--confirm-risk",
-            help=(
-                "Explicit confirmation token returned by a previous high-risk "
-                "schedule validation failure."
-            ),
-        ),
+        typer_option(_WORKFLOW_CREATE.input("confirm-risk")),
     ] = None,
 ) -> None:
-    """Create one workflow definition from a YAML file."""
+    """Execute the canonical workflow.create command."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
-        "workflow.create",
+        _WORKFLOW_CREATE.action,
         lambda: create_workflow_result(
             file=file,
             project=project,
@@ -441,7 +448,9 @@ def edit_command(
                 "from `dsctl workflow export WORKFLOW` or `dsctl "
                 "template workflow --raw`; use --dry-run to inspect the "
                 "compiled diff. Full-file edits match task identity by exact "
-                "task name and do not infer renames."
+                "task name and do not infer renames. An exported `schedule:` "
+                "block is verified as a read-only snapshot and remains unchanged; "
+                "use schedule commands to modify it."
             ),
             readable=True,
             resolve_path=True,
@@ -458,7 +467,12 @@ def edit_command(
         bool,
         typer.Option(
             "--dry-run",
-            help="Compile the merged workflow edit payload without sending it.",
+            help=(
+                "Compile the merged workflow edit payload without sending it. "
+                "When the full request is unnecessary, use `--columns "
+                "diff,no_change,workflow_state_constraints,schedule_impacts` "
+                "for a bounded review."
+            ),
         ),
     ] = False,
     confirm_risk: Annotated[

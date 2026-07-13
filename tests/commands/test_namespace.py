@@ -148,7 +148,7 @@ def test_namespace_create_command_reports_upstream_input_suggestion(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "namespace.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -160,7 +160,7 @@ def test_namespace_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["namespace", "delete", "etl-prod"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "namespace.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

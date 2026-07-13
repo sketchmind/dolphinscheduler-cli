@@ -10,6 +10,7 @@ Current stable commands:
 - global option `--env-file PATH`
 - global option `--output-format {json,table,tsv}`
 - global option `--columns CSV`
+- global option `--compact`
 - `dsctl version`
 - `dsctl context`
 - `dsctl doctor`
@@ -40,7 +41,7 @@ Current stable commands:
 - `dsctl audit list|model-types|operation-types`
 - `dsctl use [--clear]`
 - `dsctl use project NAME`
-- `dsctl use workflow NAME`
+- `dsctl use workflow NAME [--project PROJECT]`
 - `dsctl project list|get|create|update|delete`
 - `dsctl project-parameter list|get|create|update|delete`
 - `dsctl project-preference get|update|enable|disable`
@@ -52,6 +53,17 @@ Current stable commands:
 - `dsctl workflow-instance list|get|export|parent|digest|edit|watch|stop|rerun|recover-failed|execute-task`
 - `dsctl task list|get|update`
 - `dsctl task-instance list|get|watch|sub-workflow|log|force-success|savepoint|stop`
+
+## Discovery Routing
+
+`dsctl --help` is the self-contained first-touch routing surface. Agents should
+inspect only the command they will execute next, using its leaf help or
+`dsctl schema --command ACTION`. When the action is unknown, they inspect one
+relevant group rather than preloading unrelated groups or downstream lifecycle
+actions. The root schema index is for discovering an unknown group.
+
+`dsctl capabilities` answers feature and version questions. It is not required
+to construct syntax for a known command.
 
 ## Naming and Selection Rules
 
@@ -121,12 +133,16 @@ Rules:
 - `json` returns the standard JSON envelope and remains the stable machine
   contract; when `--columns` is present, only the command data payload at the
   canonical row/object path is projected
+- JSON is encoded as UTF-8 and ordinary non-ASCII text is not escaped
 - `table` renders row/object-oriented data as a plain text table for terminal
   scanning
 - `tsv` renders the same row model as tab-separated text for shell pipelines
 - row-oriented formats use each command's `data_shape` metadata when present
   and fall back to runtime shape inference for simple list payloads
-- global options are passed before the command group, for example:
+- table and TSV write only row data to stdout; partial/non-first-page summaries
+  and warnings are written to stderr
+- global options may appear before or after the command path; generated commands
+  use the canonical prefix form, for example:
 
 ```bash
 dsctl --output-format table workflow-instance list --project etl-prod
@@ -157,6 +173,31 @@ dsctl --output-format tsv --columns id,name,state,host task-instance list --work
 dsctl --output-format tsv --columns '*' task-instance list --workflow-instance 901
 ```
 
+### `--compact`
+
+Emits the standard JSON envelope without indentation. It is a JSON layout
+modifier, not a separate output format.
+
+Rules:
+
+- it is valid only with `--output-format json`
+- it may be combined with `--columns`
+- it changes only insignificant JSON whitespace; envelope fields, types,
+  pagination, resolved metadata, warnings, and errors remain intact
+- it is a secondary token optimization; select needed columns and reduce page
+  size before relying on layout compaction
+- raw artifact success output is unchanged
+- `--compact` with table or TSV is a `user_input_error`
+- like every global option, it may appear before or after the command path; `--`
+  still ends option processing
+
+Recommended agent usage:
+
+```bash
+dsctl --compact --columns id,name,state \
+  task-instance list --workflow-instance 901 --page-size 10
+```
+
 ## Output Envelope
 
 Every stable command returns the standard JSON envelope from `src/dsctl/output.py`.
@@ -164,6 +205,25 @@ This statement applies to the default `--output-format json` mode. Explicit
 `--columns` projection keeps the envelope and narrows only the command `data`
 payload. Row-oriented display formats are an alternate rendering layer over the
 same command result.
+
+Process-channel guarantees:
+
+- successful standard results and raw artifacts are written to stdout
+- structured command errors are written to stderr and exit with status 1
+- Typer/Click usage errors are written to stderr and exit with status 2
+- JSON keeps warnings and page metadata inside the envelope without duplicating
+  them to stderr
+- applicable successful JSON results may include bounded `next_actions` or an
+  `action_index`; JSON `--columns` projection keeps these envelope fields and
+  narrows only `data`
+- table and TSV keep stdout row-only and write partial/non-first-page and
+  warning diagnostics to stderr; they never append navigation metadata below
+  rows
+- raw artifacts keep their exact success body on stdout and write any warnings
+  to stderr; they never append navigation metadata
+
+JSON object member order is not a semantic contract. Consumers must read fields
+by name.
 
 Success shape:
 
@@ -177,6 +237,85 @@ Success shape:
   "warning_details": []
 }
 ```
+
+Applicable workflow lifecycle results may also include this optional top-level
+field:
+
+```json
+{
+  "next_actions": [
+    {
+      "action": "workflow-instance.watch",
+      "command": "dsctl --compact --columns id,name,state,startTime,endTime,duration workflow-instance watch 242",
+      "mutates": false
+    }
+  ]
+}
+```
+
+`next_actions` is an ordered, advisory list of at most three complete shell
+invocations. It is derived locally from the current `action`, `resolved`, and
+`data` plus the explicit invocation target; producing it sends no additional
+request. Every item contains the stable target `action`, one placeholder-free
+`command`, and `mutates`, which states whether executing that command changes
+remote state. When the current invocation uses `--env-file`, every suggested
+command preserves its resolved path with shell-safe quoting. A suggestion does
+not grant permission to execute a mutation. When facts are missing, malformed,
+or ambiguous, the field is omitted rather than populated with guessed values.
+
+After independently checking current intent and authorization, agent callers
+should preserve a selected provided command unchanged so its bounded page size,
+projection, raw view, and explicit target are retained. Ordering communicates
+recommendation priority, not a requirement to execute every item. A
+`mutates: true` item must complete before a later read that depends on its new
+state.
+
+Applicable row-oriented list results may also include this optional top-level
+field:
+
+```json
+{
+  "action_index": {
+    "scope": "data.totalList",
+    "target": {"resource": "workflow", "field": "code"},
+    "authorization": "not_evaluated",
+    "eligibility": "row_facts_only",
+    "groups": [
+      {"targets": "all", "read": ["workflow.get"]},
+      {"targets": [101], "mutate": ["workflow.online"]}
+    ],
+    "schema_command": "dsctl schema --command ACTION",
+    "group_command": "dsctl schema --group workflow",
+    "target_count": 2,
+    "indexed_target_count": 2,
+    "truncated": false
+  }
+}
+```
+
+`action_index` is a compact positive-discovery index, not an authorization or
+validation result. It is derived locally from the already returned rows and
+sends no additional request. `target_count` is the number of returned rows;
+`indexed_target_count` is the number of unique, valid selectors indexed, up to
+100 in stable row order. `truncated` reports whether additional valid selectors
+were omitted. A group's `targets` is either an explicit selector list or
+`"all"`, meaning every indexed target in this result, not every remote object.
+Actions with exactly the same targets share one group so selector lists are not
+repeated. Each action appears in one of four categories: `read`,
+`read_needs_input`, `mutate`, or `mutate_needs_input`. The latter two require
+mutation authorization; either `*_needs_input` category means the returned
+selector and row facts are insufficient and additional input is required.
+
+The index omits actions whose required row facts are missing or ambiguous.
+Malformed selectors are ignored, and a selector appearing in more than one row
+is excluded because its row facts are not unambiguous.
+`authorization: "not_evaluated"` means permissions were not checked, and
+`eligibility: "row_facts_only"` means other server-side facts may still reject
+execution. `schema_command` is a substitution template: replace `ACTION` with
+one selected grouped action to obtain its exact machine-readable contract.
+The group command is the broader fallback when the desired action is still
+unknown. Table, TSV, and raw output remain data-only rather than attempting to
+represent an interactive UI dropdown in plain text.
 
 Error shape:
 
@@ -209,6 +348,20 @@ Error guarantees:
 - `error.suggestion` is present when the CLI can provide one concrete next step
   without guessing
 
+Generated response-contract failures use `error.type: api_transport_error` and
+may include these bounded diagnostic fields in `error.details`:
+
+- `validation_message`
+- `validation_error_count`
+- `validation_errors[]`, with `field`, `type`, and `message`
+- `validation_errors_truncated: true` when more than five validation errors
+  were present
+
+Validation diagnostics omit rejected values and use static messages. Field
+paths have bounded depth and length; non-identifier dynamic keys are redacted.
+When more than five errors exist, the CLI emits only the count and truncation
+flag instead of expanding the remote error set.
+
 When present, `error.source` currently uses this shape for remote DS failures:
 
 ```json
@@ -234,6 +387,9 @@ Field rules:
 - DS objects projected into `data` keep DS-native field names.
 - CLI envelope fields such as `ok`, `action`, `resolved`, `warnings`, and
   selection metadata use CLI-owned naming.
+- `next_actions` and `action_index`, when present, are CLI-owned navigation
+  rather than DS-native resource data; they remain outside both `data` and
+  `resolved`
 - high-risk mutations may return `confirmation_required` and expect the same
   command to be retried with `--confirm-risk TOKEN`
 - `warning_details` is a machine-readable list aligned positionally with
@@ -255,12 +411,21 @@ Field rules:
 
 Current `data_shape` fields:
 
-- `kind`: one of `page`, `collection`, `object`, or `summary`
+- `kind`: one of `page`, `collection`, `object`, `summary`, or `document`
 - `row_path`: dot-path from the standard JSON envelope to the canonical row
   collection or object, such as `data.totalList` or `data`
+- `value_path`: dot-path to a non-row document such as `data.schema`
 - `default_columns`: suggested compact display columns
-- `column_discovery`: currently `runtime_row_keys`, meaning full column
-  discovery comes from the JSON row payload
+- `column_discovery`: normally `runtime_row_keys`, meaning full column discovery
+  comes from the JSON row payload; document views use `not_applicable`
+- `supported_output_formats`: present when a shape supports fewer than the
+  standard `json`, `table`, and `tsv` set
+- `column_projection`: present as `false` when `--columns` would destroy the
+  document semantics and is therefore rejected
+
+Current output metadata also exposes `compact_option`, `compact_json`,
+`json_encoding`, `default_json_layout`, `error_channel`, and
+`row_diagnostics_channel`.
 
 ## `dsctl version`
 
@@ -276,7 +441,7 @@ Example:
   "action": "version",
   "resolved": {},
   "data": {
-    "cli": "0.2.0",
+    "cli": "0.3.0",
     "ds": "3.4.1",
     "selected_ds_version": "3.4.1",
     "contract_version": "3.4.1",
@@ -288,9 +453,16 @@ Example:
 }
 ```
 
+`supported_ds_versions` lists selectable targets; it does not claim that every
+listed version has stable support. The selected target's `support_level`
+communicates that distinction: `3.4.1` is currently `full`, while `3.4.0` and
+`3.3.2` are `experimental` until their live smoke suites pass.
+
 ## `dsctl context`
 
-Returns the effective config profile plus stored session context.
+Returns the locally resolved target used by subsequent commands. It reads the
+selected config profile and persisted context but performs no remote request or
+selector validation.
 
 Current `data` fields:
 
@@ -298,6 +470,13 @@ Current `data` fields:
 - `ds_version`
 - `project`
 - `workflow`
+- `set_at`
+
+Current `resolved` fields:
+
+- `context.scope` is `project`, `user`, or `null`, identifying the layer that
+  supplied the effective selection tuple
+- `remote_validation` is `not_performed`
 
 ## `dsctl doctor`
 
@@ -313,9 +492,12 @@ Current guarantees:
 
 - always returns one aggregated diagnostic payload instead of failing on the
   first broken dependency
-- checks local profile loading, merged context loading, adapter resolution, API
-  actuator health, and current-user runtime defaults
+- checks local profile loading, effective context selection, every persisted
+  context layer (including shadowed layers), adapter resolution, API actuator
+  health, and current-user runtime defaults
 - preserves structured error details under `checks[].details.error`
+- reports invalid shadowed context layers as a `context` warning under
+  `checks[].details.layer_errors` instead of failing effective context loading
 - exposes `checks[].suggestion` for every check; successful checks use `null`
 - emits top-level warnings for any check whose status is not `ok`
 - when such a warning is present, the aligned `warning_details[]` item uses
@@ -325,8 +507,11 @@ Current guarantees:
 ## `dsctl schema`
 
 Returns the stable machine-readable command schema for the current CLI surface.
-This is the authoritative self-description for command invocation: arguments,
-options, choices, selectors, defaults, and supported composite keys.
+Schema version 2 uses progressive discovery: the default response is a bounded
+index, a group response is an action index, and a command response is the
+complete action-local invocation contract. This is the authoritative
+self-description for arguments, options, choices, selectors, defaults,
+payload hints, supported composite keys, and command output shape.
 
 Options:
 
@@ -334,72 +519,128 @@ Options:
 - `--command ACTION`
 - `--list-groups`
 - `--list-commands`
+- `--full`
 
 Selection rules:
 
-- omit all scope options to return the full schema, including `capabilities`
-- `--group` returns one command-group schema by stable group name such as
-  `task-instance`
+- omit all options to return the bounded root index; its `groups[].actions`
+  and `root_actions[]` cover every stable action name without expanding action
+  contracts
+- `--group` returns a bounded action index for one stable group such as
+  `task-instance`; each action includes its summary, help command, and exact
+  schema command
 - `--group` values come from `dsctl schema --list-groups`
-- `--command` returns one command schema by stable action such as
-  `task-instance.list` or `version`
-- `--command` values come from `dsctl schema --list-commands`
+- `--command` returns one complete action-local `data.command` object for an
+  action such as `task-instance.list` or `version`; it does not wrap the action
+  in the whole command-group tree
+- action names come from the default index, a group index, or the compatibility
+  inventory `dsctl schema --list-commands`
 - `--list-groups` returns compact rows with `name`, `summary`,
-  `command_count`, and `schema_command`
-- `--list-commands` returns compact rows with `action`, `group`, `name`,
-  `summary`, and `schema_command`
-- `--list-commands` uses `group: null` for root-level commands such as
-  `version`
+  recursive `action_count`, and `schema_command`
+- `--list-commands` retains compatibility rows with `action`, `group`, `name`,
+  `summary`, and `schema_command`; the bounded default index is preferred when
+  only action names are needed
+- `--full` returns the expanded whole-surface representation, including the
+  complete `commands` tree and embedded `capabilities`
+- `--full` may be combined with `--group` or `--command` to retain the expanded
+  scoped representation; it cannot be combined with list views
 - `--group`, `--command`, `--list-groups`, and `--list-commands` are mutually
   exclusive
-- scoped schema payloads keep the standard schema header and `commands` tree
-  shape but omit `capabilities`; use `dsctl capabilities` for feature
-  discovery
-- scoped `--group` and `--command` payloads also include `rows` for compact
-  table/tsv rendering; JSON callers that need the full contract should continue
-  reading `commands`
-- `--group` rows list commands in the group with `kind`, `action`, `name`,
-  `summary`, and `schema_command`
-- `--command` rows flatten the command contract into `command`, `argument`,
-  `option`, `payload`, and `data_shape` rows so terminal output does not
-  collapse nested contract data into one large value cell
-- scoped schema `resolved.schema.view` is `group`, `command`, `groups`, or
-  `commands`
+- unknown groups and actions return `available_count`, at most three
+  deterministic `candidates`, and one `discovery_command`; errors never dump
+  the entire action inventory
 
-Current `data` fields:
+Bounded view shapes:
 
-- `schema_version`
-- `cli`
-- `supported_ds_versions`
-- `ds_versions`
-- `global_options`
-- `selection`
-- `output`
-- `errors`
-- `confirmation`
-- `capabilities`
-- `commands`
-- `rows` for scoped `--group` and `--command` views
+- index: `schema_version`, `view`, `cli`, `ds`, `global_options`,
+  `action_count`, `groups`, `root_actions`, and `links`
+- group: `schema_version`, `view`, `cli`, `ds`, `group`, `actions`, and
+  `links`
+- command: `schema_version`, `view`, `cli`, `ds`, `global_options`, optional
+  `group`, canonical `command`, and `links`
+- list views keep `data` as a row list for pipeline compatibility
+- full: `schema_version`, `view`, `cli`, supported-version and global contract
+  fields, `capabilities`, and the expanded `commands` tree
+
+The canonical index, group, and command JSON views never contain renderer-only
+`rows`. Table and TSV presentation derive rows from `groups`, `actions`, or the
+canonical `command` object. For a command view, JSON `--columns` projects the
+derived contract rows into `data.command`; without `--columns`,
+`data.command` remains the canonical object.
+
+Actions whose canonical row path changes by view expose
+`data_shapes_by_view`. Their ordinary `data_shape` describes the default view;
+renderers select the matching view-specific shape at runtime. This applies to
+both progressive self-description and `task-type.schema`. Expanded top-level
+schema shapes distinguish root `full` (`data.commands`) from `full_group` and
+`full_command` (`data.rows`) using `resolved.schema.scope`.
+
+`resolved.schema.view` is `index`, `group`, `command`, `groups`, `commands`, or
+`full`. Full scoped responses also set `resolved.schema.scope` to `group` or
+`command`.
+
+`links[]` contains optional related navigation, not a sequence that callers
+must follow. Exact invocations use `command`; placeholder-bearing forms use
+`command_pattern`. Bounded responses do not link to the high-cost `--full`
+view.
+
+Every action-local `command` includes an `invocation` usage string with the
+exact CLI path, positional placeholders, and `[OPTIONS]` when applicable. This
+is authoritative for actions whose stable action id is not the literal command
+path, such as `use.clear` (`dsctl use --clear [OPTIONS]`).
+
+Modeled static relationships between multiple inputs appear in
+`command.constraints[]` instead of relying on prose. Current constraint kinds
+are `exactly_one_of`, `at_most_one_of`, `at_least_one_of`, `all_or_none`,
+`requires`, `requires_all`, `requires_any`, and `forbids`.
+`fields` names positional placeholders or option flags; `alternatives` groups
+fields that form one mode; `if_present` and `if_absent` make a relationship
+conditional. Constraint references are tested against the corresponding action
+contract. Runtime validation remains authoritative for dynamic conditions such
+as risk-confirmation tokens and for static validators not yet represented in
+the registry; absence of `constraints` is not a claim that no relationship can
+exist.
+
+Execution metadata such as `mutates`, `mutation_target`, and `remote_requests`
+is also additive and action-local. A present value is authoritative; an absent
+field means unspecified, not `false`. `context` and every `use` action declare
+these fields because distinguishing local state from cluster state is part of
+their safety contract.
 
 Current guarantees:
 
 - describes only the current stable surface
-- uses `DS_VERSION` and `--env-file` when rendering embedded capability
-  metadata, matching `dsctl capabilities`
-- includes selector semantics for name-first, path-first, and id-first resources
-- includes the standard success/error envelope contract
-- includes the stable structured error envelope and `error.source` contract
+- bounded `global_options` repeat only the four global flags required to build
+  an invocation, and every entry declares `placement: "anywhere"`
+- `--output-format`, `--columns`, and `--compact` therefore remain discoverable
+  even when an agent jumps directly to an action-local contract
+- the compact option declares its structured requirement that
+  `--output-format` be `json`
+- uses `DS_VERSION` and `--env-file` for compact selected-version contract
+  identity; `--full` retains all supported-version metadata
 - command arguments and options may include additive metadata such as
-  `choices`, `examples`, `supported_keys`, and `discovery_command` when the
-  CLI can expose a tighter contract for composite inputs
+  `choices`, `minimum`, `examples`, `supported_keys`, and
+  `discovery_command` when the CLI can expose a tighter contract
+- `normalization: "lowercase"` means the CLI lowercases the supplied value
+  before choice validation; absence of `normalization` publishes no
+  normalization guarantee for handwritten commands that have not migrated to
+  the canonical command contract
+- path inputs may expose `input_policy` with the parser's `exists`,
+  `file_okay`, `dir_okay`, `readable`, and `resolve_path` rules
+- `default` without `resolution` means omission produces one fixed value
+  without consulting a higher-priority runtime source
+- when `resolution` is also present, its source order is authoritative;
+  `default` is retained only as a schema-version-compatible projection of the
+  same terminal value, not as an eager parser default
+- `resolution.precedence` is ordered from strongest to weakest; the current
+  workflow runtime sources are `flag`, `project_preference`, and `default`;
+  `resolution.fallback` carries the value used by that terminal `default`
+  source
 - command entries that accept file payloads may include compact `payload`
   metadata; when present, `payload.template_command` is the preferred
   progressive-discovery command for a concrete payload template
-- includes task template type and variant discovery under
-  `capabilities.templates.task`
-- `--group`, `--command`, `--list-groups`, and `--list-commands` are additive
-  scoped or discovery views over the same command tree, not a different schema
-  mode
+- feature discovery remains the responsibility of `dsctl capabilities`; only
+  the explicit expanded `--full` view embeds it
 - `schema_version` changes for breaking schema changes; additive fields may
   appear within the same version
 - is tested against the actual registered command tree
@@ -408,33 +649,41 @@ Current guarantees:
   `--output-format table|tsv`
 - schema and capabilities output metadata expose `json_column_projection` when
   JSON `--columns` projection is supported
+- compact standard-envelope budgets guard the progressive path: root index
+  below 16 KiB, every action-local contract below 8 KiB, and unknown-action
+  recovery below 2 KiB
+- every stable leaf `--help` response stays below 10 KiB so the help-first
+  discovery path cannot grow without an explicit product decision
 
 ## `dsctl capabilities`
 
 Returns stable version and surface capability discovery for the current CLI and
 selected DS version.
-This payload is intentionally lighter than `dsctl schema`: it answers what
-resource families and feature groups exist, not how to invoke every command.
-Agents that need to construct commands should read `dsctl schema`.
+It answers which resource families and feature groups exist, while `schema`
+answers how to invoke them. The default is a bounded summary; agents should
+expand one `--section` unless they need the complete `--full` inventory, and
+should request `schema --command ACTION` when constructing a command.
 
 Options:
 
 - `--summary`
 - `--section SECTION`
+- `--full`
 
 Selection rules:
 
-- omit both options to return full capability discovery
-- `--summary` returns lightweight capability discovery with `cli`, `ds`,
+- omit all options to return bounded summary capability discovery
+- `--summary` explicitly requests the same default bounded view with `cli`, `ds`,
   `self_description`, `resources`, `planes`, `runtime`, `schedule`, `monitor`,
   `enums`, and a summarized `authoring` section
 - `--section` returns one top-level section plus the standard `cli`, `ds`, and
   `self_description` header
+- `--full` returns the complete expanded capability inventory
 - valid sections are `selection`, `output`, `errors`, `resources`, `planes`,
   `authoring`, `schedule`, `monitor`, `enums`, and `runtime`
-- `--summary` and `--section` are mutually exclusive
+- `--summary`, `--section`, and `--full` are mutually exclusive
 
-Current `data` fields:
+Complete `--full` `data` fields:
 
 - `cli`
 - `ds`
@@ -458,6 +707,12 @@ Current guarantees:
 - `data.ds.family` groups compatible server versions that share adapter
   semantics
 - `data.ds.support_level` is one of `full`, `legacy_core`, or `experimental`
+- `data.ds.tested` reports whether the selected version's live smoke suite has
+  passed
+- `data.ds.supported_versions` lists selectable targets, while
+  `data.ds.versions` reports each target's support level and test evidence
+- registry entries marked `full` or `legacy_core` always have `tested: true`;
+  untested selectable targets use `experimental`
 
 - summarizes only the current stable surface
 - exposes name-first, path-first, and id-first selection rules
@@ -473,9 +728,11 @@ Current guarantees:
 - exposes `data.self_description.command_invocation_source="schema"` and
   `data.self_description.capabilities_scope="feature_discovery"` so tools can
   distinguish feature discovery from command invocation metadata
-- `--summary` and `--section` are additive scoped views over the same feature
-  discovery data, not output-format modes
-- is intended as the lightweight companion to `dsctl schema`
+- the default/`--summary` and `--section` views are projections over the same
+  feature discovery data, not output-format modes
+- the default summary and `--section` are the bounded feature-discovery
+  companions to progressive `dsctl schema`; `--full` is explicit expansion
+- compact default capability output remains below 8 KiB
 
 ## `dsctl use`
 
@@ -484,7 +741,7 @@ Persists CLI context in the selected scope.
 Supported forms:
 
 - `dsctl use project NAME`
-- `dsctl use workflow NAME`
+- `dsctl use workflow NAME [--project PROJECT]`
 - `dsctl use --clear`
 - `dsctl use project --clear`
 - `dsctl use workflow --clear`
@@ -492,14 +749,71 @@ Supported forms:
 Rules:
 
 - `--scope` accepts `project` or `user`
+- target-specific `--scope`, `--clear`, and `--project` options belong after
+  the `project` or `workflow` subcommand; a group option before a subcommand is
+  rejected instead of being silently ignored
+- target `NAME` and `--clear` are mutually exclusive; workflow `--project` and
+  `--clear` are also mutually exclusive
 - setting `project` clears any stored `workflow` beneath it
 - clearing `project` also clears `workflow`
+- each stored layer treats `project`, optional `workflow`, and `set_at` as one
+  atomic selection tuple; a stored workflow is valid only with a project in
+  the same layer
+- `use workflow NAME --project PROJECT` binds the project and workflow
+  atomically in the selected layer
+- without `--project`, setting workflow in project scope uses the effective
+  project; setting it in user scope uses the project already stored in that
+  same user layer, so a higher-priority project layer is never copied into user
+  state
+- a workflow from context is used only when the command's project also came
+  from context; passing `--project` or selecting a project from a file requires
+  an explicit workflow selector
+- the project-scoped layer takes precedence over the user-scoped layer; an
+  update to user scope can remain shadowed by an existing project-scoped tuple
+- YAML `null` means that key is absent rather than a persistent tombstone;
+  a layer with `project: null` falls back to the lower layer, while
+  `workflow: null` leaves the selected project without workflow context
+- clearing a layer's project and workflow deletes that layer instead of
+  persisting an empty selection; legacy `set_at`-only layers remain readable
+- `set_at` comes from the layer that contributes the effective project and
+  workflow tuple; a `set_at`-only layer does not override lower selection time
+- writes replace context files atomically and preserve an existing symlink to
+  a context file; read, write, and clear filesystem failures surface as stable
+  `config_error` results with operation and path details
+- all `use` forms are local-only and report that remote validation was not
+  performed
 
-Successful output returns the merged effective context in:
+Successful output normally returns the merged effective context in:
 
 - `data.project`
 - `data.workflow`
 - `data.set_at`
+
+The mutation result is explicit about write-versus-readback state:
+
+- `resolved.scope` is the layer selected for mutation
+- `resolved.updated_context` is the tuple actually persisted in that layer
+- `resolved.effective_scope` is the layer that supplied `data`, or `null` when
+  effective resolution failed after a successful write
+- `resolved.readback` is `effective` or `updated_layer_fallback`
+- `resolved.shadowed` is `true` only when the updated user layer still contains
+  a project selection hidden by project context; it is `false` when no updated
+  selection is hidden, including after the user layer is emptied, or `null`
+  when readback could not determine this. Use `effective_scope`, not
+  `shadowed`, to identify which layer supplied `data`
+- `resolved.remote_validation` is `not_performed`
+- workflow-set results also include `resolved.project_binding` with its value,
+  `flag`/`context` source, and context scope when applicable
+
+A shadowed update remains successful and emits warning detail code
+`context_update_shadowed`; `data` still represents the higher-priority
+effective tuple, while `resolved.updated_context` proves what was written.
+
+If the selected layer mutation succeeds but another persisted layer is still
+invalid, the command remains successful, returns the updated layer as a safe
+fallback, and emits warning detail code
+`context_layer_invalid_after_update`. Repair or clear the invalid layer before
+treating that fallback as the effective merged context.
 
 ## `dsctl lint workflow FILE`
 
@@ -516,12 +830,21 @@ Rules:
 - this command is local-only and does not require DS connectivity
 - it validates the stable workflow YAML model
 - it runs the same local compile path used by `workflow create`
+- compiled task codes are deterministic preview values only; lint never
+  requests or reserves persistent task codes from DolphinScheduler
 - it warns when `workflow.project` is omitted because workflow selection then
   depends on `--project` or stored project context
 - it warns on risky `$[...]` dynamic parameter time formats; uppercase
   `YYYY` emits `parameter_time_format_week_year_token`, and calendar-year plus
   week-number patterns such as `$[yyyyww]` emit
   `parameter_time_format_calendar_year_with_week`
+- it warns when a local parameter value references its own property with
+  `parameter_local_self_reference`
+- it warns when a workflow global references itself with
+  `parameter_global_self_reference`
+- it warns when `SUB_WORKFLOW.task_params.localParams` is populated as if it
+  were a child-input mapping with
+  `sub_workflow_local_params_not_child_inputs`
 - it rejects schedule blocks on offline workflows because DS only allows
   schedule creation for online workflows
 - successful lint output includes `data.diagnostics[]`; pass diagnostics mirror
@@ -620,8 +943,16 @@ Rules:
 - `resolved.task_type` is the normalized DS-native task type
 - `data.template_command` points to the default YAML fragment
 - `data.raw_template_command` points to the copyable raw YAML fragment
-- `data.schema_command` points to the full authoring contract
-- `data.required_paths[]` lists fields required by the local authoring model
+- `data.schema_command` points directly to the bounded field contract; it is
+  not necessary to call `get` before it
+- `data.payload_modes[]` lists the accepted payload forms for the selected task
+  type
+- `data.required_paths[]` lists fields required independently of the selected
+  payload mode
+- `data.required_paths_by_payload_mode` lists the additional leaf fields needed
+  by each payload form; `SHELL` and `PYTHON` expose `command` and `task_params`
+  alternatives, while `REMOTESHELL` exposes only its datasource-backed
+  `task_params` form
 - `data.choice_sources[]` lists commands or local sources for discoverable
   values
 - `data.rows[]` is the compact table/tsv view of next commands and variants
@@ -629,24 +960,54 @@ Rules:
 
 ## `dsctl task-type schema TASK_TYPE`
 
-Returns the full local authoring contract for one DS task type. This command is
-local and does not call DolphinScheduler.
+Returns one local authoring view for a DS task type. This command is local and
+does not call DolphinScheduler. With no selector it returns the bounded field
+contract needed for ordinary YAML authoring.
+
+Options:
+
+- `--field PATH`
+- `--json-schema`
+- `--compile-mappings`
+- `--full`
 
 Rules:
 
-- `data.schema` is a JSON-Schema-style authoring contract with `x-dsctl`
-  metadata
-- `data.fields[]` is the canonical row model for table/tsv and `--columns`
+- the four selectors are mutually exclusive; no selector means the `fields`
+  view
+- `resolved.task_type` is the normalized type and `resolved.view` is one of
+  `fields`, `field`, `json_schema`, `compile_mappings`, or `full`
+- bounded views use `data.schema_version: 2` and include small `data.links`
+  commands for direct progressive navigation
+- the default `data.fields[]` is the canonical row model for table/tsv and
+  `--columns`; `data.state_rules[]` keeps the conditionals needed to use those
+  fields correctly, and `condition_paths[]` identifies the fields controlling
+  each rule without parsing its human-readable `when` text
+- dotted authoring paths are nested JSON Schema objects and `[]` paths are
+  represented as arrays; `data.fields[]` is not duplicated as `data.rows[]`
 - `data.fields[].choice_source` records the command or local source for
-  discoverable values; `data.fields[].related_commands[]` records adjacent
+  discoverable values, `data.fields[].choice_value` identifies which returned
+  field to use, and `data.fields[].related_commands[]` records adjacent
   inspection or creation commands when useful
-- `data.state_rules[]` describes task-type conditionals such as SQL
-  `sqlType`
-- `data.choice_sources[]` records how to discover valid external values
-  and which returned field to use, such as resource `fullName`, datasource
-  `id`, workflow `code`, or a task name in the same YAML file
-- `data.compile_mappings[]` records how authoring YAML maps to DS REST form
-  payload fields
+- `--field PATH` returns one element in `data.fields[]` plus only state rules
+  that mention that path; unknown paths return at most three executable typo
+  candidates rather than the whole field catalog
+- `--json-schema` returns the nested validation contract in `data.schema`; its
+  `x-dsctl` navigation metadata does not repeat state rules, choice sources, or
+  compile mappings; this document view is JSON-only, so table/tsv and
+  `--columns` fail rather than silently returning an incomplete schema
+- `--compile-mappings` returns one `data.compile_mapping_policy` plus compact
+  `data.compile_mappings[]` rows, whose table/tsv row source is distinct from
+  the field view
+- `--full` retains the former expanded top-level paths and repeated
+  `schema.x-dsctl` metadata for compatibility, audits, and generators; it is
+  not the recommended LLM authoring path
+- supported table/tsv output is always a standard single table with no metadata
+  footer: fields/field/full render `data.fields[]`, and compile mappings render
+  their own rows
+- compact success envelopes are budgeted below 12 KiB for the default view,
+  10 KiB for JSON Schema, 5 KiB for compile mappings, and 3 KiB for one field
+  across the supported task-type catalog
 - the schema is for authoring workflow YAML, not for representing every raw DS
   database column
 
@@ -2834,12 +3195,24 @@ Selection rules:
 - `--project` wins
 - then stored context project
 - use `dsctl project list` to discover project names and codes
+- `--search` is passed to the upstream paged list operation
+- `--page-no` and `--page-size` select one page
+- `--all` exhausts pages up to the shared safety limit
 
-The `data` payload is a JSON array of workflow summaries:
+The `data` payload is standard page data. Rows live at `data.totalList`; page
+metadata includes `total`, `totalPage`, `pageNo`, `pageSize`, and
+`currentPage`. Current row fields are:
 
 - `code`
 - `name`
 - `version`
+- `releaseState`
+- `scheduleReleaseState`
+- `scheduleId`
+
+The public list uses the rich paged workflow endpoint. Name/code resolution
+uses a separate lightweight reference endpoint, so improving public discovery
+does not make every selector resolution fetch a rich page.
 
 ## `dsctl workflow get`
 
@@ -2848,27 +3221,43 @@ Fetches one workflow by name or numeric code.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: positional argument, then context workflow
+- workflow selection: positional argument, then context workflow only when the
+  project also came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Output:
 
 - default output returns the workflow payload in the standard JSON envelope
+- the service resolves the independently persisted attached schedule instead
+  of trusting the DS workflow-detail payload; `data.schedule=null` therefore
+  means the authoritative lookup confirmed that no schedule exists
+- every non-null nested workflow `schedule` summary includes a positive numeric
+  `id`; workflow YAML export intentionally omits that persisted identity
+- attached-schedule lookup errors fail the command with a structured error;
+  they are never downgraded to `schedule:null`
 
 ## `dsctl workflow export`
 
-Exports one workflow by name or numeric code as an editable YAML document.
+Exports one workflow by name or numeric code as raw YAML for clone/create
+or read-only schedule-aware definition editing.
 
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: positional argument, then context workflow
+- workflow selection: positional argument, then context workflow only when the
+  project also came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Output:
 
 - writes only the workflow YAML document
-- use it as the starting point for `workflow edit --file`
+- global display options do not change successful raw YAML; they still shape
+  structured errors
+- an attached schedule is preserved as a `schedule:` block from the
+  authoritative schedule resource; lookup failure does not emit partial YAML
+- the same document can be passed directly to `workflow create --file` or
+  `workflow edit --file`: create treats `schedule:` as desired state, while edit
+  verifies it as a read-only snapshot and never changes the schedule
 
 ## `dsctl workflow describe`
 
@@ -2879,6 +3268,8 @@ Use `dsctl project list` and `dsctl workflow list` to discover selectors.
 - `data.workflow`
 - `data.tasks`
 - `data.relations`
+- `data.workflow.schedule` and `scheduleReleaseState` use the same authoritative
+  zero-or-one schedule lookup as `workflow get`
 
 ## `dsctl workflow digest`
 
@@ -2906,6 +3297,7 @@ Current guarantees:
 - omits verbose task payload fields such as `taskParams` and retry/timeout
   details to reduce context size before a caller decides whether to fetch the
   full `workflow describe` or `workflow export` view
+- `data.workflow.schedule` uses the authoritative attached-schedule lookup
 
 ## `dsctl workflow create`
 
@@ -2922,8 +3314,9 @@ Rules:
 
 - use `dsctl template workflow --raw` to start a workflow YAML file
 - use `dsctl template task` to discover task template variants
-- use `dsctl task-type schema TYPE` to inspect full task fields, choices,
-  related discovery commands, and state rules before writing `task_params`
+- use `dsctl task-type schema TYPE` to inspect bounded task fields, returned
+  value selectors, related discovery commands, and state rules before writing
+  `task_params`; request JSON Schema or compile mappings only when needed
 - use `dsctl project list` to discover project names and codes for `--project`
 - project selection precedence is:
   - explicit `--project`
@@ -2932,6 +3325,14 @@ Rules:
 - `--dry-run` returns the compiled legacy DS form request inside the standard
   dry-run envelope; when additional lifecycle steps would run, `data.requests`
   contains the ordered request plan
+- a single-request dry-run omits `data.requests` because it would duplicate
+  `data.request`
+- a successful create dry-run includes a complete, mutating
+  `next_actions[].command` that applies the same file and resolved project; a
+  required schedule confirmation token is preserved in that command
+- dry-run task codes are deterministic preview values and are never sent or
+  persisted; applied create first completes the same local compile preflight,
+  then obtains persistent task codes from DolphinScheduler's REST API
 - when a YAML `schedule:` block is present, `--dry-run` also returns
   `data.schedule_preview` and `data.schedule_confirmation`
 - YAML `workflow.release_state: ONLINE` creates the workflow, then brings it
@@ -2943,6 +3344,11 @@ Rules:
 - if `schedule.release_state` or `schedule.enabled` requests an online
   schedule, the CLI creates the schedule, then brings it online as a final
   step
+- an applied create returns the final workflow payload; when the YAML contains
+  a `schedule:` block, `data.schedule` is the created attached-schedule summary
+  (including `id`) and `data.scheduleReleaseState` reflects its final
+  `OFFLINE` or `ONLINE` state even when the upstream workflow detail response
+  does not embed schedules
 - high-frequency schedules reuse the standard `confirmation_required` flow and
   expect the same command to be retried with `--confirm-risk TOKEN`
 - the same high-frequency confirmation rule applies to `--dry-run`
@@ -2951,6 +3357,10 @@ Rules:
 - workflow dynamic parameter time-format warnings use the same
   `parameter_time_format_*` codes as `lint workflow`, both in dry-run and
   applied create results
+- parameter semantic warnings use the same
+  `parameter_global_self_reference`,
+  `parameter_local_self_reference` and
+  `sub_workflow_local_params_not_child_inputs` codes as `lint workflow`
 
 The current stable YAML surface supports:
 
@@ -2975,7 +3385,7 @@ The current stable YAML surface supports:
   - `type`
   - `description`
   - `task_params`
-  - `command` for `SHELL`, `PYTHON`, and `REMOTESHELL`
+  - `command` for `SHELL` and `PYTHON`
   - `worker_group`
   - `priority`
   - `retry`
@@ -2984,6 +3394,9 @@ The current stable YAML surface supports:
   - `depends_on`
 - task identity fields such as DS task `code` and `version` are system-managed
   and are not authored in workflow YAML
+- `REMOTESHELL` requires `task_params.rawScript` and
+  `task_params.datasource`; `task_params.type` defaults to the DS-native `SSH`
+  value when omitted
 
 Current stable per-task-type validation is built in for:
 
@@ -3018,7 +3431,8 @@ full desired-state workflow YAML file.
 Options:
 
 - positional `WORKFLOW` selects the current workflow for `--file`; for
-  `--patch`, it is optional and falls back to workflow context
+  `--patch`, it is optional only when project and workflow both come from the
+  stored context tuple
 - exactly one of `--patch PATH` or `--file PATH` is required
 - `--project PROJECT`
 - `--dry-run`
@@ -3042,10 +3456,17 @@ Rules:
     `tasks.rename[]` when task identity must survive a name change
   - workflow rename and same-name task type changes also require
     `--confirm-risk`
-  - `schedule:` is rejected; use schedule commands for schedule lifecycle
+  - an exported `schedule:` is a read-only concurrency snapshot: matching
+    values are stripped before definition compile, while changed or missing
+    attached schedule state is a pre-mutation `conflict`
+  - deleting or nulling one exported schedule field is also a snapshot mismatch;
+    remove the complete `schedule:` block to preserve the schedule without
+    snapshot validation
+  - use schedule commands for intentional schedule lifecycle or configuration
+    changes
 - target workflow selection for `--patch`:
   - explicit positional `WORKFLOW`
-  - then workflow context
+  - then workflow context only when project also came from context
 - target workflow selection for `--file`:
   - explicit positional `WORKFLOW` is required, so workflow rename intent is
     explicit
@@ -3053,6 +3474,8 @@ Rules:
 - project selection for `--file` is `flag > workflow.project > context`; if
   `--project` and `workflow.project` both exist and disagree, the command fails
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
+- for a bounded dry-run review that omits the large compiled request, use
+  `--columns diff,no_change,workflow_state_constraints,schedule_impacts`
 - current stable patch operations are:
   - `patch.workflow.set`
   - `patch.tasks.create`
@@ -3147,7 +3570,9 @@ patch:
   - `depends_on`
 - task matching is name-based
 - workflow edit preserves the live DS task `code + version` identity for
-  existing tasks and allocates new task codes only for newly created tasks
+  existing tasks and allocates new task codes from DolphinScheduler only for
+  newly created tasks; the CLI completes local compile validation before that
+  allocation request, and no-op edits request no codes
 - task renames rewrite:
   - `depends_on`
   - `SWITCH` branch targets
@@ -3178,8 +3603,24 @@ patch:
 - workflow dynamic parameter time-format warnings use the same
   `parameter_time_format_*` codes as `lint workflow`, both in dry-run and
   applied edit results
+- parameter semantic warnings use the same
+  `parameter_global_self_reference`,
+  `parameter_local_self_reference` and
+  `sub_workflow_local_params_not_child_inputs` codes as `lint workflow`
 - workflow edit does not mutate the attached schedule; schedule lifecycle stays
   on `schedule update|online|offline`
+- a `schedule:` block from workflow export is accepted as a read-only snapshot;
+  edit verifies its fields against the authoritative attached schedule, removes
+  it from the definition compiler input, and fails before mutation when it is
+  missing or changed
+- omitted and explicit-null fields inside that block compare as null rather than
+  acting as wildcards; only omitting the complete block opts out of validation
+- the `ONLINE` schedule state in an older export may match a current `OFFLINE`
+  schedule only when the workflow is offline and the document still requests
+  the workflow itself `ONLINE`, because DS workflow offline cascades that exact
+  schedule transition; a schedule-only lifecycle change remains a conflict
+- schedule constraints, impacts, and returned workflow payloads use one
+  authoritative lookup performed before any edit mutation
 
 Current `data.diff` fields:
 
@@ -3215,15 +3656,19 @@ Deletes one workflow definition after explicit confirmation.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
 
-- positional `WORKFLOW` is optional and falls back to workflow context
+- positional `WORKFLOW` is optional only when project and workflow both come
+  from the stored context tuple
 - `--force` is required
 - the CLI fetches the current workflow before deletion and returns that payload
   in `data.workflow`
+- deletion resolves the attached schedule before sending the mutation; lookup
+  failure is fail-closed and sends no delete request
 - the workflow must be offline before deletion
 - workflows with online schedules must have their schedule taken offline first
 - workflows with running workflow instances cannot be deleted until those
@@ -3273,12 +3718,14 @@ Returns the lineage graph anchored on one resolved workflow.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
 
-- positional `WORKFLOW` is optional and falls back to workflow context
+- positional `WORKFLOW` is optional only when project and workflow both come
+  from the stored context tuple
 - the payload shape matches `workflow lineage list`
 
 ## `dsctl workflow lineage dependent-tasks WORKFLOW`
@@ -3288,7 +3735,8 @@ Returns workflows and tasks that depend on one resolved workflow or task.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - optional task filter is explicit-only through `--task`
 - use `dsctl project list`, `dsctl workflow list`, and `dsctl task list` to
   discover selectors
@@ -3300,7 +3748,8 @@ Options:
 
 Rules:
 
-- positional `WORKFLOW` is optional and falls back to workflow context
+- positional `WORKFLOW` is optional only when project and workflow both come
+  from the stored context tuple
 - `--task` accepts a task name or numeric task code inside the selected
   workflow
 
@@ -3393,6 +3842,9 @@ Rules:
   `timeout_notify_strategy`, `cpu_quota`, and `memory_max`
 - `dsctl template workflow --with-schedule` includes one minimal optional
   `schedule:` block and returns `resolved.with_schedule=true`
+- that scheduled template sets `workflow.release_state: ONLINE`, which is
+  required before DS can create the schedule; the schedule itself remains
+  offline through `schedule.enabled: false`
 - the optional `schedule.cron` example uses DolphinScheduler Quartz cron syntax
 - `--raw` prints only the workflow YAML; it does not print the standard success
   envelope
@@ -3501,6 +3953,16 @@ Rules:
 - task-level parameters belong under `task_params.localParams`
 - `task_params.varPool` is a runtime output pool and should normally stay empty
   in newly authored YAML
+- for ordinary, non-reserved user parameters, runtime precedence in DS 3.4.1 is
+  upstream output/varPool, startup parameter, local parameter, workflow global,
+  project parameter, then built-in parameter; varPool only replaces an already
+  declared same-name IN parameter
+- a same-name local self-reference such as `prop: label` plus `value: ${label}`
+  shadows the workflow global and can become circular
+- `SUB_WORKFLOW` task `localParams` do not become child inputs in DS 3.4.1;
+  children inherit parent workflow globals, startup parameters, and the parent
+  workflow-instance varPool automatically. Standalone child defaults belong in
+  the child's own `workflow.global_params`.
 - `$[...]` time placeholders such as `$[yyyyMMdd-1]` are DS-native runtime
   expressions and are preserved as strings by the CLI
 - DS uses Java-style date patterns inside `$[...]`: lowercase `yyyy` means
@@ -3693,13 +4155,19 @@ For `SHELL` and `PYTHON`, the `resource` variant uses the DS-native
 the minimal inline script path and compiles to `taskParams.rawScript` with an
 empty `resourceList`.
 
-The `params` variants expose DS-native task dynamic parameter fields:
+Except for `SUB_WORKFLOW`, the `params` variants expose DS-native task dynamic
+parameter fields:
 `task_params.localParams[]` and `task_params.varPool[]`. Parameter entries use
 the DS `Property` shape: `prop`, `direct`, `type`, and optional `value`.
 `direct` is `IN` or `OUT`; supported types are `VARCHAR`, `INTEGER`, `LONG`,
 `FLOAT`, `DOUBLE`, `DATE`, `TIME`, `TIMESTAMP`, `BOOLEAN`, `LIST`, and `FILE`.
 Script-like tasks can emit output parameters through log lines matching
 `${setValue(name=value)}` or `#{setValue(name=value)}`.
+
+The `SUB_WORKFLOW` `params` variant documents parent-to-child parameter
+inheritance and keeps `localParams` empty. In DS 3.4.1, child startup parameters
+come from the parent workflow globals, startup parameters, and varPool rather
+than the SUB_WORKFLOW task's own `localParams`.
 
 SQL templates and the SQL typed payload normalizer keep `localParams`,
 `varPool`, `preStatements`, and `postStatements` as non-null lists when omitted
@@ -3769,6 +4237,9 @@ Rules:
 - create-form omitted `warningType`, `warningGroupId`,
   `workflowInstancePriority`, `workerGroup`, and `environmentCode` may be
   supplied by enabled project preference before CLI built-in defaults
+- create-form `--environment-code 0` explicitly selects no environment and
+  bypasses an enabled project environment preference; update-form zero clears
+  the current environment, while omission preserves it
 - with `SCHEDULE_ID`, explain models `schedule.update` and merges omitted
   fields from the current remote schedule before preview and risk analysis
 - update-form explain also returns `data.currentSchedule`,
@@ -3826,7 +4297,8 @@ Creates one schedule bound to a resolved workflow.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - tenant selection:
   `flag > enabled project preference.tenant > current-user tenantCode > "default"`
 - use `dsctl project list` and `dsctl workflow list` to discover project and
@@ -3861,6 +4333,12 @@ Rules:
 - omitted `warningType`, `warningGroupId`, `workflowInstancePriority`,
   `workerGroup`, `tenantCode`, and `environmentCode` may be supplied by
   enabled project preference before CLI built-in defaults
+- when no environment code is selected after preference resolution, the
+  schedule is created without an environment; the DS-version adapter chooses
+  the compatible generated endpoint rather than sending a synthetic code `0`
+- explicit `--environment-code 0` selects that no-environment state and
+  bypasses an enabled project environment preference; positive values select a
+  concrete DS environment
 - `--cron` must be a DolphinScheduler Quartz cron expression with 6 or 7
   fields and seconds first
 - the CLI does not expose `releaseState` as a create option; schedule
@@ -3893,6 +4371,11 @@ Rules:
 - `--failure-strategy`, `--warning-type`, and `--priority` use generated DS
   enum values exposed by `dsctl enum list`
 - omitted fields preserve current remote values
+- `--environment-code 0` clears the current environment; omitting the option
+  preserves the current environment instead
+- an existing schedule without an environment remains environment-free when
+  other fields are updated; the DS-version adapter uses the compatible
+  project-scoped update contract without exposing that version detail
 - at least one field change is required
 - `--confirm-risk TOKEN` accepts a token previously returned in a
   `confirmation_required` error
@@ -3951,7 +4434,8 @@ Lists tasks inside one resolved workflow.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 The `data` payload is a JSON array of task summaries:
@@ -3967,7 +4451,8 @@ Fetches one task definition inside one resolved workflow.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - task is resolved by name or numeric code within the selected workflow
 - use `dsctl task list` inside the selected workflow to discover task names and
   codes
@@ -4019,8 +4504,8 @@ Rules:
 - use `workflow-instance edit --patch|--file` for finished instance repair
 - the CLI compiles the update into the DS native
   `updateTaskWithUpstream` form request
-- `command` updates are supported only for `SHELL`, `PYTHON`, and
-  `REMOTESHELL`
+- `command` updates are supported for `SHELL`, `PYTHON`, and `REMOTESHELL`;
+  existing `REMOTESHELL` connection type and datasource fields are preserved
 - `flag` accepts `YES` or `NO`
 - `depends_on` accepts either a YAML list value or a comma-separated task-name
   string
@@ -4053,7 +4538,8 @@ Triggers one workflow definition and returns the created workflow instance ids.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 - use `dsctl worker-group list`, `dsctl tenant list`,
   `dsctl alert-group list`, and `dsctl environment list` to discover optional
@@ -4062,16 +4548,24 @@ Selection rules:
   `flag > enabled project preference.workerGroup > "default"`
 - tenant selection:
   `flag > enabled project preference.tenant > "default"`
-- runtime option defaults mirror the DS 3.4.1 UI start modal:
-  `failureStrategy=CONTINUE`, `warningType=NONE`,
-  `workflowInstancePriority=MEDIUM`, `dryRun=0`, and omitted
+- when no enabled project preference provides a value, runtime fallbacks mirror
+  the DS 3.4.1 UI start modal: `failureStrategy=CONTINUE`,
+  `warningType=NONE`, `workflowInstancePriority=MEDIUM`, `dryRun=0`, and omitted
   `warningGroupId`, `environmentCode`, and `startParams`
-- project preference overrides are used for `taskPriority`, `warningType`,
-  `alertGroups`/`alertGroup`, `workerGroup`, `tenant`, and `environmentCode`
+- priority selection is
+  `flag > enabled project preference.taskPriority > MEDIUM`
+- warning-type selection is
+  `flag > enabled project preference.warningType > NONE`
+- project preference resolution also applies to `alertGroups`/`alertGroup`,
+  `workerGroup`, `tenant`, and `environmentCode`
 - `--dry-run` is a local CLI preview: it resolves inputs and emits the native
   `start-workflow-instance` request without sending that start request
 - `--execution-dry-run` sends DS `dryRun=1`: DolphinScheduler creates dry-run
   workflow/task instances and skips task plugin trigger execution
+- if DS cannot select an available master, the CLI returns `invalid_state`,
+  preserves the upstream result source, and suggests checking
+  `dsctl monitor server master`; the CLI does not automatically retry the
+  trigger
 
 The `data` payload is a JSON object:
 
@@ -4097,8 +4591,10 @@ The `resolved` payload also includes:
 Options:
 
 - `--failure-strategy continue|end`, default `continue`
-- `--priority highest|high|medium|low|lowest`, default `medium`
-- `--warning-type none|success|failure|all`, default `none`
+- `--priority highest|high|medium|low|lowest`; omitted values use the priority
+  resolution order above
+- `--warning-type none|success|failure|all`; omitted values use the warning-type
+  resolution order above
 - `--warning-group-id ID`
 - `--environment-code CODE`
 - `--param KEY=VALUE`, repeatable, serialized to DS `startParams`
@@ -4115,7 +4611,8 @@ from `--scope`.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `argument > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - task selection: `--task` name or code within the workflow definition
 - use `dsctl project list`, `dsctl workflow list`, and `dsctl task list` to
   discover selectors
@@ -4163,6 +4660,8 @@ Rules:
   wait or fail
 - the aligned `warning_details[]` item uses code
   `workflow_run_task_dependent_context`
+- missing-master failures follow the same `invalid_state` and no-automatic-retry
+  contract as `workflow run`
 
 ## `dsctl workflow backfill`
 
@@ -4173,7 +4672,8 @@ This uses DolphinScheduler's workflow trigger endpoint with
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `argument > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - optional task selection: `--task` name or code within the workflow definition
 - use `dsctl project list`, `dsctl workflow list`, and `dsctl task list` to
   discover selectors
@@ -4217,6 +4717,16 @@ The `resolved` payload also includes the `workflow run` resolved fields plus:
 - `backfill.execution_order`
 - `task` and `scope` when `--task` is set
 
+Failure safety:
+
+- serial backfill missing-master failures return `invalid_state` without an
+  automatic retry
+- a parallel backfill selects a master once per partition, so a later
+  missing-master failure can occur after earlier partitions were dispatched;
+  its error includes `partial_dispatch_possible=true` and tells callers to
+  inspect workflow instances and compare `scheduleTime` values before deciding
+  whether to retry
+
 ## `dsctl workflow online`
 
 Brings one workflow definition online and returns the refreshed workflow
@@ -4225,7 +4735,8 @@ payload.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
@@ -4235,6 +4746,11 @@ Rules:
   adds one warning reminding the caller that `schedule online` is still
   required; the aligned `warning_details[]` item uses code
   `workflow_online_leaves_schedule_offline`
+- the returned workflow payload includes the authoritative attached schedule;
+  bringing a workflow online does not bring that schedule online
+- if the mutation succeeds but workflow or schedule refresh fails, the
+  structured error reports `mutation_applied=true` and tells callers to verify
+  state before retrying
 
 ## `dsctl workflow offline`
 
@@ -4244,7 +4760,8 @@ payload.
 Selection rules:
 
 - project selection: `flag > context`
-- workflow selection: `flag > context`
+- workflow selection: explicit selector, then context only when project also
+  came from the same context tuple
 - use `dsctl project list` and `dsctl workflow list` to discover selectors
 
 Rules:
@@ -4254,6 +4771,9 @@ Rules:
   succeeds and adds one warning because DS also forces that schedule offline;
   the aligned `warning_details[]` item uses code
   `workflow_offline_also_offlines_schedule`
+- when a schedule exists, the CLI refreshes it after the workflow mutation so
+  the returned payload reflects DS's cascading `OFFLINE` state; if that refresh
+  fails, the structured error reports `mutation_applied=true`
 
 ## `dsctl workflow-instance list`
 
@@ -4413,6 +4933,9 @@ Current guarantees:
   and `active`
 - highlighted task lists are compact task-instance views rather than the full
   `task-instance get` payload
+- each highlighted task includes `logAvailable`, derived from whether DS
+  returned a non-empty log path; lifecycle navigation only suggests `log` when
+  this value is true
 
 ## `dsctl workflow-instance edit`
 
@@ -4463,6 +4986,9 @@ Rules:
   one of `patch_file` or `file`, and `syncDefine`
 - `--dry-run` returns the compiled DS form payload plus `diff`, `no_change`,
   and `syncDefine`
+- dry-run uses deterministic preview task codes; applied edits obtain
+  persistent codes from DolphinScheduler only for newly created tasks and only
+  after local compile validation and confirmation checks succeed
 - applying a no-op edit returns the current workflow-instance payload, emits one
   warning, and the aligned `warning_details[]` item uses code
   `workflow_instance_edit_no_persistent_change`
@@ -4522,6 +5048,9 @@ Rules:
   `warning_details[]` item uses code
   `workflow_instance_action_state_after_request` with `action="rerun"` and
   `expect_non_final=true`
+- if DS cannot select an available master, the command returns `invalid_state`
+  and suggests checking `dsctl monitor server master` before retrying; the CLI
+  does not automatically retry
 
 ## `dsctl workflow-instance recover-failed`
 
@@ -4539,6 +5068,8 @@ Rules:
   `warning_details[]` item uses code
   `workflow_instance_action_state_after_request` with
   `action="recover-failed"` and `expect_non_final=true`
+- missing-master failures follow the same `invalid_state` and no-automatic-retry
+  contract as `workflow-instance rerun`
 
 ## `dsctl workflow-instance execute-task`
 

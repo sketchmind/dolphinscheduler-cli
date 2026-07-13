@@ -50,6 +50,7 @@ def test_workflow_template_result_returns_valid_yaml_document() -> None:
     assert "# task_group_id: 12" in yaml_text
     assert document["workflow"]["name"] == "example-workflow"
     assert document["workflow"]["execution_type"] == "PARALLEL"
+    assert document["workflow"]["release_state"] == "OFFLINE"
     assert len(document["tasks"]) == 2
     assert document["tasks"][1]["depends_on"] == ["extract"]
     assert "schedule" not in document
@@ -68,6 +69,7 @@ def test_workflow_template_result_can_include_schedule_block() -> None:
     assert data["artifact"]["raw_command"] == (
         "dsctl template workflow --with-schedule --raw"
     )
+    assert document["workflow"]["release_state"] == "ONLINE"
     assert document["schedule"]["cron"] == "0 0 2 * * ?"
     assert document["schedule"]["enabled"] is False
 
@@ -170,6 +172,32 @@ def test_parameter_syntax_result_can_expand_specific_topics() -> None:
     assert "${setValue(name=value)}" in [
         item["syntax"] for item in output_details["output_syntax"]
     ]
+
+
+def test_parameter_context_matches_ds_341_runtime_precedence() -> None:
+    result = parameter_syntax_result(topic="context")
+    data = result.data
+
+    assert isinstance(data, dict)
+    details = data["details"]
+    assert isinstance(details, dict)
+    assert details["priority"] == [
+        "Upstream Output / VarPool",
+        "Startup Parameter",
+        "Local Parameter",
+        "Global Parameter",
+        "Project Parameter",
+        "Built-in Parameter",
+    ]
+    assert any(
+        "SUB_WORKFLOW localParams do not become child inputs" in rule
+        for rule in details["rules"]
+    )
+    assert any(
+        "parent workflow globals, startup parameters, and the parent "
+        "workflow-instance varPool" in rule
+        for rule in details["rules"]
+    )
 
 
 def test_datasource_template_result_returns_discovery_without_type() -> None:
@@ -384,7 +412,7 @@ def test_task_template_types_match_typed_task_specs() -> None:
         ("DEPENDENT", "workflow-dependency", "dependTaskList:"),
         ("DEPENDENT", "params", "prop: date_window"),
         ("SUB_WORKFLOW", "child-workflow", "workflowDefinitionCode:"),
-        ("SUB_WORKFLOW", "params", "prop: bizdate"),
+        ("SUB_WORKFLOW", "params", "localParams: []"),
         ("REMOTESHELL", "datasource", "datasource: 1"),
         ("REMOTESHELL", "params", "direct: OUT"),
     ],
@@ -405,6 +433,21 @@ def test_task_template_result_renders_discoverable_variants(
     assert isinstance(available_variants, list)
     assert variant in available_variants
     assert expected_fragment in data["yaml"]
+
+
+def test_sub_workflow_params_template_teaches_parent_parameter_inheritance() -> None:
+    result = task_template_result("SUB_WORKFLOW", variant="params")
+    data = result.data
+
+    assert isinstance(data, dict)
+    yaml_text = data["yaml"]
+    assert isinstance(yaml_text, str)
+    document = yaml.safe_load(yaml_text)
+    assert document["task_params"]["localParams"] == []
+    assert "this parent in workflow.global_params" in yaml_text
+    assert "child workflow.global_params" in yaml_text
+    assert "parent workflow-instance varPool" in yaml_text
+    assert "do not become child inputs" in yaml_text
 
 
 def test_task_template_result_rejects_unsupported_variant() -> None:
@@ -502,11 +545,9 @@ def _compilable_workflow_document(
 
 @pytest.mark.parametrize("task_type", supported_task_template_types())
 def test_task_templates_compile_through_workflow_create_payload(
-    monkeypatch: pytest.MonkeyPatch,
     task_type: str,
 ) -> None:
     codes = iter(range(7001, 7100))
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
     template = task_template_result(task_type)
     data = template.data
     assert isinstance(data, dict)
@@ -516,7 +557,10 @@ def test_task_templates_compile_through_workflow_create_payload(
     assert isinstance(task_document, dict)
 
     spec = WorkflowSpec.model_validate(_compilable_workflow_document(task_document))
-    payload = workflow_compile_service.compile_workflow_create_payload(spec)
+    payload = workflow_compile_service.compile_workflow_create_payload(
+        spec,
+        allocate_task_codes=lambda count: [next(codes) for _ in range(count)],
+    )
     task_definitions = json.loads(payload["taskDefinitionJson"])
 
     assert task_definitions[0]["taskType"] == task_type
@@ -541,12 +585,10 @@ def test_task_templates_compile_through_workflow_create_payload(
     ],
 )
 def test_task_template_variants_compile_through_workflow_create_payload(
-    monkeypatch: pytest.MonkeyPatch,
     task_type: str,
     variant: str,
 ) -> None:
     codes = iter(range(8001, 8100))
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
     template = task_template_result(task_type, variant=variant)
     data = template.data
     assert isinstance(data, dict)
@@ -554,7 +596,10 @@ def test_task_template_variants_compile_through_workflow_create_payload(
     assert isinstance(task_document, dict)
 
     spec = WorkflowSpec.model_validate(_compilable_workflow_document(task_document))
-    payload = workflow_compile_service.compile_workflow_create_payload(spec)
+    payload = workflow_compile_service.compile_workflow_create_payload(
+        spec,
+        allocate_task_codes=lambda count: [next(codes) for _ in range(count)],
+    )
     task_definitions = json.loads(payload["taskDefinitionJson"])
 
     assert task_definitions[0]["taskType"] == task_type

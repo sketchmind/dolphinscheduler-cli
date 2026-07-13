@@ -10,7 +10,6 @@ from ...common.enums.warning_type import WarningType
 from ...dao.entities.schedule import Schedule
 from ..contracts.page_info import PageInfoScheduleVO
 from ..views.schedule import ScheduleVO
-from ..views.scheduler import ScheduleInsertResult
 
 class QueryScheduleListPagingParams(BaseParamsModel):
     """
@@ -110,7 +109,7 @@ class SchedulerOperations(BaseRequestsClient):
         self,
         project_code: int,
         form: CreateScheduleParams
-    ) -> ScheduleInsertResult:
+    ) -> Schedule:
         """
         Create Schedule
         
@@ -132,7 +131,7 @@ class SchedulerOperations(BaseRequestsClient):
             path,
         data=data,
         )
-        return self._validate_payload(payload, TypeAdapter(ScheduleInsertResult))
+        return self._validate_payload(payload, TypeAdapter(Schedule))
 
     def query_schedule_list(
         self,

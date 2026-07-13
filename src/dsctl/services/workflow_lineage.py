@@ -212,7 +212,12 @@ def _resolve_workflow_lineage_target(
         selected_project.value,
         adapter=runtime.upstream.projects,
     )
-    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    selected_workflow = require_workflow_selection(
+        workflow,
+        runtime=runtime,
+        project_selection=selected_project,
+        input_form="argument",
+    )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
         adapter=runtime.upstream.workflows,

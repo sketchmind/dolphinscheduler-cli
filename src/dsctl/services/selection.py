@@ -20,6 +20,7 @@ SelectionSource = Literal[
 ]
 SelectionDataValue = int | str | None
 SelectionData = dict[str, SelectionDataValue]
+WorkflowInputForm = Literal["argument", "option"]
 
 
 @dataclass(frozen=True)
@@ -55,20 +56,36 @@ def require_workflow_selection(
     explicit_workflow: str | None,
     *,
     runtime: ServiceRuntime,
+    project_selection: SelectedValue,
+    input_form: WorkflowInputForm = "option",
 ) -> SelectedValue:
-    """Resolve the effective workflow name from flag or context."""
+    """Resolve workflow from explicit input or the matching project context tuple."""
     normalized_flag = _normalized_text(explicit_workflow)
     if normalized_flag is not None:
         return SelectedValue(value=normalized_flag, source="flag")
 
-    normalized_context = _normalized_text(runtime.context.workflow)
-    if normalized_context is not None:
-        return SelectedValue(value=normalized_context, source="context")
+    if project_selection.source == "context":
+        normalized_context = _normalized_text(runtime.context.workflow)
+        if normalized_context is not None:
+            return SelectedValue(value=normalized_context, source="context")
+        explicit_input = "WORKFLOW" if input_form == "argument" else "--workflow"
+        message = f"Workflow is required; pass {explicit_input} or set workflow context"
+        suggestion = (
+            "Pass WORKFLOW or run `dsctl use workflow NAME`."
+            if input_form == "argument"
+            else "Pass --workflow NAME or run `dsctl use workflow NAME`."
+        )
+    else:
+        message = "Workflow is required for the explicitly selected project"
+        explicit_input = "WORKFLOW" if input_form == "argument" else "--workflow NAME"
+        suggestion = (
+            f"Pass {explicit_input} for the selected project, or remove the explicit "
+            "project selection to use the complete stored context tuple."
+        )
 
-    message = "Workflow is required; pass --workflow or set workflow context"
     raise UserInputError(
         message,
-        suggestion="Pass --workflow NAME or run `dsctl use workflow NAME`.",
+        suggestion=suggestion,
     )
 
 

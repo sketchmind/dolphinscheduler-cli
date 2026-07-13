@@ -73,12 +73,14 @@ DEFAULT_TASK_INSTANCE_WATCH_INTERVAL_SECONDS = 5
 DEFAULT_TASK_INSTANCE_WATCH_TIMEOUT_SECONDS = 600
 TASK_INSTANCE_NOT_FOUND = 10008
 TASK_INSTANCE_LOG_PATH_EMPTY = 10103
+TASK_INSTANCE_LOG_PATH_EMPTY_MARKER = "TaskInstanceLogPath is empty"
 TASK_INSTANCE_NOT_SUB_WORKFLOW_INSTANCE = 10021
 TASK_INSTANCE_STATE_OPERATION_ERROR = 10166
 TASK_SAVEPOINT_ERROR = 10196
 TASK_STOP_ERROR = 10197
 SUB_WORKFLOW_INSTANCE_NOT_EXIST = 50007
 USER_NO_OPERATION_PERM = 30001
+USER_NO_OPERATION_PROJECT_PERM = 30002
 
 
 def _task_instance_get_command(
@@ -279,10 +281,12 @@ def watch_task_instance_result(
     normalized_interval_seconds = require_positive_int(
         interval_seconds,
         label="interval_seconds",
+        input_hint="--interval-seconds",
     )
     normalized_timeout_seconds = require_non_negative_int(
         timeout_seconds,
         label="timeout_seconds",
+        input_hint="--timeout-seconds",
     )
     return run_with_service_runtime(
         env_file,
@@ -328,7 +332,11 @@ def get_task_instance_log_result(
         task_instance,
         label="task_instance",
     )
-    normalized_tail = require_positive_int(tail, label="tail")
+    normalized_tail = require_positive_int(
+        tail,
+        label="tail",
+        input_hint="--tail",
+    )
     return run_with_service_runtime(
         env_file,
         _get_task_instance_log_result,
@@ -682,11 +690,15 @@ def _watch_task_instance_result(
                 task_instance_id=task_instance_id,
             )
         except ApiResultError as exc:
-            raise _task_instance_not_found(
+            translated = _task_instance_read_error(
+                exc,
                 task_instance_id=task_instance_id,
                 workflow_instance_id=workflow_instance_id,
-            ) from exc
-        if payload.workflowInstanceId != workflow_instance_id:
+            )
+            if translated is exc:
+                raise
+            raise translated from exc
+        if payload is None or payload.workflowInstanceId != workflow_instance_id:
             raise _task_instance_not_found(
                 task_instance_id=task_instance_id,
                 workflow_instance_id=workflow_instance_id,
@@ -710,6 +722,10 @@ def _watch_task_instance_result(
             message = (
                 "Timed out waiting for the task instance to reach a finished state."
             )
+            inspect_command = _task_instance_get_command(
+                task_instance_id=task_instance_id,
+                workflow_instance_id=workflow_instance_id,
+            )
             raise WaitTimeoutError(
                 message,
                 details={
@@ -721,9 +737,7 @@ def _watch_task_instance_result(
                 },
                 suggestion=(
                     "Retry with a larger --timeout-seconds value or inspect the "
-                    "current state with "
-                    f"`task-instance get {task_instance_id} --workflow-instance "
-                    f"{workflow_instance_id}`."
+                    f"current state with `{inspect_command}`."
                 ),
             )
         time.sleep(interval_seconds)
@@ -1067,11 +1081,15 @@ def _task_instance_context(
             task_instance_id=task_instance_id,
         )
     except ApiResultError as exc:
-        raise _task_instance_not_found(
+        translated = _task_instance_read_error(
+            exc,
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
-        ) from exc
-    if payload.workflowInstanceId != workflow_instance_id:
+        )
+        if translated is exc:
+            raise
+        raise translated from exc
+    if payload is None or payload.workflowInstanceId != workflow_instance_id:
         raise _task_instance_not_found(
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
@@ -1095,7 +1113,42 @@ def _task_instance_not_found(
             "id": task_instance_id,
             "workflow_instance_id": workflow_instance_id,
         },
+        suggestion=(
+            "Run `dsctl task-instance list --workflow-instance "
+            f"{workflow_instance_id}` to inspect available task instance ids."
+        ),
     )
+
+
+def _task_instance_read_error(
+    error: ApiResultError,
+    *,
+    task_instance_id: int,
+    workflow_instance_id: int,
+) -> ApiResultError | NotFoundError | PermissionDeniedError:
+    """Translate only unambiguous task-instance read failures."""
+    if error.result_code == TASK_INSTANCE_NOT_FOUND:
+        return _task_instance_not_found(
+            task_instance_id=task_instance_id,
+            workflow_instance_id=workflow_instance_id,
+        )
+    if error.result_code in {
+        USER_NO_OPERATION_PERM,
+        USER_NO_OPERATION_PROJECT_PERM,
+    }:
+        return PermissionDeniedError(
+            "The current user does not have permission to access this task instance.",
+            details={
+                "resource": TASK_INSTANCE_RESOURCE,
+                "id": task_instance_id,
+                "workflow_instance_id": workflow_instance_id,
+            },
+            suggestion=(
+                "Ask a DolphinScheduler administrator to grant access to the "
+                "workflow instance's project, then retry."
+            ),
+        )
+    return error
 
 
 def _task_instance_resolved(
@@ -1219,8 +1272,19 @@ def _task_instance_action_error(
             f"Task instance id {task_instance_id} was not found in workflow "
             f"instance {workflow_instance_id}"
         )
-        return NotFoundError(message, details=details)
-    if error.result_code == USER_NO_OPERATION_PERM:
+        return NotFoundError(
+            message,
+            details=details,
+            source=error.source,
+            suggestion=(
+                "Run `dsctl task-instance list --workflow-instance "
+                f"{workflow_instance_id}` to inspect available task instance ids."
+            ),
+        )
+    if error.result_code in {
+        USER_NO_OPERATION_PERM,
+        USER_NO_OPERATION_PROJECT_PERM,
+    }:
         message = (
             "The current user requires additional permissions for this "
             "task instance action."
@@ -1260,23 +1324,37 @@ def _task_instance_log_error(
     error: ApiResultError,
     *,
     task_instance_id: int,
-) -> ApiResultError | TaskNotDispatchedError:
-    if error.result_code != TASK_INSTANCE_LOG_PATH_EMPTY:
+) -> ApiResultError | NotFoundError | TaskNotDispatchedError:
+    if error.result_code == TASK_INSTANCE_NOT_FOUND:
+        return NotFoundError(
+            f"Task instance id {task_instance_id} was not found",
+            details={
+                "resource": TASK_INSTANCE_RESOURCE,
+                "id": task_instance_id,
+            },
+            source=error.source,
+            suggestion=(
+                "Run `dsctl workflow-instance list` to find the owning workflow "
+                "instance id, then run `dsctl task-instance list "
+                "--workflow-instance ID`."
+            ),
+        )
+    if (
+        error.result_code != TASK_INSTANCE_LOG_PATH_EMPTY
+        or TASK_INSTANCE_LOG_PATH_EMPTY_MARKER not in error.result_message
+    ):
         return error
     return TaskNotDispatchedError(
         "Task instance log is not available because the task has not been dispatched.",
         details={
             "resource": TASK_INSTANCE_RESOURCE,
             "id": task_instance_id,
-            "result_code": error.result_code,
-            "result_message": error.result_message,
         },
         source=error.source,
         suggestion=(
-            "Inspect the task instance state with `task-instance list "
-            "--workflow-instance <workflow_instance_id>` or run "
-            "`workflow-instance digest <workflow_instance_id>` to confirm "
-            "whether DolphinScheduler has dispatched the task."
+            "Run `dsctl workflow-instance list` to find the owning workflow "
+            "instance id, then inspect its tasks with `dsctl task-instance list "
+            "--workflow-instance ID`."
         ),
     )
 

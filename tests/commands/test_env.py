@@ -105,24 +105,23 @@ def test_env_create_command_returns_created_environment() -> None:
     assert payload["data"]["workerGroups"] == ["default"]
 
 
-def test_env_create_command_accepts_config_file() -> None:
-    with runner.isolated_filesystem():
-        Path("env.sh").write_text(
-            "export JAVA_HOME=/opt/java\nexport PATH=$JAVA_HOME/bin:$PATH\n",
-            encoding="utf-8",
-        )
+def test_env_create_command_accepts_config_file(isolated_cwd: Path) -> None:
+    (isolated_cwd / "env.sh").write_text(
+        "export JAVA_HOME=/opt/java\nexport PATH=$JAVA_HOME/bin:$PATH\n",
+        encoding="utf-8",
+    )
 
-        result = runner.invoke(
-            app,
-            [
-                "environment",
-                "create",
-                "--name",
-                "qa",
-                "--config-file",
-                "env.sh",
-            ],
-        )
+    result = runner.invoke(
+        app,
+        [
+            "environment",
+            "create",
+            "--name",
+            "qa",
+            "--config-file",
+            "env.sh",
+        ],
+    )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -136,7 +135,7 @@ def test_env_create_command_requires_config_source() -> None:
     result = runner.invoke(app, ["environment", "create", "--name", "qa"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "environment.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -145,26 +144,30 @@ def test_env_create_command_requires_config_source() -> None:
     )
 
 
-def test_env_create_command_rejects_multiple_config_sources() -> None:
-    with runner.isolated_filesystem():
-        Path("env.sh").write_text("export JAVA_HOME=/opt/java\n", encoding="utf-8")
+def test_env_create_command_rejects_multiple_config_sources(
+    isolated_cwd: Path,
+) -> None:
+    (isolated_cwd / "env.sh").write_text(
+        "export JAVA_HOME=/opt/java\n",
+        encoding="utf-8",
+    )
 
-        result = runner.invoke(
-            app,
-            [
-                "environment",
-                "create",
-                "--name",
-                "qa",
-                "--config",
-                "export JAVA_HOME=/other",
-                "--config-file",
-                "env.sh",
-            ],
-        )
+    result = runner.invoke(
+        app,
+        [
+            "environment",
+            "create",
+            "--name",
+            "qa",
+            "--config",
+            "export JAVA_HOME=/other",
+            "--config-file",
+            "env.sh",
+        ],
+    )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "environment.create"
     assert payload["error"]["type"] == "user_input_error"
     assert "mutually exclusive" in payload["error"]["message"]
@@ -191,23 +194,22 @@ def test_env_update_command_can_clear_description_and_worker_groups() -> None:
     assert payload["data"]["workerGroups"] == []
 
 
-def test_env_update_command_accepts_config_file() -> None:
-    with runner.isolated_filesystem():
-        Path("env.sh").write_text(
-            "export JAVA_HOME=/opt/java-21\nexport PATH=$JAVA_HOME/bin:$PATH\n",
-            encoding="utf-8",
-        )
+def test_env_update_command_accepts_config_file(isolated_cwd: Path) -> None:
+    (isolated_cwd / "env.sh").write_text(
+        "export JAVA_HOME=/opt/java-21\nexport PATH=$JAVA_HOME/bin:$PATH\n",
+        encoding="utf-8",
+    )
 
-        result = runner.invoke(
-            app,
-            [
-                "environment",
-                "update",
-                "prod",
-                "--config-file",
-                "env.sh",
-            ],
-        )
+    result = runner.invoke(
+        app,
+        [
+            "environment",
+            "update",
+            "prod",
+            "--config-file",
+            "env.sh",
+        ],
+    )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -221,7 +223,7 @@ def test_env_update_command_requires_one_change_suggestion() -> None:
     result = runner.invoke(app, ["environment", "update", "prod"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "environment.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -263,7 +265,7 @@ def test_env_update_command_reports_upstream_input_suggestion(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "environment.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -275,7 +277,7 @@ def test_env_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["environment", "delete", "prod"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "environment.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."

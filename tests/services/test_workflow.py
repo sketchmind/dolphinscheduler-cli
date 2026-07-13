@@ -1,5 +1,5 @@
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -28,15 +28,17 @@ from tests.support import make_profile
 from dsctl.config import ClusterProfile
 from dsctl.context import SessionContext
 from dsctl.errors import (
+    ApiHttpError,
     ApiResultError,
+    ApiTransportError,
     ConfirmationRequiredError,
     ConflictError,
     InvalidStateError,
     NotFoundError,
+    PermissionDeniedError,
     UserInputError,
 )
 from dsctl.models import WorkflowSpec
-from dsctl.services import _workflow_compile as workflow_compile_service
 from dsctl.services import runtime as runtime_service
 from dsctl.services import workflow as workflow_service
 
@@ -104,6 +106,9 @@ def fake_workflow_adapter() -> FakeWorkflowAdapter:
         schedule_release_state_value=FakeEnumValue("ONLINE"),
         execution_type_value=FakeEnumValue("PARALLEL"),
         schedule_value=FakeSchedule(
+            id=23,
+            start_time_value="2026-01-01 00:00:00",
+            end_time_value="2026-12-31 23:59:59",
             timezone_id_value="UTC",
             crontab_value="0 0 0 * * ?",
             release_state_value=FakeEnumValue("ONLINE"),
@@ -190,17 +195,132 @@ def test_list_workflows_result_uses_project_context_and_filters(
         context=SessionContext(project="etl-prod"),
     )
 
-    result = workflow_service.list_workflows_result(search="daily")
-    items = _sequence(result.data)
+    result = workflow_service.list_workflows_result(
+        search="daily",
+        page_no=1,
+        page_size=25,
+    )
+    data = _mapping(result.data)
+    items = _sequence(data["totalList"])
 
     assert _mapping(result.resolved["project"])["source"] == "context"
+    assert result.resolved["page_no"] == 1
+    assert result.resolved["page_size"] == 25
+    assert result.resolved["all"] is False
     assert list(items) == [
         {
             "code": 101,
             "name": "daily-sync",
             "version": 1,
+            "releaseState": "ONLINE",
+            "scheduleReleaseState": "ONLINE",
+            "scheduleId": 23,
         }
     ]
+    assert data["total"] == 1
+    assert data["totalPage"] == 1
+    assert data["pageSize"] == 25
+    assert data["currentPage"] == 1
+    assert data["pageNo"] == 1
+
+
+def test_workflow_read_surfaces_hydrate_attached_schedule_from_schedule_resource(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    raw_workflow = replace(
+        fake_workflow_adapter.workflows[0],
+        schedule_value=None,
+        schedule_release_state_value=None,
+    )
+    fake_workflow_adapter.workflows[0] = raw_workflow
+    fake_workflow_adapter.dags[101] = replace(
+        fake_workflow_adapter.dags[101],
+        workflow_definition_value=raw_workflow,
+    )
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            FakeSchedule(
+                id=23,
+                workflow_definition_code_value=101,
+                workflow_definition_name_value="daily-sync",
+                project_code_value=7,
+                start_time_value="2026-01-01 00:00:00",
+                end_time_value="2026-12-31 23:59:59",
+                timezone_id_value="UTC",
+                crontab_value="0 0 0 * * ?",
+                release_state_value=FakeEnumValue("OFFLINE"),
+            )
+        ]
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    get_result = workflow_service.get_workflow_result(None)
+    describe_result = workflow_service.describe_workflow_result(None)
+    digest_result = workflow_service.digest_workflow_result(None)
+    export_result = workflow_service.export_workflow_yaml_result(None)
+
+    for data in (
+        _mapping(get_result.data),
+        _mapping(_mapping(describe_result.data)["workflow"]),
+        _mapping(_mapping(digest_result.data)["workflow"]),
+    ):
+        assert data["scheduleReleaseState"] == "OFFLINE"
+        assert _mapping(data["schedule"])["id"] == 23
+    exported = yaml.safe_load(str(_mapping(export_result.data)["yaml"]))
+    assert exported["schedule"] == {
+        "cron": "0 0 0 * * ?",
+        "timezone": "UTC",
+        "start": "2026-01-01 00:00:00",
+        "end": "2026-12-31 23:59:59",
+        "release_state": "OFFLINE",
+    }
+    assert len(schedule_adapter.list_calls) == 4
+    assert {call["page_size"] for call in schedule_adapter.list_calls} == {2}
+
+
+def test_workflow_export_fails_closed_for_malformed_attached_schedule(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+                crontab_value=None,
+            )
+        ]
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+    )
+
+    with pytest.raises(ApiTransportError) as captured:
+        workflow_service.export_workflow_yaml_result(
+            "daily-sync",
+            project="etl-prod",
+        )
+
+    assert captured.value.details["invalid_fields"] == ["crontab"]
 
 
 def test_export_workflow_yaml_result_can_render_yaml_export(
@@ -441,8 +561,9 @@ def test_digest_workflow_result_returns_compact_graph_summary(
         "executionType": "PARALLEL",
         "timeout": 30,
         "schedule": {
-            "startTime": None,
-            "endTime": None,
+            "id": 23,
+            "startTime": "2026-01-01 00:00:00",
+            "endTime": "2026-12-31 23:59:59",
             "timezoneId": "UTC",
             "crontab": "0 0 0 * * ?",
             "failureStrategy": None,
@@ -998,6 +1119,146 @@ def test_run_workflow_result_maps_offline_definition_to_invalid_state(
     )
 
 
+def test_run_workflow_result_maps_missing_master_to_invalid_state(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    result_message = "Internal Server Error: no master server available"
+    fake_workflow_adapter.run_errors_by_code = {
+        101: ApiResultError(
+            result_code=10000,
+            result_message=result_message,
+        )
+    }
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_service.run_workflow_result(None)
+
+    assert exc_info.value.details == {
+        "resource": "workflow",
+        "project": "etl-prod",
+        "project_code": 7,
+        "code": 101,
+        "name": "daily-sync",
+        "operation": "workflow.run",
+    }
+    assert exc_info.value.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "result",
+        "result_code": 10000,
+        "result_message": result_message,
+    }
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed, then retry `dsctl workflow run`."
+    )
+
+
+def test_run_workflow_result_preserves_unrelated_internal_server_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    fake_workflow_adapter.run_errors_by_code = {
+        101: ApiResultError(
+            result_code=10000,
+            result_message="Internal Server Error: failed to start workflow",
+        )
+    }
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    with pytest.raises(ApiResultError, match="failed to start workflow") as exc_info:
+        workflow_service.run_workflow_result(None)
+
+    assert exc_info.value.result_code == 10000
+
+
+def test_run_workflow_task_result_reports_missing_master_operation(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    fake_workflow_adapter.run_errors_by_code = {
+        101: ApiResultError(
+            result_code=10025,
+            result_message="master does not exist",
+        )
+    }
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_service.run_workflow_task_result(None, task="extract")
+
+    assert exc_info.value.details["operation"] == "workflow.run-task"
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed, then retry `dsctl workflow run-task WORKFLOW --task TASK`."
+    )
+
+
+def test_parallel_backfill_missing_master_requires_dispatch_verification(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    fake_workflow_adapter.run_errors_by_code = {
+        101: ApiResultError(
+            result_code=10000,
+            result_message="no master server available",
+        )
+    }
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_service.backfill_workflow_result(
+            None,
+            dates=["2026-04-01 00:00:00", "2026-04-02 00:00:00"],
+            run_mode="parallel",
+        )
+
+    assert exc_info.value.details["operation"] == "workflow.backfill"
+    assert exc_info.value.details["partial_dispatch_possible"] is True
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed. Part of this parallel backfill may already have been "
+        "dispatched; use `dsctl workflow-instance list --project PROJECT "
+        "--workflow WORKFLOW --all` and compare `scheduleTime` with the "
+        "requested range before deciding whether to retry the original "
+        "backfill command."
+    )
+
+
 def test_create_workflow_result_can_dry_run_compiled_legacy_request(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -1007,7 +1268,11 @@ def test_create_workflow_result_can_dry_run_compiled_legacy_request(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7001, 7002])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1165,7 +1430,11 @@ def test_create_workflow_result_dry_run_warns_on_risky_time_parameter_format(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7101])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1203,6 +1472,48 @@ tasks:
     ]
 
 
+def test_create_workflow_dry_run_warns_on_sub_workflow_local_params(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    monkeypatch.setattr(workflow_service, "preview_task_codes", lambda count: [7102])
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=fake_schedule_adapter,
+    )
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: parent
+  project: etl-prod
+tasks:
+  - name: invoke-child
+    type: SUB_WORKFLOW
+    task_params:
+      workflowDefinitionCode: 123456789
+      localParams:
+        - prop: run_label
+          value: FROM_PARENT
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = workflow_service.create_workflow_result(file=spec_path, dry_run=True)
+
+    assert [detail["code"] for detail in result.warning_details] == [
+        "dry_run_no_request_sent",
+        "sub_workflow_local_params_not_child_inputs",
+    ]
+
+
 def test_create_workflow_result_compiles_switch_branch_names_to_codes(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -1212,7 +1523,11 @@ def test_create_workflow_result_compiles_switch_branch_names_to_codes(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7501, 7502, 7503])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1296,7 +1611,11 @@ def test_create_workflow_result_compiles_task_group_settings(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7551])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1369,7 +1688,11 @@ def test_create_workflow_result_compiles_extended_task_execution_fields(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7561])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1554,7 +1877,11 @@ def test_create_workflow_result_compiles_conditions_branch_names_to_codes(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7601, 7602, 7603, 7604])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1679,8 +2006,7 @@ def test_create_workflow_result_creates_and_can_online_workflow(
     fake_task_adapter: FakeTaskAdapter,
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
-    codes = iter([7101])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    fake_task_adapter.generated_codes = [7101]
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1709,8 +2035,61 @@ tasks:
     assert data["name"] == "nightly-sync"
     assert data["releaseState"] == "ONLINE"
     assert fake_workflow_adapter.create_calls[0]["name"] == "nightly-sync"
+    assert fake_task_adapter.generate_code_calls == [{"project_code": 7, "count": 1}]
+    created_task_definitions = json.loads(
+        str(fake_workflow_adapter.create_calls[0]["task_definition_json"])
+    )
+    assert [task["code"] for task in created_task_definitions] == [7101]
     assert fake_workflow_adapter.release_calls[-1][1] == "ONLINE"
     assert _mapping(result.resolved["workflow"])["source"] == "file"
+
+
+def test_create_workflow_result_translates_task_code_allocation_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    fake_task_adapter.generate_codes_error = ApiResultError(
+        result_code=12345,
+        result_message="code service unavailable",
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+    )
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: nightly-sync
+  project: etl-prod
+tasks:
+  - name: extract
+    type: SHELL
+    command: echo extract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ApiTransportError,
+        match="could not allocate task codes",
+    ) as exc_info:
+        workflow_service.create_workflow_result(file=spec_path)
+
+    assert exc_info.value.details == {
+        "resource": "project",
+        "project_code": 7,
+        "action": "workflow.create",
+        "task_code_count": 1,
+        "result_code": 12345,
+        "result_message": "code service unavailable",
+    }
+    assert fake_workflow_adapter.create_calls == []
 
 
 def test_create_workflow_result_suggests_review_for_remote_validation_error(
@@ -1860,7 +2239,11 @@ def test_create_workflow_result_can_dry_run_schedule_plan(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7301])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -1884,6 +2267,8 @@ schedule:
   timezone: UTC
   start: "2026-01-01 00:00:00"
   end: "2026-12-31 23:59:59"
+  failure_strategy: END
+  priority: HIGH
   enabled: true
 """.strip(),
         encoding="utf-8",
@@ -1894,10 +2279,21 @@ schedule:
     requests = _sequence(data["requests"])
 
     assert len(requests) == 4
-    assert _mapping(requests[2])["path"] == "/v2/schedules"
-    assert _mapping(_mapping(requests[2])["json"])["workflowDefinitionCode"] == (
+    schedule_request = _mapping(requests[2])
+    schedule_form = _mapping(schedule_request["form"])
+    assert schedule_request["path"] == "/projects/7/schedules"
+    assert schedule_form["workflowDefinitionCode"] == (
         "<nightly-sync:created_workflow_code>"
     )
+    assert "environmentCode" not in schedule_form
+    assert schedule_form["failureStrategy"] == "END"
+    assert schedule_form["workflowInstancePriority"] == "HIGH"
+    assert json.loads(str(schedule_form["schedule"])) == {
+        "crontab": "0 0 0 * * ?",
+        "endTime": "2026-12-31 23:59:59",
+        "startTime": "2026-01-01 00:00:00",
+        "timezoneId": "UTC",
+    }
     assert _mapping(requests[3])["path"] == (
         "/projects/7/schedules/<nightly-sync:created_schedule_id>/online"
     )
@@ -1981,7 +2377,11 @@ def test_create_workflow_result_accepts_confirmation_and_emits_warning_details(
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     codes = iter([7402])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     fake_schedule_adapter.preview_times_value = [
         "2024-01-01 00:00:00",
         "2024-01-01 00:05:00",
@@ -2088,16 +2488,26 @@ schedule:
     assert fake_schedule_adapter.schedules == []
 
 
-def test_create_workflow_result_can_create_and_online_schedule(
+@pytest.mark.parametrize(
+    ("schedule_enabled_yaml", "expected_schedule_state"),
+    [("false", "OFFLINE"), ("true", "ONLINE")],
+)
+def test_create_workflow_result_returns_final_created_schedule(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fake_project_adapter: FakeProjectAdapter,
     fake_workflow_adapter: FakeWorkflowAdapter,
     fake_task_adapter: FakeTaskAdapter,
     fake_schedule_adapter: FakeScheduleAdapter,
+    schedule_enabled_yaml: str,
+    expected_schedule_state: str,
 ) -> None:
     codes = iter([7401])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -2107,7 +2517,7 @@ def test_create_workflow_result_can_create_and_online_schedule(
     )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
-        """
+        f"""
 workflow:
   name: nightly-sync
   project: etl-prod
@@ -2121,19 +2531,38 @@ schedule:
   timezone: UTC
   start: "2026-01-01 00:00:00"
   end: "2026-12-31 23:59:59"
-  enabled: true
+  failure_strategy: CONTINUE
+  priority: MEDIUM
+  enabled: {schedule_enabled_yaml}
 """.strip(),
         encoding="utf-8",
     )
 
     result = workflow_service.create_workflow_result(file=spec_path)
+    data = _mapping(result.data)
+    schedule = _mapping(data["schedule"])
 
+    assert fake_workflow_adapter.get(code=103).schedule is None
     assert _mapping(result.resolved["workflow"])["source"] == "file"
     assert fake_workflow_adapter.release_calls[-1] == (103, "ONLINE")
     assert len(fake_schedule_adapter.schedules) == 1
     assert fake_schedule_adapter.schedules[0].workflowDefinitionCode == 103
     assert fake_schedule_adapter.schedules[0].releaseState is not None
-    assert fake_schedule_adapter.schedules[0].releaseState.value == "ONLINE"
+    assert (
+        fake_schedule_adapter.schedules[0].releaseState.value == expected_schedule_state
+    )
+    assert data["scheduleReleaseState"] == expected_schedule_state
+    assert fake_schedule_adapter.list_calls == []
+    assert schedule == {
+        "id": 1,
+        "startTime": "2026-01-01 00:00:00",
+        "endTime": "2026-12-31 23:59:59",
+        "timezoneId": "UTC",
+        "crontab": "0 0 0 * * ?",
+        "failureStrategy": "CONTINUE",
+        "workflowInstancePriority": "MEDIUM",
+        "releaseState": expected_schedule_state,
+    }
 
 
 def test_create_workflow_result_rejects_dependency_cycles_locally(
@@ -2172,9 +2601,10 @@ tasks:
         workflow_service.create_workflow_result(file=spec_path)
 
     assert exc_info.value.suggestion == (
-        "Review task names and task references, then retry with workflow dry-run "
-        "before applying the change."
+        f"Run `dsctl lint workflow {spec_path}`, fix task names and references, "
+        f"then retry `dsctl workflow create --file {spec_path} --dry-run`."
     )
+    assert fake_task_adapter.generate_code_calls == []
 
 
 def test_create_workflow_result_reports_unknown_task_dependency_with_suggestion(
@@ -2209,8 +2639,8 @@ tasks:
         workflow_service.create_workflow_result(file=spec_path)
 
     assert exc_info.value.suggestion == (
-        "Review task names and task references, then retry with workflow dry-run "
-        "before applying the change."
+        f"Run `dsctl lint workflow {spec_path}`, fix task names and references, "
+        f"then retry `dsctl workflow create --file {spec_path} --dry-run`."
     )
 
 
@@ -2226,22 +2656,30 @@ def test_online_workflow_result_warns_when_attached_schedule_remains_offline(
     offline_workflow = replace(
         daily,
         release_state_value=FakeEnumValue("OFFLINE"),
-        schedule_release_state_value=FakeEnumValue("OFFLINE"),
-        schedule_value=replace(
-            schedule,
-            release_state_value=FakeEnumValue("OFFLINE"),
-        ),
+        schedule_release_state_value=None,
+        schedule_value=None,
     )
     fake_workflow_adapter.workflows[0] = offline_workflow
     fake_workflow_adapter.dags[101] = replace(
         fake_workflow_adapter.dags[101],
         workflow_definition_value=offline_workflow,
     )
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+                release_state_value=FakeEnumValue("OFFLINE"),
+            )
+        ]
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
     )
 
     result = workflow_service.online_workflow_result(
@@ -2251,7 +2689,10 @@ def test_online_workflow_result_warns_when_attached_schedule_remains_offline(
     data = _mapping(result.data)
 
     assert data["releaseState"] == "ONLINE"
+    assert data["scheduleReleaseState"] == "OFFLINE"
+    assert _mapping(data["schedule"])["id"] == 23
     assert fake_workflow_adapter.release_calls[-1] == (101, "ONLINE")
+    assert len(schedule_adapter.list_calls) == 1
     assert result.warnings == [
         "workflow brought online; any attached schedule remains offline until "
         "`schedule online` is requested"
@@ -2276,11 +2717,23 @@ def test_offline_workflow_result_warns_when_schedule_is_also_taken_offline(
     fake_workflow_adapter: FakeWorkflowAdapter,
     fake_task_adapter: FakeTaskAdapter,
 ) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+            )
+        ]
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
     )
 
     result = workflow_service.offline_workflow_result(
@@ -2291,7 +2744,9 @@ def test_offline_workflow_result_warns_when_schedule_is_also_taken_offline(
 
     assert data["releaseState"] == "OFFLINE"
     assert data["scheduleReleaseState"] == "OFFLINE"
+    assert _mapping(data["schedule"])["id"] == 23
     assert fake_workflow_adapter.release_calls[-1] == (101, "OFFLINE")
+    assert len(schedule_adapter.list_calls) == 2
     assert result.warnings == [
         "workflow brought offline; any attached schedule is also taken offline"
     ]
@@ -2306,6 +2761,204 @@ def test_offline_workflow_result_warns_when_schedule_is_also_taken_offline(
             "schedule_release_state": "ONLINE",
         }
     ]
+
+
+def test_offline_workflow_result_marks_post_mutation_schedule_lookup_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+            )
+        ],
+        list_errors_by_call={
+            2: ApiResultError(
+                result_code=30001,
+                result_message="schedule read permission denied",
+            )
+        },
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+    )
+
+    with pytest.raises(PermissionDeniedError) as captured:
+        workflow_service.offline_workflow_result(
+            "daily-sync",
+            project="etl-prod",
+        )
+
+    error = captured.value
+    assert error.details["mutation_applied"] is True
+    assert error.suggestion is not None
+    assert "mutation completed" in error.suggestion
+    assert fake_workflow_adapter.release_calls == [(101, "OFFLINE")]
+    assert len(schedule_adapter.list_calls) == 2
+
+
+@pytest.mark.parametrize(
+    ("action", "result_code", "error_type"),
+    [
+        ("online", 99999, ApiTransportError),
+        ("offline", 50003, NotFoundError),
+        ("online", 30001, PermissionDeniedError),
+    ],
+)
+def test_workflow_release_marks_post_mutation_workflow_refresh_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+    action: str,
+    result_code: int,
+    error_type: type[Exception],
+) -> None:
+    fake_workflow_adapter.get_errors_by_call = {
+        2: ApiResultError(
+            result_code=result_code,
+            result_message="workflow refresh failed",
+        )
+    }
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+    )
+
+    release = (
+        workflow_service.online_workflow_result
+        if action == "online"
+        else workflow_service.offline_workflow_result
+    )
+    with pytest.raises(error_type) as captured:
+        release("daily-sync", project="etl-prod")
+
+    error = captured.value
+    assert isinstance(error, (ApiTransportError, NotFoundError, PermissionDeniedError))
+    assert error.details["mutation_applied"] is True
+    assert error.details["operation"] == f"workflow.{action}"
+    assert error.details["phase"] == "post_mutation_refresh"
+    assert error.suggestion is not None
+    assert "mutation completed" in error.suggestion
+    assert fake_workflow_adapter.release_calls == [(101, action.upper())]
+
+
+@pytest.mark.parametrize(
+    ("upstream_error", "error_type"),
+    [
+        (ApiTransportError("connection reset"), ApiTransportError),
+        (
+            ApiHttpError(
+                "gateway unavailable",
+                status_code=503,
+                body={"message": "unavailable"},
+            ),
+            ApiHttpError,
+        ),
+    ],
+)
+def test_workflow_release_marks_post_mutation_transport_refresh_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+    upstream_error: Exception,
+    error_type: type[Exception],
+) -> None:
+    fake_workflow_adapter.get_errors_by_call = {2: upstream_error}
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+    )
+
+    with pytest.raises(error_type) as captured:
+        workflow_service.online_workflow_result(
+            "daily-sync",
+            project="etl-prod",
+        )
+
+    error = captured.value
+    assert isinstance(error, (ApiHttpError, ApiTransportError))
+    assert error.details["mutation_applied"] is True
+    assert error.details["upstream_error_type"] in {
+        "api_http_error",
+        "api_transport_error",
+    }
+    assert error.suggestion is not None
+    assert "mutation completed" in error.suggestion
+    assert fake_workflow_adapter.release_calls == [(101, "ONLINE")]
+
+
+def test_workflow_mutations_fail_closed_when_attached_schedule_lookup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[],
+        list_error=ApiResultError(
+            result_code=30001,
+            result_message="schedule read permission denied",
+        ),
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+    )
+    patch_path = tmp_path / "workflow.patch.yaml"
+    patch_path.write_text(
+        """
+patch:
+  workflow:
+    set:
+      description: updated
+""".strip(),
+        encoding="utf-8",
+    )
+
+    operations: tuple[Callable[[], object], ...] = (
+        lambda: workflow_service.edit_workflow_result(
+            "daily-sync",
+            patch=patch_path,
+            project="etl-prod",
+        ),
+        lambda: workflow_service.online_workflow_result(
+            "daily-sync",
+            project="etl-prod",
+        ),
+        lambda: workflow_service.delete_workflow_result(
+            "daily-sync",
+            project="etl-prod",
+            force=True,
+        ),
+    )
+    for operation in operations:
+        with pytest.raises(PermissionDeniedError):
+            operation()
+
+    assert fake_workflow_adapter.update_calls == []
+    assert fake_workflow_adapter.release_calls == []
+    assert [workflow.code for workflow in fake_workflow_adapter.workflows] == [101, 102]
 
 
 def test_delete_workflow_result_requires_force() -> None:
@@ -2323,11 +2976,23 @@ def test_delete_workflow_result_returns_deleted_payload(
     fake_workflow_adapter: FakeWorkflowAdapter,
     fake_task_adapter: FakeTaskAdapter,
 ) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+            )
+        ]
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
     )
 
     result = workflow_service.delete_workflow_result(
@@ -2340,6 +3005,9 @@ def test_delete_workflow_result_returns_deleted_payload(
     assert data["deleted"] is True
     workflow_data = _mapping(data["workflow"])
     assert workflow_data["name"] == "daily-sync"
+    assert workflow_data["scheduleReleaseState"] == "ONLINE"
+    assert _mapping(workflow_data["schedule"])["id"] == 23
+    assert len(schedule_adapter.list_calls) == 1
     assert [workflow.name for workflow in fake_workflow_adapter.workflows] == [
         "adhoc-backfill"
     ]
@@ -2606,7 +3274,11 @@ def test_edit_workflow_result_dry_run_emits_diff_and_update_request(
     fake_task_adapter: FakeTaskAdapter,
 ) -> None:
     codes = iter([8101, 8102, 8103])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -2766,6 +3438,67 @@ patch:
     ]
 
 
+def test_edit_workflow_result_allocates_codes_only_for_new_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    offline_workflow = replace(
+        fake_workflow_adapter.workflows[0],
+        release_state_value=FakeEnumValue("OFFLINE"),
+        schedule_release_state_value=FakeEnumValue("OFFLINE"),
+    )
+    workflow_adapter = replace(
+        fake_workflow_adapter,
+        workflows=[offline_workflow, *fake_workflow_adapter.workflows[1:]],
+        dags={
+            **fake_workflow_adapter.dags,
+            101: replace(
+                fake_workflow_adapter.dags[101],
+                workflow_definition_value=offline_workflow,
+            ),
+        },
+    )
+    fake_task_adapter.generated_codes = [8_101]
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=fake_task_adapter,
+    )
+    patch_path = tmp_path / "workflow.patch.yaml"
+    patch_path.write_text(
+        """
+patch:
+  tasks:
+    create:
+      - name: verify
+        type: SHELL
+        command: echo verify
+        depends_on: [load]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    workflow_service.edit_workflow_result(
+        "daily-sync",
+        patch=patch_path,
+        project="etl-prod",
+    )
+    task_definitions = json.loads(
+        str(workflow_adapter.update_calls[0]["task_definition_json"])
+    )
+
+    assert fake_task_adapter.generate_code_calls == [{"project_code": 7, "count": 1}]
+    assert [(task["name"], task["code"]) for task in task_definitions] == [
+        ("extract", 201),
+        ("load", 202),
+        ("verify", 8_101),
+    ]
+
+
 def test_edit_workflow_result_full_file_dry_run_reconciles_desired_state(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -2774,7 +3507,11 @@ def test_edit_workflow_result_full_file_dry_run_reconciles_desired_state(
     fake_task_adapter: FakeTaskAdapter,
 ) -> None:
     codes = iter([8101])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -2923,9 +3660,123 @@ tasks:
     ]
 
 
-def test_edit_workflow_result_full_file_rejects_schedule_block(
+def test_edit_workflow_result_accepts_exported_schedule_as_read_only_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
 ) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+            )
+        ]
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+    )
+    exported = workflow_service.export_workflow_yaml_result(
+        "daily-sync",
+        project="etl-prod",
+    )
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(
+        str(_mapping(exported.data)["yaml"]),
+        encoding="utf-8",
+    )
+
+    result = workflow_service.edit_workflow_result(
+        "daily-sync",
+        file=workflow_path,
+        project="etl-prod",
+        dry_run=True,
+    )
+
+    data = _mapping(result.data)
+    assert data["dry_run"] is True
+    assert data["no_change"] is True
+    assert data["schedule_impacts"] == [
+        "workflow edit does not modify the attached schedule; use "
+        "`schedule update|online|offline` separately"
+    ]
+    assert fake_workflow_adapter.update_calls == []
+    assert len(schedule_adapter.list_calls) == 2
+
+
+def test_edit_workflow_result_rejects_changed_schedule_snapshot_before_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+            )
+        ]
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+    )
+    exported = workflow_service.export_workflow_yaml_result(
+        "daily-sync",
+        project="etl-prod",
+    )
+    document = yaml.safe_load(str(_mapping(exported.data)["yaml"]))
+    document["schedule"]["cron"] = "0 30 2 * * ?"
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    with pytest.raises(ConflictError) as captured:
+        workflow_service.edit_workflow_result(
+            "daily-sync",
+            file=workflow_path,
+            project="etl-prod",
+            dry_run=True,
+        )
+
+    error = captured.value
+    assert error.details["reason"] == "schedule_snapshot_mismatch"
+    assert error.details["mismatched_fields"] == ["cron"]
+    assert error.details["mutation_applied"] is False
+    assert fake_workflow_adapter.update_calls == []
+    assert fake_task_adapter.generate_code_calls == []
+
+
+def test_edit_workflow_result_rejects_schedule_snapshot_when_none_is_attached(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=FakeScheduleAdapter(schedules=[]),
+    )
     workflow_path = tmp_path / "workflow.yaml"
     workflow_path.write_text(
         """
@@ -2944,13 +3795,73 @@ schedule:
         encoding="utf-8",
     )
 
-    with pytest.raises(UserInputError, match="does not mutate schedule blocks"):
+    with pytest.raises(ConflictError) as captured:
         workflow_service.edit_workflow_result(
             "daily-sync",
             file=workflow_path,
             project="etl-prod",
             dry_run=True,
         )
+
+    assert captured.value.details["reason"] == "attached_schedule_missing"
+    assert captured.value.details["mutation_applied"] is False
+    assert fake_workflow_adapter.update_calls == []
+
+
+def test_edit_workflow_result_accepts_workflow_offline_schedule_cascade(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    embedded_schedule = fake_workflow_adapter.workflows[0].schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+            )
+        ]
+    )
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
+    )
+    exported = workflow_service.export_workflow_yaml_result(
+        "daily-sync",
+        project="etl-prod",
+    )
+    document = yaml.safe_load(str(_mapping(exported.data)["yaml"]))
+    document["workflow"]["description"] = "updated from exported document"
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    workflow_service.offline_workflow_result("daily-sync", project="etl-prod")
+    result = workflow_service.edit_workflow_result(
+        "daily-sync",
+        file=workflow_path,
+        project="etl-prod",
+    )
+
+    assert _mapping(result.data)["description"] == "updated from exported document"
+    assert len(fake_workflow_adapter.update_calls) == 1
+    assert schedule_adapter.schedules[0].id == 23
+    assert schedule_adapter.schedules[0].crontab == "0 0 0 * * ?"
+    assert schedule_adapter.schedules[0].releaseState == FakeEnumValue("OFFLINE")
+    assert result.warnings == [
+        "workflow edit does not modify the attached schedule; use "
+        "`schedule update|online|offline` separately",
+        (
+            "this edit can bring the workflow back online, but any attached "
+            "schedule remains offline until `schedule online` is requested"
+        ),
+    ]
 
 
 def test_edit_workflow_result_requires_exactly_one_input_file(
@@ -3036,7 +3947,11 @@ def test_edit_workflow_result_dry_run_compiles_extended_task_execution_fields(
     fake_task_adapter: FakeTaskAdapter,
 ) -> None:
     codes = iter([8201, 8202])
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -3108,11 +4023,24 @@ def test_edit_workflow_result_applies_ds_like_task_version_bumps(
         fake_workflow_adapter.dags[101],
         workflow_definition_value=offline_daily,
     )
+    embedded_schedule = offline_daily.schedule
+    assert embedded_schedule is not None
+    schedule_adapter = FakeScheduleAdapter(
+        schedules=[
+            replace(
+                embedded_schedule,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+                release_state_value=FakeEnumValue("OFFLINE"),
+            )
+        ]
+    )
     _install_workflow_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         task_adapter=fake_task_adapter,
+        schedule_adapter=schedule_adapter,
     )
     patch_path = tmp_path / "workflow.patch.yaml"
     patch_path.write_text(
@@ -3140,6 +4068,7 @@ patch:
     relations = updated_dag.workflowTaskRelationList or []
 
     assert _mapping(result.data)["version"] == 2
+    assert len(schedule_adapter.list_calls) == 1
     assert tasks_by_name["extract"].code == 201
     assert tasks_by_name["extract"].version == 1
     assert tasks_by_name["load"].code == 202
@@ -3538,6 +4467,7 @@ patch:
         },
     ]
     assert fake_workflow_adapter.update_calls == []
+    assert fake_task_adapter.generate_code_calls == []
 
 
 def test_edit_workflow_result_emits_schedule_impact_warning_details_after_apply(
@@ -3832,7 +4762,11 @@ def test_workflow_create_get_edit_roundtrip_preserves_switch_and_generic_tasks(
             9304,
         ]
     )
-    monkeypatch.setattr(workflow_compile_service, "gen_code", lambda: next(codes))
+    monkeypatch.setattr(
+        workflow_service,
+        "preview_task_codes",
+        lambda count: [next(codes) for _ in range(count)],
+    )
     workflow_adapter = FakeWorkflowAdapter(workflows=[], dags={})
     _install_workflow_service_fakes(
         monkeypatch,

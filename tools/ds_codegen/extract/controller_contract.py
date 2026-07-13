@@ -280,7 +280,9 @@ def extract_operation_spec(
         package_name=package_name,
     )
 
+    operation_id = f"{controller_name}.{method.name}"
     logical_return_type = deps.resolve_operation_logical_return_type(
+        operation_id=operation_id,
         repo_root=repo_root,
         raw_return_type=raw_return_type,
         inferred_return_type=inferred_return_type,
@@ -289,7 +291,7 @@ def extract_operation_spec(
     )
 
     return OperationSpec(
-        operation_id=f"{controller_name}.{method.name}",
+        operation_id=operation_id,
         controller=controller_name,
         method_name=method.name,
         api_group=api_group,

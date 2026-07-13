@@ -184,7 +184,7 @@ def test_task_instance_list_command_requires_project_without_workflow_instance()
     result = runner.invoke(app, ["task-instance", "list"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -206,7 +206,7 @@ def test_task_instance_list_command_rejects_workflow_definition_filter() -> None
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["details"]["upstream_filter"] == "workflowDefinitionName"
@@ -236,6 +236,106 @@ def test_task_instance_get_command_returns_one_instance() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "task-instance.get"
     assert payload["data"]["workflowInstanceId"] == 901
+
+
+def test_task_instance_get_command_emits_stable_not_found_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_adapter = FakeProjectAdapter(
+        projects=[FakeProject(code=7, name="etl-prod")]
+    )
+    workflow_instance_adapter = FakeWorkflowInstanceAdapter(
+        workflow_instances=[
+            FakeWorkflowInstance(
+                id=901,
+                workflow_definition_code_value=101,
+                project_code_value=7,
+                state_value=FakeEnumValue("RUNNING_EXECUTION"),
+                name="daily-sync-901",
+            )
+        ]
+    )
+    task_instance_adapter = FakeTaskInstanceAdapter(task_instances=[])
+
+    def missing_get(*, project_code: int, task_instance_id: int) -> None:
+        del project_code, task_instance_id
+
+    monkeypatch.setattr(task_instance_adapter, "get", missing_get)
+    monkeypatch.setattr(
+        runtime_service,
+        "open_service_runtime",
+        lambda env_file=None: fake_service_runtime(
+            project_adapter,
+            profile=make_profile(),
+            workflow_instance_adapter=workflow_instance_adapter,
+            task_instance_adapter=task_instance_adapter,
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        ["task-instance", "get", "999999", "--workflow-instance", "901"],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "task-instance.get"
+    assert payload["error"]["type"] == "not_found"
+    assert payload["error"]["details"] == {
+        "resource": "task-instance",
+        "id": 999999,
+        "workflow_instance_id": 901,
+    }
+    assert payload["error"]["suggestion"] == (
+        "Run `dsctl task-instance list --workflow-instance 901` to inspect "
+        "available task instance ids."
+    )
+    assert "retryable" not in payload["error"]["details"]
+
+
+def test_task_instance_log_command_emits_stable_not_found_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_adapter = FakeProjectAdapter(
+        projects=[FakeProject(code=7, name="etl-prod")]
+    )
+    task_instance_adapter = FakeTaskInstanceAdapter(task_instances=[])
+
+    def missing_log(
+        *,
+        task_instance_id: int,
+        skip_line_num: int,
+        limit: int,
+    ) -> None:
+        del task_instance_id, skip_line_num, limit
+        raise ApiResultError(
+            result_code=10008,
+            result_message="task instance not found",
+        )
+
+    monkeypatch.setattr(task_instance_adapter, "log_chunk", missing_log)
+    monkeypatch.setattr(
+        runtime_service,
+        "open_service_runtime",
+        lambda env_file=None: fake_service_runtime(
+            project_adapter,
+            profile=make_profile(),
+            task_instance_adapter=task_instance_adapter,
+        ),
+    )
+
+    result = runner.invoke(app, ["task-instance", "log", "999999"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "task-instance.log"
+    assert payload["error"]["type"] == "not_found"
+    assert payload["error"]["source"]["result_code"] == 10008
+    assert payload["error"]["suggestion"] == (
+        "Run `dsctl workflow-instance list` to find the owning workflow instance "
+        "id, then run `dsctl task-instance list --workflow-instance ID`."
+    )
+    assert "retryable" not in payload["error"]["details"]
 
 
 def test_task_instance_get_help_points_to_instance_discovery() -> None:
@@ -342,7 +442,7 @@ def test_task_instance_sub_workflow_command_reports_task_type_suggestion(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.sub-workflow"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -407,7 +507,7 @@ def test_task_instance_force_success_command_reports_workflow_state_suggestion()
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.force-success"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -469,7 +569,7 @@ def test_task_instance_list_command_reports_supported_state_names() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -492,7 +592,7 @@ def test_task_instance_list_command_reports_supported_execute_types() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -514,7 +614,7 @@ def test_task_instance_stop_command_reports_running_state_suggestion() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.stop"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -588,7 +688,7 @@ def test_task_instance_savepoint_command_preserves_raw_remote_source(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.savepoint"
     assert payload["error"]["type"] == "api_result_error"
     assert payload["error"]["source"] == {

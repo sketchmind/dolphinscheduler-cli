@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
+from dsctl.command_contract import COMMAND_CATALOG, InputContract, ValueResolution
 from dsctl.services._schema_primitives import (
     argument,
     command,
+    command_from_contract,
     confirm_risk_option,
     group,
     option,
+    option_from_contract,
     project_option,
     workflow_option,
 )
@@ -15,6 +20,137 @@ from dsctl.services.template import (
     supported_parameter_syntax_topics,
     supported_task_template_variants,
 )
+
+if TYPE_CHECKING:
+    from dsctl.support.yaml_io import JsonObject
+
+_WORKFLOW_ARGUMENT_DESCRIPTION = (
+    "Workflow name or numeric code. When omitted, uses workflow context only "
+    "when project also comes from context; otherwise pass WORKFLOW."
+)
+_WORKFLOW_EDIT_ARGUMENT_DESCRIPTION = (
+    "Workflow name or numeric code. Required with --file; with --patch, uses "
+    "workflow context only when project also comes from context; otherwise "
+    "pass WORKFLOW."
+)
+_WORKFLOW_OPTION_DESCRIPTION = (
+    "Workflow name or code. When omitted, uses workflow context only when "
+    "project also comes from context; otherwise pass --workflow."
+)
+_WORKFLOW_CREATE_CONTRACT = COMMAND_CATALOG.command("workflow.create")
+_WORKFLOW_RUNTIME_PRECEDENCE = ("flag", "project_preference", "default")
+_WORKFLOW_RUNTIME_WORKER_GROUP = InputContract(
+    name="worker-group",
+    kind="option",
+    value_type="string",
+    description=(
+        "Override the worker group used to start the workflow instance. Omit to "
+        "allow enabled project preference before the DS fallback `default` worker "
+        "group."
+    ),
+    discovery_command="dsctl worker-group list",
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback="default",
+    ),
+)
+_WORKFLOW_RUNTIME_TENANT = InputContract(
+    name="tenant",
+    kind="option",
+    value_type="string",
+    description=(
+        "Override the tenant code used to start the workflow instance. Omit to "
+        "allow enabled project preference before the DS fallback `default` tenant."
+    ),
+    discovery_command="dsctl tenant list",
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback="default",
+    ),
+)
+_WORKFLOW_RUNTIME_PRIORITY = InputContract(
+    name="priority",
+    kind="option",
+    value_type="string",
+    description=(
+        "Workflow instance priority. Omit to allow enabled project preference "
+        "before medium."
+    ),
+    choices=("highest", "high", "medium", "low", "lowest"),
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback="medium",
+    ),
+)
+_WORKFLOW_RUNTIME_WARNING_TYPE = InputContract(
+    name="warning-type",
+    kind="option",
+    value_type="string",
+    description=("Warning type. Omit to allow enabled project preference before none."),
+    choices=("none", "success", "failure", "all"),
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback="none",
+    ),
+)
+_WORKFLOW_RUNTIME_WARNING_GROUP = InputContract(
+    name="warning-group-id",
+    kind="option",
+    value_type="integer",
+    description="Warning group id. Omit to allow enabled project preference.",
+    discovery_command="dsctl alert-group list",
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback=None,
+    ),
+)
+_WORKFLOW_RUNTIME_ENVIRONMENT = InputContract(
+    name="environment-code",
+    kind="option",
+    value_type="integer",
+    description="Environment code. Omit to allow enabled project preference.",
+    discovery_command="dsctl environment list",
+    resolution=ValueResolution(
+        precedence=_WORKFLOW_RUNTIME_PRECEDENCE,
+        fallback=None,
+    ),
+)
+_SCHEMA_V2_RUNTIME_DEFAULT_FIELDS = frozenset({"priority", "warning-type"})
+
+
+def _workflow_runtime_option(contract: InputContract) -> JsonObject:
+    """Project runtime resolution plus the schema-v2 legacy default fields."""
+    data = option_from_contract(contract)
+    if contract.name not in _SCHEMA_V2_RUNTIME_DEFAULT_FIELDS:
+        return data
+    resolution = contract.resolution
+    if resolution is None:
+        message = f"{contract.name!r} needs resolution for its v2 default projection"
+        raise RuntimeError(message)
+    data["default"] = resolution.fallback
+    return data
+
+
+def _workflow_runtime_options() -> list[JsonObject]:
+    """Build the shared start-time option block in stable CLI order."""
+    return [
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_WORKER_GROUP),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_TENANT),
+        cast(
+            "JsonObject",
+            option(
+                "failure-strategy",
+                value_type="string",
+                description="Failure strategy.",
+                default="continue",
+                choices=["continue", "end"],
+            ),
+        ),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_PRIORITY),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_WARNING_TYPE),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_WARNING_GROUP),
+        _workflow_runtime_option(_WORKFLOW_RUNTIME_ENVIRONMENT),
+    ]
 
 
 def schedule_group() -> dict[str, object]:
@@ -97,7 +233,17 @@ def schedule_group() -> dict[str, object]:
                     )
                 ],
                 options=[
-                    project_option(),
+                    option(
+                        "project",
+                        value_type="string",
+                        description=(
+                            "Project name or code for ad hoc preview only. When "
+                            "schedule_id is omitted, falls back to stored project "
+                            "context; do not pass --project with schedule_id."
+                        ),
+                        selector="name_or_code",
+                        discovery_command="dsctl project list",
+                    ),
                     option(
                         "cron",
                         value_type="string",
@@ -143,11 +289,23 @@ def schedule_group() -> dict[str, object]:
                 options=[
                     workflow_option(
                         description=(
-                            "Workflow name or code. Falls back to workflow context "
-                            "for create explain."
+                            "Workflow name or code for create explain only. When "
+                            "schedule_id is omitted, uses workflow context only "
+                            "when project also comes from context; do not pass "
+                            "--workflow with schedule_id."
                         )
                     ),
-                    project_option(),
+                    option(
+                        "project",
+                        value_type="string",
+                        description=(
+                            "Project name or code for create explain only. When "
+                            "schedule_id is omitted, falls back to stored project "
+                            "context; do not pass --project with schedule_id."
+                        ),
+                        selector="name_or_code",
+                        discovery_command="dsctl project list",
+                    ),
                     option(
                         "cron",
                         value_type="string",
@@ -227,9 +385,10 @@ def schedule_group() -> dict[str, object]:
                         "environment-code",
                         value_type="integer",
                         description=(
-                            "Environment code for create explain or updated value "
-                            "for update explain. Create explain can also inherit "
-                            "an enabled project preference when omitted."
+                            "Environment selection for create or update explain. "
+                            "For create, omission allows enabled project preference "
+                            "and zero explicitly selects no environment. For update, "
+                            "omission preserves the current value and zero clears it."
                         ),
                         discovery_command="dsctl environment list",
                     ),
@@ -240,11 +399,7 @@ def schedule_group() -> dict[str, object]:
                 action="schedule.create",
                 summary="Create one schedule.",
                 options=[
-                    workflow_option(
-                        description=(
-                            "Workflow name or code. Falls back to workflow context."
-                        )
-                    ),
+                    workflow_option(description=_WORKFLOW_OPTION_DESCRIPTION),
                     project_option(),
                     option(
                         "cron",
@@ -325,8 +480,9 @@ def schedule_group() -> dict[str, object]:
                         "environment-code",
                         value_type="integer",
                         description=(
-                            "Environment code. Omit to keep the CLI fallback "
-                            "chain, including enabled project preference."
+                            "Environment selection. Omit to allow enabled project "
+                            "preference and otherwise use no environment; pass 0 to "
+                            "explicitly use no environment and bypass that preference."
                         ),
                         discovery_command="dsctl environment list",
                     ),
@@ -423,7 +579,8 @@ def schedule_group() -> dict[str, object]:
                         "environment-code",
                         value_type="integer",
                         description=(
-                            "Updated environment code. Omit to keep the current value."
+                            "Updated environment selection. Omit to keep the current "
+                            "value; pass 0 to clear the environment."
                         ),
                         discovery_command="dsctl environment list",
                     ),
@@ -687,16 +844,35 @@ def workflow_group() -> dict[str, object]:
             command(
                 "list",
                 action="workflow.list",
-                summary="List workflows inside one project.",
+                summary=(
+                    "List workflows with optional filtering and pagination controls."
+                ),
                 options=[
                     project_option(),
                     option(
                         "search",
                         value_type="string",
                         description=(
-                            "Filter workflows by name substring after fetching "
-                            "the project list."
+                            "Filter workflows by name using the upstream search value."
                         ),
+                    ),
+                    option(
+                        "page-no",
+                        value_type="integer",
+                        description="Page number to fetch when not using --all.",
+                        default=1,
+                    ),
+                    option(
+                        "page-size",
+                        value_type="integer",
+                        description="Page size to request from the upstream API.",
+                        default=DEFAULT_PAGE_SIZE,
+                    ),
+                    option(
+                        "all",
+                        value_type="boolean",
+                        description="Fetch all remaining pages up to the safety limit.",
+                        default=False,
                     ),
                 ],
             ),
@@ -708,10 +884,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -722,15 +895,15 @@ def workflow_group() -> dict[str, object]:
             command(
                 "export",
                 action="workflow.export",
-                summary="Export one workflow as an editable YAML document.",
+                summary=(
+                    "Export raw workflow YAML for clone/create or "
+                    "read-only schedule-aware edit."
+                ),
                 arguments=[
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -740,7 +913,12 @@ def workflow_group() -> dict[str, object]:
                 payload={
                     "format": "yaml",
                     "output": "raw_document",
-                    "target_command": "dsctl workflow edit WORKFLOW --file FILE",
+                    "target_commands": [
+                        "dsctl workflow create --file FILE",
+                        "dsctl workflow edit WORKFLOW --file FILE",
+                    ],
+                    "schedule_on_create": "desired_state",
+                    "schedule_on_edit": "read_only_snapshot",
                 },
             ),
             command(
@@ -751,11 +929,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Required with "
-                            "--file; with --patch, falls back to workflow "
-                            "context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -771,10 +945,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -782,43 +953,9 @@ def workflow_group() -> dict[str, object]:
                 ],
                 options=[project_option()],
             ),
-            command(
-                "create",
-                action="workflow.create",
-                summary="Create one workflow definition from a YAML file.",
-                options=[
-                    option(
-                        "file",
-                        value_type="path",
-                        description=(
-                            "Path to one workflow YAML specification file. Start "
-                            "from `dsctl template workflow --raw`; add task "
-                            "fragments with `dsctl template task`, and inspect "
-                            "task fields with `dsctl task-type schema TYPE`."
-                        ),
-                        required=True,
-                    ),
-                    option(
-                        "project",
-                        value_type="string",
-                        description=(
-                            "Override workflow.project from the YAML file. Run "
-                            "`dsctl project list` to discover values."
-                        ),
-                        selector="name_or_code",
-                        discovery_command="dsctl project list",
-                    ),
-                    option(
-                        "dry-run",
-                        value_type="boolean",
-                        description=(
-                            "Compile the workflow payload without sending the "
-                            "create request."
-                        ),
-                        default=False,
-                    ),
-                    confirm_risk_option(),
-                ],
+            cast(
+                "dict[str, object]",
+                command_from_contract(_WORKFLOW_CREATE_CONTRACT),
             ),
             command(
                 "edit",
@@ -831,11 +968,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Required with "
-                            "--file; with --patch, falls back to workflow "
-                            "context when omitted."
-                        ),
+                        description=_WORKFLOW_EDIT_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -869,7 +1002,10 @@ def workflow_group() -> dict[str, object]:
                             "WORKFLOW` or `dsctl template workflow "
                             "--raw`; use --dry-run to inspect the compiled diff. "
                             "Full-file edits match task identity by exact task "
-                            "name and do not infer renames."
+                            "name and do not infer renames. An exported "
+                            "`schedule:` block is verified as a read-only "
+                            "snapshot and remains unchanged; use schedule "
+                            "commands to modify it."
                         ),
                     ),
                     project_option(),
@@ -878,7 +1014,10 @@ def workflow_group() -> dict[str, object]:
                         value_type="boolean",
                         description=(
                             "Compile the merged workflow edit payload without "
-                            "sending it."
+                            "sending it. When the full request is unnecessary, "
+                            "use `--columns diff,no_change,"
+                            "workflow_state_constraints,schedule_impacts` for a "
+                            "bounded review."
                         ),
                         default=False,
                     ),
@@ -889,6 +1028,7 @@ def workflow_group() -> dict[str, object]:
                     "source_options": ["--patch PATH", "--file PATH"],
                     "patch_template_command": "dsctl template workflow-patch --raw",
                     "file_source_command": "dsctl workflow export WORKFLOW",
+                    "file_schedule": "read_only_snapshot",
                     "file_template_command": "dsctl template workflow --raw",
                     "target_commands": [
                         "dsctl workflow edit WORKFLOW --patch FILE",
@@ -904,10 +1044,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -923,10 +1060,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -945,10 +1079,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -956,65 +1087,9 @@ def workflow_group() -> dict[str, object]:
                 ],
                 options=[
                     project_option(),
-                    option(
-                        "worker-group",
-                        value_type="string",
-                        description=(
-                            "Override the worker group used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` worker "
-                            "group."
-                        ),
-                        discovery_command="dsctl worker-group list",
-                    ),
-                    option(
-                        "tenant",
-                        value_type="string",
-                        description=(
-                            "Override the tenant code used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` tenant."
-                        ),
-                        discovery_command="dsctl tenant list",
-                    ),
-                    option(
-                        "failure-strategy",
-                        value_type="string",
-                        description="Failure strategy.",
-                        default="continue",
-                        choices=["continue", "end"],
-                    ),
-                    option(
-                        "priority",
-                        value_type="string",
-                        description="Workflow instance priority.",
-                        default="medium",
-                        choices=["highest", "high", "medium", "low", "lowest"],
-                    ),
-                    option(
-                        "warning-type",
-                        value_type="string",
-                        description="Warning type.",
-                        default="none",
-                        choices=["none", "success", "failure", "all"],
-                    ),
-                    option(
-                        "warning-group-id",
-                        value_type="integer",
-                        description=(
-                            "Warning group id. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl alert-group list",
-                    ),
-                    option(
-                        "environment-code",
-                        value_type="integer",
-                        description=(
-                            "Environment code. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl environment list",
+                    *cast(
+                        "list[dict[str, object]]",
+                        _workflow_runtime_options(),
                     ),
                     option(
                         "param",
@@ -1053,10 +1128,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -1082,65 +1154,9 @@ def workflow_group() -> dict[str, object]:
                         default="self",
                         choices=["self", "pre", "post"],
                     ),
-                    option(
-                        "worker-group",
-                        value_type="string",
-                        description=(
-                            "Override the worker group used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` worker "
-                            "group."
-                        ),
-                        discovery_command="dsctl worker-group list",
-                    ),
-                    option(
-                        "tenant",
-                        value_type="string",
-                        description=(
-                            "Override the tenant code used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` tenant."
-                        ),
-                        discovery_command="dsctl tenant list",
-                    ),
-                    option(
-                        "failure-strategy",
-                        value_type="string",
-                        description="Failure strategy.",
-                        default="continue",
-                        choices=["continue", "end"],
-                    ),
-                    option(
-                        "priority",
-                        value_type="string",
-                        description="Workflow instance priority.",
-                        default="medium",
-                        choices=["highest", "high", "medium", "low", "lowest"],
-                    ),
-                    option(
-                        "warning-type",
-                        value_type="string",
-                        description="Warning type.",
-                        default="none",
-                        choices=["none", "success", "failure", "all"],
-                    ),
-                    option(
-                        "warning-group-id",
-                        value_type="integer",
-                        description=(
-                            "Warning group id. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl alert-group list",
-                    ),
-                    option(
-                        "environment-code",
-                        value_type="integer",
-                        description=(
-                            "Environment code. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl environment list",
+                    *cast(
+                        "list[dict[str, object]]",
+                        _workflow_runtime_options(),
                     ),
                     option(
                         "param",
@@ -1182,10 +1198,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -1269,65 +1282,9 @@ def workflow_group() -> dict[str, object]:
                         default="desc",
                         choices=["desc", "asc"],
                     ),
-                    option(
-                        "worker-group",
-                        value_type="string",
-                        description=(
-                            "Override the worker group used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` worker "
-                            "group."
-                        ),
-                        discovery_command="dsctl worker-group list",
-                    ),
-                    option(
-                        "tenant",
-                        value_type="string",
-                        description=(
-                            "Override the tenant code used to start the "
-                            "workflow instance. Omit to allow enabled project "
-                            "preference before the DS fallback `default` tenant."
-                        ),
-                        discovery_command="dsctl tenant list",
-                    ),
-                    option(
-                        "failure-strategy",
-                        value_type="string",
-                        description="Failure strategy.",
-                        default="continue",
-                        choices=["continue", "end"],
-                    ),
-                    option(
-                        "priority",
-                        value_type="string",
-                        description="Workflow instance priority.",
-                        default="medium",
-                        choices=["highest", "high", "medium", "low", "lowest"],
-                    ),
-                    option(
-                        "warning-type",
-                        value_type="string",
-                        description="Warning type.",
-                        default="none",
-                        choices=["none", "success", "failure", "all"],
-                    ),
-                    option(
-                        "warning-group-id",
-                        value_type="integer",
-                        description=(
-                            "Warning group id. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl alert-group list",
-                    ),
-                    option(
-                        "environment-code",
-                        value_type="integer",
-                        description=(
-                            "Environment code. Omit to allow enabled project "
-                            "preference."
-                        ),
-                        discovery_command="dsctl environment list",
+                    *cast(
+                        "list[dict[str, object]]",
+                        _workflow_runtime_options(),
                     ),
                     option(
                         "param",
@@ -1367,10 +1324,7 @@ def workflow_group() -> dict[str, object]:
                     argument(
                         "workflow",
                         value_type="string",
-                        description=(
-                            "Workflow name or numeric code. Falls back to "
-                            "workflow context when omitted."
-                        ),
+                        description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                         required=False,
                         selector="name_or_code",
                         discovery_command="dsctl workflow list",
@@ -1404,10 +1358,7 @@ def workflow_group() -> dict[str, object]:
                             argument(
                                 "workflow",
                                 value_type="string",
-                                description=(
-                                    "Workflow name or numeric code. Falls back to "
-                                    "workflow context when omitted."
-                                ),
+                                description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                                 required=False,
                                 selector="name_or_code",
                                 discovery_command="dsctl workflow list",
@@ -1426,10 +1377,7 @@ def workflow_group() -> dict[str, object]:
                             argument(
                                 "workflow",
                                 value_type="string",
-                                description=(
-                                    "Workflow name or numeric code. Falls back to "
-                                    "workflow context when omitted."
-                                ),
+                                description=_WORKFLOW_ARGUMENT_DESCRIPTION,
                                 required=False,
                                 selector="name_or_code",
                                 discovery_command="dsctl workflow list",
@@ -1467,11 +1415,7 @@ def task_group() -> dict[str, object]:
                 summary="List tasks inside one workflow.",
                 options=[
                     project_option(),
-                    workflow_option(
-                        description=(
-                            "Workflow name or code. Falls back to workflow context."
-                        )
-                    ),
+                    workflow_option(description=_WORKFLOW_OPTION_DESCRIPTION),
                     option(
                         "search",
                         value_type="string",
@@ -1500,11 +1444,7 @@ def task_group() -> dict[str, object]:
                 ],
                 options=[
                     project_option(),
-                    workflow_option(
-                        description=(
-                            "Workflow name or code. Falls back to workflow context."
-                        )
-                    ),
+                    workflow_option(description=_WORKFLOW_OPTION_DESCRIPTION),
                 ],
             ),
             command(
@@ -1528,11 +1468,7 @@ def task_group() -> dict[str, object]:
                 ],
                 options=[
                     project_option(),
-                    workflow_option(
-                        description=(
-                            "Workflow name or code. Falls back to workflow context."
-                        )
-                    ),
+                    workflow_option(description=_WORKFLOW_OPTION_DESCRIPTION),
                     option(
                         "set",
                         value_type="string",

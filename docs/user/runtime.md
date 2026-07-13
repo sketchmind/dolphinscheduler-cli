@@ -17,6 +17,21 @@ Run one task from a workflow definition:
 dsctl workflow run-task daily-etl --task load --project etl-prod
 ```
 
+In the default JSON format, common create/online/run/watch/list results may
+include up to three `next_actions`. Each entry contains a complete command with
+resolved numeric identities and a `mutates` flag, so callers can continue the
+common lifecycle without another help or schema lookup. The entries are
+advisory; callers must still decide whether a mutating command matches their
+intent. An explicit `--env-file` target is carried into every suggested
+command. Table, TSV, and raw output remain pure rows or artifact text and do
+not append navigation below the output.
+
+List JSON may additionally contain `action_index`. It groups available stable
+actions over returned instance ids and marks state-dependent target subsets.
+This is a low-cost discovery aid: inspect `dsctl schema --command ACTION` only
+for the action you choose. The index does not evaluate permissions or replace
+the execution-time checks performed by DolphinScheduler.
+
 When a selected task has downstream dependency nodes that are not included in
 the run scope, DolphinScheduler may reject the command at execution time. The
 CLI surfaces this as a warning or translated user-facing error when upstream

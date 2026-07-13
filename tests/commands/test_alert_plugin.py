@@ -92,6 +92,18 @@ def test_alert_plugin_list_command_returns_paginated_payload() -> None:
     assert payload["data"]["totalList"][0]["instanceName"] == "slack-ops"
 
 
+def test_alert_plugin_list_command_uses_projected_fields_for_default_table() -> None:
+    result = runner.invoke(
+        app,
+        ["--output-format", "table", "alert-plugin", "list"],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[0] == "id | instanceName | alertPluginName"
+    assert "slack-ops" in result.stdout
+    assert "Slack" in result.stdout
+
+
 def test_alert_plugin_get_command_resolves_name() -> None:
     result = runner.invoke(app, ["alert-plugin", "get", "slack-ops"])
 
@@ -213,7 +225,7 @@ def test_alert_plugin_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["alert-plugin", "delete", "slack-ops"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "alert-plugin.delete"
     assert payload["error"]["type"] == "user_input_error"
 
@@ -238,7 +250,7 @@ def test_alert_plugin_test_command_requires_live_alert_server(
     result = runner.invoke(app, ["alert-plugin", "test", "slack-ops"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "alert-plugin.test"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (

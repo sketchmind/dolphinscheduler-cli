@@ -102,6 +102,13 @@ materializes Quartz jobs.
 
 ```text
 dolphinscheduler-cli/
+├── skills/dsctl/
+│   ├── SKILL.md
+│   └── references/
+│       ├── errors.md
+│       ├── runtime.md
+│       ├── schedules.md
+│       └── workflows.md
 ├── README.md
 ├── AGENTS.md
 ├── docs/
@@ -136,7 +143,8 @@ dolphinscheduler-cli/
 │   ├── config.py
 │   ├── context.py
 │   ├── errors.py
-│   └── output.py
+│   ├── output.py
+│   └── result_navigation.py
 ├── tools/
 │   ├── ds_codegen/
 │   ├── generate_ds_contract.py
@@ -161,7 +169,7 @@ not depend on it.
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │ commands/          CLI surface                              │
-│ Parse options → call service → emit JSON envelope           │
+│ Parse options → call service → emit rendered command        │
 ├──────────────────────────────────────────────────────────────┤
 │ services/          business logic                           │
 │ Selection, resolution, validation, pagination, YAML shaping │
@@ -187,8 +195,34 @@ Foundation owns:
 - context persistence
 - error types
 - JSON/YAML boundary helpers
+- output adapters and exact stdout/stderr/exit-code routing
+- pure, bounded lifecycle and list-action navigation derived from an already
+  completed command result
 
 Foundation does not import upward into commands, services, or upstream.
+
+`context.py` is the persistence boundary for the current two-layer local
+selection model. It owns layer paths, tuple invariants, source-aware effective
+resolution, atomic same-directory replacement that preserves configured
+symlink indirection, and stable `ConfigError` translation for read/write/clear
+filesystem failures. Services decide how a context mutation is presented,
+including post-write effective readback and shadowing diagnostics; commands
+only parse the canonical invocation and emit that result. Context inspection
+and mutation are local-only operations and do not imply remote selector
+validation.
+
+`result_navigation.py` is the single deep module for optional JSON navigation:
+bounded complete `next_actions` and grouped list `action_index` discovery. Its
+public interface accepts `action`, `resolved`, `data`, and the optional explicit
+env-file target; its private rules own safe fact extraction, lifecycle-state
+decisions, numeric selector preference, target preservation, shell encoding,
+deterministic ordering, de-duplication, and output limits. Action indexes are
+computed only from returned rows, cap unique selectors, and state explicitly
+that authorization and non-row eligibility were not evaluated. The module
+performs no I/O and imports no service, upstream, or generated contracts. The
+standard success-envelope builder calls it once, so domain services do not need
+to remember an output-navigation hook and table/TSV/raw renderers remain
+row/artifact-only.
 
 ### Generated
 
@@ -200,6 +234,21 @@ Rules:
 - improve the generator first when DS-facing shapes are wrong
 - use `tools/check_generated_freshness.py` to keep generated output in sync
 
+The generated runtime routes response-contract and result-envelope failures
+through explicit `SessionLike` hooks. Its standalone default adapter raises
+self-contained generated exceptions, while the production
+`GeneratedSessionAdapter` translates the same hooks into stable `dsctl`
+transport and result errors. Response validation errors preserve a bounded,
+value-free list of sanitized field paths, types, and static messages so callers
+can diagnose a contract mismatch without echoing rejected values. Resource adapters must not
+add one-off catches for generated payload validation.
+
+When upstream Java declarations are less precise than observed JSON behavior,
+the generator may apply a narrowly keyed field normalization grounded in
+upstream implementation/tests and live response evidence. This keeps the
+runtime correction generated and local to the DS-native model instead of
+cleaning values in command or adapter code.
+
 ### Upstream
 
 `upstream/` owns:
@@ -207,6 +256,8 @@ Rules:
 - binding a shared `DolphinSchedulerClient`
 - adapting generated clients into version-stable operation groups
 - normalizing version differences at the handwritten bridge
+- selecting between generated DS endpoints when one version exposes the same
+  domain operation through contracts with different semantics
 - resolving `DS_VERSION` to support metadata, adapter family, and generated
   contract version
 - exposing version-specific DS enum semantics needed by services without
@@ -220,6 +271,13 @@ must have support metadata before services can bind it. Compatibility families
 such as `workflow-3.3-plus` can share adapter logic when upstream REST
 semantics are stable; older `process-*` API families should be implemented as
 separate legacy adapters instead of service-layer branches.
+
+Endpoint selection is an adapter implementation detail. For example, DS 3.4.1
+cannot represent every schedule state through its v2 create/update request
+models: no-environment schedules and zero-valued update fields collide with v2
+primitive sentinels. Its generated legacy schedule operations preserve those
+DS-native states. The schedule interface keeps `None` as the version-stable
+meaning of “no environment”; callers do not choose legacy versus v2 routes.
 
 ### Services
 
@@ -242,6 +300,42 @@ separate legacy adapters instead of service-layer branches.
 - direct generated imports
 - stdout rendering
 
+Workflow discovery has two explicit upstream seams. `list_refs` returns the
+minimal DS identity contract used by selector resolution; `list_page` returns
+the rich paged contract used by the public `workflow list` service. Keeping the
+operations separate avoids an ambiguous generic `list`, prevents rich public
+discovery from adding cost to every name lookup, and leaves pagination/output
+shaping in the service layer without N+1 detail requests.
+
+Workflow detail and DAG responses are not authoritative for attached schedules
+in DS 3.4.1; only the independently persisted schedule resource and rich
+workflow paging query join that state. A service-internal attached-schedule
+lookup is therefore the single seam for workflow get/describe/digest/export,
+edit, release, and delete behavior. It performs one exact project/workflow
+schedule query, enforces the DS zero-or-one invariant, and treats lookup or
+shape failure as an error rather than reusing `schedule: null`. Selector
+resolution stays on `list_refs` and does not pay this cost. Workflow create
+reuses the schedule returned by its own mutation, while workflow offline
+refreshes the attached schedule after DS applies its cascading state change.
+Definition edit compilation deliberately excludes this independently persisted
+schedule from its live baseline; schedule constraints and output shaping consume
+the authoritative record at the workflow service boundary instead. A full-file
+edit may carry the `schedule:` emitted by workflow export, but the edit module
+treats it only as a concurrency snapshot: it verifies the authoritative fields,
+accepts DS's workflow-offline schedule cascade only when the exported document
+still requests both workflow and schedule `ONLINE`, strips the block, and never
+compiles or sends a schedule mutation.
+
+Workflow task identity allocation is split across the service and upstream
+layers. The compiler always receives an explicit allocator. Lint and dry-run
+use deterministic preview-only codes, while an applied workflow create,
+workflow edit, or workflow-instance edit first completes the same local
+compile preflight and then obtains persistent task codes from DolphinScheduler
+through the bound `TaskOperations` interface. The upstream 3.4.1 adapter backs
+that interface with the generated `gen-task-codes` REST operation and batches
+requests to the server limit of 100 codes. Existing-task and no-op edits do not
+request new codes.
+
 ### Commands
 
 `commands/` owns:
@@ -256,6 +350,100 @@ separate legacy adapters instead of service-layer branches.
 - HTTP
 - DS DTO details
 - name resolution
+
+### Progressive Self-Description
+
+`services.schema` is a deep module over the generated/handwritten command
+catalog. Its interface exposes index, group, action, list, and expanded queries;
+callers do not need to know how action nodes, DS-version identity, payload
+metadata, data shapes, or correction candidates are assembled.
+
+The normal discovery path is deliberately bounded:
+
+```text
+schema index -> group action index -> action-local contract
+```
+
+An agent that already knows an action may jump directly to the final step.
+`--full` selects the expanded projection adapter for catalog audits and
+generators. It is not the default representation.
+
+The root help is the routing seam for callers that cannot read repository
+documentation. It directs agents to inspect only the immediate command through
+leaf help or an action-local schema, using one relevant group only when the
+action is unknown and without preloading downstream actions. Successful
+lifecycle results then carry complete, output-bounded `next_actions` commands.
+Row-oriented lists provide a bounded `action_index` so an agent can discover
+which stable actions apply to returned selectors before paying for another help
+or schema read. Callers preserve a goal-aligned, authorized `next_actions`
+selection unchanged and serialize mutations before dependent reads.
+
+Interaction is help-first with schema on demand; implementation is
+contract-first. The pure `command_contract` deep module owns canonical root
+option facts, explicit action routes, ordered input facts, parser versus fixed
+default semantics, path rules, value-source resolution, and shell-safe command
+rendering. Typer help/parser metadata, bounded schema JSON, and lifecycle
+navigation are separate adapters at that seam. Strongly typed command callbacks
+remain explicit, and Click-tree parity tests verify that their observable parser
+contract matches the canonical facts. Migration is incremental; the four root
+options and `workflow.create` form the initial three-adapter tracer bullet.
+Commands with hidden compatibility flags or multiple aliases remain
+handwritten until the canonical grammar models visibility and aliases; they
+must not be forced through a lossy projection merely to increase coverage.
+
+Each modeled command fact has one construction source. The versioned wire
+contract may retain a compatibility projection of that fact—for example a
+legacy `default` beside the richer `resolution` object—but adapters do not
+redefine it. In particular, action-local JSON owns one `command` object and
+does not carry duplicate renderer rows. The output adapter derives table, TSV,
+and explicit column projection rows from that object. Schema view-aware data
+shapes keep index, list, group, and command projection paths local to the
+output boundary.
+
+`services.task_authoring` applies the same deep-module rule to task-type
+contracts. It builds canonical metadata, fields, and state rules once, then
+lazily derives only the bounded field, exact field, JSON Schema, compile
+mapping, or explicit legacy-full projection requested. Commands do not assemble
+these representations. View-dependent row paths and document restrictions are
+registered by action in the shared output data-shape module, so
+table/TSV/column adapters do not contain task-type-specific branches.
+
+Static cross-field command constraints live in the schema constraint registry
+and mirror service/command validation (`exactly_one_of`, `requires`, mode
+alternatives, and related forms). Tests require every referenced flag or
+placeholder to exist in the action contract. Dynamic runtime facts, including
+confirmation tokens derived from a concrete mutation, stay in service errors
+rather than being guessed by the static schema.
+
+Self-description quality is evaluated at the task level rather than by response
+size alone: necessary tokens, discovery round trips, retry tokens, and
+ambiguity/misoperation risk all count. Byte-budget tests bound common responses
+without removing information needed to construct the next correct command.
+Layout compaction is secondary: semantic projection and avoiding duplicate
+representations normally save more task tokens than removing JSON whitespace.
+
+### Separately Installable Agent Skill
+
+`skills/dsctl` is the repository-owned source of the independently installable
+agent skill for operating DolphinScheduler through the CLI. Its interface is
+the skill metadata and one goal-oriented operating loop; the implementation
+knowledge for commands, versions, REST transport, selectors, output, and errors
+remains behind the `dsctl` process interface and its progressive
+self-description.
+
+The skill lives outside `src/dsctl/` because it is neither Python runtime code
+nor a second command adapter. It does not wrap `dsctl`, copy the command catalog,
+or depend on generated/upstream packages. Its conditional agent guidance is
+bundled under `references/`, so the skill directory remains self-contained when
+installed independently from the PyPI package. Those references encode agent
+decision processes; live help, action schema, capabilities, and output remain
+the command-contract authority.
+
+The root `skills/` location is the authoring and distribution-source seam, not a
+Python release unit or a repository-local auto-discovery location. Users install
+the skill separately from the PyPI package; a future plugin may package this
+same directory without moving its source. Every relative Markdown pointer in
+the skill must resolve inside the independently copyable skill directory.
 
 ## Dependency Rules
 

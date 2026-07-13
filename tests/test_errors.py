@@ -14,7 +14,6 @@ from dsctl.errors import (
     NotFoundError,
     PermissionDeniedError,
     ResolutionError,
-    SearchIndexError,
     UserInputError,
     WaitTimeoutError,
 )
@@ -71,11 +70,6 @@ def test_dsctl_error_rejects_non_json_source() -> None:
             id="resolution",
         ),
         pytest.param(NotFoundError("missing"), "not_found", id="not-found"),
-        pytest.param(
-            SearchIndexError("search"),
-            "search_index_error",
-            id="search-index",
-        ),
         pytest.param(
             ApiTransportError("transport"),
             "api_transport_error",

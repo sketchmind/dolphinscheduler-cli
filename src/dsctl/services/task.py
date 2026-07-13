@@ -18,7 +18,6 @@ from dsctl.errors import (
 from dsctl.models.common import is_yaml_object
 from dsctl.models.task_spec import canonical_task_type, normalize_task_params
 from dsctl.models.workflow_patch import WorkflowPatchTaskSetSpec
-from dsctl.models.workflow_spec import COMMAND_TASK_TYPES
 from dsctl.output import (
     CommandResult,
     dry_run_result,
@@ -102,6 +101,7 @@ _TASK_UPDATE_INVALID_STATE_SUGGESTION = (
     "Inspect the containing workflow definition state; if the workflow is "
     "online, bring it offline before retrying `task update`."
 )
+_RAW_SCRIPT_UPDATE_TASK_TYPES = frozenset({"PYTHON", "REMOTESHELL", "SHELL"})
 
 
 class TaskUpdateWarningDetail(TypedDict):
@@ -195,7 +195,11 @@ def _list_tasks_result(
         selected_project.value,
         adapter=runtime.upstream.projects,
     )
-    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    selected_workflow = require_workflow_selection(
+        workflow,
+        runtime=runtime,
+        project_selection=selected_project,
+    )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
         adapter=runtime.upstream.workflows,
@@ -397,7 +401,11 @@ def _resolve_task_scope(
         selected_project.value,
         adapter=runtime.upstream.projects,
     )
-    selected_workflow = require_workflow_selection(workflow, runtime=runtime)
+    selected_workflow = require_workflow_selection(
+        workflow,
+        runtime=runtime,
+        project_selection=selected_project,
+    )
     resolved_workflow = resolve_workflow(
         selected_workflow.value,
         adapter=runtime.upstream.workflows,
@@ -802,7 +810,7 @@ def _updated_task_params_document(
         message = "Task payload was missing taskType"
         raise ApiTransportError(message, details={"resource": TASK_RESOURCE})
     normalized_task_type = canonical_task_type(task_type)
-    if normalized_task_type not in COMMAND_TASK_TYPES:
+    if normalized_task_type not in _RAW_SCRIPT_UPDATE_TASK_TYPES:
         message = (
             "command updates are only supported for SHELL, PYTHON, and "
             "REMOTESHELL tasks"
@@ -944,7 +952,10 @@ def _updated_resource_limit(
 
 def _task_command_value(task: TaskPayloadRecord) -> str | None:
     task_type = optional_text(task.taskType)
-    if task_type is None or canonical_task_type(task_type) not in COMMAND_TASK_TYPES:
+    if (
+        task_type is None
+        or canonical_task_type(task_type) not in _RAW_SCRIPT_UPDATE_TASK_TYPES
+    ):
         return None
     payload = parse_json_text(task.taskParams)
     task_params = require_json_object(payload, label="task params")

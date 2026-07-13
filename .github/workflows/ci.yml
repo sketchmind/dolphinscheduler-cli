@@ -95,6 +95,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install build twine
 
+      - name: Check release version
+        run: python tools/check_release_version.py
+
       - name: Build distributions
         run: python -m build
 

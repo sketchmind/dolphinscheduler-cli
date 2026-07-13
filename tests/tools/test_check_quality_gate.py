@@ -7,6 +7,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from types import ModuleType
+    from typing import Protocol
+
+    import pytest
+
+    class _NamedStep(Protocol):
+        name: str
 
 
 def _ensure_tools_on_path() -> None:
@@ -29,6 +35,7 @@ def test_build_steps_matches_ci_shape() -> None:
         "Lint",
         "Format Check",
         "Project Layout Check",
+        "Release Version Consistency",
         "Explicit Object Audit",
         "Architecture Boundary Check",
         "Generated Code Freshness",
@@ -64,6 +71,7 @@ def test_build_steps_honors_skip_flags() -> None:
         "Lint",
         "Format Check",
         "Project Layout Check",
+        "Release Version Consistency",
         "Explicit Object Audit",
         "Architecture Boundary Check",
         "Generated Code Freshness",
@@ -81,6 +89,7 @@ def test_build_steps_can_append_live_suite() -> None:
         "Lint",
         "Format Check",
         "Project Layout Check",
+        "Release Version Consistency",
         "Explicit Object Audit",
         "Architecture Boundary Check",
         "Generated Code Freshness",
@@ -109,6 +118,61 @@ def test_build_steps_can_append_live_suite() -> None:
         "-q",
         "tests/live",
     )
+
+
+def test_main_fails_when_codespell_is_unavailable_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    quality = _load_module()
+    original_run_step = quality.run_step
+
+    monkeypatch.setattr(quality.shutil, "which", lambda _command: None)
+    monkeypatch.setattr(
+        quality,
+        "has_module",
+        lambda module: module != "codespell",
+    )
+
+    def run_without_external_commands(step: _NamedStep) -> int:
+        if step.name == "Codespell":
+            return int(original_run_step(step))
+        return 0
+
+    monkeypatch.setattr(quality, "run_step", run_without_external_commands)
+
+    returncode = quality.main(["--skip-pytest", "--skip-generated-sample"])
+
+    assert returncode == 2
+    output = capsys.readouterr().out
+    assert (
+        "codespell is not installed in the active environment; "
+        "install dev dependencies or use --skip-codespell"
+    ) in output
+    assert "[quality] failed: Codespell" in output
+    assert "[quality] all checks passed" not in output
+
+
+def test_main_allows_codespell_to_be_skipped_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    quality = _load_module()
+    executed_steps: list[str] = []
+
+    def pass_external_steps(step: _NamedStep) -> int:
+        executed_steps.append(step.name)
+        return 0
+
+    monkeypatch.setattr(quality, "run_step", pass_external_steps)
+
+    returncode = quality.main(
+        ["--skip-codespell", "--skip-pytest", "--skip-generated-sample"]
+    )
+
+    assert returncode == 0
+    assert "Codespell" not in executed_steps
+    assert "[quality] all checks passed" in capsys.readouterr().out
 
 
 def test_validate_live_preconditions_requires_flags_and_admin_profile() -> None:

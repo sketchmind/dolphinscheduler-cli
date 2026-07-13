@@ -6,14 +6,23 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, TypeAlias, TypeGuard, cast
 
+from dsctl.command_contract import COMMAND_CATALOG, CommandBindingError
+from dsctl.data_shapes import (
+    DataShape,
+    data_shape_for_action,
+    data_shapes_by_view_schema_for_action,
+)
 from dsctl.errors import UserInputError
-from dsctl.services._data_shapes import DataShape, data_shape_for_action
+from dsctl.schema_contract_rows import command_contract_rows
 
 if TYPE_CHECKING:
     from dsctl.support.json_types import JsonObject, JsonValue
 
 OutputFormat: TypeAlias = Literal["json", "table", "tsv"]
-OUTPUT_FORMAT_CHOICES: tuple[OutputFormat, ...] = ("json", "table", "tsv")
+OUTPUT_FORMAT_CHOICES = cast(
+    "tuple[OutputFormat, ...]",
+    COMMAND_CATALOG.global_option("output-format").input.choices,
+)
 
 
 @dataclass(frozen=True)
@@ -22,6 +31,16 @@ class RenderOptions:
 
     output_format: OutputFormat = "json"
     columns: tuple[str, ...] = ()
+    compact: bool = False
+
+
+@dataclass(frozen=True)
+class RenderedCommand:
+    """Exact process output and exit status for one rendered command."""
+
+    stdout: str = ""
+    stderr: str = ""
+    exit_code: int = 0
 
 
 def parse_columns(value: str | None) -> tuple[str, ...]:
@@ -40,9 +59,58 @@ def parse_columns(value: str | None) -> tuple[str, ...]:
 
 def validate_render_options(options: RenderOptions) -> RenderOptions:
     """Reject ambiguous global display settings before running a command."""
+    try:
+        COMMAND_CATALOG.validate_global_values(
+            {
+                "output-format": options.output_format,
+                "compact": options.compact,
+            }
+        )
+    except CommandBindingError as exc:
+        message = "--compact can only be used with --output-format json"
+        raise UserInputError(
+            message,
+            details={
+                "compact": True,
+                "output_format": options.output_format,
+            },
+            suggestion="Remove --compact or use --output-format json.",
+        ) from exc
     if options.columns and "*" in options.columns:
         _validate_wildcard_columns(options.columns)
     return options
+
+
+def render_command(
+    payload: JsonObject,
+    *,
+    action: str,
+    options: RenderOptions,
+) -> RenderedCommand:
+    """Render one standard result into exact process channels and status."""
+    body = render_payload(payload, action=action, options=options)
+    if not payload.get("ok"):
+        return RenderedCommand(
+            stderr=_with_final_newline(body),
+            exit_code=1,
+        )
+
+    diagnostics = ""
+    if options.output_format != "json":
+        diagnostics = _render_success_diagnostics(payload, include_page=True)
+    return RenderedCommand(
+        stdout=_with_final_newline(body),
+        stderr=_with_final_newline(diagnostics) if diagnostics else "",
+    )
+
+
+def render_raw_command(body: str, *, payload: JsonObject) -> RenderedCommand:
+    """Render one successful raw artifact without changing its body bytes."""
+    diagnostics = _render_success_diagnostics(payload, include_page=False)
+    return RenderedCommand(
+        stdout=body,
+        stderr=_with_final_newline(diagnostics) if diagnostics else "",
+    )
 
 
 def render_payload(
@@ -52,6 +120,12 @@ def render_payload(
     options: RenderOptions,
 ) -> str:
     """Render one standard output envelope using the requested format."""
+    if payload.get("ok"):
+        _validate_data_shape_render_options(
+            payload,
+            action=action,
+            options=options,
+        )
     if options.output_format == "json":
         if options.columns and payload.get("ok"):
             payload = _project_json_payload(
@@ -59,14 +133,85 @@ def render_payload(
                 action=action,
                 columns=options.columns,
             )
-        return _render_json(payload)
+        return _render_json(payload, compact=options.compact)
     if not payload.get("ok"):
         return _render_error_payload(payload, output_format=options.output_format)
     return _render_success_payload(payload, action=action, options=options)
 
 
-def _render_json(payload: JsonValue) -> str:
-    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True)
+def _render_json(payload: JsonValue, *, compact: bool) -> str:
+    return json.dumps(
+        payload,
+        indent=None if compact else 2,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":") if compact else None,
+    )
+
+
+def _render_success_diagnostics(
+    payload: JsonObject,
+    *,
+    include_page: bool,
+) -> str:
+    lines: list[str] = []
+    if include_page:
+        page = _pagination_diagnostic(payload)
+        if page is not None:
+            lines.append(page)
+    lines.extend(_warning_diagnostics(payload))
+    return "\n".join(lines)
+
+
+def _pagination_diagnostic(payload: JsonObject) -> str | None:
+    data = payload.get("data")
+    if not isinstance(data, Mapping):
+        return None
+    rows = data.get("totalList")
+    if not _is_sequence_like(rows):
+        return None
+
+    total = _int_metadata(data.get("total"))
+    page_no = _int_metadata(data.get("pageNo"))
+    total_page = _int_metadata(data.get("totalPage"))
+    if total is None or page_no is None or total_page is None:
+        return None
+
+    row_count = len(rows)
+    if page_no <= 1 and total_page <= 1 and row_count >= total:
+        return None
+    return f"page: {page_no}/{total_page}; showing {row_count} of {total} rows"
+
+
+def _warning_diagnostics(payload: JsonObject) -> list[str]:
+    warnings = payload.get("warnings")
+    if not _is_sequence_like(warnings):
+        return []
+    details = payload.get("warning_details")
+    detail_items = details if _is_sequence_like(details) else ()
+
+    lines: list[str] = []
+    for index, warning in enumerate(warnings):
+        if not isinstance(warning, str):
+            continue
+        detail = detail_items[index] if index < len(detail_items) else None
+        code = detail.get("code") if isinstance(detail, Mapping) else None
+        label = f"warning[{code}]" if isinstance(code, str) and code else "warning"
+        lines.append(f"{label}: {warning}")
+        suggestion = detail.get("suggestion") if isinstance(detail, Mapping) else None
+        if isinstance(suggestion, str) and suggestion:
+            lines.append(f"  suggestion: {suggestion}")
+    return lines
+
+
+def _int_metadata(value: JsonValue | None) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _with_final_newline(value: str) -> str:
+    return value if value.endswith("\n") else f"{value}\n"
 
 
 def _render_success_payload(
@@ -76,14 +221,23 @@ def _render_success_payload(
     options: RenderOptions,
 ) -> str:
     data = payload.get("data")
-    shape = data_shape_for_action(action)
-    rows = _extract_rows(data, shape=shape)
+    view = _result_view(payload, action=action)
+    shape = data_shape_for_action(action, view=view)
+    derived_rows = _derived_rows(data, action=action, view=view)
+    rows = derived_rows
+    if rows is None:
+        rows = _extract_rows(data, shape=shape)
     if rows is not None:
         columns = _resolve_columns(
             rows,
             requested=options.columns,
-            defaults=() if shape is None else shape.default_columns,
+            defaults=(
+                ()
+                if shape is None or (derived_rows is not None and view != "command")
+                else shape.default_columns
+            ),
             action=action,
+            view=view,
         )
         return _render_rows(rows, columns=columns, output_format=options.output_format)
 
@@ -96,6 +250,7 @@ def _render_success_payload(
                 requested=options.columns,
                 defaults=(),
                 action=action,
+                view=view,
             )
             return _render_rows(
                 rows,
@@ -151,13 +306,44 @@ def _project_json_payload(
 ) -> JsonObject:
     """Return a copy of a success envelope with row/object data projected."""
     projected = deepcopy(payload)
-    shape = data_shape_for_action(action)
+    view = _result_view(projected, action=action)
+    shape = data_shape_for_action(action, view=view)
+    derived_rows = _derived_rows(projected.get("data"), action=action, view=view)
+    if (
+        action == "schema"
+        and view in {"command", "full_group", "full_command"}
+        and derived_rows is not None
+    ):
+        data = projected.get("data")
+        if not isinstance(data, dict):
+            raise _projection_not_supported_error(
+                action=action,
+                columns=columns,
+                view=view,
+            )
+        row_field = "command" if view == "command" else "rows"
+        data[row_field] = _project_json_value(
+            list(derived_rows),
+            columns=columns,
+            action=action,
+            view=view,
+        )
+        return projected
     if shape is not None and shape.row_path is not None:
         value = _value_at_path(projected, shape.row_path)
-        replacement = _project_json_value(value, columns=columns, action=action)
+        replacement = _project_json_value(
+            value,
+            columns=columns,
+            action=action,
+            view=view,
+        )
         if _replace_value_at_path(projected, shape.row_path, replacement):
             return projected
-        raise _projection_not_supported_error(action=action, columns=columns)
+        raise _projection_not_supported_error(
+            action=action,
+            columns=columns,
+            view=view,
+        )
 
     data = projected.get("data")
     if isinstance(data, Mapping):
@@ -167,6 +353,7 @@ def _project_json_payload(
                 total_list,
                 columns=columns,
                 action=action,
+                view=view,
             )
             data_copy = dict(data)
             data_copy["totalList"] = replacement
@@ -176,11 +363,109 @@ def _project_json_payload(
             data,
             columns=columns,
             action=action,
+            view=view,
         )
         return projected
 
-    projected["data"] = _project_json_value(data, columns=columns, action=action)
+    projected["data"] = _project_json_value(
+        data,
+        columns=columns,
+        action=action,
+        view=view,
+    )
     return projected
+
+
+def _validate_data_shape_render_options(
+    payload: JsonObject,
+    *,
+    action: str,
+    options: RenderOptions,
+) -> None:
+    view = _result_view(payload, action=action)
+    shape = data_shape_for_action(action, view=view)
+    if shape is None:
+        return
+    if options.output_format not in shape.supported_output_formats:
+        message = (
+            f"The {view or 'default'} view for {action} is JSON-only and cannot be "
+            f"rendered as {options.output_format}."
+        )
+        raise UserInputError(
+            message,
+            details={
+                "action": action,
+                "view": view,
+                "output_format": options.output_format,
+                "supported_output_formats": list(shape.supported_output_formats),
+            },
+            suggestion=(
+                "Use the default JSON output and omit --columns; --compact remains "
+                "available for complete compact JSON."
+            ),
+        )
+    if options.columns and not shape.column_projection:
+        message = (
+            f"The {view or 'default'} view for {action} is JSON-only and does not "
+            "support --columns."
+        )
+        raise UserInputError(
+            message,
+            details={
+                "action": action,
+                "view": view,
+                "columns": list(options.columns),
+                "column_projection": False,
+            },
+            suggestion=(
+                "Omit --columns to preserve the complete document; --compact remains "
+                "available for complete compact JSON."
+            ),
+        )
+
+
+def _result_view(payload: JsonObject, *, action: str) -> str | None:
+    resolved = payload.get("resolved")
+    data = payload.get("data")
+    if action != "schema":
+        resolved_view = resolved.get("view") if isinstance(resolved, Mapping) else None
+        if isinstance(resolved_view, str):
+            return resolved_view
+        data_view = data.get("view") if isinstance(data, Mapping) else None
+        return data_view if isinstance(data_view, str) else None
+
+    schema = resolved.get("schema") if isinstance(resolved, Mapping) else None
+    scope = schema.get("scope") if isinstance(schema, Mapping) else None
+    if isinstance(data, Mapping):
+        data_view = data.get("view")
+        if isinstance(data_view, str):
+            if data_view == "full" and scope in {"group", "command"}:
+                return f"full_{scope}"
+            return data_view
+    if not isinstance(schema, Mapping):
+        return None
+    resolved_view = schema.get("view")
+    return resolved_view if isinstance(resolved_view, str) else None
+
+
+def _derived_rows(
+    data: JsonValue | None,
+    *,
+    action: str,
+    view: str | None,
+) -> tuple[JsonObject, ...] | None:
+    if action != "schema" or not isinstance(data, Mapping):
+        return None
+    if view == "command":
+        command = data.get("command")
+        action_name = command.get("action") if isinstance(command, Mapping) else None
+        if isinstance(command, Mapping) and isinstance(action_name, str):
+            return tuple(command_contract_rows(command, action=action_name))
+    if view in {"full_group", "full_command"}:
+        legacy_rows = _coerce_rows(data.get("rows"))
+        if legacy_rows is not None:
+            return legacy_rows
+    return None
 
 
 def _project_json_value(
@@ -188,6 +473,7 @@ def _project_json_value(
     *,
     columns: tuple[str, ...],
     action: str,
+    view: str | None,
 ) -> JsonValue:
     if isinstance(value, Mapping):
         row = _mapping_to_json_object(value)
@@ -196,15 +482,27 @@ def _project_json_value(
             requested=columns,
             defaults=(),
             action=action,
+            view=view,
         )
         return _project_row(row, resolved)
 
     if _is_sequence_like(value):
-        rows = _json_rows_for_projection(value, action=action, columns=columns)
-        resolved = _resolve_columns(rows, requested=columns, defaults=(), action=action)
+        rows = _json_rows_for_projection(
+            value,
+            action=action,
+            columns=columns,
+            view=view,
+        )
+        resolved = _resolve_columns(
+            rows,
+            requested=columns,
+            defaults=(),
+            action=action,
+            view=view,
+        )
         return [_project_row(row, resolved) for row in rows]
 
-    raise _projection_not_supported_error(action=action, columns=columns)
+    raise _projection_not_supported_error(action=action, columns=columns, view=view)
 
 
 def _json_rows_for_projection(
@@ -212,13 +510,22 @@ def _json_rows_for_projection(
     *,
     action: str,
     columns: tuple[str, ...],
+    view: str | None,
 ) -> tuple[JsonObject, ...]:
     if not _is_sequence_like(value):
-        raise _projection_not_supported_error(action=action, columns=columns)
+        raise _projection_not_supported_error(
+            action=action,
+            columns=columns,
+            view=view,
+        )
     rows: list[JsonObject] = []
     for item in value:
         if not isinstance(item, Mapping):
-            raise _projection_not_supported_error(action=action, columns=columns)
+            raise _projection_not_supported_error(
+                action=action,
+                columns=columns,
+                view=view,
+            )
         rows.append(_mapping_to_json_object(item))
     return tuple(rows)
 
@@ -251,13 +558,15 @@ def _projection_not_supported_error(
     *,
     action: str,
     columns: tuple[str, ...],
+    view: str | None,
 ) -> UserInputError:
     message = f"--columns can only project object or row-oriented output for {action}"
     return UserInputError(
         message,
-        details={"action": action, "columns": list(columns)},
+        details={"action": action, "view": view, "columns": list(columns)},
         suggestion=(
-            f"Run `dsctl schema --command {action}` and inspect data_shape, "
+            f"Run `dsctl schema --command {action}` and inspect "
+            f"{_data_shape_contract_path(action, view)}, "
             "or omit --columns for this command."
         ),
     )
@@ -322,12 +631,13 @@ def _resolve_columns(
     requested: tuple[str, ...],
     defaults: tuple[str, ...],
     action: str,
+    view: str | None,
 ) -> tuple[str, ...]:
     if requested:
         if "*" in requested:
             _validate_wildcard_columns(requested)
             return _infer_columns(rows)
-        _validate_requested_columns(rows, requested, action=action)
+        _validate_requested_columns(rows, requested, action=action, view=view)
         return requested
     if defaults and _any_column_present(rows, defaults):
         return defaults
@@ -353,6 +663,7 @@ def _validate_requested_columns(
     columns: tuple[str, ...],
     *,
     action: str,
+    view: str | None,
 ) -> None:
     if not rows:
         return
@@ -364,15 +675,23 @@ def _validate_requested_columns(
         message,
         details={
             "action": action,
+            "view": view,
             "columns": list(columns),
             "unknown_columns": missing,
             "available_columns": _infer_columns(rows),
         },
         suggestion=(
-            f"Run `dsctl schema --command {action}` and inspect data_shape, "
+            f"Run `dsctl schema --command {action}` and inspect "
+            f"{_data_shape_contract_path(action, view)}, "
             "or retry with columns present in the JSON row payload."
         ),
     )
+
+
+def _data_shape_contract_path(action: str, view: str | None) -> str:
+    if view is None or view not in data_shapes_by_view_schema_for_action(action):
+        return "data.command.data_shape"
+    return f"data.command.data_shapes_by_view.{view}"
 
 
 def _any_column_present(rows: Sequence[JsonObject], columns: tuple[str, ...]) -> bool:
@@ -457,7 +776,10 @@ __all__ = [
     "OUTPUT_FORMAT_CHOICES",
     "OutputFormat",
     "RenderOptions",
+    "RenderedCommand",
     "parse_columns",
+    "render_command",
     "render_payload",
+    "render_raw_command",
     "validate_render_options",
 ]

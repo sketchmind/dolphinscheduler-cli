@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dsctl.errors import ConflictError, UserInputError
+from dsctl.errors import ConflictError
 from dsctl.output import require_json_object
 from dsctl.services._serialization import optional_text
 from dsctl.services.selection import SelectedValue
@@ -69,20 +69,6 @@ def select_tenant_code(
     return SelectedValue(value="default", source="default")
 
 
-def selected_tenant_code(
-    explicit_tenant_code: str | None,
-    *,
-    runtime: ServiceRuntime,
-    project_preference: ProjectPreferenceDefaults | None = None,
-) -> str:
-    """Resolve one tenant-code input against local and remote defaults."""
-    return select_tenant_code(
-        explicit_tenant_code,
-        runtime=runtime,
-        project_preference=project_preference,
-    ).value
-
-
 def load_project_preference_defaults(
     runtime: ServiceRuntime,
     *,
@@ -120,7 +106,7 @@ def load_project_preference_defaults(
             decoded_preferences,
             label="stored project preference",
         )
-    except UserInputError as error:
+    except TypeError as error:
         message = "Stored project preference must be one JSON object"
         raise ConflictError(
             message,

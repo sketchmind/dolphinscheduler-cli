@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.cli_surface import WORKFLOW_RESOURCE
@@ -16,7 +16,6 @@ from dsctl.services._task_settings import (
     task_resource_limit_value,
     task_timeout_settings,
 )
-from dsctl.support.ds_code import gen_code
 from dsctl.upstream.runtime_enums import TASK_EXECUTE_TYPE_BATCH_VALUE
 
 if TYPE_CHECKING:
@@ -25,9 +24,9 @@ if TYPE_CHECKING:
     from dsctl.support.yaml_io import JsonObject
 
 
-_WORKFLOW_COMPILE_REVIEW_SUGGESTION = (
-    "Review task names and task references, then retry with workflow dry-run "
-    "before applying the change."
+_WORKFLOW_GRAPH_REVIEW_SUGGESTION = (
+    "Fix task names and references in the workflow input, then retry the "
+    "current operation."
 )
 
 
@@ -53,12 +52,16 @@ class WorkflowUpdatePayload(WorkflowCreatePayload):
 def compile_workflow_create_payload(
     spec: WorkflowSpec,
     *,
+    allocate_task_codes: Callable[[int], Sequence[int]],
     task_identities: Mapping[str, WorkflowTaskIdentity] | None = None,
+    reserved_task_codes: Collection[int] = (),
 ) -> WorkflowCreatePayload:
     """Compile one workflow spec into the legacy DS create/update payload."""
     task_codes, task_versions = _task_identity_maps(
         spec.tasks,
+        allocate_task_codes=allocate_task_codes,
         task_identities=task_identities,
+        reserved_task_codes=reserved_task_codes,
     )
     edges = workflow_edges(spec.tasks)
     levels = _task_levels(spec.tasks, edges=edges)
@@ -86,12 +89,19 @@ def compile_workflow_create_payload(
 def compile_workflow_update_payload(
     spec: WorkflowSpec,
     *,
+    allocate_task_codes: Callable[[int], Sequence[int]],
     release_state: str | None,
     task_identities: Mapping[str, WorkflowTaskIdentity] | None = None,
+    reserved_task_codes: Collection[int] = (),
 ) -> WorkflowUpdatePayload:
     """Compile one workflow spec into the legacy update payload."""
     return {
-        **compile_workflow_create_payload(spec, task_identities=task_identities),
+        **compile_workflow_create_payload(
+            spec,
+            allocate_task_codes=allocate_task_codes,
+            task_identities=task_identities,
+            reserved_task_codes=reserved_task_codes,
+        ),
         "releaseState": release_state,
     }
 
@@ -99,19 +109,34 @@ def compile_workflow_update_payload(
 def _task_identity_maps(
     tasks: list[WorkflowTaskSpec],
     *,
+    allocate_task_codes: Callable[[int], Sequence[int]],
     task_identities: Mapping[str, WorkflowTaskIdentity] | None,
+    reserved_task_codes: Collection[int],
 ) -> tuple[dict[str, int], dict[str, int]]:
     task_codes: dict[str, int] = {}
     task_versions: dict[str, int] = {}
-    used_codes = (
-        {identity.code for identity in task_identities.values()}
-        if task_identities is not None
-        else set()
+    missing_task_names = [
+        task.name
+        for task in tasks
+        if task_identities is None or task.name not in task_identities
+    ]
+    existing_codes = set(reserved_task_codes)
+    if task_identities is not None:
+        existing_codes.update(identity.code for identity in task_identities.values())
+    allocated_codes = (
+        _validated_allocated_task_codes(
+            allocate_task_codes(len(missing_task_names)),
+            required_count=len(missing_task_names),
+            existing_codes=existing_codes,
+        )
+        if missing_task_names
+        else []
     )
+    allocated_code_by_name = dict(zip(missing_task_names, allocated_codes, strict=True))
     for task in tasks:
         identity = None if task_identities is None else task_identities.get(task.name)
         if identity is None:
-            task_codes[task.name] = _next_generated_task_code(used_codes)
+            task_codes[task.name] = allocated_code_by_name[task.name]
             task_versions[task.name] = 1
             continue
         task_codes[task.name] = identity.code
@@ -119,13 +144,32 @@ def _task_identity_maps(
     return task_codes, task_versions
 
 
-def _next_generated_task_code(used_codes: set[int]) -> int:
-    while True:
-        code = gen_code()
-        if code in used_codes:
-            continue
-        used_codes.add(code)
-        return code
+def _validated_allocated_task_codes(
+    values: Sequence[int],
+    *,
+    required_count: int,
+    existing_codes: set[int],
+) -> list[int]:
+    task_codes = list(values)
+    if len(task_codes) != required_count:
+        message = (
+            f"Task code allocator returned {len(task_codes)} task codes "
+            f"when {required_count} were required"
+        )
+        raise ApiTransportError(message)
+    if any(
+        isinstance(code, bool) or not isinstance(code, int) or code <= 0
+        for code in task_codes
+    ):
+        message = "Task code allocator values must be positive integers"
+        raise ApiTransportError(message)
+    if len(set(task_codes)) != len(task_codes):
+        message = "Task code allocator contained duplicate task codes"
+        raise ApiTransportError(message)
+    if existing_codes.intersection(task_codes):
+        message = "Task code allocator collided with an existing task code"
+        raise ApiTransportError(message)
+    return task_codes
 
 
 def workflow_edges(tasks: list[WorkflowTaskSpec]) -> list[tuple[str, str]]:
@@ -145,7 +189,7 @@ def workflow_edges(tasks: list[WorkflowTaskSpec]) -> list[tuple[str, str]]:
             message = f"Task '{task_name}' depends on unknown task '{predecessor}'"
             raise UserInputError(
                 message,
-                suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+                suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
             )
         if successor not in task_names:
             message = (
@@ -153,13 +197,13 @@ def workflow_edges(tasks: list[WorkflowTaskSpec]) -> list[tuple[str, str]]:
             )
             raise UserInputError(
                 message,
-                suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+                suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
             )
         if predecessor == successor:
             message = f"Task '{task_name}' cannot reference itself in {label}"
             raise UserInputError(
                 message,
-                suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+                suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
             )
         edge = (predecessor, successor)
         if edge in seen:
@@ -254,7 +298,7 @@ def _task_levels(
         message = "Workflow tasks contain a dependency cycle"
         raise UserInputError(
             message,
-            suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+            suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
         )
 
     levels: dict[str, int] = {}
@@ -576,14 +620,14 @@ def _resolve_local_task_name_ref(
         message = f"Task '{task_name}' expects a task name string in {label}"
         raise UserInputError(
             message,
-            suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+            suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
         )
     candidate = value.strip()
     if candidate not in task_codes:
         message = f"Task '{task_name}' references unknown task '{candidate}' in {label}"
         raise UserInputError(
             message,
-            suggestion=_WORKFLOW_COMPILE_REVIEW_SUGGESTION,
+            suggestion=_WORKFLOW_GRAPH_REVIEW_SUGGESTION,
         )
     return task_codes[candidate]
 

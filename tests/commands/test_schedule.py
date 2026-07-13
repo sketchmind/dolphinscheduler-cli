@@ -18,7 +18,7 @@ from tests.fakes import (
     FakeWorkflowAdapter,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -114,7 +114,7 @@ def test_schedule_list_command_rejects_workflow_and_search_together() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -150,6 +150,15 @@ def test_schedule_preview_command_returns_times_and_analysis() -> None:
     assert payload["data"]["analysis"]["risk_level"] == "none"
 
 
+def test_schedule_preview_help_distinguishes_existing_and_ad_hoc_modes() -> None:
+    result = runner.invoke(app, ["schedule", "preview", "--help"])
+
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout).lower()
+    assert "project name or code for ad hoc preview only" in help_text
+    assert "do not pass --project with schedule_id" in help_text
+
+
 def test_schedule_preview_command_rejects_mixing_id_and_schedule_fields() -> None:
     result = runner.invoke(
         app,
@@ -163,7 +172,7 @@ def test_schedule_preview_command_rejects_mixing_id_and_schedule_fields() -> Non
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.preview"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -177,12 +186,37 @@ def test_schedule_create_help_points_to_related_discovery_commands() -> None:
     result = runner.invoke(app, ["schedule", "create", "--help"])
 
     assert result.exit_code == 0
-    assert "workflow list" in result.stdout
-    assert "project list" in result.stdout
-    assert "alert-group" in result.stdout
-    assert "worker-group" in result.stdout
-    assert "tenant list" in result.stdout
-    assert "environment list" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "workflow list" in help_text
+    assert "project list" in help_text
+    assert "alert-group" in help_text
+    assert "worker-group" in help_text
+    assert "tenant list" in help_text
+    assert "environment list" in help_text
+    assert "context only when project" in help_text
+    assert "also comes from context" in help_text
+    assert "pass 0 to explicitly use no environment" in help_text
+    assert "bypass project preference" in help_text
+
+
+def test_schedule_update_help_explains_environment_clear_and_preserve() -> None:
+    result = runner.invoke(app, ["schedule", "update", "--help"])
+
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout)
+    assert "omit to keep the current value" in help_text
+    assert "pass 0 to clear the environment" in help_text
+
+
+def test_schedule_explain_help_distinguishes_create_and_update_selectors() -> None:
+    result = runner.invoke(app, ["schedule", "explain", "--help"])
+
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout).lower()
+    assert "workflow name or code for create explain only" in help_text
+    assert "project name or code for create explain only" in help_text
+    assert "do not pass --workflow with schedule_id" in help_text
+    assert "do not pass --project with schedule_id" in help_text
 
 
 def test_schedule_explain_command_returns_create_explanation() -> None:
@@ -364,7 +398,7 @@ def test_schedule_create_command_requires_confirmation_for_high_frequency_risk(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["error"]["type"] == "confirmation_required"
     assert payload["error"]["details"]["risk_type"] == "high_frequency_schedule"
     assert payload["error"]["details"]["confirm_flag"].startswith("--confirm-risk ")
@@ -391,7 +425,7 @@ def test_schedule_create_command_rejects_five_field_cron() -> None:
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["details"] == {
@@ -410,7 +444,7 @@ def test_schedule_update_command_requires_a_change() -> None:
     result = runner.invoke(app, ["schedule", "update", "1"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["ok"] is False
     assert payload["action"] == "schedule.update"
     assert payload["error"]["type"] == "user_input_error"
@@ -477,7 +511,7 @@ def test_schedule_update_command_reports_offline_retry_suggestion(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.update"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -489,7 +523,7 @@ def test_schedule_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["schedule", "delete", "1"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["ok"] is False
     assert payload["action"] == "schedule.delete"
     assert payload["error"]["type"] == "user_input_error"
@@ -551,7 +585,7 @@ def test_schedule_delete_command_reports_offline_retry_suggestion(
     result = runner.invoke(app, ["schedule", "delete", "1", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.delete"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
@@ -616,7 +650,7 @@ def test_schedule_create_command_reports_conflict_with_remote_source(
     )
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "schedule.create"
     assert payload["error"]["type"] == "conflict"
     assert payload["error"]["source"] == {

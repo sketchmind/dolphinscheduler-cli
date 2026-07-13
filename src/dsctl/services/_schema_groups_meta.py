@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dsctl.services._schema_primitives import argument, command, group
+from dsctl.services._schema_primitives import argument, command, group, option
 from dsctl.services.enums import supported_enum_choices
 
 
@@ -64,8 +64,8 @@ def task_type_group() -> dict[str, object]:
                 "schema",
                 action="task-type.schema",
                 summary=(
-                    "Print the full local authoring schema for one task type, "
-                    "including fields, state rules, choices, and compile mapping."
+                    "Print a bounded field contract for one task type; select "
+                    "detailed views explicitly."
                 ),
                 arguments=[
                     argument(
@@ -76,6 +76,43 @@ def task_type_group() -> dict[str, object]:
                         ),
                         discovery_command="dsctl template task",
                     )
+                ],
+                options=[
+                    option(
+                        "field",
+                        value_type="string",
+                        description=(
+                            "Return one exact authoring field and related state rules; "
+                            "quote paths containing []."
+                        ),
+                        discovery_command="dsctl task-type schema TYPE",
+                    ),
+                    option(
+                        "json-schema",
+                        value_type="boolean",
+                        description=(
+                            "Return the nested JSON Schema without repeated "
+                            "authoring metadata."
+                        ),
+                        default=False,
+                    ),
+                    option(
+                        "compile-mappings",
+                        value_type="boolean",
+                        description=(
+                            "Return authoring-path to DS REST payload mappings."
+                        ),
+                        default=False,
+                    ),
+                    option(
+                        "full",
+                        value_type="boolean",
+                        description=(
+                            "Return the former expanded authoring contract for "
+                            "compatibility."
+                        ),
+                        default=False,
+                    ),
                 ],
             ),
         ],

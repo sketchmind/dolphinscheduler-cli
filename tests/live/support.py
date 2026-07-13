@@ -165,6 +165,7 @@ def run_dsctl(
     )
     payload = _parse_command_payload(
         command=command,
+        exit_code=completed.returncode,
         stdout=completed.stdout,
         stderr=completed.stderr,
     )
@@ -459,11 +460,13 @@ def _pythonpath(repo_root: Path, existing_pythonpath: str | None) -> str:
 def _parse_command_payload(
     *,
     command: list[str],
+    exit_code: int,
     stdout: str,
     stderr: str,
 ) -> dict[str, object]:
+    json_text = stdout if exit_code == 0 else stderr
     try:
-        payload = json.loads(stdout)
+        payload = json.loads(json_text)
     except json.JSONDecodeError as error:
         message = (
             f"Command {' '.join(command)} did not emit valid JSON.\n"

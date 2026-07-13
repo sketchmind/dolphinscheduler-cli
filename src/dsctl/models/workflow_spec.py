@@ -30,7 +30,7 @@ from dsctl.support.quartz import normalize_quartz_cron_text
 if TYPE_CHECKING:
     from pathlib import Path
 
-COMMAND_TASK_TYPES = frozenset({"PYTHON", "REMOTESHELL", "SHELL"})
+COMMAND_TASK_TYPES = frozenset({"PYTHON", "SHELL"})
 
 
 class WorkflowMetadataSpec(YamlSpecModel):
@@ -149,10 +149,16 @@ class WorkflowTaskSpec(YamlSpecModel):
         if self.task_params is not None and self.command is not None:
             message = f"Task '{self.name}' cannot define both task_params and command"
             raise ValueError(message)
+        if self.command is not None and self.type == "REMOTESHELL":
+            message = (
+                f"Task '{self.name}' cannot use command shorthand for REMOTESHELL; "
+                "define task_params.rawScript and task_params.datasource instead"
+            )
+            raise ValueError(message)
         if self.command is not None and self.type.upper() not in COMMAND_TASK_TYPES:
             message = (
                 f"Task '{self.name}' only supports command shorthand for "
-                "SHELL, PYTHON, and REMOTESHELL types"
+                "SHELL and PYTHON types"
             )
             raise ValueError(message)
         if self.task_group_priority is not None and self.task_group_id is None:

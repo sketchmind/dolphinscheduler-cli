@@ -1,7 +1,9 @@
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 
 import pytest
 from tests.fakes import (
+    FakeEnvironmentAdapter,
     FakeProject,
     FakeProjectAdapter,
     FakeProjectPreference,
@@ -40,6 +42,7 @@ def _install_schedule_service_fakes(
     context: SessionContext | None = None,
     profile: ClusterProfile | None = None,
     project_preference_adapter: FakeProjectPreferenceAdapter | None = None,
+    environment_adapter: FakeEnvironmentAdapter | None = None,
 ) -> None:
     monkeypatch.setattr(
         runtime_service,
@@ -52,6 +55,7 @@ def _install_schedule_service_fakes(
             schedule_adapter=schedule_adapter,
             user_adapter=user_adapter,
             project_preference_adapter=project_preference_adapter,
+            environment_adapter=environment_adapter,
         ),
     )
 
@@ -742,6 +746,70 @@ def test_create_schedule_result_uses_workflow_context(
     assert data["releaseState"] == "OFFLINE"
 
 
+def test_create_schedule_result_normalizes_zero_environment_to_absent(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    result = schedule_service.create_schedule_result(
+        workflow=None,
+        cron="0 0 4 * * ?",
+        start="2024-01-01 00:00:00",
+        end="2025-01-01 00:00:00",
+        timezone="Asia/Shanghai",
+        environment_code=0,
+    )
+
+    assert _mapping(result.data)["environmentCode"] == -1
+
+
+def test_create_schedule_zero_environment_bypasses_project_preference(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        project_preference_adapter=FakeProjectPreferenceAdapter(
+            project_preferences=[
+                FakeProjectPreference(
+                    id=8,
+                    code=8,
+                    project_code_value=7,
+                    state=1,
+                    preferences_value='{"environmentCode":99}',
+                )
+            ]
+        ),
+    )
+
+    result = schedule_service.create_schedule_result(
+        workflow=None,
+        cron="0 0 4 * * ?",
+        start="2024-01-01 00:00:00",
+        end="2025-01-01 00:00:00",
+        timezone="Asia/Shanghai",
+        environment_code=0,
+    )
+
+    assert _mapping(result.data)["environmentCode"] == -1
+    assert "project_preference" not in result.resolved
+
+
 def test_create_schedule_result_prefers_explicit_tenant_over_current_user(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -862,6 +930,53 @@ def test_update_schedule_result_preserves_omitted_fields(
     assert data["timezoneId"] == "Asia/Shanghai"
 
 
+def test_update_schedule_result_normalizes_zero_environment_to_clear(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    fake_schedule_adapter.schedules[0] = replace(
+        fake_schedule_adapter.schedules[0],
+        environment_code_value=44,
+        tenant_code_value="tenant-current",
+    )
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+    )
+
+    result = schedule_service.update_schedule_result(1, environment_code=0)
+    data = _mapping(result.data)
+
+    assert data["environmentCode"] == -1
+    assert data["tenantCode"] == "tenant-current"
+
+
+def test_update_schedule_result_can_clear_warning_group_with_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    fake_schedule_adapter.schedules[0] = replace(
+        fake_schedule_adapter.schedules[0],
+        warning_group_id_value=12,
+    )
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+    )
+
+    result = schedule_service.update_schedule_result(1, warning_group_id=0)
+
+    assert _mapping(result.data)["warningGroupId"] == 0
+
+
 def test_delete_schedule_result_requires_force(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -962,6 +1077,23 @@ def test_get_schedule_result_reports_missing_schedules(
         schedule_service.get_schedule_result(999)
 
 
+def test_update_schedule_result_reports_missing_schedule_without_masking_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+    )
+
+    with pytest.raises(NotFoundError, match="Schedule 999 does not exist"):
+        schedule_service.update_schedule_result(999, cron="0 0 6 * * ?")
+
+
 def test_create_schedule_result_maps_duplicate_schedule_to_conflict(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -1031,6 +1163,94 @@ def test_create_schedule_result_maps_offline_workflow_to_invalid_state(
 
     assert exc_info.value.suggestion == (
         "Bring the owning workflow online, then retry the schedule operation."
+    )
+
+
+def test_create_schedule_result_maps_missing_environment_to_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    def fail_create(**_: object) -> FakeSchedule:
+        raise ApiResultError(
+            result_code=1200009,
+            result_message="not found environment code [404]",
+        )
+
+    monkeypatch.setattr(fake_schedule_adapter, "create", fail_create)
+
+    with pytest.raises(
+        NotFoundError, match="Environment code 404 does not exist"
+    ) as exc:
+        schedule_service.create_schedule_result(
+            workflow=None,
+            cron="0 0 4 * * ?",
+            start="2024-01-01 00:00:00",
+            end="2025-01-01 00:00:00",
+            timezone="Asia/Shanghai",
+            environment_code=404,
+        )
+
+    assert exc.value.details == {
+        "resource": "schedule",
+        "operation": "create",
+        "workflow_code": 101,
+        "workflow_name": "daily-sync",
+        "environment_code": 404,
+    }
+    assert exc.value.suggestion == (
+        "Run `dsctl environment list` to choose an existing environment code, "
+        "or pass `--environment-code 0` to explicitly use no environment."
+    )
+
+
+def test_update_schedule_result_validates_explicit_environment_before_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    environment_adapter = FakeEnvironmentAdapter(environments=[])
+
+    def fail_environment_get(*, code: int) -> object:
+        raise ApiResultError(
+            result_code=1200009,
+            result_message=f"not found environment code [{code}]",
+        )
+
+    monkeypatch.setattr(environment_adapter, "get", fail_environment_get)
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        environment_adapter=environment_adapter,
+    )
+
+    with pytest.raises(
+        NotFoundError, match="Environment code 404 does not exist"
+    ) as exc:
+        schedule_service.update_schedule_result(1, environment_code=404)
+
+    assert exc.value.details == {
+        "resource": "schedule",
+        "operation": "update",
+        "schedule_id": 1,
+        "environment_code": 404,
+    }
+    assert exc.value.suggestion == (
+        "Run `dsctl environment list` to choose an existing environment code, "
+        "pass `--environment-code 0` to clear the environment, or omit the "
+        "option to preserve the current environment."
     )
 
 

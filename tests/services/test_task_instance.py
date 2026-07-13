@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 import pytest
 from tests.fakes import (
@@ -17,6 +17,7 @@ from dsctl.errors import (
     ApiResultError,
     InvalidStateError,
     NotFoundError,
+    PermissionDeniedError,
     TaskNotDispatchedError,
     UserInputError,
     WaitTimeoutError,
@@ -414,8 +415,44 @@ def test_get_task_instance_log_result_translates_not_dispatched(
     with pytest.raises(TaskNotDispatchedError) as exc_info:
         task_instance_service.get_task_instance_log_result(3001)
 
-    assert exc_info.value.details["result_code"] == 10103
-    assert "workflow-instance digest" in (exc_info.value.suggestion or "")
+    assert exc_info.value.details == {"resource": "task-instance", "id": 3001}
+    source = _mapping(exc_info.value.to_payload()["source"])
+    assert source["result_code"] == 10103
+    assert "dsctl workflow-instance list" in (exc_info.value.suggestion or "")
+
+
+def test_get_task_instance_log_result_preserves_generic_log_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=10103,
+        result_message="view task instance log error: connection refused",
+    )
+
+    def failed_log(
+        *,
+        task_instance_id: int,
+        skip_line_num: int,
+        limit: int,
+    ) -> None:
+        del task_instance_id, skip_line_num, limit
+        raise upstream_error
+
+    monkeypatch.setattr(fake_task_instance_adapter, "log_chunk", failed_log)
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(ApiResultError) as exc_info:
+        task_instance_service.get_task_instance_log_result(3001)
+
+    assert exc_info.value is upstream_error
 
 
 def test_get_task_instance_result_reports_missing_instance(
@@ -436,6 +473,175 @@ def test_get_task_instance_result_reports_missing_instance(
             9999,
             workflow_instance=901,
         )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        task_instance_service.get_task_instance_result,
+        task_instance_service.watch_task_instance_result,
+    ],
+)
+def test_task_instance_reads_translate_v2_empty_success_body(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+    operation: Callable[..., object],
+) -> None:
+    def missing_get(
+        *,
+        project_code: int,
+        task_instance_id: int,
+    ) -> None:
+        del project_code, task_instance_id
+
+    monkeypatch.setattr(fake_task_instance_adapter, "get", missing_get)
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(NotFoundError) as exc_info:
+        operation(9999, workflow_instance=901)
+
+    error = exc_info.value
+    assert error.details == {
+        "resource": "task-instance",
+        "id": 9999,
+        "workflow_instance_id": 901,
+    }
+    assert error.suggestion == (
+        "Run `dsctl task-instance list --workflow-instance 901` to inspect "
+        "available task instance ids."
+    )
+    assert "retryable" not in error.details
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        task_instance_service.get_task_instance_result,
+        task_instance_service.watch_task_instance_result,
+    ],
+)
+def test_task_instance_reads_preserve_generic_query_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+    operation: Callable[..., object],
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=10205,
+        result_message="query task instance error:database unavailable",
+    )
+
+    def fail_get(*, project_code: int, task_instance_id: int) -> None:
+        del project_code, task_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_task_instance_adapter, "get", fail_get)
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(ApiResultError) as exc_info:
+        operation(9999, workflow_instance=901)
+
+    assert exc_info.value is upstream_error
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        task_instance_service.get_task_instance_result,
+        task_instance_service.watch_task_instance_result,
+    ],
+)
+def test_task_instance_reads_translate_project_permission_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+    operation: Callable[..., object],
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=30002,
+        result_message="user has no project operation privilege",
+    )
+
+    def fail_get(*, project_code: int, task_instance_id: int) -> None:
+        del project_code, task_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_task_instance_adapter, "get", fail_get)
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        operation(9999, workflow_instance=901)
+
+    error = exc_info.value
+    assert error.details == {
+        "resource": "task-instance",
+        "id": 9999,
+        "workflow_instance_id": 901,
+    }
+    assert error.to_payload()["source"] == upstream_error.source
+
+
+def test_task_instance_log_translates_missing_result_code(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=10008,
+        result_message="task instance not found",
+    )
+
+    def missing_log(
+        *,
+        task_instance_id: int,
+        skip_line_num: int,
+        limit: int,
+    ) -> None:
+        del task_instance_id, skip_line_num, limit
+        raise upstream_error
+
+    monkeypatch.setattr(fake_task_instance_adapter, "log_chunk", missing_log)
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(NotFoundError) as exc_info:
+        task_instance_service.get_task_instance_log_result(9999)
+
+    error = exc_info.value
+    assert error.details == {
+        "resource": "task-instance",
+        "id": 9999,
+    }
+    assert error.suggestion == (
+        "Run `dsctl workflow-instance list` to find the owning workflow instance "
+        "id, then run `dsctl task-instance list --workflow-instance ID`."
+    )
+    assert error.to_payload()["source"] == upstream_error.source
+    assert "retryable" not in error.details
 
 
 def test_watch_task_instance_result_waits_for_finished_state(
@@ -521,7 +727,7 @@ def test_watch_task_instance_result_times_out(
     assert exc_info.value.details["last_state"] == "RUNNING_EXECUTION"
     assert exc_info.value.suggestion == (
         "Retry with a larger --timeout-seconds value or inspect the current "
-        "state with `task-instance get 3001 --workflow-instance 901`."
+        "state with `dsctl task-instance get 3001 --workflow-instance 901`."
     )
 
 

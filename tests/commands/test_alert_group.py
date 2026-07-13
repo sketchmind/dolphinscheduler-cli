@@ -143,7 +143,7 @@ def test_alert_group_update_command_requires_one_change_suggestion() -> None:
     result = runner.invoke(app, ["alert-group", "update", "ops"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "alert-group.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
@@ -156,7 +156,7 @@ def test_alert_group_delete_command_requires_force() -> None:
     result = runner.invoke(app, ["alert-group", "delete", "ops"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "alert-group.delete"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."
@@ -187,7 +187,7 @@ def test_alert_group_delete_command_rejects_default_group(
     result = runner.invoke(app, ["alert-group", "delete", "default", "--force"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "alert-group.delete"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (

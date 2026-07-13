@@ -20,6 +20,7 @@ from tests.live.support import (
 )
 from tests.live.workflow_support import (
     delete_project_eventually,
+    delete_workflow_eventually,
     write_shell_workflow_spec,
     write_single_shell_workflow_spec,
     write_sub_workflow_parent_spec,
@@ -230,9 +231,13 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             expected_action="workflow.list",
             label="workflow list",
         )
-        workflow_rows = require_list(
+        workflow_list_data = require_mapping(
             workflow_list_payload["data"],
-            label="workflow list data",
+            label="workflow list page",
+        )
+        workflow_rows = require_list(
+            workflow_list_data["totalList"],
+            label="workflow list rows",
         )
         assert any(
             require_mapping(item, label="workflow row").get("code") == workflow_code
@@ -1109,28 +1114,11 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                 timeout_seconds=200.0,
             )
         if workflow_created and not workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                [
-                    "workflow",
-                    "offline",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                ],
-                env_file=live_etl_env_file,
-            )
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=project_name,
+                workflow=workflow_name,
             )
         if project_created:
             delete_project_eventually(
@@ -1395,30 +1383,13 @@ def test_workflow_instance_edit_respects_sync_definition_flag(
         }
     finally:
         if workflow_created and not workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                [
-                    "workflow",
-                    "offline",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=project_name,
+                workflow=workflow_name,
             )
-            workflow_delete_result = run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
-            )
-            workflow_deleted = workflow_delete_result.exit_code == 0
+            workflow_deleted = True
         if project_created:
             delete_project_eventually(
                 live_repo_root,
@@ -1760,52 +1731,18 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
                 timeout_seconds=200.0,
             )
         if parent_workflow_created and not parent_workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                [
-                    "workflow",
-                    "offline",
-                    parent_workflow_name,
-                    "--project",
-                    project_name,
-                ],
-                env_file=live_etl_env_file,
-            )
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    parent_workflow_name,
-                    "--project",
-                    project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=project_name,
+                workflow=parent_workflow_name,
             )
         if child_workflow_created and not child_workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                [
-                    "workflow",
-                    "offline",
-                    child_workflow_name,
-                    "--project",
-                    project_name,
-                ],
-                env_file=live_etl_env_file,
-            )
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    child_workflow_name,
-                    "--project",
-                    project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=project_name,
+                workflow=child_workflow_name,
             )
         if project_created:
             delete_project_eventually(

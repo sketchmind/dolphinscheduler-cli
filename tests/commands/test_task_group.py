@@ -90,7 +90,7 @@ def test_task_group_list_command_reports_status_choices() -> None:
     result = runner.invoke(app, ["task-group", "list", "--status", "paused"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-group.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Pass `open`/`closed` or `1`/`0`."
@@ -204,7 +204,7 @@ def test_task_group_queue_force_start_command_reports_already_started(
     result = runner.invoke(app, ["task-group", "queue", "force-start", "31"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    payload = json.loads(result.stderr)
     assert payload["action"] == "task-group.queue.force-start"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (

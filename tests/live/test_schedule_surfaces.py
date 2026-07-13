@@ -18,6 +18,7 @@ from tests.live.support import (
 from tests.live.workflow_support import (
     SHANGHAI_TIMEZONE,
     delete_project_eventually,
+    delete_workflow_eventually,
     near_future_schedule_window,
     write_shell_workflow_spec,
 )
@@ -631,6 +632,176 @@ def test_etl_schedule_lifecycle_round_trips_and_triggers_runtime(
                 env_file=live_etl_env_file,
             )
         if workflow_created and not workflow_deleted:
+            delete_workflow_eventually(
+                live_repo_root,
+                live_etl_env_file,
+                project=project_name,
+                workflow=workflow_name,
+            )
+        if environment_created and environment_code is not None:
+            run_dsctl(
+                live_repo_root,
+                ["environment", "delete", str(environment_code), "--force"],
+                env_file=live_admin_env_file,
+            )
+        if project_created:
+            delete_project_eventually(
+                live_repo_root,
+                live_etl_env_file,
+                project=project_name,
+            )
+
+
+def test_etl_schedule_without_environment_round_trips(
+    live_repo_root: Path,
+    live_etl_env_file: Path,
+    live_name_factory: Callable[[str], str],
+    tmp_path: Path,
+) -> None:
+    project_name = live_name_factory("schedule-no-env-project")
+    workflow_name = live_name_factory("schedule-no-env-workflow")
+    workflow_spec = write_shell_workflow_spec(
+        tmp_path / f"{workflow_name}.yaml",
+        project_name=project_name,
+        workflow_name=workflow_name,
+        extract_marker=f"{workflow_name}-extract-marker",
+        load_marker=f"{workflow_name}-load-marker",
+    )
+    schedule_start, schedule_end = near_future_schedule_window()
+    schedule_id: int | None = None
+    project_created = False
+    workflow_created = False
+    workflow_deleted = False
+    schedule_deleted = False
+
+    try:
+        require_ok_payload(
+            run_dsctl(
+                live_repo_root,
+                [
+                    "project",
+                    "create",
+                    "--name",
+                    project_name,
+                    "--description",
+                    "schedule without environment live test",
+                ],
+                env_file=live_etl_env_file,
+            ),
+            expected_action="project.create",
+            label="no-environment schedule project create",
+        )
+        project_created = True
+
+        require_ok_payload(
+            run_dsctl(
+                live_repo_root,
+                ["workflow", "create", "--file", str(workflow_spec)],
+                env_file=live_etl_env_file,
+            ),
+            expected_action="workflow.create",
+            label="no-environment schedule workflow create",
+        )
+        workflow_created = True
+
+        online_payload = require_ok_payload(
+            run_dsctl(
+                live_repo_root,
+                [
+                    "workflow",
+                    "online",
+                    workflow_name,
+                    "--project",
+                    project_name,
+                ],
+                env_file=live_etl_env_file,
+            ),
+            expected_action="workflow.online",
+            label="no-environment schedule workflow online",
+        )
+        assert (
+            require_mapping(
+                online_payload["data"],
+                label="no-environment workflow online data",
+            )["releaseState"]
+            == "ONLINE"
+        )
+
+        create_payload = require_ok_payload(
+            run_dsctl(
+                live_repo_root,
+                [
+                    "schedule",
+                    "create",
+                    "--project",
+                    project_name,
+                    "--workflow",
+                    workflow_name,
+                    "--cron",
+                    "0 0/10 * * * ?",
+                    "--start",
+                    schedule_start,
+                    "--end",
+                    schedule_end,
+                    "--timezone",
+                    SHANGHAI_TIMEZONE,
+                ],
+                env_file=live_etl_env_file,
+            ),
+            expected_action="schedule.create",
+            label="schedule create without environment",
+        )
+        create_data = require_mapping(
+            create_payload["data"],
+            label="schedule create without environment data",
+        )
+        schedule_id = require_int_value(
+            create_data.get("id"),
+            label="schedule without environment id",
+        )
+        assert create_data.get("environmentCode") in (None, -1, 0)
+
+        update_payload = require_ok_payload(
+            run_dsctl(
+                live_repo_root,
+                [
+                    "schedule",
+                    "update",
+                    str(schedule_id),
+                    "--warning-type",
+                    "SUCCESS",
+                ],
+                env_file=live_etl_env_file,
+            ),
+            expected_action="schedule.update",
+            label="schedule update without environment",
+        )
+        update_data = require_mapping(
+            update_payload["data"],
+            label="schedule update without environment data",
+        )
+        assert update_data["warningType"] == "SUCCESS"
+        assert update_data.get("environmentCode") in (None, -1, 0)
+
+        delete_payload = require_ok_payload(
+            run_dsctl(
+                live_repo_root,
+                ["schedule", "delete", str(schedule_id), "--force"],
+                env_file=live_etl_env_file,
+            ),
+            expected_action="schedule.delete",
+            label="schedule without environment delete",
+        )
+        assert (
+            require_mapping(
+                delete_payload["data"],
+                label="schedule without environment delete data",
+            )["deleted"]
+            is True
+        )
+        schedule_deleted = True
+
+        require_ok_payload(
             run_dsctl(
                 live_repo_root,
                 [
@@ -641,7 +812,11 @@ def test_etl_schedule_lifecycle_round_trips_and_triggers_runtime(
                     project_name,
                 ],
                 env_file=live_etl_env_file,
-            )
+            ),
+            expected_action="workflow.offline",
+            label="no-environment schedule workflow offline",
+        )
+        delete_workflow_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
                 [
@@ -653,12 +828,36 @@ def test_etl_schedule_lifecycle_round_trips_and_triggers_runtime(
                     "--force",
                 ],
                 env_file=live_etl_env_file,
-            )
-        if environment_created and environment_code is not None:
+            ),
+            expected_action="workflow.delete",
+            label="no-environment schedule workflow delete",
+        )
+        assert (
+            require_mapping(
+                delete_workflow_payload["data"],
+                label="no-environment schedule workflow delete data",
+            )["deleted"]
+            is True
+        )
+        workflow_deleted = True
+    finally:
+        if schedule_id is not None and not schedule_deleted:
             run_dsctl(
                 live_repo_root,
-                ["environment", "delete", str(environment_code), "--force"],
-                env_file=live_admin_env_file,
+                ["schedule", "offline", str(schedule_id)],
+                env_file=live_etl_env_file,
+            )
+            run_dsctl(
+                live_repo_root,
+                ["schedule", "delete", str(schedule_id), "--force"],
+                env_file=live_etl_env_file,
+            )
+        if workflow_created and not workflow_deleted:
+            delete_workflow_eventually(
+                live_repo_root,
+                live_etl_env_file,
+                project=project_name,
+                workflow=workflow_name,
             )
         if project_created:
             delete_project_eventually(

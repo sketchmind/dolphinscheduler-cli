@@ -7,7 +7,13 @@ import typer
 
 from dsctl.errors import DsctlError
 from dsctl.output import CommandResult, error_payload, success_payload
-from dsctl.output_formats import RenderOptions, render_payload, validate_render_options
+from dsctl.output_formats import (
+    RenderedCommand,
+    RenderOptions,
+    render_command,
+    render_raw_command,
+    validate_render_options,
+)
 
 
 @dataclass(frozen=True)
@@ -41,31 +47,30 @@ def set_app_state(state: AppState) -> None:
 
 def emit_result(action: str, builder: Callable[[], CommandResult]) -> None:
     """Render a command result with the active global display settings."""
-    render_options = _CURRENT_APP_STATE.get().render_options
+    state = _CURRENT_APP_STATE.get()
+    render_options = state.render_options
     try:
         try:
             validate_render_options(render_options)
             result = builder()
-            payload = success_payload(action, result)
+            payload = success_payload(
+                action,
+                result,
+                env_file=None if state.env_file is None else str(state.env_file),
+            )
+            rendered = render_command(
+                payload,
+                action=action,
+                options=render_options,
+            )
         except DsctlError as exc:
             payload = error_payload(action, exc)
-            typer.echo(
-                render_payload(payload, action=action, options=render_options),
+            rendered = render_command(
+                payload,
+                action=action,
+                options=render_options,
             )
-            raise typer.Exit(code=1) from None
-
-        try:
-            rendered = render_payload(payload, action=action, options=render_options)
-        except DsctlError as exc:
-            typer.echo(
-                render_payload(
-                    error_payload(action, exc),
-                    action=action,
-                    options=render_options,
-                ),
-            )
-            raise typer.Exit(code=1) from None
-        typer.echo(rendered)
+        _emit_rendered(rendered)
     finally:
         _CURRENT_APP_STATE.set(_DEFAULT_APP_STATE)
 
@@ -76,16 +81,37 @@ def emit_raw_result(
     selector: Callable[[CommandResult], str],
 ) -> None:
     """Emit one command artifact body without the standard success envelope."""
-    render_options = _CURRENT_APP_STATE.get().render_options
+    state = _CURRENT_APP_STATE.get()
+    render_options = state.render_options
     try:
         try:
+            validate_render_options(render_options)
             result = builder()
+            rendered = render_raw_command(
+                selector(result),
+                payload=success_payload(
+                    action,
+                    result,
+                    env_file=None if state.env_file is None else str(state.env_file),
+                ),
+            )
         except DsctlError as exc:
             payload = error_payload(action, exc)
-            typer.echo(
-                render_payload(payload, action=action, options=render_options),
+            rendered = render_command(
+                payload,
+                action=action,
+                options=render_options,
             )
-            raise typer.Exit(code=1) from None
-        typer.echo(selector(result), nl=False)
+        _emit_rendered(rendered)
     finally:
         _CURRENT_APP_STATE.set(_DEFAULT_APP_STATE)
+
+
+def _emit_rendered(rendered: RenderedCommand) -> None:
+    """Write one rendered command without altering its exact channel text."""
+    if rendered.stdout:
+        typer.echo(rendered.stdout, nl=False)
+    if rendered.stderr:
+        typer.echo(rendered.stderr, err=True, nl=False)
+    if rendered.exit_code:
+        raise typer.Exit(code=rendered.exit_code)

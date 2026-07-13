@@ -27,6 +27,7 @@ class WorkflowInstanceDigestTaskData(TypedDict):
     startTime: str | None
     endTime: str | None
     duration: str | None
+    logAvailable: bool
 
 
 class WorkflowInstanceDigestProgressData(TypedDict):
@@ -151,6 +152,7 @@ def _compact_task(task: TaskInstanceData) -> WorkflowInstanceDigestTaskData:
         "startTime": task["startTime"],
         "endTime": task["endTime"],
         "duration": task["duration"],
+        "logAvailable": bool(task["logPath"] and task["logPath"].strip()),
     }
 
 
