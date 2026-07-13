@@ -41,24 +41,42 @@ configuration:
 
 ```bash
 dsctl use project etl-prod
-dsctl use workflow daily-etl
+dsctl use workflow daily-etl --project etl-prod
 dsctl context
 ```
 
 Explicit command flags take precedence over saved context. The effective
 selection rule is `flag > context`.
 
+`dsctl context` is a local read: it reports the effective project/workflow
+tuple, the scope that supplied it, and the stored `set_at` timestamp without
+contacting DolphinScheduler. `dsctl use` also changes local state only; supplied
+names are not remotely validated. Use `dsctl doctor` for connection,
+credentials, version adaptation, and local context-file health. Verify a saved
+project or workflow with the corresponding `get` or `list` command.
+
 Project and workflow context are stored as one scoped selection. Set project
-context before workflow context; `dsctl use workflow NAME` persists the current
-effective project alongside the workflow. A workflow saved for one project is
-never reused when a command explicitly selects another project.
+context before workflow context, or bind both atomically with `dsctl use
+workflow NAME --project PROJECT`. Without `--project`, workflow updates in user
+scope use the project stored in that same user layer instead of copying a
+shadowing project-layer value. A workflow saved for one project is never reused
+when a command explicitly selects another project.
 
 User-scoped context is the base layer and the current directory's
 project-scoped context has higher precedence. Updating user scope while a
 project-scoped selection exists does not change the effective selection until
-that project-scoped selection is cleared. In context YAML, `null` means the key
-is absent and may fall back to the lower layer; it is not a persistent
-tombstone.
+that project-scoped selection is cleared; successful output marks the update as
+shadowed only when the updated user layer still contains a project selection.
+Clearing the user layer leaves nothing to shadow, while `effective_scope` still
+reports that project context supplied the result. Context-file replacement is
+atomic. In context YAML, `null` means the key is absent and may fall back to the
+lower layer; it is not a persistent tombstone.
+
+Place target options after the subcommand, for example `dsctl use project NAME
+--scope user`. Group-level `dsctl use --clear --scope SCOPE` remains the form
+for clearing a whole layer. A name cannot be combined with a target's
+`--clear`, and `dsctl use workflow --clear` cannot be combined with
+`--project`.
 
 ### Migrating workflow-only context from v0.2
 

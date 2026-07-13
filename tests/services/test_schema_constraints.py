@@ -75,6 +75,28 @@ def test_schema_exposes_high_value_cross_field_constraints() -> None:
     ]
 
 
+def test_schema_exposes_use_set_or_clear_constraints() -> None:
+    assert _constraints(_command_contract("use.project")) == [
+        {"kind": "exactly_one_of", "fields": ["NAME", "--clear"]}
+    ]
+    assert _constraints(_command_contract("use.workflow")) == [
+        {"kind": "exactly_one_of", "fields": ["NAME", "--clear"]},
+        {
+            "kind": "forbids",
+            "if_present": "--clear",
+            "fields": ["--project"],
+        },
+    ]
+
+
+def test_schema_marks_use_actions_as_local_only_mutations() -> None:
+    for action in ("use.clear", "use.project", "use.workflow"):
+        command = _command_contract(action)
+        assert command["mutates"] is True
+        assert command["mutation_target"] == "local_context"
+        assert command["remote_requests"] is False
+
+
 def test_every_constraint_references_fields_in_its_action_contract() -> None:
     for action in constrained_actions():
         command = _command_contract(action)

@@ -195,7 +195,11 @@ def test_context_command_reads_env_file_and_project_context(
         encoding="utf-8",
     )
     (isolated_cwd / ".dsctl-context.yaml").write_text(
-        "project: etl-prod\nworkflow: daily-etl\n",
+        (
+            "project: etl-prod\n"
+            "workflow: daily-etl\n"
+            "set_at: '2026-07-13T10:00:00+00:00'\n"
+        ),
         encoding="utf-8",
     )
 
@@ -213,4 +217,9 @@ def test_context_command_reads_env_file_and_project_context(
     assert payload["data"]["ds_version"] == "3.4.1"
     assert payload["data"]["project"] == "etl-prod"
     assert payload["data"]["workflow"] == "daily-etl"
+    assert payload["data"]["set_at"] == "2026-07-13T10:00:00+00:00"
+    assert payload["resolved"] == {
+        "context": {"scope": "project"},
+        "remote_validation": "not_performed",
+    }
     assert "default_project" not in payload["data"]

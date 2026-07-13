@@ -1819,7 +1819,7 @@ def test_schema_result_can_list_group_and_command_discovery_rows() -> None:
     }
     assert first_group == {
         "name": "use",
-        "summary": "Set or clear persisted CLI context.",
+        "summary": "Set or clear local CLI context without remote validation.",
         "action_count": 3,
         "schema_command": "dsctl schema --group use",
     }
@@ -2014,6 +2014,43 @@ def test_schema_result_exposes_collection_and_nested_data_shapes() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("action", "default_columns"),
+    [
+        (
+            "context",
+            ["api_url", "ds_version", "project", "workflow", "set_at"],
+        ),
+        ("use.clear", ["project", "workflow", "set_at"]),
+        ("use.project", ["project", "workflow", "set_at"]),
+        ("use.workflow", ["project", "workflow", "set_at"]),
+    ],
+)
+def test_schema_result_describes_context_object_data_shapes(
+    action: str,
+    default_columns: list[str],
+) -> None:
+    result = get_schema_result(command_action=action)
+    data = _require_dict(result.data)
+    command = _require_dict(data["command"])
+
+    assert command["data_shape"] == {
+        "kind": "object",
+        "row_path": "data",
+        "default_columns": default_columns,
+        "column_discovery": "runtime_row_keys",
+    }
+
+
+def test_context_schema_declares_read_only_local_execution() -> None:
+    result = get_schema_result(command_action="context")
+    data = _require_dict(result.data)
+    command = _require_dict(data["command"])
+
+    assert command["mutates"] is False
+    assert command["remote_requests"] is False
+
+
 def test_schema_result_can_return_one_top_level_command() -> None:
     result = get_schema_result(command_action="version")
     data = result.data
@@ -2116,9 +2153,12 @@ def test_schema_result_describes_group_level_use_clear_action() -> None:
         _require_dict(use_workflow_args[0])["discovery_command"]
         == "dsctl workflow list"
     )
-    assert "Requires an effective project" in _require_str(
+    workflow_description = _require_str(
         _require_dict(use_workflow_args[0])["description"]
     )
+    assert "Requires a project binding" in workflow_description
+    assert "project scope uses the effective project" in workflow_description
+    assert "user scope uses its own stored project" in workflow_description
 
 
 def test_schema_describes_atomic_workflow_context_fallback() -> None:

@@ -7,7 +7,7 @@ from dsctl.context import ContextScope
 from dsctl.services.use import clear_context_result, set_context_value_result
 
 use_app = typer.Typer(
-    help="Set or clear persisted CLI context.",
+    help="Set or clear local CLI context without remote validation.",
     invoke_without_command=True,
     no_args_is_help=True,
 )
@@ -26,26 +26,38 @@ def use_callback(
         bool,
         typer.Option(
             "--clear",
-            help="Clear the selected context scope or target value.",
+            help="Clear the entire selected context scope.",
         ),
     ] = False,
     scope: Annotated[
-        ContextScope,
+        ContextScope | None,
         typer.Option(
             "--scope",
-            help="Select which persisted context layer to update.",
+            help=(
+                "Select which persisted context layer `use --clear` updates. "
+                "Defaults to project."
+            ),
         ),
-    ] = "project",
+    ] = None,
 ) -> None:
     """Clear all context in one scope when no subcommand is given."""
     if ctx.invoked_subcommand is not None:
+        if clear:
+            message = (
+                "--clear before a use subcommand is ambiguous; use "
+                "`dsctl use TARGET --clear` without NAME"
+            )
+            raise typer.BadParameter(message)
+        if scope is not None:
+            message = "Place --scope after the use subcommand"
+            raise typer.BadParameter(message)
         return
     if not clear:
         message = "use requires a target subcommand or --clear"
         raise typer.BadParameter(message)
     emit_result(
         "use.clear",
-        lambda: clear_context_result(scope=scope),
+        lambda: clear_context_result(scope=scope or "project"),
     )
 
 
@@ -78,8 +90,11 @@ def use_project_command(
         ),
     ] = "project",
 ) -> None:
-    """Set or clear the project context."""
+    """Set or clear local project context; no remote validation."""
     if clear:
+        if name is not None:
+            message = "NAME cannot be combined with --clear"
+            raise typer.BadParameter(message)
         emit_result(
             "use.project",
             lambda: clear_context_result(target="project", scope=scope),
@@ -102,11 +117,23 @@ def use_workflow_command(
             help=(
                 "Workflow name to persist for later commands. Run `dsctl "
                 "workflow list` in the selected project to discover values. "
-                "Requires an effective project and stores it in the same scope."
+                "Requires a project binding: pass --project; otherwise project "
+                "scope uses the effective project, while user scope uses its own "
+                "stored project."
             ),
         ),
     ] = None,
     *,
+    project: Annotated[
+        str | None,
+        typer.Option(
+            "--project",
+            help=(
+                "Project name to bind with the workflow in the selected context "
+                "scope. Run `dsctl project list` to discover values."
+            ),
+        ),
+    ] = None,
     clear: Annotated[
         bool,
         typer.Option(
@@ -122,8 +149,14 @@ def use_workflow_command(
         ),
     ] = "project",
 ) -> None:
-    """Set or clear workflow context; setting requires an effective project."""
+    """Set or clear local workflow context; no remote validation."""
     if clear:
+        if name is not None:
+            message = "NAME cannot be combined with --clear"
+            raise typer.BadParameter(message)
+        if project is not None:
+            message = "--project cannot be combined with --clear"
+            raise typer.BadParameter(message)
         emit_result(
             "use.workflow",
             lambda: clear_context_result(target="workflow", scope=scope),
@@ -134,5 +167,10 @@ def use_workflow_command(
         raise typer.BadParameter(message)
     emit_result(
         "use.workflow",
-        lambda: set_context_value_result("workflow", name, scope=scope),
+        lambda: set_context_value_result(
+            "workflow",
+            name,
+            project=project,
+            scope=scope,
+        ),
     )

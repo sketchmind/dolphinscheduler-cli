@@ -49,6 +49,11 @@ You can also load connection settings from a dotenv-style file:
 dsctl --env-file cluster.env context
 ```
 
+`context` reports the locally resolved target and its context source without
+contacting DolphinScheduler. Use `doctor` for connection, credentials, version
+adaptation, and local context-file health; verify a saved project or workflow
+with its `get` or `list` command.
+
 ## Quick Start
 
 First verify the connection and discover existing resources without changing
@@ -68,7 +73,8 @@ dsctl workflow get "$workflow" --project "$project"
 `project` and `workflow` above are ordinary shell variables used only to keep
 the example consistent; they are not required `dsctl` environment variables.
 Use `dsctl use project NAME` only when you intentionally want later commands to
-reuse stored project context. Running a workflow is covered under
+reuse stored project context; `use` changes local defaults and does not verify
+the supplied name against the cluster. Running a workflow is covered under
 [Runtime Operations](#runtime-operations).
 
 ## Discover Commands
