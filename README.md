@@ -307,7 +307,7 @@ Reference documentation:
 
 Repository agent workflow:
 
-- [Use dsctl Skill](.agents/skills/use-dsctl/SKILL.md)
+- [DolphinScheduler CLI Skill](.agents/skills/dsctl/SKILL.md)
 
 ## Development
 

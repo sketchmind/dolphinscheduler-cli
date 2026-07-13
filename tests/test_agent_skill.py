@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = REPO_ROOT / ".agents" / "skills" / "use-dsctl"
+SKILL_ROOT = REPO_ROOT / ".agents" / "skills" / "dsctl"
 MARKDOWN_POINTER = re.compile(r"(?<!!)\[[^]]+\]\(([^)]+)\)")
 
 

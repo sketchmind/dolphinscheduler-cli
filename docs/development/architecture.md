@@ -102,7 +102,7 @@ materializes Quartz jobs.
 
 ```text
 dolphinscheduler-cli/
-├── .agents/skills/use-dsctl/
+├── .agents/skills/dsctl/
 │   ├── SKILL.md
 │   ├── agents/openai.yaml
 │   └── references/
@@ -415,7 +415,7 @@ representations normally save more task tokens than removing JSON whitespace.
 
 ### Repository Agent Skill
 
-`.agents/skills/use-dsctl` is the repo-scoped instruction module for agents that
+`.agents/skills/dsctl` is the repo-scoped instruction module for agents that
 operate DolphinScheduler through the installed CLI. Its interface is the skill
 metadata and one goal-oriented operating loop; the implementation knowledge for
 commands, versions, REST transport, selectors, output, and errors remains behind
