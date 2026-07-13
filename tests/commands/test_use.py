@@ -4,7 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from tests.support import normalize_cli_help
+from tests.support import normalize_cli_help, strip_cli_ansi
 
 runner = CliRunner()
 
@@ -129,7 +129,7 @@ def test_use_rejects_group_scope_before_a_subcommand(isolated_cwd: Path) -> None
     )
 
     assert result.exit_code == 2
-    assert "Place --scope after the use subcommand" in result.stderr
+    assert "Place --scope after the use subcommand" in strip_cli_ansi(result.stderr)
 
 
 def test_use_rejects_group_clear_before_a_subcommand(isolated_cwd: Path) -> None:
@@ -152,7 +152,7 @@ def test_use_project_rejects_name_with_clear(isolated_cwd: Path) -> None:
     )
 
     assert result.exit_code == 2
-    assert "NAME cannot be combined with --clear" in result.stderr
+    assert "NAME cannot be combined with --clear" in strip_cli_ansi(result.stderr)
 
 
 def test_use_workflow_rejects_name_with_clear(isolated_cwd: Path) -> None:
@@ -163,7 +163,7 @@ def test_use_workflow_rejects_name_with_clear(isolated_cwd: Path) -> None:
     )
 
     assert result.exit_code == 2
-    assert "NAME cannot be combined with --clear" in result.stderr
+    assert "NAME cannot be combined with --clear" in strip_cli_ansi(result.stderr)
 
 
 def test_use_workflow_accepts_explicit_project(isolated_cwd: Path) -> None:
@@ -187,4 +187,4 @@ def test_use_workflow_rejects_project_with_clear(isolated_cwd: Path) -> None:
     )
 
     assert result.exit_code == 2
-    assert "--project cannot be combined with --clear" in result.stderr
+    assert "--project cannot be combined with --clear" in strip_cli_ansi(result.stderr)

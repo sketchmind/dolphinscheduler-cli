@@ -8,7 +8,7 @@ from itertools import product
 from pathlib import Path
 from typing import TypedDict
 
-from tests.support import normalize_cli_help
+from tests.support import normalize_cli_help, strip_cli_ansi
 from typer.testing import CliRunner
 
 from dsctl.app import app
@@ -247,7 +247,7 @@ def test_leaf_help_stays_within_the_agent_discovery_budget() -> None:
     oversized: list[str] = []
     for path, _command in _iter_schema_command_paths(commands):
         result = RUNNER.invoke(app, [*path, "--help"])
-        size = len(result.stdout.encode("utf-8"))
+        size = len(strip_cli_ansi(result.stdout).encode("utf-8"))
         if size > HELP_OUTPUT_BYTE_BUDGET:
             oversized.append(f"{' '.join(path)}: {size} bytes")
 

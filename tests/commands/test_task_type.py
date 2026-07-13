@@ -11,7 +11,7 @@ from tests.fakes import (
     FakeTaskTypeAdapter,
     fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, strip_cli_ansi
 
 runner = CliRunner()
 
@@ -392,7 +392,8 @@ def test_task_type_schema_help_exposes_direct_view_flags() -> None:
     result = runner.invoke(app, ["task-type", "schema", "--help"])
 
     assert result.exit_code == 0
-    assert "--field" in result.stdout
-    assert "--json-schema" in result.stdout
-    assert "--compile-mappings" in result.stdout
-    assert "--full" in result.stdout
+    help_text = strip_cli_ansi(result.stdout)
+    assert "--field" in help_text
+    assert "--json-schema" in help_text
+    assert "--compile-mappings" in help_text
+    assert "--full" in help_text
