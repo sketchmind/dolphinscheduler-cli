@@ -4,12 +4,13 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = REPO_ROOT / ".agents" / "skills" / "dsctl"
+SKILL_ROOT = REPO_ROOT / "skills" / "dsctl"
 MARKDOWN_POINTER = re.compile(r"(?<!!)\[[^]]+\]\(([^)]+)\)")
 
 
 def test_skill_markdown_pointers_are_self_contained() -> None:
     skill_root = SKILL_ROOT.resolve()
+    assert (skill_root / "SKILL.md").is_file()
 
     for document in SKILL_ROOT.rglob("*.md"):
         text = document.read_text(encoding="utf-8")

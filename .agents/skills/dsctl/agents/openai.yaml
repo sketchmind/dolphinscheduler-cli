@@ -1,4 +1,0 @@
-interface:
-  display_name: "DolphinScheduler CLI"
-  short_description: "Operate DolphinScheduler through dsctl"
-  default_prompt: "Use $dsctl to complete this DolphinScheduler task through a verified closed loop."
