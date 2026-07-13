@@ -139,8 +139,12 @@ def _stable_get_defaults(
 OBJECT_DEFAULTS: dict[str, tuple[str, ...]] = {
     **_stable_get_defaults(PAGE_LIST_DEFAULTS),
     **_stable_get_defaults(COLLECTION_DEFAULTS),
+    "context": ("api_url", "ds_version", "project", "workflow", "set_at"),
     "datasource.get": ("id", "name", "type", "host", "port", "database"),
     "project-preference.get": (),
+    "use.clear": ("project", "workflow", "set_at"),
+    "use.project": ("project", "workflow", "set_at"),
+    "use.workflow": ("project", "workflow", "set_at"),
     "workflow.get": ("code", "name", "version"),
     "workflow.lineage.get": (),
     "workflow.describe": ("workflow", "tasks", "relations"),

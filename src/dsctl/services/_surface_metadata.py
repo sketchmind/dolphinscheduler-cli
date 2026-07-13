@@ -71,7 +71,10 @@ OUTPUT_ERROR_FIELDS: tuple[str, ...] = (
 )
 TOP_LEVEL_COMMAND_SUMMARIES: dict[str, str] = {
     "version": "Return CLI and selectable DolphinScheduler version metadata.",
-    "context": "Return the effective config profile and stored session context.",
+    "context": (
+        "Return the locally resolved target for subsequent commands without "
+        "remote validation."
+    ),
     "doctor": "Return structured local and remote diagnostics for the current runtime.",
     "schema": "Return the stable machine-readable schema for the current CLI surface.",
     "capabilities": "Return stable version and surface capability discovery.",

@@ -410,17 +410,31 @@ surface.
       savepoint and stop without inventing a workflow instance id
 - [ ] add an explicit read-only context validity check without making ordinary
       `dsctl context` perform remote calls
+- [ ] in the next explicit CLI contract version, simplify persisted selection
+      context after a compatibility and migration review:
+  - keep `dsctl context` as the local, read-only answer to “which target will a
+    later command use?”, including source provenance and an explicit statement
+    that no remote validation occurred
+  - prefer one workspace-bound project selection over the current exact-CWD
+    project layer plus global user layer, and bind it to a stable workspace or
+    profile identity rather than an incidental process directory
+  - remove ambient workflow selection; workflow selectors are task-specific
+    enough to remain explicit on commands, files, or returned commands
+  - collapse duplicate clear spellings as part of the same breaking change;
+    do not silently change the stable `0.2` surface
 - [x] audit log inspection and audit filter metadata discovery
 - [x] workflow lineage inspection and dependent-task discovery
 - [ ] `--non-interactive` mode (never prompt stdin)
 - [ ] Error hints with concrete next-step guidance
   - [x] config, resolver, selection, delete-force, confirmation, timeout, and
         common discovery/input errors emit `error.suggestion`
-- [ ] Claude Code skill: `/ds` entry point wrapping dsctl
-- [ ] Skill knowledge files for complex operations
+- [x] repository-distributed `dsctl` agent skill with a closed-loop operating
+      contract independent from the PyPI CLI installation
+- [x] progressively disclosed skill references for workflow authoring,
+      schedules, runtime recovery, and structured errors
 - [ ] End-to-end LLM agent test: create workflow → trigger → check → report
 
-**Done when:** A Claude Code skill can autonomously:
+**Done when:** The `dsctl` skill can autonomously:
 1. Create a multi-task workflow from natural language description.
 2. Trigger it and wait for completion.
 3. Check status, retrieve logs on failure, and report results.
@@ -573,7 +587,7 @@ The project is **production-ready** when all of these are true:
 - [x] `dsctl template` covers all upstream default task types
 - [ ] Error responses include machine-actionable `type` and `suggestion`
 - [ ] `--dry-run` available on all mutating commands
-- [ ] Claude Code `/ds` skill works end-to-end
+- [ ] the repository-distributed `dsctl` skill works end-to-end
 
 ### Quality
 - [x] ruff 30+ rule sets pass with zero violations

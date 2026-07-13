@@ -41,7 +41,7 @@ Current stable commands:
 - `dsctl audit list|model-types|operation-types`
 - `dsctl use [--clear]`
 - `dsctl use project NAME`
-- `dsctl use workflow NAME`
+- `dsctl use workflow NAME [--project PROJECT]`
 - `dsctl project list|get|create|update|delete`
 - `dsctl project-parameter list|get|create|update|delete`
 - `dsctl project-preference get|update|enable|disable`
@@ -460,7 +460,9 @@ communicates that distinction: `3.4.1` is currently `full`, while `3.4.0` and
 
 ## `dsctl context`
 
-Returns the effective config profile plus stored session context.
+Returns the locally resolved target used by subsequent commands. It reads the
+selected config profile and persisted context but performs no remote request or
+selector validation.
 
 Current `data` fields:
 
@@ -468,6 +470,13 @@ Current `data` fields:
 - `ds_version`
 - `project`
 - `workflow`
+- `set_at`
+
+Current `resolved` fields:
+
+- `context.scope` is `project`, `user`, or `null`, identifying the layer that
+  supplied the effective selection tuple
+- `remote_validation` is `not_performed`
 
 ## `dsctl doctor`
 
@@ -591,6 +600,12 @@ contract. Runtime validation remains authoritative for dynamic conditions such
 as risk-confirmation tokens and for static validators not yet represented in
 the registry; absence of `constraints` is not a claim that no relationship can
 exist.
+
+Execution metadata such as `mutates`, `mutation_target`, and `remote_requests`
+is also additive and action-local. A present value is authoritative; an absent
+field means unspecified, not `false`. `context` and every `use` action declare
+these fields because distinguishing local state from cluster state is part of
+their safety contract.
 
 Current guarantees:
 
@@ -726,7 +741,7 @@ Persists CLI context in the selected scope.
 Supported forms:
 
 - `dsctl use project NAME`
-- `dsctl use workflow NAME`
+- `dsctl use workflow NAME [--project PROJECT]`
 - `dsctl use --clear`
 - `dsctl use project --clear`
 - `dsctl use workflow --clear`
@@ -734,13 +749,22 @@ Supported forms:
 Rules:
 
 - `--scope` accepts `project` or `user`
+- target-specific `--scope`, `--clear`, and `--project` options belong after
+  the `project` or `workflow` subcommand; a group option before a subcommand is
+  rejected instead of being silently ignored
+- target `NAME` and `--clear` are mutually exclusive; workflow `--project` and
+  `--clear` are also mutually exclusive
 - setting `project` clears any stored `workflow` beneath it
 - clearing `project` also clears `workflow`
 - each stored layer treats `project`, optional `workflow`, and `set_at` as one
   atomic selection tuple; a stored workflow is valid only with a project in
   the same layer
-- setting workflow context requires an effective project and persists that
-  project with the workflow in the selected scope
+- `use workflow NAME --project PROJECT` binds the project and workflow
+  atomically in the selected layer
+- without `--project`, setting workflow in project scope uses the effective
+  project; setting it in user scope uses the project already stored in that
+  same user layer, so a higher-priority project layer is never copied into user
+  state
 - a workflow from context is used only when the command's project also came
   from context; passing `--project` or selecting a project from a file requires
   an explicit workflow selector
@@ -753,12 +777,37 @@ Rules:
   persisting an empty selection; legacy `set_at`-only layers remain readable
 - `set_at` comes from the layer that contributes the effective project and
   workflow tuple; a `set_at`-only layer does not override lower selection time
+- writes replace context files atomically and preserve an existing symlink to
+  a context file; read, write, and clear filesystem failures surface as stable
+  `config_error` results with operation and path details
+- all `use` forms are local-only and report that remote validation was not
+  performed
 
 Successful output normally returns the merged effective context in:
 
 - `data.project`
 - `data.workflow`
 - `data.set_at`
+
+The mutation result is explicit about write-versus-readback state:
+
+- `resolved.scope` is the layer selected for mutation
+- `resolved.updated_context` is the tuple actually persisted in that layer
+- `resolved.effective_scope` is the layer that supplied `data`, or `null` when
+  effective resolution failed after a successful write
+- `resolved.readback` is `effective` or `updated_layer_fallback`
+- `resolved.shadowed` is `true` only when the updated user layer still contains
+  a project selection hidden by project context; it is `false` when no updated
+  selection is hidden, including after the user layer is emptied, or `null`
+  when readback could not determine this. Use `effective_scope`, not
+  `shadowed`, to identify which layer supplied `data`
+- `resolved.remote_validation` is `not_performed`
+- workflow-set results also include `resolved.project_binding` with its value,
+  `flag`/`context` source, and context scope when applicable
+
+A shadowed update remains successful and emits warning detail code
+`context_update_shadowed`; `data` still represents the higher-priority
+effective tuple, while `resolved.updated_context` proves what was written.
 
 If the selected layer mutation succeeds but another persisted layer is still
 invalid, the command remains successful, returns the updated layer as a safe

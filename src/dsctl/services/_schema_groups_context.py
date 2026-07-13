@@ -15,9 +15,12 @@ def use_group() -> dict[str, object]:
     """Build the persisted-context command group schema."""
     return group(
         "use",
-        summary="Set or clear persisted CLI context.",
+        summary="Set or clear local CLI context without remote validation.",
         group_action={
             "action": "use.clear",
+            "mutates": True,
+            "mutation_target": "local_context",
+            "remote_requests": False,
             "summary": (
                 "Clear all persisted context in one scope when called as use --clear."
             ),
@@ -41,7 +44,10 @@ def use_group() -> dict[str, object]:
             command(
                 "project",
                 action="use.project",
-                summary="Set or clear the project context.",
+                summary="Set or clear local project context; no remote validation.",
+                mutates=True,
+                mutation_target="local_context",
+                remote_requests=False,
                 arguments=[
                     argument(
                         "name",
@@ -65,28 +71,42 @@ def use_group() -> dict[str, object]:
             command(
                 "workflow",
                 action="use.workflow",
-                summary=(
-                    "Set or clear workflow context; setting requires an "
-                    "effective project."
-                ),
+                summary=("Set or clear local workflow context; no remote validation."),
+                mutates=True,
+                mutation_target="local_context",
+                remote_requests=False,
                 arguments=[
                     argument(
                         "name",
                         value_type="string",
                         description=(
                             "Workflow name to persist. Run `dsctl workflow list` "
-                            "in the selected project to discover values. Requires "
-                            "an effective project, which is stored in the same "
-                            "scope. Required unless --clear."
+                            "in the selected project to discover values. Requires a "
+                            "project binding: pass --project; otherwise project scope "
+                            "uses the effective project, while user scope uses its own "
+                            "stored project. Required unless --clear."
                         ),
                         required=False,
                         selector="opaque_name",
                         discovery_command="dsctl workflow list",
                     )
                 ],
-                options=use_target_options(
-                    clear_help="Clear the stored workflow context."
-                ),
+                options=[
+                    option(
+                        "project",
+                        value_type="string",
+                        description=(
+                            "Project name to bind with the workflow in the selected "
+                            "context scope. Run `dsctl project list` to discover "
+                            "values."
+                        ),
+                        selector="opaque_name",
+                        discovery_command="dsctl project list",
+                    ),
+                    *use_target_options(
+                        clear_help="Clear the stored workflow context."
+                    ),
+                ],
             ),
         ],
     )

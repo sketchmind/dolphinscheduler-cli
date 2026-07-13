@@ -102,6 +102,11 @@ _FORCE_REQUIRED_ACTIONS = (
 ACTION_CONSTRAINTS: dict[str, tuple[Constraint, ...]] = {
     **dict.fromkeys(_WORKFLOW_TARGET_ACTIONS, _WORKFLOW_EXPLICIT_PROJECT_CONSTRAINT),
     "use.clear": (_fields("requires_all", "--clear"),),
+    "use.project": (_fields("exactly_one_of", "NAME", "--clear"),),
+    "use.workflow": (
+        _fields("exactly_one_of", "NAME", "--clear"),
+        _forbids("--clear", "--project"),
+    ),
     "schema": (
         _fields(
             "at_most_one_of",

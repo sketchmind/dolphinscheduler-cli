@@ -48,6 +48,11 @@ loop.
 
 - Inspect `context` when an unobserved stored selector would determine the
   target. Use `doctor` when connection or configuration state is the unknown.
+- Prefer explicit selectors or complete returned commands within one task.
+  `use` changes persistent local state and does not validate the value against
+  the cluster; run it only when changing later-command defaults is part of the
+  requested outcome. After an authorized change, inspect its `resolved` fields
+  for the updated layer, effective layer, shadowing, and readback status.
 - For id-first commands, let the id select the resource and add project or
   workflow options when leaf help or action schema requires them.
 - Treat a complete returned command as grounded when its resolved target and

@@ -1062,6 +1062,8 @@ def _top_level_command_schema(name: str) -> JsonObject:
             name,
             action=name,
             summary=TOP_LEVEL_COMMAND_SUMMARIES[name],
+            mutates=False if name == "context" else None,
+            remote_requests=False if name == "context" else None,
         ),
         label="top-level command schema",
     )

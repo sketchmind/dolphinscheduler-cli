@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import tempfile
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -57,8 +59,16 @@ class SessionContext:
         }
 
 
-def load_context(*, cwd: Path | None = None) -> SessionContext:
-    """Load the highest-priority context tuple that selects a project."""
+@dataclass(frozen=True)
+class EffectiveContext:
+    """Resolved session context and the persisted scope that supplied it."""
+
+    session: SessionContext
+    scope: ContextScope | None
+
+
+def resolve_context(*, cwd: Path | None = None) -> EffectiveContext:
+    """Resolve the highest-priority context tuple and its source scope."""
     context_layers: tuple[tuple[ContextScope, Path], ...] = (
         ("project", project_context_path(cwd=cwd)),
         ("user", user_context_path()),
@@ -66,12 +76,20 @@ def load_context(*, cwd: Path | None = None) -> SessionContext:
     for scope, path in context_layers:
         layer = _read_context_file(path, scope=scope)
         if "project" in layer:
-            return SessionContext(
-                project=layer["project"],
-                workflow=layer.get("workflow"),
-                set_at=layer.get("set_at"),
+            return EffectiveContext(
+                session=SessionContext(
+                    project=layer["project"],
+                    workflow=layer.get("workflow"),
+                    set_at=layer.get("set_at"),
+                ),
+                scope=scope,
             )
-    return SessionContext()
+    return EffectiveContext(session=SessionContext(), scope=None)
+
+
+def load_context(*, cwd: Path | None = None) -> SessionContext:
+    """Load the highest-priority context tuple that selects a project."""
+    return resolve_context(cwd=cwd).session
 
 
 def write_context(
@@ -82,12 +100,41 @@ def write_context(
 ) -> Path:
     """Persist a context layer to disk."""
     path = _context_path(scope=scope, cwd=cwd)
-    path.parent.mkdir(parents=True, exist_ok=True)
     payload = context.to_data()
-    path.write_text(
-        yaml.safe_dump(payload, sort_keys=False, allow_unicode=False),
-        encoding="utf-8",
-    )
+    document = yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
+    temporary_path: Path | None = None
+    write_path = path
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_symlink():
+            write_path = path.resolve(strict=False)
+        write_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=write_path.parent,
+            prefix=f".{write_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            temporary_file.write(document)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.replace(temporary_path, write_path)  # noqa: PTH105
+    except (OSError, RuntimeError) as exc:
+        if temporary_path is not None:
+            with suppress(OSError):
+                temporary_path.unlink(missing_ok=True)
+        message = f"Could not write context file {path}"
+        raise ConfigError(
+            message,
+            details={"operation": "write", "path": str(path)},
+            suggestion=(
+                f"Make sure {write_path.parent} is a writable directory, then retry "
+                "the command."
+            ),
+        ) from exc
     return path
 
 
@@ -146,8 +193,19 @@ def clear_context(
 ) -> None:
     """Remove a stored context layer if it exists."""
     path = _context_path(scope=scope, cwd=cwd)
-    if path.exists():
+    try:
         path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        message = f"Could not clear context file {path}"
+        raise ConfigError(
+            message,
+            details={"operation": "clear", "path": str(path)},
+            suggestion=(
+                f"Make sure {path} is a removable regular file, then retry the command."
+            ),
+        ) from exc
 
 
 def read_context_layer(
@@ -219,11 +277,33 @@ def _read_context_file(
 
 def _load_context_mapping(path: Path) -> JsonObject:
     """Load one context YAML mapping without applying context invariants."""
-    if not path.exists():
+    try:
+        document = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {}
+    except UnicodeError as exc:
+        message = f"Context file {path} must be UTF-8"
+        raise ConfigError(
+            message,
+            details={
+                "operation": "read",
+                "path": str(path),
+                "encoding": "utf-8",
+            },
+            suggestion=f"Rewrite {path} as UTF-8 YAML, then retry the command.",
+        ) from exc
+    except OSError as exc:
+        message = f"Could not read context file {path}"
+        raise ConfigError(
+            message,
+            details={"operation": "read", "path": str(path)},
+            suggestion=(
+                f"Make sure {path} is a readable regular file, then retry the command."
+            ),
+        ) from exc
 
     try:
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+        loaded = yaml.safe_load(document)
     except yaml.YAMLError as exc:
         message = f"Invalid YAML in context file {path}"
         raise ConfigError(

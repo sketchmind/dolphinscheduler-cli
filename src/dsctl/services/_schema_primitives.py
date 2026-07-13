@@ -100,6 +100,9 @@ def command(
     options: list[dict[str, object]] | None = None,
     payload: JsonObject | None = None,
     payload_schema: JsonObject | None = None,
+    mutates: bool | None = None,
+    mutation_target: str | None = None,
+    remote_requests: bool | None = None,
 ) -> dict[str, object]:
     """Build one schema command payload."""
     data: JsonObject = {
@@ -114,6 +117,12 @@ def command(
         data["payload"] = payload
     if payload_schema is not None:
         data["payload_schema"] = payload_schema
+    if mutates is not None:
+        data["mutates"] = mutates
+    if mutation_target is not None:
+        data["mutation_target"] = mutation_target
+    if remote_requests is not None:
+        data["remote_requests"] = remote_requests
     return cast("dict[str, object]", data)
 
 

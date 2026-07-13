@@ -4,11 +4,13 @@ import pytest
 
 from dsctl.context import (
     ContextScope,
+    EffectiveContext,
     SessionContext,
     clear_context,
     load_context,
     project_context_path,
     read_context_layer,
+    resolve_context,
     update_context,
     user_context_path,
     write_context,
@@ -65,6 +67,41 @@ def test_load_context_merges_user_and_project_layers(
     assert loaded.workflow == "daily-etl"
 
 
+def test_resolve_context_reports_project_source(
+    tmp_path: Path,
+) -> None:
+    session = SessionContext(project="repo-project", workflow="daily-etl")
+    write_context(session, scope="project", cwd=tmp_path)
+
+    resolved = resolve_context(cwd=tmp_path)
+
+    assert resolved == EffectiveContext(session=session, scope="project")
+
+
+def test_resolve_context_reports_user_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    session = SessionContext(project="user-project", workflow="daily-etl")
+    write_context(session, scope="user")
+
+    resolved = resolve_context(cwd=tmp_path)
+
+    assert resolved == EffectiveContext(session=session, scope="user")
+
+
+def test_resolve_context_reports_no_source_when_context_is_empty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+    resolved = resolve_context(cwd=tmp_path)
+
+    assert resolved == EffectiveContext(session=SessionContext(), scope=None)
+
+
 def test_load_context_does_not_inherit_workflow_across_project_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -101,6 +138,81 @@ def test_update_and_clear_context_layer(
 
     assert not project_context_path(cwd=tmp_path).exists()
     assert user_context_path() == tmp_path / "xdg" / "dsctl" / "context.yaml"
+
+
+def test_write_context_replace_failure_preserves_existing_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = write_context(SessionContext(project="original"), cwd=tmp_path)
+    original_document = path.read_text(encoding="utf-8")
+
+    def fail_replace(_source: object, _destination: object) -> None:
+        message = "replace failed"
+        raise OSError(message)
+
+    monkeypatch.setattr("dsctl.context.os.replace", fail_replace)
+
+    with pytest.raises(ConfigError) as exc_info:
+        write_context(SessionContext(project="replacement"), cwd=tmp_path)
+
+    assert path.read_text(encoding="utf-8") == original_document
+    assert list(tmp_path.iterdir()) == [path]
+    assert exc_info.value.details == {
+        "operation": "write",
+        "path": str(path),
+    }
+    assert exc_info.value.suggestion == (
+        f"Make sure {tmp_path} is a writable directory, then retry the command."
+    )
+
+
+def test_write_context_atomically_updates_symlink_target_without_replacing_link(
+    tmp_path: Path,
+) -> None:
+    shared_path = tmp_path / "shared-context.yaml"
+    shared_path.write_text("project: original\n", encoding="utf-8")
+    context_path = project_context_path(cwd=tmp_path)
+    context_path.symlink_to(shared_path.name)
+
+    write_context(SessionContext(project="replacement"), cwd=tmp_path)
+
+    assert context_path.is_symlink()
+    assert read_context_layer(cwd=tmp_path).project == "replacement"
+    assert "project: replacement" in shared_path.read_text(encoding="utf-8")
+
+
+def test_write_context_translates_unwritable_parent_path(tmp_path: Path) -> None:
+    blocked_parent = tmp_path / "blocked"
+    blocked_parent.write_text("not a directory", encoding="utf-8")
+    path = project_context_path(cwd=blocked_parent)
+
+    with pytest.raises(ConfigError) as exc_info:
+        write_context(SessionContext(project="etl-prod"), cwd=blocked_parent)
+
+    assert exc_info.value.details == {
+        "operation": "write",
+        "path": str(path),
+    }
+    assert exc_info.value.suggestion == (
+        f"Make sure {blocked_parent} is a writable directory, then retry the command."
+    )
+
+
+def test_clear_context_translates_directory_removal_error(tmp_path: Path) -> None:
+    path = project_context_path(cwd=tmp_path)
+    path.mkdir()
+
+    with pytest.raises(ConfigError) as exc_info:
+        clear_context(cwd=tmp_path)
+
+    assert exc_info.value.details == {
+        "operation": "clear",
+        "path": str(path),
+    }
+    assert exc_info.value.suggestion == (
+        f"Make sure {path} is a removable regular file, then retry the command."
+    )
 
 
 def test_update_context_can_clear_one_field_without_resetting_others(
@@ -289,6 +401,39 @@ def test_read_context_layer_rejects_invalid_yaml(tmp_path: Path) -> None:
         read_context_layer(cwd=tmp_path)
 
     assert "Invalid YAML" in exc_info.value.message
+
+
+def test_read_context_layer_translates_directory_read_error(tmp_path: Path) -> None:
+    path = project_context_path(cwd=tmp_path)
+    path.mkdir()
+
+    with pytest.raises(ConfigError) as exc_info:
+        read_context_layer(cwd=tmp_path)
+
+    assert exc_info.value.details == {
+        "operation": "read",
+        "path": str(path),
+    }
+    assert exc_info.value.suggestion == (
+        f"Make sure {path} is a readable regular file, then retry the command."
+    )
+
+
+def test_read_context_layer_rejects_non_utf8_document(tmp_path: Path) -> None:
+    path = project_context_path(cwd=tmp_path)
+    path.write_bytes(b"\xff")
+
+    with pytest.raises(ConfigError) as exc_info:
+        read_context_layer(cwd=tmp_path)
+
+    assert exc_info.value.details == {
+        "operation": "read",
+        "path": str(path),
+        "encoding": "utf-8",
+    }
+    assert exc_info.value.suggestion == (
+        f"Rewrite {path} as UTF-8 YAML, then retry the command."
+    )
 
 
 @pytest.mark.parametrize(

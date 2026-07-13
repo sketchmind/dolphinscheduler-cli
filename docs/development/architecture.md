@@ -201,6 +201,16 @@ Foundation owns:
 
 Foundation does not import upward into commands, services, or upstream.
 
+`context.py` is the persistence boundary for the current two-layer local
+selection model. It owns layer paths, tuple invariants, source-aware effective
+resolution, atomic same-directory replacement that preserves configured
+symlink indirection, and stable `ConfigError` translation for read/write/clear
+filesystem failures. Services decide how a context mutation is presented,
+including post-write effective readback and shadowing diagnostics; commands
+only parse the canonical invocation and emit that result. Context inspection
+and mutation are local-only operations and do not imply remote selector
+validation.
+
 `result_navigation.py` is the single deep module for optional JSON navigation:
 bounded complete `next_actions` and grouped list `action_index` discovery. Its
 public interface accepts `action`, `resolved`, `data`, and the optional explicit
