@@ -17,22 +17,26 @@ Use Python 3.11 unless the CI matrix and `pyproject.toml` are widened together.
 
 ## Branching Model
 
-`dev` is the daily integration branch. Feature and fix branches should start
-from `dev`, and normal pull requests should target `dev`.
+`main` is the only long-lived development branch. Keep it green and releasable;
+normal pull requests target `main` and must pass the required checks before
+merge.
 
-`main` is the stable release branch. Do not merge day-to-day development
-directly into `main`; use a release or hotfix branch.
+Create short-lived feature, fix, documentation, and `release-prep/<version>`
+branches from an up-to-date `main`. Squash-merge those pull requests and delete
+the source branch after merge. Release-preparation branches contain only the
+version, changelog, final documentation, and small blocking fixes needed for a
+single release.
 
-Use `release/<version>` branches for release preparation. Cut them from `dev`,
-make only release-focused changes such as version, changelog, documentation, and
-small blocking fixes, then merge into `main`.
+Create `release/<major>.<minor>` only when an older release line needs ongoing
+maintenance or a real stabilization window, and base it on the corresponding
+release tag rather than the current `main`. Product fixes should normally land
+on `main` first and then be backported with `git cherry-pick -x` through a
+reviewed pull request. Do not use a maintenance branch as a second development
+trunk or merge its version-specific state wholesale back into `main`.
 
-Use `hotfix/<version>` branches for urgent patches. Cut them from `main`, merge
-the fix back into `main`, publish the patch release, then merge `main` back into
-`dev`.
-
-Release tags are created from `main` only. GitHub Releases from those tags
-trigger the formal PyPI publish workflow.
+Normal release tags point at the exact `main` commit validated through
+TestPyPI. A maintained older line may be tagged from its `release/*` branch.
+Publishing a GitHub Release from the tag triggers the formal PyPI workflow.
 
 ## Documentation Map
 

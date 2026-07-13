@@ -2,15 +2,6 @@ name: Publish
 
 on:
   workflow_dispatch:
-    inputs:
-      repository:
-        description: "Package index to publish to"
-        required: true
-        default: testpypi
-        type: choice
-        options:
-          - testpypi
-          - pypi
   release:
     types:
       - published
@@ -61,7 +52,12 @@ jobs:
   publish-testpypi:
     name: Publish to TestPyPI
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.repository == 'testpypi'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (
+        github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/release/')
+      )
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -85,13 +81,7 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     needs: build
-    if: >-
-      github.event_name == 'release' ||
-      (
-        github.event_name == 'workflow_dispatch' &&
-        inputs.repository == 'pypi' &&
-        github.ref == 'refs/heads/main'
-      )
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment:
       name: pypi

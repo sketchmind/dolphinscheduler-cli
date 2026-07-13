@@ -4,62 +4,57 @@ This checklist keeps GitHub and PyPI publication explicit and reproducible.
 
 ## Branch Flow
 
-Daily work lands on `dev`. Keep `dev` green because it is the integration point
-for the next release.
-
-`main` is the stable release branch. It should receive only release-ready
-changes from `release/*` branches or urgent fixes from `hotfix/*` branches.
+`main` is the only long-lived development branch. Keep it green and releasable.
+Feature, fix, documentation, and release-preparation work is done on short-lived
+branches and reviewed pull requests targeting `main`.
 
 Prepare a normal release with this flow:
 
-1. Cut `release/<version>` from `dev`.
+1. Create `release-prep/<version>` from an up-to-date `main`.
 2. Update the version, changelog, release notes, and final documentation.
 3. Run the local gate, package checks, and live gate when a cluster is available.
-4. Merge the release branch into `main`.
-5. Tag the release on `main`.
-6. Create the GitHub Release to publish to PyPI.
-7. Merge `main` back into `dev`.
+4. Merge the reviewed release-preparation pull request into `main`.
+5. Wait for the resulting `main` commit to pass CI and record its full SHA.
+6. Publish that commit to TestPyPI and verify a clean installation.
+7. Create the version tag at that exact SHA.
+8. Create the GitHub Release to publish to PyPI, then verify the public install.
 
 The version section in `CHANGELOG.md` is the source for the GitHub Release
 body. Keep an empty `Unreleased` section above it so post-release work has an
 explicit landing place.
 
-### `0.3.0` History Reconciliation
+### Maintenance Releases
 
-`v0.2.0` on `main` and the `011ab4f` synchronization commit on `dev` have
-identical trees but parallel parent histories. A normal merge treats the same
-changes as independent work and produces widespread conflicts. For `0.3.0`
-only, build the release branch from `main`, replay the commits after the
-tree-equivalent synchronization point, and verify the result before making
-release-only edits:
+Do not create a persistent release branch for every normal release. Create
+`release/<major>.<minor>` only when an older line needs continued patches or a
+stabilization window must remain isolated while `main` advances.
 
-```bash
-git switch -c release/0.3.0 main
-git cherry-pick 011ab4f..0d49cea
-git diff --exit-code 0d49cea HEAD
-```
-
-After the release preparation commit passes every gate, review the remaining
-tree diff against `dev`. It must contain only the intended version, release
-documentation, and release-safety checks. Then record `dev` as merged while
-retaining the already verified release tree:
+Create the maintenance branch from the published tag that starts the supported
+line, not from the current `main`. For example, to maintain the `0.3` line from
+its first release:
 
 ```bash
-git diff --stat dev..release/0.3.0
-git merge -s ours dev -m "Reconcile dev history for v0.3.0"
+minor=0.3
+base_tag=v0.3.0
+git switch --create "release/$minor" "$base_tag"
+git push --set-upstream origin "release/$minor"
 ```
 
-The `ours` strategy is justified here only by the preceding tree-equivalence
-proof; it is not a general conflict-resolution method. Once this merge reaches
-`main`, `dev` can fast-forward to `main` and the normal branch flow resumes.
+Fixes should normally land on `main` first, then be backported with
+`git cherry-pick -x` through a reviewed pull request targeting the maintenance
+branch. For an urgent production-first fix, forward-port the same change to
+`main` immediately so the next release cannot regress. Keep release-specific
+version changes on the maintenance branch instead of merging the branch
+wholesale into `main`. Prepare the patch version and changelog on a short-lived
+branch targeting `release/<major>.<minor>`, then run the same TestPyPI and tag
+checks against that maintenance branch.
 
-Prepare an urgent patch with this flow:
+### Historical Note: `0.3.0`
 
-1. Cut `hotfix/<version>` from `main`.
-2. Apply the minimal fix and targeted tests.
-3. Merge the hotfix into `main`.
-4. Tag and publish the patch release from `main`.
-5. Merge `main` back into `dev`.
+The [`v0.3.0` release pull request](https://github.com/sketchmind/dolphinscheduler-cli/pull/7)
+reconciled parallel `main` and `dev` histories before the project moved to a
+single `main` trunk. Its replay and `ours` merge were a verified one-time
+repair, not a reusable release procedure.
 
 ## Pre-Release Decisions
 
@@ -71,8 +66,6 @@ Prepare an urgent patch with this flow:
 - Confirm the DolphinScheduler support matrix in
   [Version Compatibility](../user/version-compatibility.md).
 - Confirm the README does not imply official Apache project status.
-- Decide whether the public GitHub repository preserves full history or starts
-  from a clean initial commit.
 
 ## Local Gate
 
@@ -130,18 +123,48 @@ a pending publisher in TestPyPI with these values:
 - Workflow name: `publish.yml`
 - Environment name: `testpypi`
 
-Then run the `Publish` workflow manually and choose `testpypi`.
+Set the candidate version and release ref explicitly. Use `main` for a normal
+release or the maintained `release/<major>.<minor>` branch for a patch on an
+older line. Fetch that ref and record the exact remote commit before dispatch:
+
+```bash
+version="X.Y.Z"  # replace with the candidate version
+release_ref=main  # or release/X.Y for a maintained line
+git fetch origin "$release_ref"
+release_sha=$(git rev-parse "origin/$release_ref^{commit}")
+gh workflow run publish.yml --ref "$release_ref"
+```
+
+Find and watch the dispatched run, then require its `headSha` to equal the
+recorded release commit:
+
+```bash
+gh run list --workflow publish.yml --branch "$release_ref" \
+  --event workflow_dispatch --limit 5
+run_id="RUN_ID"  # copy the matching run ID from the list
+gh run watch "$run_id" --exit-status
+run_sha=$(gh run view "$run_id" --json headSha --jq .headSha)
+test "$run_sha" = "$release_sha"
+```
+
+The final version tag must point at that same commit. TestPyPI and PyPI are
+separate indexes, but neither permits replacing an already uploaded
+distribution filename; never overwrite or silently reuse a candidate version.
 
 Install from TestPyPI in a clean environment:
 
 ```bash
-python3 -m venv /tmp/dsctl-testpypi-check
-/tmp/dsctl-testpypi-check/bin/python -m pip install --upgrade pip
-/tmp/dsctl-testpypi-check/bin/python -m pip install \
-  --index-url https://test.pypi.org/simple/ \
-  --extra-index-url https://pypi.org/simple/ \
-  dolphinscheduler-cli
-/tmp/dsctl-testpypi-check/bin/dsctl version
+check_dir="/tmp/dsctl-testpypi-$version"
+python3 -m venv "$check_dir"
+"$check_dir/bin/python" -m pip install --upgrade pip
+"$check_dir/bin/python" -m pip download --no-cache-dir --no-deps \
+  --only-binary=:all: --index-url https://test.pypi.org/simple/ \
+  --dest "$check_dir" "dolphinscheduler-cli==$version"
+"$check_dir/bin/python" -m pip install \
+  "$check_dir"/dolphinscheduler_cli-"$version"-*.whl
+"$check_dir/bin/dsctl" version
+"$check_dir/bin/dsctl" schema --list-groups
+"$check_dir/bin/dsctl" capabilities
 ```
 
 ## PyPI
@@ -159,15 +182,28 @@ Configure a pending publisher in PyPI with these values:
 
 Recommended release trigger:
 
-1. Update `CHANGELOG.md`.
-2. Update `pyproject.toml` and `src/dsctl/__init__.py` to the release version.
-3. Verify `python tools/check_release_version.py --tag vX.Y.Z`, then push the
-   matching signed tag.
-4. Create a GitHub Release from the tag.
-5. Let the `Publish` workflow build and upload the distributions.
-6. Verify `pipx install dolphinscheduler-cli` exposes `dsctl`.
+1. Confirm the recorded release commit passed `main` CI and the TestPyPI clean
+   install. For a maintenance release, require the corresponding maintenance
+   branch CI instead.
+2. Verify `python tools/check_release_version.py --tag "v$version"` against that
+   commit.
+3. Create an annotated tag at the recorded SHA, verify its peeled commit, and
+   push it:
 
-The `Publish` workflow can also be started manually with `repository=pypi`.
-Manual PyPI publishing is restricted to the `main` branch. Prefer the GitHub
-Release path for normal public releases so the published PyPI version has a
-matching source tag and release page.
+   ```bash
+   tag="v$version"
+   git tag -a "$tag" "$release_sha" -m "Release $version"
+   test "$(git rev-parse "${tag}^{}")" = "$release_sha"
+   git push origin "$tag"
+   ```
+
+   Sign the tag when a verified signing key is configured; do not claim an
+   unsigned tag is signed.
+4. Create a GitHub Release from the tag using the matching changelog section.
+5. Let the `Publish` workflow build and upload the distributions.
+6. Verify an exact-version clean install from PyPI and confirm `dsctl version`,
+   `dsctl schema --list-groups`, and `dsctl capabilities`.
+
+Manual workflow dispatch publishes only to TestPyPI and is restricted to
+`main` or `release/*`. Formal PyPI publishing is triggered only by a published
+GitHub Release, so an untagged branch head cannot bypass the release chain.
