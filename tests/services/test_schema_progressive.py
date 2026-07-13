@@ -23,7 +23,7 @@ def test_default_schema_is_a_bounded_progressive_index() -> None:
 
     assert data["schema_version"] == 2
     assert data["view"] == "index"
-    assert data["cli"] == {"name": "dsctl", "version": "0.2.0"}
+    assert data["cli"] == {"name": "dsctl", "version": "0.3.0"}
     assert isinstance(data["ds"], dict)
     global_options = [
         _require_dict(item) for item in _require_list(data["global_options"])

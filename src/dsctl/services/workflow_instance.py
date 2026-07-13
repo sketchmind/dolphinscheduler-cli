@@ -15,6 +15,7 @@ from dsctl.errors import (
 from dsctl.output import CommandResult, dry_run_result, require_json_object
 from dsctl.services._runtime_support import (
     get_workflow_instance,
+    master_unavailable_error,
     require_workflow_definition_code,
     require_workflow_instance_project_code,
 )
@@ -1372,6 +1373,22 @@ def _raise_workflow_instance_action_error(
     task_code: int | None = None,
 ) -> None:
     command = _workflow_instance_action_command(action)
+    if action in {"rerun", "recover-failed"}:
+        unavailable = master_unavailable_error(
+            exc,
+            operation=f"workflow-instance.{action}",
+            details={
+                "resource": WORKFLOW_INSTANCE_RESOURCE,
+                "id": workflow_instance_id,
+                "action": action,
+            },
+            suggestion=(
+                "Run `dsctl monitor server master` and wait until at least one "
+                f"master is listed, then retry `{command}`."
+            ),
+        )
+        if unavailable is not None:
+            raise unavailable from exc
     if exc.result_code == WORKFLOW_INSTANCE_EXECUTING_COMMAND:
         message = (
             "This workflow instance is already executing another runtime control "

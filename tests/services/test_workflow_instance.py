@@ -840,6 +840,53 @@ def test_rerun_workflow_instance_result_reports_runtime_control_conflict(
     )
 
 
+def test_rerun_workflow_instance_result_maps_missing_master_to_invalid_state(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    result_message = "master does not exist"
+
+    def rerun_without_master(*, workflow_instance_id: int) -> None:
+        del workflow_instance_id
+        raise ApiResultError(
+            result_code=10025,
+            result_message=result_message,
+        )
+
+    monkeypatch.setattr(
+        fake_workflow_instance_adapter,
+        "rerun",
+        rerun_without_master,
+    )
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_instance_service.rerun_workflow_instance_result(902)
+
+    assert exc_info.value.details == {
+        "resource": "workflow-instance",
+        "id": 902,
+        "action": "rerun",
+        "operation": "workflow-instance.rerun",
+    }
+    assert exc_info.value.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "result",
+        "result_code": 10025,
+        "result_message": result_message,
+    }
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed, then retry `dsctl workflow-instance rerun ID`."
+    )
+
+
 def test_watch_workflow_instance_result_waits_for_final_state(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -1082,6 +1129,57 @@ def test_execute_task_in_workflow_instance_result_requires_online_definition(
     )
 
 
+def test_execute_task_preserves_unrelated_missing_master_code(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    task_adapter = FakeTaskAdapter(
+        workflow_tasks={
+            101: [
+                FakeTaskDefinition(
+                    code=201,
+                    name="extract",
+                    project_code_value=7,
+                )
+            ]
+        }
+    )
+
+    def execute_task_error(
+        *,
+        project_code: int,
+        workflow_instance_id: int,
+        task_code: int,
+        scope: str,
+    ) -> None:
+        del project_code, workflow_instance_id, task_code, scope
+        raise ApiResultError(
+            result_code=10025,
+            result_message="master does not exist",
+        )
+
+    monkeypatch.setattr(
+        fake_workflow_instance_adapter,
+        "execute_task",
+        execute_task_error,
+    )
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_adapter=task_adapter,
+    )
+
+    with pytest.raises(ApiResultError, match="master does not exist") as exc_info:
+        workflow_instance_service.execute_task_in_workflow_instance_result(
+            902,
+            task="extract",
+        )
+
+    assert exc_info.value.result_code == 10025
+
+
 def test_recover_failed_workflow_instance_result_requests_recovery(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -1111,6 +1209,53 @@ def test_recover_failed_workflow_instance_result_requests_recovery(
 
     assert workflow_instance_adapter.recovered_failed_ids == [903]
     assert data["state"] == "RUNNING_EXECUTION"
+
+
+def test_recover_failed_workflow_instance_maps_missing_master(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+) -> None:
+    workflow_instance_adapter = FakeWorkflowInstanceAdapter(
+        workflow_instances=[
+            FakeWorkflowInstance(
+                id=903,
+                workflow_definition_code_value=101,
+                workflow_definition_version_value=1,
+                project_code_value=7,
+                state_value=FakeEnumValue("FAILURE"),
+                run_times_value=1,
+                name="daily-sync-903",
+                executor_id_value=11,
+            )
+        ]
+    )
+
+    def recover_without_master(*, workflow_instance_id: int) -> None:
+        del workflow_instance_id
+        raise ApiResultError(
+            result_code=10025,
+            result_message="master does not exist",
+        )
+
+    monkeypatch.setattr(
+        workflow_instance_adapter,
+        "recover_failed",
+        recover_without_master,
+    )
+    _install_workflow_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=workflow_instance_adapter,
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_instance_service.recover_failed_workflow_instance_result(903)
+
+    assert exc_info.value.details["operation"] == "workflow-instance.recover-failed"
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed, then retry `dsctl workflow-instance recover-failed ID`."
+    )
 
 
 def test_recover_failed_workflow_instance_result_rejects_non_failure_state(

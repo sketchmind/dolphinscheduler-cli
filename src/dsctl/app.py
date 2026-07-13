@@ -20,7 +20,7 @@ from dsctl.output_formats import (
 )
 
 if TYPE_CHECKING:
-    from typer._click.core import Context as TyperClickContext
+    from click import Context as ClickContext
 
 _ROOT_OPTION_ARITY = {
     option.flag: option.arity for option in COMMAND_CATALOG.global_options
@@ -46,7 +46,7 @@ _ROOT_HELP = (
 class _GlobalOptionGroup(TyperGroup):
     """Let root rendering/config options appear anywhere before `--`."""
 
-    def parse_args(self, ctx: TyperClickContext, args: list[str]) -> list[str]:
+    def parse_args(self, ctx: ClickContext, args: list[str]) -> list[str]:
         """Move catalogued root options ahead of the command before Click parses."""
         return super().parse_args(ctx, _normalize_root_options(self, args))
 

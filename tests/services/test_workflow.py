@@ -1119,6 +1119,146 @@ def test_run_workflow_result_maps_offline_definition_to_invalid_state(
     )
 
 
+def test_run_workflow_result_maps_missing_master_to_invalid_state(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    result_message = "Internal Server Error: no master server available"
+    fake_workflow_adapter.run_errors_by_code = {
+        101: ApiResultError(
+            result_code=10000,
+            result_message=result_message,
+        )
+    }
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_service.run_workflow_result(None)
+
+    assert exc_info.value.details == {
+        "resource": "workflow",
+        "project": "etl-prod",
+        "project_code": 7,
+        "code": 101,
+        "name": "daily-sync",
+        "operation": "workflow.run",
+    }
+    assert exc_info.value.source == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "result",
+        "result_code": 10000,
+        "result_message": result_message,
+    }
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed, then retry `dsctl workflow run`."
+    )
+
+
+def test_run_workflow_result_preserves_unrelated_internal_server_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    fake_workflow_adapter.run_errors_by_code = {
+        101: ApiResultError(
+            result_code=10000,
+            result_message="Internal Server Error: failed to start workflow",
+        )
+    }
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    with pytest.raises(ApiResultError, match="failed to start workflow") as exc_info:
+        workflow_service.run_workflow_result(None)
+
+    assert exc_info.value.result_code == 10000
+
+
+def test_run_workflow_task_result_reports_missing_master_operation(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    fake_workflow_adapter.run_errors_by_code = {
+        101: ApiResultError(
+            result_code=10025,
+            result_message="master does not exist",
+        )
+    }
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_service.run_workflow_task_result(None, task="extract")
+
+    assert exc_info.value.details["operation"] == "workflow.run-task"
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed, then retry `dsctl workflow run-task WORKFLOW --task TASK`."
+    )
+
+
+def test_parallel_backfill_missing_master_requires_dispatch_verification(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_task_adapter: FakeTaskAdapter,
+) -> None:
+    fake_workflow_adapter.run_errors_by_code = {
+        101: ApiResultError(
+            result_code=10000,
+            result_message="no master server available",
+        )
+    }
+    _install_workflow_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        task_adapter=fake_task_adapter,
+        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+    )
+
+    with pytest.raises(InvalidStateError, match="no available master") as exc_info:
+        workflow_service.backfill_workflow_result(
+            None,
+            dates=["2026-04-01 00:00:00", "2026-04-02 00:00:00"],
+            run_mode="parallel",
+        )
+
+    assert exc_info.value.details["operation"] == "workflow.backfill"
+    assert exc_info.value.details["partial_dispatch_possible"] is True
+    assert exc_info.value.suggestion == (
+        "Run `dsctl monitor server master` and wait until at least one master "
+        "is listed. Part of this parallel backfill may already have been "
+        "dispatched; use `dsctl workflow-instance list --project PROJECT "
+        "--workflow WORKFLOW --all` and compare `scheduleTime` with the "
+        "requested range before deciding whether to retry the original "
+        "backfill command."
+    )
+
+
 def test_create_workflow_result_can_dry_run_compiled_legacy_request(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

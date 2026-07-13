@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta
 from textwrap import dedent
 from typing import TYPE_CHECKING
@@ -9,6 +10,7 @@ from tests.live.support import (
     require_mapping,
     require_ok_payload,
     result_error_code,
+    run_dsctl,
     wait_for_result,
 )
 
@@ -386,3 +388,65 @@ def delete_project_eventually(
         label="project delete data",
     )
     assert data["deleted"] is True
+
+
+def delete_workflow_eventually(
+    repo_root: Path,
+    env_file: Path,
+    *,
+    project: str,
+    workflow: str,
+    timeout_seconds: float = 60.0,
+    interval_seconds: float = 2.0,
+) -> None:
+    """Take a test workflow offline and retry deletion through DS convergence."""
+    if timeout_seconds < 0:
+        message = "timeout_seconds must be non-negative"
+        raise ValueError(message)
+    if interval_seconds <= 0:
+        message = "interval_seconds must be positive"
+        raise ValueError(message)
+
+    started_at = time.monotonic()
+    while True:
+        run_dsctl(
+            repo_root,
+            ["workflow", "offline", workflow, "--project", project],
+            env_file=env_file,
+        )
+        result = run_dsctl(
+            repo_root,
+            [
+                "workflow",
+                "delete",
+                workflow,
+                "--project",
+                project,
+                "--force",
+            ],
+            env_file=env_file,
+        )
+        if result.exit_code == 0 and result.payload.get("ok") is True:
+            payload = require_ok_payload(
+                result,
+                expected_action="workflow.delete",
+                label="workflow cleanup delete",
+            )
+            data = require_mapping(
+                payload["data"],
+                label="workflow cleanup delete data",
+            )
+            assert data["deleted"] is True
+            return
+
+        error = result.payload.get("error")
+        if isinstance(error, dict) and error.get("type") == "not_found":
+            return
+        if (time.monotonic() - started_at) >= timeout_seconds:
+            require_ok_payload(
+                result,
+                expected_action="workflow.delete",
+                label="workflow cleanup delete",
+            )
+            return
+        time.sleep(interval_seconds)

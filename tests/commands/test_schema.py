@@ -24,7 +24,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
     assert payload["action"] == "schema"
     assert payload["data"]["schema_version"] == 2
     assert payload["data"]["view"] == "full"
-    assert payload["data"]["cli"] == {"name": "dsctl", "version": "0.2.0"}
+    assert payload["data"]["cli"] == {"name": "dsctl", "version": "0.3.0"}
     command_names = [item["name"] for item in payload["data"]["commands"]]
     assert command_names[:18] == [
         "version",

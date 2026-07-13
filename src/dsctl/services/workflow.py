@@ -37,6 +37,7 @@ from dsctl.services._runtime_defaults import (
     load_project_preference_defaults,
     select_worker_group,
 )
+from dsctl.services._runtime_support import master_unavailable_error
 from dsctl.services._schedule_support import (
     ScheduleConfirmationData,
     ScheduleCreateInput,
@@ -1447,6 +1448,7 @@ def _run_workflow_task_result(
             project_code=target.resolved_project.code,
             project_name=target.resolved_project.name,
             workflow=target.resolved_workflow,
+            operation="workflow.run-task",
             retry_command="dsctl workflow run-task WORKFLOW --task TASK",
         )
     data = require_json_object(
@@ -1606,6 +1608,10 @@ def _backfill_workflow_result(
             project_code=target.resolved_project.code,
             project_name=target.resolved_project.name,
             workflow=target.resolved_workflow,
+            operation="workflow.backfill",
+            partial_dispatch_possible=(
+                backfill_settings.run_mode.value == "RUN_MODE_PARALLEL"
+            ),
             retry_command="dsctl workflow backfill WORKFLOW --start START --end END",
         )
     data = require_json_object(
@@ -3126,8 +3132,40 @@ def _raise_workflow_run_error(
     project_code: int,
     project_name: str,
     workflow: ResolvedWorkflow,
+    operation: str = "workflow.run",
+    partial_dispatch_possible: bool = False,
     retry_command: str = "dsctl workflow run",
 ) -> None:
+    details: JsonObject = {
+        "resource": WORKFLOW_RESOURCE,
+        "project": project_name,
+        "project_code": project_code,
+        "code": workflow.code,
+        "name": workflow.name,
+    }
+    if partial_dispatch_possible:
+        details["partial_dispatch_possible"] = True
+        suggestion = (
+            "Run `dsctl monitor server master` and wait until at least one master "
+            "is listed. Part of this parallel backfill may already have been "
+            "dispatched; use `dsctl workflow-instance list --project PROJECT "
+            "--workflow WORKFLOW --all` and compare `scheduleTime` with the "
+            "requested range before deciding whether to retry the original "
+            "backfill command."
+        )
+    else:
+        suggestion = (
+            "Run `dsctl monitor server master` and wait until at least one "
+            f"master is listed, then retry `{retry_command}`."
+        )
+    unavailable = master_unavailable_error(
+        error,
+        operation=operation,
+        details=details,
+        suggestion=suggestion,
+    )
+    if unavailable is not None:
+        raise unavailable from error
     if _is_workflow_definition_not_online_run_error(error):
         message = f"Workflow '{workflow.name}' must be online before it can be run."
         raise InvalidStateError(

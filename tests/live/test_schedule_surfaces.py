@@ -18,6 +18,7 @@ from tests.live.support import (
 from tests.live.workflow_support import (
     SHANGHAI_TIMEZONE,
     delete_project_eventually,
+    delete_workflow_eventually,
     near_future_schedule_window,
     write_shell_workflow_spec,
 )
@@ -631,28 +632,11 @@ def test_etl_schedule_lifecycle_round_trips_and_triggers_runtime(
                 env_file=live_etl_env_file,
             )
         if workflow_created and not workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                [
-                    "workflow",
-                    "offline",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                ],
-                env_file=live_etl_env_file,
-            )
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=project_name,
+                workflow=workflow_name,
             )
         if environment_created and environment_code is not None:
             run_dsctl(
@@ -869,28 +853,11 @@ def test_etl_schedule_without_environment_round_trips(
                 env_file=live_etl_env_file,
             )
         if workflow_created and not workflow_deleted:
-            run_dsctl(
+            delete_workflow_eventually(
                 live_repo_root,
-                [
-                    "workflow",
-                    "offline",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                ],
-                env_file=live_etl_env_file,
-            )
-            run_dsctl(
-                live_repo_root,
-                [
-                    "workflow",
-                    "delete",
-                    workflow_name,
-                    "--project",
-                    project_name,
-                    "--force",
-                ],
-                env_file=live_etl_env_file,
+                live_etl_env_file,
+                project=project_name,
+                workflow=workflow_name,
             )
         if project_created:
             delete_project_eventually(

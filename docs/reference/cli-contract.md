@@ -441,7 +441,7 @@ Example:
   "action": "version",
   "resolved": {},
   "data": {
-    "cli": "0.2.0",
+    "cli": "0.3.0",
     "ds": "3.4.1",
     "selected_ds_version": "3.4.1",
     "contract_version": "3.4.1",
@@ -4562,6 +4562,10 @@ Selection rules:
   `start-workflow-instance` request without sending that start request
 - `--execution-dry-run` sends DS `dryRun=1`: DolphinScheduler creates dry-run
   workflow/task instances and skips task plugin trigger execution
+- if DS cannot select an available master, the CLI returns `invalid_state`,
+  preserves the upstream result source, and suggests checking
+  `dsctl monitor server master`; the CLI does not automatically retry the
+  trigger
 
 The `data` payload is a JSON object:
 
@@ -4656,6 +4660,8 @@ Rules:
   wait or fail
 - the aligned `warning_details[]` item uses code
   `workflow_run_task_dependent_context`
+- missing-master failures follow the same `invalid_state` and no-automatic-retry
+  contract as `workflow run`
 
 ## `dsctl workflow backfill`
 
@@ -4710,6 +4716,16 @@ The `resolved` payload also includes the `workflow run` resolved fields plus:
 - `backfill.all_level_dependent`
 - `backfill.execution_order`
 - `task` and `scope` when `--task` is set
+
+Failure safety:
+
+- serial backfill missing-master failures return `invalid_state` without an
+  automatic retry
+- a parallel backfill selects a master once per partition, so a later
+  missing-master failure can occur after earlier partitions were dispatched;
+  its error includes `partial_dispatch_possible=true` and tells callers to
+  inspect workflow instances and compare `scheduleTime` values before deciding
+  whether to retry
 
 ## `dsctl workflow online`
 
@@ -5032,6 +5048,9 @@ Rules:
   `warning_details[]` item uses code
   `workflow_instance_action_state_after_request` with `action="rerun"` and
   `expect_non_final=true`
+- if DS cannot select an available master, the command returns `invalid_state`
+  and suggests checking `dsctl monitor server master` before retrying; the CLI
+  does not automatically retry
 
 ## `dsctl workflow-instance recover-failed`
 
@@ -5049,6 +5068,8 @@ Rules:
   `warning_details[]` item uses code
   `workflow_instance_action_state_after_request` with
   `action="recover-failed"` and `expect_non_final=true`
+- missing-master failures follow the same `invalid_state` and no-automatic-retry
+  contract as `workflow-instance rerun`
 
 ## `dsctl workflow-instance execute-task`
 

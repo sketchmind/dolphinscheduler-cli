@@ -37,6 +37,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install build twine
 
+      - name: Check release version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python tools/check_release_version.py --tag "$RELEASE_TAG"
+
       - name: Build distributions
         run: python -m build
 

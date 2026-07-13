@@ -123,6 +123,10 @@ def build_steps(
             python_cmd(python, "tools/check_project_layout.py"),
         ),
         Step(
+            "Release Version Consistency",
+            python_cmd(python, "tools/check_release_version.py"),
+        ),
+        Step(
             "Explicit Object Audit",
             python_cmd(python, "tools/check_explicit_object.py"),
         ),
