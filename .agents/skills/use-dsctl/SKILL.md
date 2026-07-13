@@ -1,19 +1,14 @@
 ---
 name: use-dsctl
-description: Operate Apache DolphinScheduler through the stable dsctl CLI for resource discovery, workflow authoring and editing, schedules, runtime monitoring, troubleshooting, recovery, and source-blind CLI evaluation. Use when Codex must plan or execute dsctl commands against a configured cluster or local dsctl authoring artifacts. Do not use merely to develop, review, test, document, or release the dolphinscheduler-cli implementation unless the task also requires exercising its CLI behavior.
+description: Operate Apache DolphinScheduler with dsctl. Use when the user wants to inspect or change a configured cluster, author or edit workflow artifacts, manage schedules, monitor runs, troubleshoot failures, or recover instances.
 ---
 
 # Use dsctl
 
-Complete the requested DolphinScheduler outcome through the installed `dsctl`
-interface. Let `dsctl` hide REST transport, version adapters, generated
-contracts, and DolphinScheduler request shapes.
+Complete the requested DolphinScheduler outcome through the installed `dsctl`.
 
 ## Keep the operating invariants
 
-- Use `dsctl` only. Do not call DolphinScheduler REST endpoints directly or use
-  PyDolphinScheduler, Py4J, the Python gateway, a database, or repository source
-  to reconstruct an invocation.
 - Treat current leaf help, action schema, templates, capabilities, command
   output, and server state as authoritative within their respective roles.
 - Treat names, ids, codes, enum values, and paths as opaque. Obtain them from
@@ -190,4 +185,4 @@ and states, warnings, and any unresolved blocker. Avoid dumping a wide JSON
 payload when a concise factual result is sufficient.
 
 If `dsctl` or its target configuration is unavailable, report the missing
-prerequisite. Do not fall back to direct REST or source-derived requests.
+prerequisite.
