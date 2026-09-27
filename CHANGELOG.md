@@ -7,6 +7,10 @@ versioning policy is needed.
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-28
+
+### Workflow execution and scheduling
+
 - Block `workflow-instance execute-task` on `3.3.1`, `3.3.2`, `3.4.0` and
   `3.4.1` before dispatch: their API accepts the command but their master has
   no `EXECUTE_TASK` handler. Capabilities and schema expose the limitation while
@@ -22,8 +26,6 @@ versioning policy is needed.
 - Show effective project schedule preferences in workflow creation previews and
   bind confirmation to them. Stop schedule creation if those settings change
   after the workflow was created, reporting the completed steps.
-
-## 0.4.0 - Unreleased
 
 ### Compatibility
 
@@ -61,6 +63,9 @@ versioning policy is needed.
   before deferred datasource-name resolution. Preserve native opaque baselines.
 - Retained exact DATAX validation differences: `3.4.3` rejects an empty JSON
   object in the typed inline custom-config facet without inventing a file path.
+- Preserve valid large integers in DATAX custom configuration on `3.4.3`;
+  recognize an empty object after the shared JSON validation step without
+  decoding the configuration a second time.
 - Made legacy `1.3.9` project and datasource GET deletions execute once and
   preserve uncertain mutation outcomes. Namespace permissions no longer
   fabricate a cluster code when older native responses omit it.
@@ -81,6 +86,8 @@ versioning policy is needed.
 - Raised the Typer dependency floor to `0.26` to use its vendored Click and
   exclude older combinations that break CLI imports and argument help with
   external Click `8.5`.
+- Use Typer's public exit and abort interfaces for consistent CLI termination
+  across supported dependency combinations.
 
 ### Architecture and code generation
 
@@ -237,6 +244,15 @@ versioning policy is needed.
   including DATAX parameter restrictions and the `3.1.6` SeaTunnel wire.
 - Translate schedule start-time rejections into actionable `user_input_error`
   messages, and correctly project resource content maps on `2.0.1`–`2.0.5`.
+
+### Documentation and agent guidance
+
+- Organize the README around creating and running a workflow, repairing an
+  instance, synchronizing accepted changes to its definition, rerunning or
+  recovering failed tasks, scheduling, and retiring the workflow.
+- Add complete Skill installation instructions and links to focused command
+  guides. Keep reusable contributor documentation and version-bound evidence
+  separate from local development records.
 
 ### Verification
 
