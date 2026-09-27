@@ -4,9 +4,8 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.context import SessionContext
 from dsctl.errors import ApiResultError
-from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
 from tests.fakes import (
     FakeProject,
     FakeProjectAdapter,
@@ -16,8 +15,8 @@ from tests.fakes import (
     FakeUserAdapter,
     FakeWorkflow,
     FakeWorkflowAdapter,
-    fake_service_runtime,
 )
+from tests.schedule_domain_fakes import install_schedule_domain_runtime
 from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
@@ -54,29 +53,24 @@ def patch_schedule_service(monkeypatch: pytest.MonkeyPatch) -> None:
             )
         ]
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(
-                project="etl-prod",
-                workflow="daily-sync",
-            ),
-            workflow_adapter=workflow_adapter,
-            schedule_adapter=schedule_adapter,
-            user_adapter=FakeUserAdapter(
-                users=[
-                    FakeUser(
-                        id=11,
-                        user_name_value="alice",
-                        email="alice@example.com",
-                        tenant_id_value=7,
-                        tenant_code_value="tenant-current-user",
-                    )
-                ]
-            ),
+
+    install_schedule_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        context=ResourceDefaults(project="etl-prod"),
+        workflow_adapter=workflow_adapter,
+        schedule_adapter=schedule_adapter,
+        user_adapter=FakeUserAdapter(
+            users=[
+                FakeUser(
+                    id=11,
+                    user_name_value="alice",
+                    email="alice@example.com",
+                    tenant_id_value=7,
+                    tenant_code_value="tenant-current-user",
+                )
+            ]
         ),
     )
 
@@ -96,7 +90,7 @@ def test_schedule_list_help_points_to_project_and_workflow_discovery() -> None:
     result = runner.invoke(app, ["schedule", "list", "--help"])
 
     assert result.exit_code == 0
-    assert "project list" in result.stdout
+    assert "project list" in normalize_cli_help(result.stdout)
     assert "workflow list" in result.stdout
 
 
@@ -155,8 +149,8 @@ def test_schedule_preview_help_distinguishes_existing_and_ad_hoc_modes() -> None
 
     assert result.exit_code == 0
     help_text = normalize_cli_help(result.stdout).lower()
-    assert "project name or code for ad hoc preview only" in help_text
-    assert "do not pass --project with schedule_id" in help_text
+    assert "for an existing schedule id, constrains lookup" in help_text
+    assert "for ad hoc preview, selects the preview project" in help_text
 
 
 def test_schedule_preview_command_rejects_mixing_id_and_schedule_fields() -> None:
@@ -176,9 +170,9 @@ def test_schedule_preview_command_rejects_mixing_id_and_schedule_fields() -> Non
     assert payload["action"] == "schedule.preview"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Pass only the schedule id to preview an existing schedule, or omit "
-        "the id and pass `--project`, `--cron`, `--start`, `--end`, and "
-        "`--timezone` for an ad hoc preview."
+        "Pass only the schedule id and optional `--project` to preview an "
+        "existing schedule, or omit the id and pass `--project`, `--cron`, "
+        "`--start`, and `--end` (plus `--timezone` where supported)."
     )
 
 
@@ -193,8 +187,7 @@ def test_schedule_create_help_points_to_related_discovery_commands() -> None:
     assert "worker-group" in help_text
     assert "tenant list" in help_text
     assert "environment list" in help_text
-    assert "context only when project" in help_text
-    assert "also comes from context" in help_text
+    assert "Pass --workflow explicitly" in help_text
     assert "pass 0 to explicitly use no environment" in help_text
     assert "bypass project preference" in help_text
 
@@ -214,9 +207,19 @@ def test_schedule_explain_help_distinguishes_create_and_update_selectors() -> No
     assert result.exit_code == 0
     help_text = normalize_cli_help(result.stdout).lower()
     assert "workflow name or code for create explain only" in help_text
-    assert "project name or code for create explain only" in help_text
+    assert "with schedule_id, constrains lookup to this project" in help_text
     assert "do not pass --workflow with schedule_id" in help_text
-    assert "do not pass --project with schedule_id" in help_text
+
+
+@pytest.mark.parametrize("action", ["get", "update", "delete", "online", "offline"])
+def test_schedule_id_command_help_exposes_project_scope(action: str) -> None:
+    result = runner.invoke(app, ["schedule", action, "--help"])
+
+    assert result.exit_code == 0
+    help_text = normalize_cli_help(result.stdout).lower()
+    assert "--project" in help_text
+    assert "constrain schedule id lookup" in help_text
+    assert "bounded visible project inventory" in help_text
 
 
 def test_schedule_explain_command_returns_create_explanation() -> None:
@@ -225,6 +228,8 @@ def test_schedule_explain_command_returns_create_explanation() -> None:
         [
             "schedule",
             "explain",
+            "--workflow",
+            "daily-sync",
             "--cron",
             "0 0 4 * * ?",
             "--start",
@@ -285,16 +290,13 @@ def test_schedule_explain_command_returns_update_confirmation_token(
             "2024-01-01 00:20:00",
         ],
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            schedule_adapter=schedule_adapter,
-        ),
+    install_schedule_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        context=ResourceDefaults(project="etl-prod"),
+        workflow_adapter=workflow_adapter,
+        schedule_adapter=schedule_adapter,
     )
 
     result = runner.invoke(
@@ -316,12 +318,14 @@ def test_schedule_explain_command_returns_update_confirmation_token(
     assert payload["data"]["confirmation"]["confirmFlag"].startswith("--confirm-risk ")
 
 
-def test_schedule_create_command_uses_context_workflow() -> None:
+def test_schedule_create_command_uses_explicit_workflow() -> None:
     result = runner.invoke(
         app,
         [
             "schedule",
             "create",
+            "--workflow",
+            "daily-sync",
             "--cron",
             "0 0 4 * * ?",
             "--start",
@@ -336,7 +340,7 @@ def test_schedule_create_command_uses_context_workflow() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "schedule.create"
-    assert payload["resolved"]["workflow"]["source"] == "context"
+    assert payload["resolved"]["workflow"]["source"] == "flag"
     assert payload["resolved"]["tenant"]["source"] == "current_user"
     assert payload["data"]["id"] == 2
     assert payload["data"]["tenantCode"] == "tenant-current-user"
@@ -369,16 +373,13 @@ def test_schedule_create_command_requires_confirmation_for_high_frequency_risk(
             "2024-01-01 00:20:00",
         ],
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            schedule_adapter=schedule_adapter,
-        ),
+    install_schedule_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        context=ResourceDefaults(project="etl-prod"),
+        workflow_adapter=workflow_adapter,
+        schedule_adapter=schedule_adapter,
     )
 
     result = runner.invoke(
@@ -386,6 +387,8 @@ def test_schedule_create_command_requires_confirmation_for_high_frequency_risk(
         [
             "schedule",
             "create",
+            "--workflow",
+            "daily-sync",
             "--cron",
             "0 */5 * * * ?",
             "--start",
@@ -413,6 +416,8 @@ def test_schedule_create_command_rejects_five_field_cron() -> None:
         [
             "schedule",
             "create",
+            "--workflow",
+            "daily-sync",
             "--cron",
             "0 4 * * *",
             "--start",
@@ -493,16 +498,13 @@ def test_schedule_update_command_reports_offline_retry_suggestion(
         )
 
     monkeypatch.setattr(schedule_adapter, "update", fail_update)
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            schedule_adapter=schedule_adapter,
-        ),
+    install_schedule_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        context=ResourceDefaults(project="etl-prod"),
+        workflow_adapter=workflow_adapter,
+        schedule_adapter=schedule_adapter,
     )
 
     result = runner.invoke(
@@ -570,16 +572,13 @@ def test_schedule_delete_command_reports_offline_retry_suggestion(
         )
 
     monkeypatch.setattr(schedule_adapter, "delete", fail_delete)
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            schedule_adapter=schedule_adapter,
-        ),
+    install_schedule_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        context=ResourceDefaults(project="etl-prod"),
+        workflow_adapter=workflow_adapter,
+        schedule_adapter=schedule_adapter,
     )
 
     result = runner.invoke(app, ["schedule", "delete", "1", "--force"])
@@ -621,16 +620,13 @@ def test_schedule_create_command_reports_conflict_with_remote_source(
         )
 
     monkeypatch.setattr(schedule_adapter, "create", fail_create)
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            schedule_adapter=schedule_adapter,
-        ),
+    install_schedule_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        context=ResourceDefaults(project="etl-prod"),
+        workflow_adapter=workflow_adapter,
+        schedule_adapter=schedule_adapter,
     )
 
     result = runner.invoke(
@@ -638,6 +634,8 @@ def test_schedule_create_command_reports_conflict_with_remote_source(
         [
             "schedule",
             "create",
+            "--workflow",
+            "daily-sync",
             "--cron",
             "0 0 4 * * ?",
             "--start",
@@ -671,3 +669,24 @@ def test_schedule_online_command_returns_refreshed_schedule() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "schedule.online"
     assert payload["data"]["releaseState"] == "ONLINE"
+
+
+def test_schedule_create_requires_explicit_workflow() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "schedule",
+            "create",
+            "--cron",
+            "0 0 2 * * ?",
+            "--start",
+            "2026-01-01 00:00:00",
+            "--end",
+            "2026-12-31 23:59:59",
+            "--timezone",
+            "UTC",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "Missing option '--workflow'" in result.stderr

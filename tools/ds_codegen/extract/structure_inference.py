@@ -210,8 +210,15 @@ def _infer_local_map_shape_type(
             seen_field_names.add(field_name)
             deduped_fields.append((field_name, field_type))
         return deps.register_generated_view_model(
+            repo_root=repo_root,
             base_name=view_name_hint,
             fields=deduped_fields,
+            source_import_map=import_map,
+            source_package_name=package_name,
+            source_owner_import_path=_source_owner_import_path(
+                controller_path,
+                package_name,
+            ),
         )
     unique_dynamic_value_types = list(dict.fromkeys(dynamic_value_types))
     if len(unique_dynamic_value_types) == 1:
@@ -274,9 +281,25 @@ def _infer_local_object_node_type(
     if not fields:
         return None
     return deps.register_generated_view_model(
+        repo_root=repo_root,
         base_name=view_name_hint,
         fields=fields,
+        source_import_map=import_map,
+        source_package_name=package_name,
+        source_owner_import_path=_source_owner_import_path(
+            controller_path,
+            package_name,
+        ),
     )
+
+
+def _source_owner_import_path(
+    source_path: Path,
+    package_name: str | None,
+) -> str | None:
+    if package_name is None:
+        return None
+    return f"{package_name}.{source_path.stem}"
 
 
 def infer_local_collection_shape_type(
@@ -380,6 +403,23 @@ def infer_structured_expression_data_type(
         )
         if structured_variable_type is not None:
             return structured_variable_type
+        # A declared concrete container is stronger evidence than inspecting
+        # its constructor body.  In particular, an empty ``Map<String,
+        # String>`` initializer has no return payload to infer, but the map's
+        # generic value type is still the exact serialized contract.
+        declared_variable_type = variable_types.get(expression.member)
+        if (
+            declared_variable_type is not None
+            and declared_variable_type.startswith(
+                ("Collection<", "List<", "Map<", "Set<")
+            )
+            and declared_variable_type
+            not in {
+                "Map<String, Object>",
+                "Map<String, Map<String, Object>>",
+            }
+        ):
+            return declared_variable_type
         local_payload_type = deps.infer_local_variable_payload_type(
             repo_root=repo_root,
             controller_path=controller_path,

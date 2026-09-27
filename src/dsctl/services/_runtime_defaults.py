@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING
 
 from dsctl.errors import ConflictError
 from dsctl.output import require_json_object
-from dsctl.services._serialization import optional_text
 from dsctl.services.selection import SelectedValue
+from dsctl.upstream.serialization import optional_text
 
 if TYPE_CHECKING:
-    from dsctl.services.runtime import ServiceRuntime
     from dsctl.support.yaml_io import JsonObject
+    from dsctl.upstream.protocol import ProjectPreferenceOperations
 
 
 @dataclass(frozen=True)
@@ -45,39 +45,15 @@ def select_worker_group(
     return SelectedValue(value="default", source="default")
 
 
-def select_tenant_code(
-    explicit_tenant_code: str | None,
-    *,
-    runtime: ServiceRuntime,
-    project_preference: ProjectPreferenceDefaults | None = None,
-) -> SelectedValue:
-    """Resolve one tenant-code input plus the source that supplied it."""
-    normalized_flag = optional_text(explicit_tenant_code)
-    if normalized_flag is not None:
-        return SelectedValue(value=normalized_flag, source="flag")
-
-    if project_preference is not None and project_preference.tenant_code is not None:
-        return SelectedValue(
-            value=project_preference.tenant_code,
-            source="project_preference",
-        )
-
-    normalized_current_user = runtime.current_user_defaults.tenant_code
-    if normalized_current_user is not None:
-        return SelectedValue(value=normalized_current_user, source="current_user")
-
-    return SelectedValue(value="default", source="default")
-
-
-def load_project_preference_defaults(
-    runtime: ServiceRuntime,
+def load_project_preference_defaults_from_operations(
+    operations: ProjectPreferenceOperations | None,
     *,
     project_code: int,
 ) -> ProjectPreferenceDefaults | None:
-    """Return enabled project-preference defaults for one resolved project."""
-    project_preference = runtime.upstream.project_preferences.get(
-        project_code=project_code
-    )
+    """Load defaults from an optional caller-owned preference dependency."""
+    if operations is None:
+        return None
+    project_preference = operations.get(project_code=project_code)
     if project_preference is None or project_preference.state != 1:
         return None
 

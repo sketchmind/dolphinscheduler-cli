@@ -13,7 +13,7 @@ from dsctl.errors import (
     NotFoundError,
     PermissionDeniedError,
 )
-from dsctl.services._workflow_schedule import load_attached_schedule
+from dsctl.services._workflow.schedule import load_attached_schedule
 
 
 def _schedule(
@@ -142,8 +142,10 @@ def test_load_attached_schedule_rejects_total_and_rows_mismatch(
     ("result_code", "error_type"),
     [
         (10018, NotFoundError),
+        (10190, NotFoundError),
         (50003, NotFoundError),
         (30001, PermissionDeniedError),
+        (30002, PermissionDeniedError),
         (99999, ApiTransportError),
     ],
 )

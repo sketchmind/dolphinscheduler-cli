@@ -1,5 +1,12 @@
 # Contributing
 
+Start with [README](README.md), [Architecture](docs/development/architecture.md)
+and the [CLI overview](docs/reference/cli-overview.md). Before changing a command,
+read its section and shared rules in the
+[complete CLI contract](docs/reference/cli-contract.md). Before changing task
+authoring or preservation, also read the relevant
+[reviewed family boundary](docs/development/task-authoring-boundaries.md).
+
 This project is a generated-first, REST-only CLI for Apache DolphinScheduler.
 Contributions should preserve DolphinScheduler-native behavior while keeping
 the public `dsctl` surface stable and understandable.
@@ -34,9 +41,12 @@ on `main` first and then be backported with `git cherry-pick -x` through a
 reviewed pull request. Do not use a maintenance branch as a second development
 trunk or merge its version-specific state wholesale back into `main`.
 
-Normal release tags point at the exact `main` commit validated through
-TestPyPI. A maintained older line may be tagged from its `release/*` branch.
-Publishing a GitHub Release from the tag triggers the formal PyPI workflow.
+Normal release tags point at the exact reviewed `main` commit. A maintained
+older line may be tagged from its `release/*` branch. Attach the canonical
+wheel and sdist to a draft GitHub Release, then use separately authorized manual
+dispatches from protected `main` for TestPyPI and PyPI. Publish the draft
+GitHub Release only after PyPI verification; publishing it does not trigger a
+package-index upload.
 
 ## Documentation Map
 
@@ -53,36 +63,39 @@ Publishing a GitHub Release from the tag triggers the formal PyPI workflow.
 Before opening a substantial change, run:
 
 ```bash
-python tools/check_quality_gate.py
+python tools/check_quality_gate.py --mode development
 ```
 
-For targeted work, use the same underlying checks as CI:
+The development gate owns lint, formatting, types, architecture boundaries,
+generated freshness, static conformance and all three offline test lanes.
+Run focused tests while iterating; use `--portable` for a clean checkout without
+prepared exact sources. Diagnostic skip options report partial results.
+CI also checks command, process and authoring contracts with minimum and
+known-current runtime dependency versions; do not assume the latest Pydantic
+schema format. See [Dependency compatibility](docs/development/dependency-compatibility.md).
 
-```bash
-python -m ruff check src tests tools
-python -m ruff format --check src tests tools
-python tools/check_project_layout.py
-python tools/check_explicit_object.py
-lint-imports
-python tools/check_generated_freshness.py
-python tools/check_error_translation_governance.py
-python -m mypy src tests tools
-codespell --toml pyproject.toml
-python -m pytest -q
-```
+After the canonical wheel completes its required live campaigns, run
+`python tools/check_quality_gate.py --mode release`. It includes every
+development check and the three current-wheel receipt checks, and rejects skip
+options or partial lanes. Passing development checks does not establish release
+readiness or promote a DS profile.
 
-For packaging changes, also run:
+For non-release packaging development, also run:
 
 ```bash
 python -m build
 python -m twine check dist/*
 ```
 
+Do not use that combined build command for a release candidate after its wheel
+has passed the installed-wheel live gate. Formal releases must follow the
+wheel → evidence → sdist build-once sequence in the release checklist.
+
 For destructive real-cluster coverage, export the live-test environment
 variables and run:
 
 ```bash
-python tools/check_quality_gate.py --include-live
+python tools/check_quality_gate.py --mode development --include-live
 ```
 
 ## Development Rules
@@ -113,7 +126,9 @@ python tools/check_quality_gate.py --include-live
 
 ## Compatibility Notes
 
-The default target is DolphinScheduler `3.4.1`. The runtime registry also
-selects `3.4.0` and `3.3.2` through the current compatibility family. See
-`docs/user/version-compatibility.md` before extending support to another
-DolphinScheduler version.
+The default and only stable runtime target is DolphinScheduler `3.4.1`. The
+runtime registry selects exact generated profiles for all 37 releases from
+`1.3.9` through `3.4.3`; the other 36 profiles retain their recorded experimental
+support level until an evidence-backed release-policy decision promotes them.
+See `docs/user/version-compatibility.md` before changing a profile's coverage or
+promotion state.

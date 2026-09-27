@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dolphinscheduler-cli"
-version = "0.3.0"
+version = "0.4.0"
 description = "Generated-first REST-only CLI for Apache DolphinScheduler"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,7 +37,7 @@ dependencies = [
   "httpx>=0.27,<1",
   "pydantic>=2.8,<3",
   "PyYAML>=6,<7",
-  "typer>=0.24.1,<1",
+  "typer>=0.26,<1",
 ]
 
 [project.urls]
@@ -79,9 +79,15 @@ addopts = ["--strict-config", "--strict-markers", "--tb=short", "-ra"]
 xfail_strict = true
 filterwarnings = ["error"]
 markers = [
+  "source_contract: test checks prepared exact upstream sources and contract snapshots without a complete source rebuild",
+  "source_rebuild: test re-extracts exact upstream sources and renders complete runtime packages",
   "live: test talks to a real DolphinScheduler cluster",
   "live_admin: test requires admin bootstrap credentials or admin-only mutation rights",
   "live_developer: test runs through a non-admin ETL-style user identity",
+  "live_exact_read: installed-wheel read gate for one exact DolphinScheduler profile",
+  "live_exact_conformance: installed-wheel named conformance bundle gate",
+  "live_exact_profile: installed-wheel gate for a reviewed exact profile policy",
+  "live_runtime_journey: installed-wheel runtime and schedule journey gate",
   "destructive: test creates, mutates, or deletes remote cluster state",
   "slow: test may wait on real runtime state transitions",
   "optional_capability: test requires cluster capabilities that may not exist in every environment",
@@ -101,7 +107,7 @@ exclude = [
   "__pycache__",
   "build",
   "dist",
-  "src/dsctl/generated/versions",
+  "src/dsctl/generated",
 ]
 
 [tool.ruff.lint]
@@ -185,12 +191,18 @@ ignore = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+ignore-decorators = ["dsctl.commands._contract_adapter.bind_command"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-type-checking]
-runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+runtime-evaluated-base-classes = [
+  "pydantic.BaseModel",
+  "dsctl.models.common.YamlSpecModel",
+  "dsctl.models.task_spec.base.TaskParamsSpec",
+  "dsctl.models.task_spec.literal_json._LiteralJsonObjectTaskParamsSpec",
+]
 
 [tool.ruff.lint.flake8-pytest-style]
 fixture-parentheses = false
@@ -204,6 +216,9 @@ max-branches = 12
 max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
+"src/dsctl/commands/*.py" = [
+  "FBT001",    # Typed callbacks retain their Python calling convention.
+]
 "tests/*" = [
   "TID252",     # relative imports OK in tests
   "S101",       # assert is fine in tests
@@ -282,6 +297,18 @@ layers = [
 ]
 exhaustive = false
 
+[[tool.importlinter.contracts]]
+name = "CLI runtime does not import upward"
+type = "forbidden"
+source_modules = ["dsctl.cli_runtime"]
+forbidden_modules = [
+  "dsctl.commands",
+  "dsctl.services",
+  "dsctl.upstream",
+  "dsctl.generated",
+]
+allow_indirect_imports = true
+
 # JsonValue is a boundary type — keep it in transport/error layers only.
 [[tool.importlinter.contracts]]
 name = "JsonValue stays at boundary"
@@ -333,6 +360,7 @@ forbidden_modules = [
 ]
 
 [tool.codespell]
+ignore-words-list = "NotIn,standlone"
 skip = [
   "./.git",
   "./.mypy_cache",

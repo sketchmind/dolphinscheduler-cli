@@ -1,111 +1,55 @@
-from __future__ import annotations
-
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from dsctl.context import SessionContext
 from dsctl.errors import UserInputError
-from dsctl.services.selection import SelectedValue, require_workflow_selection
-
-if TYPE_CHECKING:
-    from dsctl.services.runtime import ServiceRuntime
-
-
-def _runtime_with_context(context: SessionContext) -> ServiceRuntime:
-    return cast("ServiceRuntime", SimpleNamespace(context=context))
-
-
-@pytest.mark.parametrize(
-    "project_selection",
-    [
-        SelectedValue(value="flag-project", source="flag"),
-        SelectedValue(value="file-project", source="file"),
-    ],
+from dsctl.services.selection import (
+    ResourceDefaults,
+    SelectedValue,
+    WorkflowInputForm,
+    require_project_selection,
+    require_workflow_selection,
 )
-def test_non_context_project_does_not_reuse_context_workflow(
-    project_selection: SelectedValue,
-) -> None:
-    runtime = _runtime_with_context(
-        SessionContext(project="context-project", workflow="daily-sync")
+
+
+def test_project_defaults_belong_to_selected_context_and_explicit_input_wins() -> None:
+    runtime = SimpleNamespace(context=ResourceDefaults(project="analytics"))
+    assert require_project_selection(None, runtime=runtime) == SelectedValue(
+        "analytics", "context"
     )
-
-    with pytest.raises(UserInputError, match="Workflow is required") as exc_info:
-        require_workflow_selection(
-            None,
-            runtime=runtime,
-            project_selection=project_selection,
-        )
-
-    assert exc_info.value.suggestion == (
-        "Pass --workflow NAME for the selected project, or remove the explicit "
-        "project selection to use the complete stored context tuple."
+    assert require_project_selection("finance", runtime=runtime) == SelectedValue(
+        "finance", "flag"
     )
-    assert exc_info.value.message == (
-        "Workflow is required for the explicitly selected project"
-    )
+    assert runtime.context.project == "analytics"
 
 
+def test_missing_project_has_actionable_explicit_selection() -> None:
+    runtime = SimpleNamespace(context=ResourceDefaults())
+    with pytest.raises(UserInputError) as error:
+        require_project_selection(None, runtime=runtime)
+    assert error.value.suggestion is not None
+    assert "--project NAME" in error.value.suggestion
+
+
+@pytest.mark.parametrize("workflow", [None, "", "   "])
 @pytest.mark.parametrize(
-    ("project_selection", "expected_suggestion"),
-    [
-        (
-            SelectedValue(value="context-project", source="context"),
-            "Pass WORKFLOW or run `dsctl use workflow NAME`.",
-        ),
-        (
-            SelectedValue(value="flag-project", source="flag"),
-            (
-                "Pass WORKFLOW for the selected project, or remove the explicit "
-                "project selection to use the complete stored context tuple."
-            ),
-        ),
-    ],
+    ("input_form", "suggestion"),
+    [("argument", "Pass WORKFLOW."), ("option", "Pass --workflow NAME.")],
 )
-def test_workflow_argument_form_uses_positional_suggestion(
-    project_selection: SelectedValue,
-    expected_suggestion: str,
+def test_missing_workflow_requires_explicit_identity(
+    workflow: str | None, input_form: WorkflowInputForm, suggestion: str
 ) -> None:
-    runtime = _runtime_with_context(SessionContext(project="context-project"))
-
-    with pytest.raises(UserInputError, match="Workflow is required") as exc_info:
-        require_workflow_selection(
-            None,
-            runtime=runtime,
-            project_selection=project_selection,
-            input_form="argument",
-        )
-
-    assert exc_info.value.suggestion == expected_suggestion
+    with pytest.raises(UserInputError, match="Workflow is required") as error:
+        require_workflow_selection(workflow, input_form=input_form)
+    assert error.value.suggestion == suggestion
 
 
-def test_context_project_reuses_workflow_from_same_context_tuple() -> None:
-    runtime = _runtime_with_context(
-        SessionContext(project="context-project", workflow="daily-sync")
-    )
-
-    selected = require_workflow_selection(
-        None,
-        runtime=runtime,
-        project_selection=SelectedValue(
-            value="context-project",
-            source="context",
-        ),
-    )
-
-    assert selected == SelectedValue(value="daily-sync", source="context")
+@pytest.mark.parametrize("workflow", ["daily-etl", "17", "prod's workflow", " daily "])
+def test_workflow_names_remain_opaque(workflow: str) -> None:
+    assert require_workflow_selection(workflow) == SelectedValue(workflow, "flag")
 
 
-def test_explicit_workflow_is_valid_with_explicit_project() -> None:
-    runtime = _runtime_with_context(
-        SessionContext(project="context-project", workflow="daily-sync")
-    )
-
-    selected = require_workflow_selection(
-        "flag-workflow",
-        runtime=runtime,
-        project_selection=SelectedValue(value="flag-project", source="flag"),
-    )
-
-    assert selected == SelectedValue(value="flag-workflow", source="flag")
+def test_project_name_whitespace_is_preserved() -> None:
+    runtime = SimpleNamespace(context=ResourceDefaults(project=" analytics "))
+    assert require_project_selection(None, runtime=runtime).value == " analytics "
+    assert require_project_selection(" finance ", runtime=runtime).value == " finance "

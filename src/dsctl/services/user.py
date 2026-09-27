@@ -1,60 +1,53 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Literal, TypeAlias, TypedDict, cast
 
-from dsctl.cli_surface import DATASOURCE_RESOURCE, NAMESPACE_RESOURCE, USER_RESOURCE
+from dsctl.cli_surface import USER_RESOURCE
 from dsctl.errors import (
     ApiResultError,
     ApiTransportError,
     ConflictError,
     NotFoundError,
     PermissionDeniedError,
-    ResolutionError,
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
-    UserListItemData,
-    serialize_user,
-    serialize_user_list_item,
-)
+from dsctl.services._page_result import paged_command_result
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_positive_int,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.resolver import (
-    ResolvedDataSourceData,
-    ResolvedNamespaceData,
-    ResolvedProjectData,
-    ResolvedUserData,
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.serialization import (
+    serialize_user,
+    serialize_user_list_item,
 )
-from dsctl.services.resolver import datasource as resolve_datasource
-from dsctl.services.resolver import namespace as resolve_namespace
-from dsctl.services.resolver import project as resolve_project
-from dsctl.services.resolver import tenant as resolve_tenant
-from dsctl.services.resolver import user as resolve_user
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.users import (
+    USER_DOMAIN,
+    PermissionDataSource,
+    PermissionNamespace,
+    UserDomain,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
 
-    from dsctl.upstream.protocol import (
-        DataSourceOperations,
-        DataSourceRecord,
-        NamespaceOperations,
-        NamespaceRecord,
-        UserRecord,
+    from dsctl.output import JsonObject
+    from dsctl.upstream.protocol import UserRecord
+    from dsctl.upstream.resolver import (
+        ResolvedDataSourceData,
+        ResolvedNamespaceData,
+        ResolvedUserData,
     )
+    from dsctl.upstream.users import UserIdentityData
 
 
-UserPageData: TypeAlias = PageData[UserListItemData]
+UserServiceRuntime: TypeAlias = BoundDomainServiceRuntime[UserDomain]
 
 REQUEST_PARAMS_NOT_VALID_ERROR = 10001
 USER_NAME_EXIST = 10003
@@ -75,17 +68,13 @@ USER_UPDATE_FIELDS_SUGGESTION = (
     "--tenant, --state, --phone, --clear-phone, --queue, --clear-queue, or "
     "--time-zone."
 )
-USER_UPDATE_DIFFERENT_VALUES_SUGGESTION = (
-    "Pass a different --user-name, --password, --email, --tenant, --state, "
-    "--phone, --clear-phone, --queue, --clear-queue, or --time-zone value."
-)
 
 
 class DeleteUserData(TypedDict):
     """CLI delete confirmation payload."""
 
     deleted: bool
-    user: ResolvedUserData
+    user: ResolvedUserData | UserIdentityData
 
 
 class GrantUserProjectData(TypedDict):
@@ -93,23 +82,24 @@ class GrantUserProjectData(TypedDict):
 
     granted: bool
     permission: str
-    user: ResolvedUserData
-    project: ResolvedProjectData
+    verification: Literal["membership_only"]
+    user: ResolvedUserData | UserIdentityData
+    project: JsonObject
 
 
 class RevokeUserProjectData(TypedDict):
     """CLI project revoke confirmation payload."""
 
     revoked: bool
-    user: ResolvedUserData
-    project: ResolvedProjectData
+    user: ResolvedUserData | UserIdentityData
+    project: JsonObject
 
 
 class GrantUserNamespacesData(TypedDict):
     """CLI namespace grant confirmation payload."""
 
     granted: bool
-    user: ResolvedUserData
+    user: ResolvedUserData | UserIdentityData
     requested_namespaces: list[ResolvedNamespaceData]
     namespaces: list[ResolvedNamespaceData]
 
@@ -118,7 +108,7 @@ class RevokeUserNamespacesData(TypedDict):
     """CLI namespace revoke confirmation payload."""
 
     revoked: bool
-    user: ResolvedUserData
+    user: ResolvedUserData | UserIdentityData
     requested_namespaces: list[ResolvedNamespaceData]
     namespaces: list[ResolvedNamespaceData]
 
@@ -127,7 +117,7 @@ class GrantUserDatasourcesData(TypedDict):
     """CLI datasource grant confirmation payload."""
 
     granted: bool
-    user: ResolvedUserData
+    user: ResolvedUserData | UserIdentityData
     requested_datasources: list[ResolvedDataSourceData]
     datasources: list[ResolvedDataSourceData]
 
@@ -136,7 +126,7 @@ class RevokeUserDatasourcesData(TypedDict):
     """CLI datasource revoke confirmation payload."""
 
     revoked: bool
-    user: ResolvedUserData
+    user: ResolvedUserData | UserIdentityData
     requested_datasources: list[ResolvedDataSourceData]
     datasources: list[ResolvedDataSourceData]
 
@@ -163,8 +153,9 @@ def list_users_result(
     require_positive_int(page_no, label="page_no")
     require_positive_int(page_size, label="page_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _list_users_result,
         search=normalized_search,
         page_no=page_no,
@@ -179,8 +170,9 @@ def get_user_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Resolve and fetch one user payload."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _get_user_result,
         user=user,
     )
@@ -210,8 +202,9 @@ def create_user_result(
         None if queue is None else require_non_empty_text(queue, label="queue")
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _create_user_result,
         user_name=normalized_user_name,
         password=normalized_password,
@@ -287,8 +280,9 @@ def update_user_result(
         else require_non_empty_text(time_zone, label="time zone")
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _update_user_result,
         user=user,
         user_name=normalized_user_name,
@@ -311,8 +305,9 @@ def delete_user_result(
     """Delete one user after explicit confirmation."""
     require_delete_force(force=force, resource_label="User")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _delete_user_result,
         user=user,
     )
@@ -325,8 +320,9 @@ def grant_user_project_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Grant one project to one resolved user."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _grant_user_project_result,
         user=user,
         project=project,
@@ -340,8 +336,9 @@ def revoke_user_project_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Revoke one project from one resolved user."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _revoke_user_project_result,
         user=user,
         project=project,
@@ -359,8 +356,9 @@ def grant_user_datasources_result(
         datasources,
         label="datasource",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _grant_user_datasources_result,
         user=user,
         datasources=normalized_datasources,
@@ -378,8 +376,9 @@ def revoke_user_datasources_result(
         datasources,
         label="datasource",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _revoke_user_datasources_result,
         user=user,
         datasources=normalized_datasources,
@@ -397,8 +396,9 @@ def grant_user_namespaces_result(
         namespaces,
         label="namespace",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _grant_user_namespaces_result,
         user=user,
         namespaces=normalized_namespaces,
@@ -416,8 +416,9 @@ def revoke_user_namespaces_result(
         namespaces,
         label="namespace",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        USER_DOMAIN,
         _revoke_user_namespaces_result,
         user=user,
         namespaces=normalized_namespaces,
@@ -425,15 +426,15 @@ def revoke_user_namespaces_result(
 
 
 def _list_users_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     search: str | None,
     page_no: int,
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.users
-    data = requested_page_data(
+    adapter = runtime.domain.users
+    return paged_command_result(
         lambda current_page_no, current_page_size: adapter.list(
             page_no=current_page_no,
             page_size=current_page_size,
@@ -444,40 +445,28 @@ def _list_users_result(
         all_pages=all_pages,
         serialize_item=serialize_user_list_item,
         resource=USER_RESOURCE,
-        max_pages=MAX_AUTO_EXHAUST_PAGES,
+        resolved={"search": search},
         translate_error=lambda error: _translate_user_api_error(
             error,
             operation="list",
         ),
     )
 
-    return CommandResult(
-        data=require_json_object(data, label="user list data"),
-        resolved={
-            "search": search,
-            "page_no": page_no,
-            "page_size": page_size,
-            "all": all_pages,
-        },
-    )
-
 
 def _get_user_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.users
-    resolved_user = resolve_user(user, adapter=adapter)
-    fetched_user = adapter.get(user_id=resolved_user.id)
+    selected = runtime.domain.get(user)
     return CommandResult(
         data=require_json_object(
-            serialize_user(fetched_user),
+            serialize_user(selected.record),
             label="user data",
         ),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                selected.resolved.to_data(),
                 label="resolved user",
             )
         },
@@ -485,7 +474,7 @@ def _get_user_result(
 
 
 def _create_user_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user_name: str,
     password: str,
@@ -495,14 +484,12 @@ def _create_user_result(
     phone: str | None,
     queue: str | None,
 ) -> CommandResult:
-    user_adapter = runtime.upstream.users
-    resolved_tenant = resolve_tenant(tenant, adapter=runtime.upstream.tenants)
     try:
-        created_user = user_adapter.create(
+        created_user = runtime.domain.create(
             user_name=user_name,
             password=password,
             email=email,
-            tenant_id=resolved_tenant.id,
+            tenant=tenant,
             phone=phone,
             queue=queue,
             state=state,
@@ -512,7 +499,6 @@ def _create_user_result(
             error,
             operation="create",
             user_name=user_name,
-            tenant_id=resolved_tenant.id,
         ) from error
 
     return CommandResult(
@@ -530,7 +516,7 @@ def _create_user_result(
 
 
 def _update_user_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user: str,
     user_name: str | None,
@@ -542,81 +528,35 @@ def _update_user_result(
     queue: QueueUpdate,
     time_zone: str | None,
 ) -> CommandResult:
-    user_adapter = runtime.upstream.users
-    resolved_user = resolve_user(user, adapter=user_adapter)
-    current_user = user_adapter.get(user_id=resolved_user.id)
-
-    next_user_name = current_user.userName if user_name is None else user_name
-    next_email = current_user.email if email is None else email
-    next_tenant_id = current_user.tenantId
-    if tenant is not None:
-        next_tenant_id = resolve_tenant(tenant, adapter=runtime.upstream.tenants).id
-
-    next_phone = current_user.phone if isinstance(phone, _UnsetValue) else phone
-    current_queue = _stored_queue(current_user)
-    next_queue = (
-        current_queue
-        if isinstance(queue, _UnsetValue)
-        else ""
-        if queue is None
-        else queue
-    )
-    next_state = current_user.state if state is None else state
-    next_time_zone = current_user.timeZone if time_zone is None else time_zone
-    next_password = "" if password is None else password
-
-    if next_user_name is None or next_email is None:
-        message = "User payload was missing required fields"
-        raise ApiTransportError(
-            message,
-            details={"resource": USER_RESOURCE, "id": resolved_user.id},
-        )
-
-    if (
-        password is None
-        and next_user_name == current_user.userName
-        and next_email == current_user.email
-        and next_tenant_id == current_user.tenantId
-        and next_phone == current_user.phone
-        and next_queue == current_queue
-        and next_state == current_user.state
-        and next_time_zone == current_user.timeZone
-    ):
-        message = "User update requires at least one field change"
-        raise UserInputError(
-            message,
-            suggestion=USER_UPDATE_DIFFERENT_VALUES_SUGGESTION,
-        )
-
     try:
-        updated_user = user_adapter.update(
-            user_id=resolved_user.id,
-            user_name=next_user_name,
-            password=next_password,
-            email=next_email,
-            tenant_id=next_tenant_id,
-            phone=next_phone,
-            queue=next_queue,
-            state=next_state,
-            time_zone=next_time_zone,
+        selected = runtime.domain.update(
+            user,
+            user_name=user_name,
+            password=password,
+            email=email,
+            tenant=tenant,
+            state=state,
+            phone=None if isinstance(phone, _UnsetValue) else phone,
+            preserve_phone=isinstance(phone, _UnsetValue),
+            queue=None if isinstance(queue, _UnsetValue) else queue,
+            preserve_queue=isinstance(queue, _UnsetValue),
+            time_zone=time_zone,
         )
     except ApiResultError as error:
         raise _translate_user_api_error(
             error,
             operation="update",
-            user_id=resolved_user.id,
-            user_name=next_user_name,
-            tenant_id=next_tenant_id,
+            user_name=user,
         ) from error
 
     return CommandResult(
         data=require_json_object(
-            serialize_user(updated_user),
+            serialize_user(selected.record),
             label="user data",
         ),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                selected.resolved.to_data(),
                 label="resolved user",
             )
         },
@@ -624,32 +564,28 @@ def _update_user_result(
 
 
 def _delete_user_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user: str,
 ) -> CommandResult:
-    user_adapter = runtime.upstream.users
-    resolved_user = resolve_user(user, adapter=user_adapter)
     try:
-        deleted = user_adapter.delete(user_id=resolved_user.id)
+        deletion = runtime.domain.delete(user)
     except ApiResultError as error:
         raise _translate_user_api_error(
             error,
             operation="delete",
-            user_id=resolved_user.id,
-            user_name=resolved_user.user_name,
-            tenant_id=resolved_user.tenant_id,
+            user_name=user,
         ) from error
 
     data: DeleteUserData = {
-        "deleted": deleted,
-        "user": resolved_user.to_data(),
+        "deleted": deletion.deleted,
+        "user": deletion.resolved.to_data(),
     }
     return CommandResult(
         data=require_json_object(data, label="user delete data"),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                deletion.resolved.to_data(),
                 label="resolved user",
             )
         },
@@ -657,45 +593,37 @@ def _delete_user_result(
 
 
 def _grant_user_project_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user: str,
     project: str,
 ) -> CommandResult:
-    user_adapter = runtime.upstream.users
-    resolved_user = resolve_user(user, adapter=user_adapter)
-    resolved_project = resolve_project(project, adapter=runtime.upstream.projects)
     try:
-        granted = user_adapter.grant_project_by_code(
-            user_id=resolved_user.id,
-            project_code=resolved_project.code,
-        )
+        change = runtime.domain.grant_project(user, project)
     except ApiResultError as error:
         raise _translate_user_api_error(
             error,
             operation="grant_project",
-            user_id=resolved_user.id,
-            user_name=resolved_user.user_name,
-            tenant_id=resolved_user.tenant_id,
-            project_code=resolved_project.code,
-            project_name=resolved_project.name,
+            user_name=user,
+            project_name=project,
         ) from error
 
     data: GrantUserProjectData = {
-        "granted": granted,
+        "granted": True,
         "permission": "write",
-        "user": resolved_user.to_data(),
-        "project": resolved_project.to_data(),
+        "verification": "membership_only",
+        "user": change.user.to_data(),
+        "project": change.project.to_data(),
     }
     return CommandResult(
         data=require_json_object(data, label="user project grant data"),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                change.user.to_data(),
                 label="resolved user",
             ),
             "project": require_json_object(
-                resolved_project.to_data(),
+                change.project.to_data(),
                 label="resolved project",
             ),
         },
@@ -703,44 +631,35 @@ def _grant_user_project_result(
 
 
 def _revoke_user_project_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user: str,
     project: str,
 ) -> CommandResult:
-    user_adapter = runtime.upstream.users
-    resolved_user = resolve_user(user, adapter=user_adapter)
-    resolved_project = resolve_project(project, adapter=runtime.upstream.projects)
     try:
-        revoked = user_adapter.revoke_project(
-            user_id=resolved_user.id,
-            project_code=resolved_project.code,
-        )
+        change = runtime.domain.revoke_project(user, project)
     except ApiResultError as error:
         raise _translate_user_api_error(
             error,
             operation="revoke_project",
-            user_id=resolved_user.id,
-            user_name=resolved_user.user_name,
-            tenant_id=resolved_user.tenant_id,
-            project_code=resolved_project.code,
-            project_name=resolved_project.name,
+            user_name=user,
+            project_name=project,
         ) from error
 
     data: RevokeUserProjectData = {
-        "revoked": revoked,
-        "user": resolved_user.to_data(),
-        "project": resolved_project.to_data(),
+        "revoked": True,
+        "user": change.user.to_data(),
+        "project": change.project.to_data(),
     }
     return CommandResult(
         data=require_json_object(data, label="user project revoke data"),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                change.user.to_data(),
                 label="resolved user",
             ),
             "project": require_json_object(
-                resolved_project.to_data(),
+                change.project.to_data(),
                 label="resolved project",
             ),
         },
@@ -748,52 +667,37 @@ def _revoke_user_project_result(
 
 
 def _grant_user_datasources_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user: str,
     datasources: Sequence[str],
 ) -> CommandResult:
-    user_adapter = runtime.upstream.users
-    datasource_adapter = runtime.upstream.datasources
-    resolved_user = resolve_user(user, adapter=user_adapter)
-    requested_datasources = _resolve_requested_datasources(
-        datasources,
-        adapter=datasource_adapter,
-    )
-    current_datasources = _authorized_datasources(
-        datasource_adapter,
-        user_id=resolved_user.id,
-    )
-
-    final_by_id = {item["id"]: item for item in current_datasources}
-    for datasource in requested_datasources:
-        final_by_id[datasource["id"]] = datasource
-
     try:
-        granted = user_adapter.grant_datasources(
-            user_id=resolved_user.id,
-            datasource_ids=sorted(final_by_id),
+        change = runtime.domain.change_datasources(
+            user,
+            datasources,
+            grant=True,
         )
     except ApiResultError as error:
         raise _translate_user_api_error(
             error,
             operation="grant_datasources",
-            user_id=resolved_user.id,
-            user_name=resolved_user.user_name,
-            tenant_id=resolved_user.tenant_id,
+            user_name=user,
         ) from error
+    requested_datasources = _datasource_data(change.requested)
+    final_datasources = _datasource_data(change.final)
 
     data: GrantUserDatasourcesData = {
-        "granted": granted,
-        "user": resolved_user.to_data(),
+        "granted": True,
+        "user": change.user.to_data(),
         "requested_datasources": requested_datasources,
-        "datasources": _sorted_datasource_data(final_by_id.values()),
+        "datasources": final_datasources,
     }
     return CommandResult(
         data=require_json_object(data, label="user datasource grant data"),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                change.user.to_data(),
                 label="resolved user",
             ),
             "datasources": _json_datasource_list(requested_datasources),
@@ -802,55 +706,37 @@ def _grant_user_datasources_result(
 
 
 def _revoke_user_datasources_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user: str,
     datasources: Sequence[str],
 ) -> CommandResult:
-    user_adapter = runtime.upstream.users
-    datasource_adapter = runtime.upstream.datasources
-    resolved_user = resolve_user(user, adapter=user_adapter)
-    requested_datasources = _resolve_requested_datasources(
-        datasources,
-        adapter=datasource_adapter,
-    )
-    current_datasources = _authorized_datasources(
-        datasource_adapter,
-        user_id=resolved_user.id,
-    )
-
-    requested_ids = {datasource["id"] for datasource in requested_datasources}
-    final_by_id = {
-        item["id"]: item
-        for item in current_datasources
-        if item["id"] not in requested_ids
-    }
-
     try:
-        revoked = user_adapter.grant_datasources(
-            user_id=resolved_user.id,
-            datasource_ids=sorted(final_by_id),
+        change = runtime.domain.change_datasources(
+            user,
+            datasources,
+            grant=False,
         )
     except ApiResultError as error:
         raise _translate_user_api_error(
             error,
             operation="revoke_datasources",
-            user_id=resolved_user.id,
-            user_name=resolved_user.user_name,
-            tenant_id=resolved_user.tenant_id,
+            user_name=user,
         ) from error
+    requested_datasources = _datasource_data(change.requested)
+    final_datasources = _datasource_data(change.final)
 
     data: RevokeUserDatasourcesData = {
-        "revoked": revoked,
-        "user": resolved_user.to_data(),
+        "revoked": True,
+        "user": change.user.to_data(),
         "requested_datasources": requested_datasources,
-        "datasources": _sorted_datasource_data(final_by_id.values()),
+        "datasources": final_datasources,
     }
     return CommandResult(
         data=require_json_object(data, label="user datasource revoke data"),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                change.user.to_data(),
                 label="resolved user",
             ),
             "datasources": _json_datasource_list(requested_datasources),
@@ -859,52 +745,37 @@ def _revoke_user_datasources_result(
 
 
 def _grant_user_namespaces_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user: str,
     namespaces: Sequence[str],
 ) -> CommandResult:
-    user_adapter = runtime.upstream.users
-    namespace_adapter = runtime.upstream.namespaces
-    resolved_user = resolve_user(user, adapter=user_adapter)
-    requested_namespaces = _resolve_requested_namespaces(
-        namespaces,
-        adapter=namespace_adapter,
-    )
-    current_namespaces = _authorized_namespaces(
-        namespace_adapter,
-        user_id=resolved_user.id,
-    )
-
-    final_by_id = {item["id"]: item for item in current_namespaces}
-    for namespace in requested_namespaces:
-        final_by_id[namespace["id"]] = namespace
-
     try:
-        granted = user_adapter.grant_namespaces(
-            user_id=resolved_user.id,
-            namespace_ids=sorted(final_by_id),
+        change = runtime.domain.change_namespaces(
+            user,
+            namespaces,
+            grant=True,
         )
     except ApiResultError as error:
         raise _translate_user_api_error(
             error,
             operation="grant_namespaces",
-            user_id=resolved_user.id,
-            user_name=resolved_user.user_name,
-            tenant_id=resolved_user.tenant_id,
+            user_name=user,
         ) from error
+    requested_namespaces = _namespace_data(change.requested)
+    final_namespaces = _namespace_data(change.final)
 
     data: GrantUserNamespacesData = {
-        "granted": granted,
-        "user": resolved_user.to_data(),
+        "granted": True,
+        "user": change.user.to_data(),
         "requested_namespaces": requested_namespaces,
-        "namespaces": _sorted_namespace_data(final_by_id.values()),
+        "namespaces": final_namespaces,
     }
     return CommandResult(
         data=require_json_object(data, label="user namespace grant data"),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                change.user.to_data(),
                 label="resolved user",
             ),
             "namespaces": _json_namespace_list(requested_namespaces),
@@ -913,55 +784,37 @@ def _grant_user_namespaces_result(
 
 
 def _revoke_user_namespaces_result(
-    runtime: ServiceRuntime,
+    runtime: UserServiceRuntime,
     *,
     user: str,
     namespaces: Sequence[str],
 ) -> CommandResult:
-    user_adapter = runtime.upstream.users
-    namespace_adapter = runtime.upstream.namespaces
-    resolved_user = resolve_user(user, adapter=user_adapter)
-    requested_namespaces = _resolve_requested_namespaces(
-        namespaces,
-        adapter=namespace_adapter,
-    )
-    current_namespaces = _authorized_namespaces(
-        namespace_adapter,
-        user_id=resolved_user.id,
-    )
-
-    requested_ids = {namespace["id"] for namespace in requested_namespaces}
-    final_by_id = {
-        item["id"]: item
-        for item in current_namespaces
-        if item["id"] not in requested_ids
-    }
-
     try:
-        revoked = user_adapter.grant_namespaces(
-            user_id=resolved_user.id,
-            namespace_ids=sorted(final_by_id),
+        change = runtime.domain.change_namespaces(
+            user,
+            namespaces,
+            grant=False,
         )
     except ApiResultError as error:
         raise _translate_user_api_error(
             error,
             operation="revoke_namespaces",
-            user_id=resolved_user.id,
-            user_name=resolved_user.user_name,
-            tenant_id=resolved_user.tenant_id,
+            user_name=user,
         ) from error
+    requested_namespaces = _namespace_data(change.requested)
+    final_namespaces = _namespace_data(change.final)
 
     data: RevokeUserNamespacesData = {
-        "revoked": revoked,
-        "user": resolved_user.to_data(),
+        "revoked": True,
+        "user": change.user.to_data(),
         "requested_namespaces": requested_namespaces,
-        "namespaces": _sorted_namespace_data(final_by_id.values()),
+        "namespaces": final_namespaces,
     }
     return CommandResult(
         data=require_json_object(data, label="user namespace revoke data"),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                change.user.to_data(),
                 label="resolved user",
             ),
             "namespaces": _json_namespace_list(requested_namespaces),
@@ -986,40 +839,6 @@ def _resolved_user_data_from_record(user: UserRecord) -> ResolvedUserData:
     }
 
 
-def _resolved_datasource_data_from_record(
-    datasource: DataSourceRecord,
-) -> ResolvedDataSourceData:
-    if datasource.id is None or datasource.name is None:
-        message = "Datasource payload was missing required identity fields"
-        raise ResolutionError(
-            message,
-            details={"resource": DATASOURCE_RESOURCE},
-        )
-    return {
-        "id": datasource.id,
-        "name": datasource.name,
-        "note": datasource.note,
-        "type": None if datasource.type is None else datasource.type.value,
-    }
-
-
-def _resolved_namespace_data_from_record(
-    namespace: NamespaceRecord,
-) -> ResolvedNamespaceData:
-    if namespace.id is None or namespace.namespace is None:
-        message = "Namespace payload was missing required identity fields"
-        raise ResolutionError(
-            message,
-            details={"resource": NAMESPACE_RESOURCE},
-        )
-    return {
-        "id": namespace.id,
-        "namespace": namespace.namespace,
-        "clusterCode": namespace.clusterCode,
-        "clusterName": namespace.clusterName,
-    }
-
-
 def _required_identifiers(
     identifiers: Sequence[str],
     *,
@@ -1037,60 +856,20 @@ def _required_identifiers(
     )
 
 
-def _resolve_requested_datasources(
-    identifiers: Sequence[str],
-    *,
-    adapter: DataSourceOperations,
+def _datasource_data(
+    datasources: Sequence[PermissionDataSource],
 ) -> list[ResolvedDataSourceData]:
-    resolved_by_id: dict[int, ResolvedDataSourceData] = {}
-    for identifier in identifiers:
-        resolved = resolve_datasource(identifier, adapter=adapter).to_data()
-        resolved_by_id.setdefault(resolved["id"], resolved)
-    return _sorted_datasource_data(resolved_by_id.values())
-
-
-def _authorized_datasources(
-    adapter: DataSourceOperations,
-    *,
-    user_id: int,
-) -> list[ResolvedDataSourceData]:
-    return _sorted_datasource_data(
-        _resolved_datasource_data_from_record(record)
-        for record in adapter.authorized_for_user(user_id=user_id)
+    return sorted(
+        [
+            cast("ResolvedDataSourceData", datasource.to_data())
+            for datasource in datasources
+        ],
+        key=lambda datasource: datasource["id"],
     )
-
-
-def _resolve_requested_namespaces(
-    identifiers: Sequence[str],
-    *,
-    adapter: NamespaceOperations,
-) -> list[ResolvedNamespaceData]:
-    resolved_by_id: dict[int, ResolvedNamespaceData] = {}
-    for identifier in identifiers:
-        resolved = resolve_namespace(identifier, adapter=adapter).to_data()
-        resolved_by_id.setdefault(resolved["id"], resolved)
-    return _sorted_namespace_data(resolved_by_id.values())
-
-
-def _authorized_namespaces(
-    adapter: NamespaceOperations,
-    *,
-    user_id: int,
-) -> list[ResolvedNamespaceData]:
-    return _sorted_namespace_data(
-        _resolved_namespace_data_from_record(record)
-        for record in adapter.authorized_for_user(user_id=user_id)
-    )
-
-
-def _sorted_datasource_data(
-    datasources: Iterable[ResolvedDataSourceData],
-) -> list[ResolvedDataSourceData]:
-    return sorted(datasources, key=lambda datasource: datasource["id"])
 
 
 def _json_datasource_list(
-    datasources: Iterable[ResolvedDataSourceData],
+    datasources: Sequence[ResolvedDataSourceData],
 ) -> list[dict[str, int | str | None]]:
     return [
         {
@@ -1103,14 +882,20 @@ def _json_datasource_list(
     ]
 
 
-def _sorted_namespace_data(
-    namespaces: Iterable[ResolvedNamespaceData],
+def _namespace_data(
+    namespaces: Sequence[PermissionNamespace],
 ) -> list[ResolvedNamespaceData]:
-    return sorted(namespaces, key=lambda namespace: namespace["id"])
+    return sorted(
+        [
+            cast("ResolvedNamespaceData", namespace.to_data())
+            for namespace in namespaces
+        ],
+        key=lambda namespace: namespace["id"],
+    )
 
 
 def _json_namespace_list(
-    namespaces: Iterable[ResolvedNamespaceData],
+    namespaces: Sequence[ResolvedNamespaceData],
 ) -> list[dict[str, int | str | None]]:
     return [
         {
@@ -1275,11 +1060,6 @@ def _user_operation_input_suggestion(operation: str) -> str:
     if operation in {"grant_namespaces", "revoke_namespaces"}:
         return "Verify the user and --namespace values, then retry."
     return "Verify the command arguments, then retry."
-
-
-def _stored_queue(user: UserRecord) -> str:
-    stored_queue = user.storedQueue
-    return "" if stored_queue is None else stored_queue
 
 
 def _optional_text(value: str | None) -> str | None:

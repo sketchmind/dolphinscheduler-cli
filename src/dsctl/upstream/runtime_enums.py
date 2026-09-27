@@ -3,14 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dsctl.generated.versions.ds_3_4_1.common.enums.task_execute_type import (
-    TaskExecuteType,
-)
-from dsctl.generated.versions.ds_3_4_1.common.enums.workflow_execution_status import (
-    WorkflowExecutionStatus,
-)
-from dsctl.generated.versions.ds_3_4_1.plugin.task_api.enums import (
-    task_execution_status,
+from dsctl.execution_states import (
+    TASK_EXECUTION_FAILED_STATES,
+    TASK_EXECUTION_FINISHED_STATES,
+    TASK_EXECUTION_FORCE_SUCCESS_ALLOWED_STATES,
+    TASK_EXECUTION_PAUSED_STATES,
+    TASK_EXECUTION_QUEUED_STATES,
+    TASK_EXECUTION_RUNNING_STATES,
+    TASK_EXECUTION_SUCCESS_STATES,
+    WORKFLOW_EXECUTION_STATUS_FACTS,
 )
 
 if TYPE_CHECKING:
@@ -26,55 +27,23 @@ class WorkflowExecutionStatusInfo:
     final_state: bool
 
 
+_TASK_EXECUTE_TYPE_NAMES = frozenset({"BATCH", "STREAM"})
+_TASK_EXECUTION_STATUS_NAMES = (
+    TASK_EXECUTION_FINISHED_STATES
+    | TASK_EXECUTION_RUNNING_STATES
+    | TASK_EXECUTION_QUEUED_STATES
+)
+
+
 def _task_execution_status_value(name: str) -> str:
-    return task_execution_status.TaskExecutionStatus[name].value
+    if name not in _TASK_EXECUTION_STATUS_NAMES:
+        raise KeyError(name)
+    return name
 
 
-TASK_EXECUTE_TYPE_BATCH_VALUE = TaskExecuteType.BATCH.value
-WORKFLOW_EXECUTION_STOP_STATE = WorkflowExecutionStatus.STOP.value
-WORKFLOW_EXECUTION_FAILURE_STATE = WorkflowExecutionStatus.FAILURE.value
-
-TASK_EXECUTION_FORCE_SUCCESS_ALLOWED_STATES = frozenset(
-    {
-        _task_execution_status_value("FAILURE"),
-        _task_execution_status_value("NEED_FAULT_TOLERANCE"),
-        _task_execution_status_value("KILL"),
-    }
-)
-TASK_EXECUTION_FINISHED_STATES = frozenset(
-    {
-        _task_execution_status_value("SUCCESS"),
-        _task_execution_status_value("FORCED_SUCCESS"),
-        _task_execution_status_value("KILL"),
-        _task_execution_status_value("FAILURE"),
-        _task_execution_status_value("NEED_FAULT_TOLERANCE"),
-        _task_execution_status_value("PAUSE"),
-    }
-)
-TASK_EXECUTION_RUNNING_STATES = frozenset(
-    {_task_execution_status_value("RUNNING_EXECUTION")}
-)
-TASK_EXECUTION_QUEUED_STATES = frozenset(
-    {
-        _task_execution_status_value("SUBMITTED_SUCCESS"),
-        _task_execution_status_value("DISPATCH"),
-        _task_execution_status_value("DELAY_EXECUTION"),
-    }
-)
-TASK_EXECUTION_PAUSED_STATES = frozenset({_task_execution_status_value("PAUSE")})
-TASK_EXECUTION_FAILED_STATES = frozenset(
-    {
-        _task_execution_status_value("FAILURE"),
-        _task_execution_status_value("NEED_FAULT_TOLERANCE"),
-        _task_execution_status_value("KILL"),
-    }
-)
-TASK_EXECUTION_SUCCESS_STATES = frozenset(
-    {
-        _task_execution_status_value("SUCCESS"),
-        _task_execution_status_value("FORCED_SUCCESS"),
-    }
-)
+TASK_EXECUTE_TYPE_BATCH_VALUE = "BATCH"
+WORKFLOW_EXECUTION_STOP_STATE = "STOP"
+WORKFLOW_EXECUTION_FAILURE_STATE = "FAILURE"
 
 
 def workflow_execution_status_info(
@@ -84,30 +53,30 @@ def workflow_execution_status_info(
     wire_value = _enum_wire_value(value)
     if wire_value is None:
         return None
-    try:
-        status = WorkflowExecutionStatus[wire_value]
-    except KeyError:
+    facts = WORKFLOW_EXECUTION_STATUS_FACTS.get(wire_value)
+    if facts is None:
         return None
+    can_stop, final_state = facts
     return WorkflowExecutionStatusInfo(
-        value=status.value,
-        can_stop=status.canStop,
-        final_state=status.finalState,
+        value=wire_value,
+        can_stop=can_stop,
+        final_state=final_state,
     )
 
 
 def workflow_execution_status_value(name: str) -> str:
     """Return the DS workflow execution-status wire value for one enum name."""
-    return WorkflowExecutionStatus[name].value
+    if name not in WORKFLOW_EXECUTION_STATUS_FACTS:
+        raise KeyError(name)
+    return name
 
 
 def workflow_execution_status_is_final(state_name: str | None) -> bool:
     """Return whether one workflow execution-status name is final."""
     if state_name is None:
         return False
-    try:
-        return WorkflowExecutionStatus[state_name].finalState
-    except KeyError:
-        return False
+    facts = WORKFLOW_EXECUTION_STATUS_FACTS.get(state_name)
+    return facts is not None and facts[1]
 
 
 def task_execution_status_value(name: str) -> str:
@@ -117,7 +86,9 @@ def task_execution_status_value(name: str) -> str:
 
 def task_execute_type_value(name: str) -> str:
     """Return the DS task execute-type wire value for one enum name."""
-    return TaskExecuteType[name].value
+    if name not in _TASK_EXECUTE_TYPE_NAMES:
+        raise KeyError(name)
+    return name
 
 
 def _enum_wire_value(value: StringEnumValue | str | None) -> str | None:

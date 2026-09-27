@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
@@ -9,9 +10,9 @@ from dsctl.services.datasource_payload import datasource_template_index_data
 from dsctl.services.template import (
     cluster_config_template_capability_data,
     parameter_syntax_index_data,
+    supported_task_template_types,
     task_template_metadata,
 )
-from dsctl.upstream import upstream_default_task_types
 
 runner = CliRunner()
 
@@ -22,17 +23,17 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "schema"
-    assert payload["data"]["schema_version"] == 2
+    assert payload["data"]["schema_version"] == 3
     assert payload["data"]["view"] == "full"
-    assert payload["data"]["cli"] == {"name": "dsctl", "version": "0.3.0"}
+    assert payload["data"]["cli"] == {"name": "dsctl", "version": "0.4.0"}
     command_names = [item["name"] for item in payload["data"]["commands"]]
     assert command_names[:18] == [
         "version",
-        "context",
         "doctor",
         "schema",
         "capabilities",
-        "use",
+        "context",
+        "config",
         "enum",
         "lint",
         "environment",
@@ -47,7 +48,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "alert-group",
     ]
     assert "task-type" in command_names
-    expected_supported_types = list(upstream_default_task_types())
+    expected_supported_types = list(supported_task_template_types())
     expected_typed_types = list(supported_typed_task_types())
     expected_generic_types = [
         task_type
@@ -57,20 +58,24 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
     assert payload["data"]["capabilities"]["templates"]["workflow"] == {
         "with_schedule_option": True,
         "raw_template_command": "dsctl template workflow --raw",
-        "export_command": "dsctl workflow export WORKFLOW",
+        "export_command_pattern": "dsctl workflow export WORKFLOW",
     }
     assert payload["data"]["capabilities"]["templates"]["workflow_patch"] == {
         "raw_template_command": "dsctl template workflow-patch --raw",
-        "target_command": "dsctl workflow edit WORKFLOW --patch FILE",
+        "target_command_pattern": "dsctl workflow edit WORKFLOW --patch FILE",
     }
     assert payload["data"]["capabilities"]["templates"]["workflow_instance_patch"] == {
         "raw_template_command": "dsctl template workflow-instance-patch --raw",
-        "target_command": (
-            "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+        "target_command_pattern": (
+            "dsctl workflow-instance edit WORKFLOW_INSTANCE --project PROJECT "
+            "--patch FILE"
         ),
-        "file_source_command": ("dsctl workflow-instance export WORKFLOW_INSTANCE"),
-        "file_target_command": (
-            "dsctl workflow-instance edit WORKFLOW_INSTANCE --file FILE"
+        "file_source_command_pattern": (
+            "dsctl workflow-instance export WORKFLOW_INSTANCE --project PROJECT"
+        ),
+        "file_target_command_pattern": (
+            "dsctl workflow-instance edit WORKFLOW_INSTANCE --project PROJECT "
+            "--file FILE"
         ),
     }
     assert payload["data"]["capabilities"]["templates"]["task"] == {
@@ -91,8 +96,8 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
     )
     assert payload["data"]["capabilities"]["templates"]["environment"] == {
         "command": "dsctl template environment",
-        "source_options": ["--config TEXT", "--config-file PATH"],
-        "target_commands": [
+        "source_options": ["--config CONFIG", "--config-file CONFIG_FILE"],
+        "target_command_patterns": [
             "dsctl environment create --name NAME --config-file env.sh",
             "dsctl environment update ENVIRONMENT --config-file env.sh",
         ],
@@ -106,6 +111,8 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         "capabilities": True,
         "command_invocation_source": "schema",
         "capabilities_scope": "feature_discovery",
+        "surface_inventory_scope": "installed_cli_surface",
+        "action_availability_command_pattern": ("dsctl capabilities --action ACTION"),
     }
     assert payload["data"]["errors"] == {
         "fields": ["type", "message", "details", "source", "suggestion"],
@@ -135,12 +142,18 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
         },
     }
     assert payload["data"]["output"] == {
-        "formats": ["json", "table", "tsv"],
+        "formats": ["json", "json-compact", "table", "tsv"],
         "default_format": "json",
-        "format_option": "--output-format",
+        "format_option": "--format",
         "columns_option": "--columns",
-        "compact_option": "--compact",
         "compact_json": True,
+        "compact_list_encoding": "columns_rows",
+        "compact_list_contract": {
+            "data_shape_flag": "compact_rows",
+            "fields": ["columns", "rows"],
+            "column_selection": "top_level_fields",
+            "scope_paths": "decoded_logical_collections",
+        },
         "json_encoding": "utf-8",
         "default_json_layout": "pretty",
         "error_channel": "stderr",
@@ -150,24 +163,20 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
             "action",
             "resolved",
             "data",
-            "warnings",
-            "warning_details",
         ],
-        "optional_success_fields": ["next_actions", "action_index"],
+        "optional_success_fields": ["warnings", "next_actions", "action_index"],
         "error_fields": [
             "ok",
             "action",
             "resolved",
             "data",
-            "warnings",
-            "warning_details",
             "error",
         ],
         "ok_values": {
             "success": True,
             "error": False,
         },
-        "warning_details_aligned": True,
+        "warnings": {"type": "array", "items": "object", "presence": "nonempty"},
         "data_shape_metadata": True,
         "json_column_projection": True,
         "next_actions": {
@@ -191,7 +200,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
                 "authorization",
                 "eligibility",
                 "groups",
-                "schema_command",
+                "schema_command_pattern",
                 "group_command",
                 "target_count",
                 "indexed_target_count",
@@ -205,7 +214,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
                 "mutate",
                 "mutate_needs_input",
             ],
-            "all_targets_semantics": "all_indexed_targets",
+            "all_targets_semantics": "all_returned_rows",
             "authorization": "not_evaluated",
             "eligibility": "row_facts_only",
             "row_output": False,
@@ -230,7 +239,7 @@ def test_schema_command_honors_env_file_ds_version(isolated_cwd: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["data"]["ds"] == {
         "selected_version": "3.3.2",
-        "contract_version": "3.4.1",
+        "contract_version": "3.3.2",
         "support_level": "experimental",
         "tested": False,
     }
@@ -243,10 +252,16 @@ def test_schema_command_returns_group_scope() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "schema"
     assert payload["resolved"] == {
+        "selection": {
+            "source": "unconfigured",
+            "context": None,
+            "env_file": None,
+            "api_url": None,
+        },
         "schema": {
             "view": "group",
             "group": "task-instance",
-        }
+        },
     }
     assert "capabilities" not in payload["data"]
     assert payload["data"]["group"]["name"] == "task-instance"
@@ -262,14 +277,91 @@ def test_schema_command_returns_command_scope() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "schema"
     assert payload["resolved"] == {
+        "selection": {
+            "source": "unconfigured",
+            "context": None,
+            "env_file": None,
+            "api_url": None,
+        },
         "schema": {
             "view": "command",
             "command": "task-instance.list",
-        }
+        },
     }
     command = payload["data"]["command"]
     assert command["name"] == "list"
     assert command["action"] == "task-instance.list"
+
+
+def test_schema_command_exposes_exact_version_action_capability(
+    isolated_cwd: Path,
+) -> None:
+    (isolated_cwd / "cluster.env").write_text(
+        "DS_VERSION=1.3.9\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--env-file",
+            "cluster.env",
+            "schema",
+            "--command",
+            "task-type.list",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["data"]["capability"] == {
+        "action": "task-type.list",
+        "availability": "unsupported",
+        "verification": "static",
+        "constraint": (
+            "This DolphinScheduler release predates live favourite task-type "
+            "discovery introduced in 3.1.0."
+        ),
+    }
+
+
+def test_322_clear_schema_matches_action_capability(isolated_cwd: Path) -> None:
+    (isolated_cwd / "cluster.env").write_text(
+        "DS_VERSION=3.2.2\n",
+        encoding="utf-8",
+    )
+
+    capabilities_result = runner.invoke(
+        app,
+        [
+            "--env-file",
+            "cluster.env",
+            "capabilities",
+            "--action",
+            "project-worker-group.clear",
+        ],
+    )
+    schema_result = runner.invoke(
+        app,
+        [
+            "--env-file",
+            "cluster.env",
+            "schema",
+            "--command",
+            "project-worker-group.clear",
+        ],
+    )
+
+    assert capabilities_result.exit_code == 0
+    assert schema_result.exit_code == 0
+    capabilities_payload = json.loads(capabilities_result.stdout)
+    schema_payload = json.loads(schema_result.stdout)
+    capability = capabilities_payload["data"]["capability"]
+    assert schema_payload["data"]["command"]["action"] == ("project-worker-group.clear")
+    assert schema_payload["data"]["capability"] == capability
+    assert capability["availability"] == "limited"
+    assert capability["verification"] == "static"
+    assert "1402003" in capability["constraint"]
 
 
 def test_schema_command_can_list_group_and_command_values() -> None:
@@ -278,7 +370,7 @@ def test_schema_command_can_list_group_and_command_values() -> None:
     assert groups_result.exit_code == 0
     groups_payload = json.loads(groups_result.stdout)
     assert groups_payload["resolved"]["schema"]["view"] == "groups"
-    assert groups_payload["data"][0]["schema_command"] == "dsctl schema --group use"
+    assert groups_payload["data"][0]["schema_command"] == "dsctl schema --group context"
 
     commands_result = runner.invoke(app, ["schema", "--list-commands"])
 
@@ -296,13 +388,13 @@ def test_schema_command_can_list_group_and_command_values() -> None:
 def test_schema_command_list_values_render_as_table_rows() -> None:
     result = runner.invoke(
         app,
-        ["--output-format", "table", "schema", "--list-groups"],
+        ["--format", "table", "schema", "--list-groups"],
     )
 
     assert result.exit_code == 0
     assert "name" in result.stdout
     assert "schema_command" in result.stdout
-    assert "dsctl schema --group use" in result.stdout
+    assert "dsctl schema --group context" in result.stdout
 
 
 def test_schema_command_datasource_create_uses_payload_reference() -> None:
@@ -327,7 +419,7 @@ def test_schema_command_datasource_create_uses_payload_reference() -> None:
 def test_schema_command_datasource_create_table_output_is_compact() -> None:
     result = runner.invoke(
         app,
-        ["--output-format", "table", "schema", "--command", "datasource.create"],
+        ["--format", "table", "schema", "--command", "datasource.create"],
     )
 
     assert result.exit_code == 0
@@ -341,7 +433,7 @@ def test_schema_command_expanded_scope_keeps_derived_table_contract_rows() -> No
     result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             "table",
             "schema",
             "--command",
@@ -359,7 +451,7 @@ def test_schema_command_expanded_scope_keeps_derived_table_contract_rows() -> No
 def test_schema_command_long_choices_render_as_discovery_hint() -> None:
     result = runner.invoke(
         app,
-        ["--output-format", "table", "schema", "--command", "template.datasource"],
+        ["--format", "table", "schema", "--command", "template.datasource"],
     )
 
     assert result.exit_code == 0
@@ -372,7 +464,7 @@ def test_schema_command_long_choices_render_as_discovery_hint() -> None:
 def test_schema_command_default_table_prioritizes_compact_invocation_fields() -> None:
     result = runner.invoke(
         app,
-        ["--output-format", "table", "schema", "--command", "workflow.backfill"],
+        ["--format", "table", "schema", "--command", "workflow.backfill"],
     )
 
     assert result.exit_code == 0
@@ -380,15 +472,109 @@ def test_schema_command_default_table_prioritizes_compact_invocation_fields() ->
     header = result.stdout.splitlines()[0]
     assert "invocation" in header
     assert "description" not in header
-    assert "dsctl workflow backfill [WORKFLOW] [OPTIONS]" in result.stdout
+    assert "dsctl workflow backfill WORKFLOW [OPTIONS]" in result.stdout
     assert "at_least_one_of" in result.stdout
     assert "--date | --start+--end" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("ds_version", "expected_shape"),
+    [
+        ("1.3.9", "comma-range"),
+        ("3.0.6", "comma-range"),
+        ("3.1.0", "json"),
+        ("3.4.3", "json"),
+    ],
+)
+def test_workflow_backfill_schema_projects_exact_date_selection(
+    isolated_cwd: Path,
+    ds_version: str,
+    expected_shape: str,
+) -> None:
+    (isolated_cwd / "cluster.env").write_text(
+        f"DS_VERSION={ds_version}\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--env-file",
+            "cluster.env",
+            "schema",
+            "--command",
+            "workflow.backfill",
+        ],
+    )
+
+    assert result.exit_code == 0
+    command = json.loads(result.stdout)["data"]["command"]
+    option_names = {option["name"] for option in command["options"]}
+    if expected_shape == "json":
+        assert "date" in option_names
+        assert command["constraints"][0] == {
+            "kind": "at_least_one_of",
+            "alternatives": [["--date"], ["--start", "--end"]],
+        }
+        assert "unavailable_options" not in command
+    else:
+        assert "date" not in option_names
+        assert command["constraints"] == [
+            {"kind": "requires_all", "fields": ["--start", "--end"]}
+        ]
+        unavailable = [
+            {
+                "flag": "--date",
+                "availability": "upstream_absent",
+                "introduced_in": "3.1.0",
+                "instruction": "use --start and --end",
+            }
+        ]
+        if ds_version == "1.3.9":
+            unavailable.append(
+                {
+                    "flag": "--environment-code",
+                    "availability": "upstream_absent",
+                    "introduced_in": "2.0.0",
+                    "instruction": "omit",
+                }
+            )
+        assert command["unavailable_options"] == unavailable
+
+
+def test_unresolved_workflow_backfill_schema_keeps_union_with_unknown_boundary(
+    isolated_cwd: Path,
+) -> None:
+    (isolated_cwd / "cluster.env").write_text(
+        "DS_API_URL=http://ds.example.test/api\nDS_API_TOKEN=secret\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app,
+        [
+            "--env-file",
+            "cluster.env",
+            "schema",
+            "--command",
+            "workflow.backfill",
+        ],
+    )
+
+    assert result.exit_code == 0
+    command = json.loads(result.stdout)["data"]["command"]
+    date_option = next(
+        option for option in command["options"] if option["name"] == "date"
+    )
+    assert "Available on DS 3.1.0 and newer." in date_option["description"]
+    assert command["version_specific_constraints"] == "unknown"
+    assert "constraints" not in command
+    assert "unavailable_options" not in command
 
 
 def test_schema_command_table_exposes_runtime_value_resolution() -> None:
     result = runner.invoke(
         app,
-        ["--output-format", "table", "schema", "--command", "workflow.run"],
+        ["--format", "table", "schema", "--command", "workflow.run"],
     )
 
     assert result.exit_code == 0
@@ -400,7 +586,7 @@ def test_schema_command_table_output_supports_contract_columns() -> None:
     result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             "table",
             "--columns",
             "flag,description,discovery_command",
@@ -420,7 +606,7 @@ def test_schema_command_table_output_exposes_numeric_minimum() -> None:
     result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             "table",
             "schema",
             "--command",

@@ -13,25 +13,27 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
-    AlertGroupData,
-    optional_text,
-    serialize_alert_group,
-)
+from dsctl.services._page_result import paged_command_result
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_positive_int,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.resolver import ResolvedAlertGroupData
-from dsctl.services.resolver import alert_group as resolve_alert_group
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.alert_groups import (
+    ALERT_GROUP_DOMAIN,
+    AlertGroupDomain,
+)
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.resolver import ResolvedAlertGroupData
+from dsctl.upstream.resolver import alert_group as resolve_alert_group
+from dsctl.upstream.serialization import (
+    optional_text,
+    serialize_alert_group,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -49,15 +51,15 @@ USER_NO_OPERATION_PERM = 30001
 DESCRIPTION_TOO_LONG_ERROR = 1400004
 NOT_ALLOW_TO_DELETE_DEFAULT_ALARM_GROUP = 130030
 
-AlertGroupPageData: TypeAlias = PageData[AlertGroupData]
+AlertGroupRuntime: TypeAlias = BoundDomainServiceRuntime[AlertGroupDomain]
 
 ALERT_GROUP_UPDATE_FIELDS_SUGGESTION = (
     "Pass at least one update flag such as --name, --description, "
-    "--clear-description, --instance-id, or --clear-instance-ids."
+    "--clear-description, --instance-id, --clear-instance-ids, or --group-type."
 )
 ALERT_GROUP_UPDATE_DIFFERENT_VALUES_SUGGESTION = (
-    "Pass a different --name, --description, or --instance-id value, or use "
-    "--clear-description/--clear-instance-ids to remove stored values."
+    "Pass a different --name, --description, --instance-id, or --group-type "
+    "value, or use --clear-description/--clear-instance-ids to remove stored values."
 )
 
 
@@ -75,6 +77,7 @@ class _UnsetValue:
 UNSET = _UnsetValue()
 DescriptionUpdate = str | None | _UnsetValue
 InstanceIdsUpdate = list[int] | _UnsetValue
+GroupTypeUpdate = str | _UnsetValue
 
 
 def list_alert_groups_result(
@@ -90,8 +93,9 @@ def list_alert_groups_result(
     require_positive_int(page_no, label="page_no")
     require_positive_int(page_size, label="page_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_GROUP_DOMAIN,
         _list_alert_groups_result,
         search=normalized_search,
         page_no=page_no,
@@ -106,8 +110,9 @@ def get_alert_group_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Resolve and fetch one alert-group payload."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_GROUP_DOMAIN,
         _get_alert_group_result,
         alert_group=alert_group,
     )
@@ -118,19 +123,24 @@ def create_alert_group_result(
     name: str,
     description: str | None = None,
     instance_ids: Sequence[int] | None = None,
+    group_type: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
     """Create one alert group from validated CLI input."""
     normalized_name = require_non_empty_text(name, label="alert group name")
     normalized_description = optional_text(description)
     normalized_instance_ids = _normalize_instance_ids(instance_ids or [])
+    normalized_group_type = _normalize_group_type(group_type)
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_GROUP_DOMAIN,
         _create_alert_group_result,
         name=normalized_name,
         description=normalized_description,
         alert_instance_ids=_encode_alert_instance_ids(normalized_instance_ids),
+        instance_ids_explicit=instance_ids is not None,
+        group_type=normalized_group_type,
     )
 
 
@@ -140,10 +150,16 @@ def update_alert_group_result(
     name: str | None = None,
     description: DescriptionUpdate = UNSET,
     instance_ids: InstanceIdsUpdate = UNSET,
+    group_type: GroupTypeUpdate = UNSET,
     env_file: str | None = None,
 ) -> CommandResult:
     """Update one alert group while preserving omitted fields."""
-    if name is None and description is UNSET and instance_ids is UNSET:
+    if (
+        name is None
+        and description is UNSET
+        and instance_ids is UNSET
+        and group_type is UNSET
+    ):
         message = "Alert-group update requires at least one field change"
         raise UserInputError(message, suggestion=ALERT_GROUP_UPDATE_FIELDS_SUGGESTION)
 
@@ -162,14 +178,21 @@ def update_alert_group_result(
         if not isinstance(instance_ids, _UnsetValue)
         else UNSET
     )
+    normalized_group_type = (
+        _normalize_group_type_update(group_type)
+        if not isinstance(group_type, _UnsetValue)
+        else UNSET
+    )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_GROUP_DOMAIN,
         _update_alert_group_result,
         alert_group=alert_group,
         name=normalized_name,
         description=normalized_description,
         instance_ids=normalized_instance_ids,
+        group_type=normalized_group_type,
     )
 
 
@@ -182,23 +205,24 @@ def delete_alert_group_result(
     """Delete one alert group after explicit confirmation."""
     require_delete_force(force=force, resource_label="Alert-group")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_GROUP_DOMAIN,
         _delete_alert_group_result,
         alert_group=alert_group,
     )
 
 
 def _list_alert_groups_result(
-    runtime: ServiceRuntime,
+    runtime: AlertGroupRuntime,
     *,
     search: str | None,
     page_no: int,
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.alert_groups
-    data: AlertGroupPageData = requested_page_data(
+    adapter = runtime.domain.alert_groups
+    return paged_command_result(
         lambda current_page_no, current_page_size: adapter.list(
             page_no=current_page_no,
             page_size=current_page_size,
@@ -209,7 +233,7 @@ def _list_alert_groups_result(
         all_pages=all_pages,
         serialize_item=serialize_alert_group,
         resource=ALERT_GROUP_RESOURCE,
-        max_pages=MAX_AUTO_EXHAUST_PAGES,
+        resolved={"search": search},
         translate_error=lambda error: _translate_alert_group_api_error(
             error,
             operation="list",
@@ -217,23 +241,13 @@ def _list_alert_groups_result(
         ),
     )
 
-    return CommandResult(
-        data=require_json_object(data, label="alert-group list data"),
-        resolved={
-            "search": search,
-            "page_no": page_no,
-            "page_size": page_size,
-            "all": all_pages,
-        },
-    )
-
 
 def _get_alert_group_result(
-    runtime: ServiceRuntime,
+    runtime: AlertGroupRuntime,
     *,
     alert_group: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.alert_groups
+    adapter = runtime.domain.alert_groups
     resolved_alert_group = resolve_alert_group(alert_group, adapter=adapter)
     fetched_alert_group = adapter.get(alert_group_id=resolved_alert_group.id)
     return CommandResult(
@@ -251,18 +265,28 @@ def _get_alert_group_result(
 
 
 def _create_alert_group_result(
-    runtime: ServiceRuntime,
+    runtime: AlertGroupRuntime,
     *,
     name: str,
     description: str | None,
     alert_instance_ids: str,
+    instance_ids_explicit: bool,
+    group_type: str | None,
 ) -> CommandResult:
-    adapter = runtime.upstream.alert_groups
+    adapter = runtime.domain.alert_groups
+    wire_instance_ids, wire_group_type = _association_create_values(
+        association=adapter.association,
+        alert_instance_ids=alert_instance_ids,
+        instance_ids_explicit=instance_ids_explicit,
+        group_type=group_type,
+        ds_version=runtime.profile.ds_version,
+    )
     try:
         created_alert_group = adapter.create(
             group_name=name,
             description=description,
-            alert_instance_ids=alert_instance_ids,
+            alert_instance_ids=wire_instance_ids,
+            group_type=wire_group_type,
         )
     except ApiResultError as error:
         raise _translate_alert_group_api_error(
@@ -287,14 +311,21 @@ def _create_alert_group_result(
 
 
 def _update_alert_group_result(
-    runtime: ServiceRuntime,
+    runtime: AlertGroupRuntime,
     *,
     alert_group: str,
     name: str | None,
     description: DescriptionUpdate,
     instance_ids: InstanceIdsUpdate,
+    group_type: GroupTypeUpdate,
 ) -> CommandResult:
-    adapter = runtime.upstream.alert_groups
+    adapter = runtime.domain.alert_groups
+    _validate_update_association_input(
+        association=adapter.association,
+        instance_ids=instance_ids,
+        group_type=group_type,
+        ds_version=runtime.profile.ds_version,
+    )
     resolved_alert_group = resolve_alert_group(alert_group, adapter=adapter)
     current_alert_group = adapter.get(alert_group_id=resolved_alert_group.id)
 
@@ -309,10 +340,27 @@ def _update_alert_group_result(
         if isinstance(instance_ids, _UnsetValue)
         else _encode_alert_instance_ids(instance_ids)
     )
+    next_group_type = (
+        _record_group_type(current_alert_group)
+        if isinstance(group_type, _UnsetValue)
+        else group_type
+    )
+    wire_instance_ids = (
+        None if adapter.association == "legacy-alert-type" else next_instance_ids
+    )
+    wire_group_type = (
+        _require_current_group_type(next_group_type)
+        if adapter.association == "legacy-alert-type"
+        else None
+    )
     if (
         next_name == _required_group_name(current_alert_group)
         and next_description == current_alert_group.description
-        and next_instance_ids == (current_alert_group.alertInstanceIds or "")
+        and (
+            next_group_type == _record_group_type(current_alert_group)
+            if adapter.association == "legacy-alert-type"
+            else next_instance_ids == (current_alert_group.alertInstanceIds or "")
+        )
     ):
         message = "Alert-group update requires at least one field change"
         raise UserInputError(
@@ -325,7 +373,8 @@ def _update_alert_group_result(
             alert_group_id=resolved_alert_group.id,
             group_name=next_name,
             description=next_description,
-            alert_instance_ids=next_instance_ids,
+            alert_instance_ids=wire_instance_ids,
+            group_type=wire_group_type,
         )
     except ApiResultError as error:
         raise _translate_alert_group_api_error(
@@ -350,11 +399,11 @@ def _update_alert_group_result(
 
 
 def _delete_alert_group_result(
-    runtime: ServiceRuntime,
+    runtime: AlertGroupRuntime,
     *,
     alert_group: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.alert_groups
+    adapter = runtime.domain.alert_groups
     resolved_alert_group = resolve_alert_group(alert_group, adapter=adapter)
     try:
         deleted = adapter.delete(alert_group_id=resolved_alert_group.id)
@@ -408,6 +457,141 @@ def _required_group_name(alert_group: AlertGroupRecord) -> str:
             details={"resource": ALERT_GROUP_RESOURCE},
         )
     return group_name
+
+
+def _normalize_group_type(value: str | None) -> str | None:
+    normalized = optional_text(value)
+    if normalized is None:
+        return None
+    normalized = normalized.upper()
+    if normalized in {"EMAIL", "SMS"}:
+        return normalized
+    message = "Alert-group type must be EMAIL or SMS"
+    raise UserInputError(
+        message,
+        details={"group_type": normalized, "choices": ["EMAIL", "SMS"]},
+        suggestion="Pass --group-type EMAIL or --group-type SMS.",
+    )
+
+
+def _normalize_group_type_update(value: str) -> str:
+    normalized = _normalize_group_type(value)
+    if normalized is not None:
+        return normalized
+    message = "Alert-group type cannot be empty"
+    raise UserInputError(
+        message,
+        suggestion="Pass --group-type EMAIL or --group-type SMS.",
+    )
+
+
+def _record_group_type(alert_group: AlertGroupRecord) -> str | None:
+    value = getattr(alert_group, "groupType", None)
+    return value if isinstance(value, str) else None
+
+
+def _association_create_values(
+    *,
+    association: str,
+    alert_instance_ids: str,
+    instance_ids_explicit: bool,
+    group_type: str | None,
+    ds_version: str,
+) -> tuple[str | None, str | None]:
+    if association == "legacy-alert-type":
+        if instance_ids_explicit:
+            raise _association_input_error(
+                ds_version=ds_version,
+                message=(
+                    f"DolphinScheduler {ds_version} does not support --instance-id "
+                    "for alert groups"
+                ),
+                suggestion="Omit --instance-id and pass --group-type EMAIL or SMS.",
+            )
+        if group_type is None:
+            raise _association_input_error(
+                ds_version=ds_version,
+                message=(
+                    f"DolphinScheduler {ds_version} alert-group create requires "
+                    "--group-type"
+                ),
+                suggestion="Pass --group-type EMAIL or --group-type SMS.",
+            )
+        return None, group_type
+    if group_type is not None:
+        raise _association_input_error(
+            ds_version=ds_version,
+            message=(
+                f"DolphinScheduler {ds_version} does not support --group-type "
+                "for alert groups"
+            ),
+            suggestion="Omit --group-type and use --instance-id when needed.",
+        )
+    return alert_instance_ids, None
+
+
+def _validate_update_association_input(
+    *,
+    association: str,
+    instance_ids: InstanceIdsUpdate,
+    group_type: GroupTypeUpdate,
+    ds_version: str,
+) -> None:
+    if association == "legacy-alert-type" and not isinstance(
+        instance_ids,
+        _UnsetValue,
+    ):
+        raise _association_input_error(
+            ds_version=ds_version,
+            message=(
+                f"DolphinScheduler {ds_version} does not support --instance-id "
+                "or --clear-instance-ids for alert groups"
+            ),
+            suggestion=(
+                "Omit plugin-instance flags; use --group-type EMAIL or SMS to "
+                "change the legacy association."
+            ),
+        )
+    if association != "legacy-alert-type" and not isinstance(
+        group_type,
+        _UnsetValue,
+    ):
+        raise _association_input_error(
+            ds_version=ds_version,
+            message=(
+                f"DolphinScheduler {ds_version} does not support --group-type "
+                "for alert groups"
+            ),
+            suggestion="Omit --group-type and use --instance-id when needed.",
+        )
+
+
+def _require_current_group_type(value: str | None) -> str:
+    normalized = _normalize_group_type(value)
+    if normalized is not None:
+        return normalized
+    message = "Legacy alert-group payload was missing required field 'groupType'"
+    raise ApiTransportError(
+        message,
+        details={"resource": ALERT_GROUP_RESOURCE, "field": "groupType"},
+    )
+
+
+def _association_input_error(
+    *,
+    ds_version: str,
+    message: str,
+    suggestion: str,
+) -> UserInputError:
+    return UserInputError(
+        message,
+        details={
+            "resource": ALERT_GROUP_RESOURCE,
+            "selected_version": ds_version,
+            "reason": "upstream_field_absent",
+        },
+        suggestion=suggestion,
+    )
 
 
 def _normalize_instance_ids(values: Sequence[int]) -> list[int]:

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-USE_RESOURCE = "use"
+CONTEXT_RESOURCE = "context"
+CONFIG_RESOURCE = "config"
 ENUM_RESOURCE = "enum"
 LINT_RESOURCE = "lint"
 ENV_RESOURCE = "environment"
@@ -48,12 +49,11 @@ GOVERNANCE_RESOURCES: tuple[str, ...] = (
 )
 TOP_LEVEL_COMMANDS: tuple[str, ...] = (
     "version",
-    "context",
     "doctor",
     "schema",
     "capabilities",
 )
-GROUP_LEVEL_ACTIONS: tuple[str, ...] = ("use.clear",)
+GROUP_LEVEL_ACTIONS: tuple[str, ...] = ("context",)
 NAME_FIRST_RESOURCES: tuple[str, ...] = (
     PROJECT_RESOURCE,
     ENV_RESOURCE,
@@ -94,12 +94,18 @@ def _surface_command(name: str, *commands: SurfaceCommand) -> SurfaceCommand:
 
 
 RESOURCE_COMMAND_TREE: dict[str, tuple[SurfaceCommand, ...]] = {
-    USE_RESOURCE: (
-        _surface_command(PROJECT_RESOURCE),
-        _surface_command(WORKFLOW_RESOURCE),
+    CONTEXT_RESOURCE: tuple(
+        _surface_command(action)
+        for action in ("list", "get", "create", "update", "delete")
+    ),
+    CONFIG_RESOURCE: tuple(
+        _surface_command(action) for action in ("get", "set", "unset")
     ),
     ENUM_RESOURCE: (_surface_command("names"), _surface_command("list")),
-    LINT_RESOURCE: (_surface_command("workflow"),),
+    LINT_RESOURCE: tuple(
+        _surface_command(action)
+        for action in ("workflow", "workflow-patch", "workflow-instance-patch")
+    ),
     ENV_RESOURCE: (
         _surface_command("list"),
         _surface_command("get"),
@@ -340,7 +346,8 @@ META_PLANE_COMMANDS: tuple[str, ...] = (
     *TOP_LEVEL_COMMANDS,
     TEMPLATE_RESOURCE,
     TASK_TYPE_RESOURCE,
-    USE_RESOURCE,
+    CONTEXT_RESOURCE,
+    CONFIG_RESOURCE,
     ENUM_RESOURCE,
     LINT_RESOURCE,
 )

@@ -4,8 +4,10 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.context import SessionContext
+from dsctl.commands import task_group as task_group_commands
 from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
+from dsctl.upstream.task_groups import TASK_GROUP_DOMAIN, TaskGroupDomain
 from tests.fakes import (
     FakeEnumValue,
     FakeProject,
@@ -13,7 +15,8 @@ from tests.fakes import (
     FakeTaskGroup,
     FakeTaskGroupAdapter,
     FakeTaskGroupQueue,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
+    fake_project_definitions,
 )
 from tests.support import make_profile
 
@@ -64,15 +67,27 @@ def patch_task_group_service(
     fake_project_adapter: FakeProjectAdapter,
     fake_task_group_adapter: FakeTaskGroupAdapter,
 ) -> None:
+    def bound_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is TASK_GROUP_DOMAIN
+        return fake_bound_domain_service_runtime(
+            TaskGroupDomain(
+                definitions=fake_project_definitions(fake_project_adapter),
+                task_groups=fake_task_group_adapter,
+            ),
+            context=ResourceDefaults(project="etl-prod"),
+            profile=make_profile(),
+        )
+
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            fake_project_adapter,
-            task_group_adapter=fake_task_group_adapter,
-            context=SessionContext(project="etl-prod"),
-            profile=make_profile(),
-        ),
+        "open_bound_domain_service_runtime",
+        bound_runtime_factory,
     )
 
 
@@ -129,6 +144,46 @@ def test_task_group_create_command_uses_project_selection() -> None:
     assert payload["data"]["projectCode"] == 11
 
 
+def test_task_group_update_rejects_conflicting_description_flags_before_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service_called = False
+
+    def unexpected_service_call(*args: object, **kwargs: object) -> object:
+        nonlocal service_called
+        del args, kwargs
+        service_called = True
+        message = "task-group update service must not be called"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(
+        task_group_commands,
+        "update_task_group_result",
+        unexpected_service_call,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "task-group",
+            "update",
+            "etl",
+            "--description",
+            "updated",
+            "--clear-description",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert service_called is False
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "task-group.update"
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["suggestion"] == (
+        "Use either --description VALUE or --clear-description, not both."
+    )
+
+
 def test_task_group_queue_list_command_returns_queue_payload() -> None:
     result = runner.invoke(app, ["task-group", "queue", "list", "etl"])
 
@@ -145,14 +200,15 @@ def test_task_group_queue_force_start_command_returns_confirmation() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "task-group.queue.force-start"
-    assert payload["data"] == {"queueId": 31, "forceStarted": True}
+    assert payload["data"] == {"queueId": 31, "accepted": True}
 
 
 def test_task_group_queue_help_points_to_queue_id_discovery() -> None:
     result = runner.invoke(app, ["task-group", "queue", "force-start", "--help"])
 
     assert result.exit_code == 0
-    assert "task-group queue list" in result.stdout
+    help_text = " ".join(result.stdout.replace("│", " ").split())
+    assert "task-group queue list" in help_text
     assert "discover" in result.stdout
     assert "ids" in result.stdout
 
@@ -190,15 +246,28 @@ def test_task_group_queue_force_start_command_reports_already_started(
             )
         ],
     )
+
+    def bound_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is TASK_GROUP_DOMAIN
+        return fake_bound_domain_service_runtime(
+            TaskGroupDomain(
+                definitions=fake_project_definitions(project_adapter),
+                task_groups=task_group_adapter,
+            ),
+            context=ResourceDefaults(project="etl-prod"),
+            profile=make_profile(),
+        )
+
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            task_group_adapter=task_group_adapter,
-            context=SessionContext(project="etl-prod"),
-            profile=make_profile(),
-        ),
+        "open_bound_domain_service_runtime",
+        bound_runtime_factory,
     )
 
     result = runner.invoke(app, ["task-group", "queue", "force-start", "31"])

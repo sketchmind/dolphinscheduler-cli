@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
-from dsctl.cli_runtime import emit_raw_result, emit_result
+from dsctl.cli_runtime import emit_raw_result, emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult
 from dsctl.services.template import (
@@ -10,8 +9,6 @@ from dsctl.services.template import (
     datasource_template_result,
     environment_config_template_result,
     parameter_syntax_result,
-    supported_datasource_types,
-    supported_parameter_syntax_topics,
     task_template_result,
     task_template_types_result,
     workflow_instance_patch_template_result,
@@ -31,50 +28,37 @@ def register_template_commands(app: typer.Typer) -> None:
 
 
 @template_app.command("workflow")
+@bind_command("template.workflow")
 def workflow_command(
-    with_schedule: Annotated[
-        bool | None,
-        typer.Option(
-            "--with-schedule",
-            help="Include one optional schedule block in the emitted template.",
-        ),
-    ] = None,
-    raw: Annotated[
-        bool | None,
-        typer.Option(
-            "--raw",
-            help="Print only the workflow YAML template, without the JSON envelope.",
-        ),
-    ] = None,
+    ctx: typer.Context,
+    with_schedule: bool | None,
+    raw: bool | None,
+    example: str | None,
 ) -> None:
-    """Emit the stable workflow YAML template."""
+    state = get_app_state(ctx)
+    env_file = None if state.env_file is None else str(state.env_file)
     if raw:
         emit_raw_result(
             "template.workflow",
-            lambda: workflow_template_result(with_schedule=bool(with_schedule)),
+            lambda: workflow_template_result(
+                with_schedule=bool(with_schedule), env_file=env_file, example=example
+            ),
             _template_yaml,
         )
         return
     emit_result(
         "template.workflow",
-        lambda: workflow_template_result(with_schedule=bool(with_schedule)),
+        lambda: workflow_template_result(
+            with_schedule=bool(with_schedule), env_file=env_file, example=example
+        ),
     )
 
 
 @template_app.command("workflow-patch")
+@bind_command("template.workflow-patch")
 def workflow_patch_command(
-    raw: Annotated[
-        bool | None,
-        typer.Option(
-            "--raw",
-            help=(
-                "Print only the workflow patch YAML template, without the JSON "
-                "envelope."
-            ),
-        ),
-    ] = None,
+    raw: bool | None,
 ) -> None:
-    """Emit the stable workflow edit patch YAML template."""
     if raw:
         emit_raw_result(
             "template.workflow-patch",
@@ -86,19 +70,10 @@ def workflow_patch_command(
 
 
 @template_app.command("workflow-instance-patch")
+@bind_command("template.workflow-instance-patch")
 def workflow_instance_patch_command(
-    raw: Annotated[
-        bool | None,
-        typer.Option(
-            "--raw",
-            help=(
-                "Print only the workflow-instance patch YAML template, "
-                "without the JSON envelope."
-            ),
-        ),
-    ] = None,
+    raw: bool | None,
 ) -> None:
-    """Emit the stable workflow-instance edit patch YAML template."""
     if raw:
         emit_raw_result(
             "template.workflow-instance-patch",
@@ -113,106 +88,87 @@ def workflow_instance_patch_command(
 
 
 @template_app.command("params")
+@bind_command("template.params")
 def params_command(
-    topic: Annotated[
-        str | None,
-        typer.Option(
-            "--topic",
-            help=(
-                "Parameter syntax topic. Run without --topic for compact "
-                f"discovery. Supported: "
-                f"{', '.join(supported_parameter_syntax_topics())}."
-            ),
-        ),
-    ] = None,
+    ctx: typer.Context,
+    topic: str | None,
 ) -> None:
-    """Emit stable DS parameter syntax metadata and examples."""
-    emit_result("template.params", lambda: parameter_syntax_result(topic=topic))
+    state = get_app_state(ctx)
+    env_file = None if state.env_file is None else str(state.env_file)
+    emit_result(
+        "template.params",
+        lambda: parameter_syntax_result(topic=topic, env_file=env_file),
+    )
 
 
 @template_app.command("environment")
+@bind_command("template.environment")
 def environment_command() -> None:
-    """Emit a DS environment shell/export config template."""
     emit_result("template.environment", environment_config_template_result)
 
 
 @template_app.command("cluster")
+@bind_command("template.cluster")
 def cluster_command() -> None:
-    """Emit a DS cluster config JSON template."""
     emit_result("template.cluster", cluster_config_template_result)
 
 
 @template_app.command("datasource")
+@bind_command("template.datasource")
 def datasource_command(
-    datasource_type: Annotated[
-        str | None,
-        typer.Option(
-            "--type",
-            help=(
-                "Datasource type to template. Omit for compact type discovery. "
-                "Run `dsctl template datasource` or `dsctl enum list db-type` "
-                "for all values. Common: "
-                f"{', '.join(supported_datasource_types()[:6])}."
-            ),
-        ),
-    ] = None,
+    ctx: typer.Context,
+    datasource_type: str | None,
+    ds_version: str | None,
 ) -> None:
-    """Emit datasource JSON payload-template type discovery or one template."""
+    state = get_app_state(ctx)
+    env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "template.datasource",
-        lambda: datasource_template_result(datasource_type=datasource_type),
+        lambda: datasource_template_result(
+            datasource_type=datasource_type,
+            ds_version=ds_version,
+            env_file=env_file,
+        ),
     )
 
 
 @template_app.command("task")
+@bind_command("template.task")
 def task_command(
-    task_type: Annotated[
-        str | None,
-        typer.Argument(
-            help=(
-                "Task type to template. Omit for a compact template catalog. "
-                "Run `dsctl task-type get TYPE` for per-type guidance."
-            ),
-        ),
-    ] = None,
-    variant: Annotated[
-        str | None,
-        typer.Option(
-            "--variant",
-            help=(
-                "Task template scenario. Valid choices depend on the selected "
-                "task type. Known variants include minimal, params, resource, "
-                "post-json, pre-post-statements, branching, condition-routing, "
-                "workflow-dependency, child-workflow, and datasource; inspect "
-                "per-type values with `dsctl task-type get TYPE`."
-            ),
-        ),
-    ] = None,
-    raw: Annotated[
-        bool | None,
-        typer.Option(
-            "--raw",
-            help="Print only the YAML task fragment, without the JSON envelope.",
-        ),
-    ] = None,
+    ctx: typer.Context,
+    task_type: str | None,
+    variant: str | None,
+    raw: bool | None,
 ) -> None:
-    """Emit one task YAML template or list supported task types."""
+    state = get_app_state(ctx)
+    env_file = None if state.env_file is None else str(state.env_file)
     if task_type is None:
         if raw:
             emit_result("template.task", _task_template_raw_requires_type)
             return
-        emit_result("template.task", task_template_types_result)
+        emit_result(
+            "template.task",
+            lambda: task_template_types_result(env_file=env_file),
+        )
         return
     if raw:
         emit_raw_result(
             "template.task",
-            lambda: task_template_result(task_type, variant=variant),
+            lambda: task_template_result(
+                task_type,
+                variant=variant,
+                env_file=env_file,
+            ),
             _template_yaml,
         )
         return
     emit_result(
         "template.task",
-        lambda: task_template_result(task_type, variant=variant),
+        lambda: task_template_result(
+            task_type,
+            variant=variant,
+            env_file=env_file,
+        ),
     )
 
 

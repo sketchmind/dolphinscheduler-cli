@@ -7,8 +7,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from dsctl.upstream.datasource_contracts import normalize_datasource_type
 from tests.live.support import (
+    DsctlCommandResult,
     LiveBootstrapState,
+    cleanup_live_resources,
     require_error_payload,
     require_int_value,
     require_list,
@@ -32,8 +35,6 @@ LIVE_DATASOURCE_USER_ENV = "DS_LIVE_DATASOURCE_USER"
 LIVE_DATASOURCE_PASSWORD_ENV = "DS_LIVE_DATASOURCE_PASSWORD"
 DEFAULT_LIVE_DATASOURCE_TYPE = "MYSQL"
 DEFAULT_LIVE_DATASOURCE_PORT = 3306
-ALERT_TEST_SENDING_FAILED = 110014
-ALERT_SERVER_NOT_EXIST = 110017
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,139 @@ def _optional_env_text(name: str) -> str | None:
     return stripped or None
 
 
+def test_admin_alert_plugin_test_send_reports_success(
+    live_repo_root: Path,
+    live_admin_env_file: Path,
+) -> None:
+    """Exercise test-send only with an explicitly enabled, configured instance."""
+    if _optional_env_text("DSCTL_RUN_LIVE_ALERT_TESTS") != "1":
+        pytest.skip("Alert test-send requires DSCTL_RUN_LIVE_ALERT_TESTS=1")
+    instance = _optional_env_text("DS_LIVE_ALERT_TEST_INSTANCE")
+    if instance is None:
+        pytest.fail("Set DS_LIVE_ALERT_TEST_INSTANCE to a dedicated test instance")
+    payload = require_ok_payload(
+        run_dsctl(
+            live_repo_root,
+            ["alert-plugin", "test", instance],
+            env_file=live_admin_env_file,
+        ),
+        expected_action="alert-plugin.test",
+        label="configured alert-plugin test-send",
+    )
+    data = require_mapping(payload["data"], label="alert-plugin test-send data")
+    assert data["tested"] is True
+
+
+def _cleanup_owned_governance_resource(
+    live_repo_root: Path,
+    live_admin_env_file: Path,
+    *,
+    command: str,
+    selector: str,
+) -> None:
+    result = run_dsctl(
+        live_repo_root,
+        [command, "delete", selector, "--force"],
+        env_file=live_admin_env_file,
+    )
+    _require_owned_governance_resource_absent(
+        live_repo_root,
+        live_admin_env_file,
+        command=command,
+        selector=selector,
+        delete_result=result,
+    )
+
+
+def _cleanup_owned_datasource(
+    live_repo_root: Path,
+    live_admin_env_file: Path,
+    *,
+    selector: str,
+) -> None:
+    result = run_dsctl(
+        live_repo_root,
+        ["datasource", "delete", selector, "--force"],
+        env_file=live_admin_env_file,
+    )
+    _require_owned_governance_resource_absent(
+        live_repo_root,
+        live_admin_env_file,
+        command="datasource",
+        selector=selector,
+        delete_result=result,
+    )
+
+
+def _require_owned_governance_resource_absent(
+    live_repo_root: Path,
+    live_admin_env_file: Path,
+    *,
+    command: str,
+    selector: str,
+    delete_result: DsctlCommandResult,
+) -> None:
+    action = f"{command}.delete"
+    label = f"owned {command} cleanup"
+    if delete_result.exit_code == 0:
+        payload = require_ok_payload(
+            delete_result,
+            expected_action=action,
+            label=label,
+        )
+        data = require_mapping(payload["data"], label=f"{label} data")
+        assert data["deleted"] is True
+    else:
+        require_error_payload(
+            delete_result,
+            expected_action=action,
+            expected_type="not_found",
+            label=f"{label} already absent",
+        )
+    require_error_payload(
+        run_dsctl(
+            live_repo_root,
+            [command, "get", selector],
+            env_file=live_admin_env_file,
+        ),
+        expected_action=f"{command}.get",
+        expected_type="not_found",
+        label=f"{label} absence proof",
+    )
+
+
+def _revoke_owned_datasource_grant(
+    live_repo_root: Path,
+    live_admin_env_file: Path,
+    *,
+    user_name: str,
+    datasource: str,
+    datasource_id: int,
+) -> None:
+    payload = require_ok_payload(
+        run_dsctl(
+            live_repo_root,
+            [
+                "user",
+                "revoke",
+                "datasource",
+                user_name,
+                "--datasource",
+                datasource,
+            ],
+            env_file=live_admin_env_file,
+        ),
+        expected_action="user.revoke.datasource",
+        label="owned datasource grant cleanup",
+    )
+    data = require_mapping(payload["data"], label="datasource revoke data")
+    remaining = require_list(data["datasources"], label="remaining datasources")
+    assert all(
+        require_mapping(item, label="remaining datasource").get("id") != datasource_id
+        for item in remaining
+    )
+
+
 def _datasource_payload(
     config: LiveDatasourceConfig,
     *,
@@ -127,8 +261,33 @@ def test_admin_datasource_lifecycle_and_user_grant_round_trip(
         pytest.skip("Datasource grant live test requires one managed ETL user.")
 
     datasource_config = _load_live_datasource_config()
+    version_payload = require_ok_payload(
+        run_dsctl(live_repo_root, ["version"], env_file=live_admin_env_file),
+        expected_action="version",
+        label="datasource selected version",
+    )
+    version_data = require_mapping(version_payload["data"], label="version data")
+    selected_version = version_data.get("selected_ds_version")
+    assert isinstance(selected_version, str), (
+        "Datasource test requires an exact DS version"
+    )
+    expected_type = normalize_datasource_type(selected_version, datasource_config.type)
+    assert expected_type is not None, (
+        f"{LIVE_DATASOURCE_TYPE_ENV}={datasource_config.type!r} is not supported "
+        f"by the exact {selected_version} datasource contract"
+    )
     initial_name = live_name_factory("datasource")
     updated_name = live_name_factory("datasource-updated")
+    require_error_payload(
+        run_dsctl(
+            live_repo_root,
+            ["datasource", "get", initial_name],
+            env_file=live_admin_env_file,
+        ),
+        expected_action="datasource.get",
+        expected_type="not_found",
+        label="owned datasource name preflight",
+    )
     create_file = _write_json(
         tmp_path / f"{initial_name}.json",
         _datasource_payload(
@@ -139,7 +298,8 @@ def test_admin_datasource_lifecycle_and_user_grant_round_trip(
         ),
     )
 
-    datasource_deleted = False
+    grant_attempted = False
+    revoke_attempted = False
     current_name = initial_name
     datasource_id: int | None = None
 
@@ -159,7 +319,7 @@ def test_admin_datasource_lifecycle_and_user_grant_round_trip(
         )
         datasource_id = require_int_value(create_data.get("id"), label="datasource id")
         assert create_data["name"] == initial_name
-        assert create_data["type"] == "MYSQL"
+        assert create_data["type"] == expected_type
 
         get_payload = require_ok_payload(
             run_dsctl(
@@ -172,6 +332,7 @@ def test_admin_datasource_lifecycle_and_user_grant_round_trip(
         )
         get_data = require_mapping(get_payload["data"], label="datasource get data")
         assert get_data["id"] == datasource_id
+        assert get_data["type"] == expected_type
         assert get_data["database"] == datasource_config.database
 
         list_payload = require_ok_payload(
@@ -244,6 +405,7 @@ def test_admin_datasource_lifecycle_and_user_grant_round_trip(
             label="datasource get after update data",
         )
         assert refreshed_data["name"] == updated_name
+        assert refreshed_data["type"] == expected_type
         assert refreshed_data["note"] == "live datasource update path"
 
         test_payload = require_ok_payload(
@@ -258,19 +420,21 @@ def test_admin_datasource_lifecycle_and_user_grant_round_trip(
         test_data = require_mapping(test_payload["data"], label="datasource test data")
         assert test_data["connected"] is True
 
+        grant_attempted = True
+        grant_result = run_dsctl(
+            live_repo_root,
+            [
+                "user",
+                "grant",
+                "datasource",
+                user_name,
+                "--datasource",
+                current_name,
+            ],
+            env_file=live_admin_env_file,
+        )
         grant_payload = require_ok_payload(
-            run_dsctl(
-                live_repo_root,
-                [
-                    "user",
-                    "grant",
-                    "datasource",
-                    user_name,
-                    "--datasource",
-                    current_name,
-                ],
-                env_file=live_admin_env_file,
-            ),
+            grant_result,
             expected_action="user.grant.datasource",
             label="user grant datasource",
         )
@@ -287,58 +451,37 @@ def test_admin_datasource_lifecycle_and_user_grant_round_trip(
             for item in granted_datasources
         )
 
-        revoke_payload = require_ok_payload(
-            run_dsctl(
-                live_repo_root,
-                [
-                    "user",
-                    "revoke",
-                    "datasource",
-                    user_name,
-                    "--datasource",
-                    current_name,
-                ],
-                env_file=live_admin_env_file,
-            ),
-            expected_action="user.revoke.datasource",
-            label="user revoke datasource",
-        )
-        revoke_data = require_mapping(
-            revoke_payload["data"],
-            label="user revoke datasource data",
-        )
-        remaining_datasources = require_list(
-            revoke_data["datasources"],
-            label="user revoke datasource list",
-        )
-        assert all(
-            require_mapping(item, label="remaining datasource").get("id")
-            != datasource_id
-            for item in remaining_datasources
+        revoke_attempted = True
+        _revoke_owned_datasource_grant(
+            live_repo_root,
+            live_admin_env_file,
+            user_name=user_name,
+            datasource=str(datasource_id),
+            datasource_id=datasource_id,
         )
 
-        delete_payload = require_ok_payload(
-            run_dsctl(
-                live_repo_root,
-                ["datasource", "delete", current_name, "--force"],
-                env_file=live_admin_env_file,
-            ),
-            expected_action="datasource.delete",
-            label="datasource delete",
-        )
-        delete_data = require_mapping(
-            delete_payload["data"],
-            label="datasource delete data",
-        )
-        assert delete_data["deleted"] is True
-        datasource_deleted = True
     finally:
-        if current_name and not datasource_deleted:
-            run_dsctl(
-                live_repo_root,
-                ["datasource", "delete", current_name, "--force"],
-                env_file=live_admin_env_file,
+        cleanup_tasks: list[Callable[[], None]] = []
+        if grant_attempted and not revoke_attempted and datasource_id is not None:
+            cleanup_tasks.append(
+                lambda: _revoke_owned_datasource_grant(
+                    live_repo_root,
+                    live_admin_env_file,
+                    user_name=user_name,
+                    datasource=str(datasource_id),
+                    datasource_id=datasource_id,
+                )
             )
+        cleanup_tasks.append(
+            lambda: _cleanup_owned_datasource(
+                live_repo_root,
+                live_admin_env_file,
+                selector=str(datasource_id)
+                if datasource_id is not None
+                else initial_name,
+            )
+        )
+        cleanup_live_resources(cleanup_tasks)
 
 
 def test_admin_alert_plugin_and_group_lifecycle_round_trip(
@@ -356,6 +499,9 @@ def test_admin_alert_plugin_and_group_lifecycle_round_trip(
     current_plugin_name = plugin_name
     current_group_name = group_name
     alert_plugin_id: int | None = None
+    alert_group_id: int | None = None
+    plugin_cleanup_selector = plugin_name
+    group_cleanup_selector = group_name
 
     definition_list_payload = require_ok_payload(
         run_dsctl(
@@ -422,6 +568,7 @@ def test_admin_alert_plugin_and_group_lifecycle_round_trip(
             plugin_create_data.get("id"),
             label="alert-plugin id",
         )
+        plugin_cleanup_selector = str(alert_plugin_id)
         assert plugin_create_data["instanceName"] == current_plugin_name
 
         plugin_get_payload = require_ok_payload(
@@ -514,6 +661,11 @@ def test_admin_alert_plugin_and_group_lifecycle_round_trip(
             group_create_payload["data"],
             label="alert-group create data",
         )
+        alert_group_id = require_int_value(
+            group_create_data.get("id"),
+            label="alert-group id",
+        )
+        group_cleanup_selector = str(alert_group_id)
         assert group_create_data["groupName"] == current_group_name
 
         group_get_payload = require_ok_payload(
@@ -586,39 +738,10 @@ def test_admin_alert_plugin_and_group_lifecycle_round_trip(
         assert group_update_data["groupName"] == updated_group_name
         current_group_name = updated_group_name
 
-        plugin_test_error = require_error_payload(
-            run_dsctl(
-                live_repo_root,
-                ["alert-plugin", "test", current_plugin_name],
-                env_file=live_admin_env_file,
-            ),
-            expected_action="alert-plugin.test",
-            label="alert-plugin test",
-        )
-        plugin_test_source = require_mapping(
-            plugin_test_error["source"],
-            label="alert-plugin test source",
-        )
-        result_code = require_int_value(
-            plugin_test_source.get("result_code"),
-            label="alert-plugin test result code",
-        )
-        expected_error_types = {
-            ALERT_TEST_SENDING_FAILED: "conflict",
-            ALERT_SERVER_NOT_EXIST: "invalid_state",
-        }
-        assert result_code in expected_error_types
-        assert plugin_test_error["type"] == expected_error_types[result_code]
-        if result_code == ALERT_SERVER_NOT_EXIST:
-            assert plugin_test_error["suggestion"] == (
-                "Create or start at least one live alert server before retrying the "
-                "alert-plugin test."
-            )
-
         group_delete_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
-                ["alert-group", "delete", current_group_name, "--force"],
+                ["alert-group", "delete", str(alert_group_id), "--force"],
                 env_file=live_admin_env_file,
             ),
             expected_action="alert-group.delete",
@@ -634,7 +757,7 @@ def test_admin_alert_plugin_and_group_lifecycle_round_trip(
         plugin_delete_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
-                ["alert-plugin", "delete", current_plugin_name, "--force"],
+                ["alert-plugin", "delete", str(alert_plugin_id), "--force"],
                 env_file=live_admin_env_file,
             ),
             expected_action="alert-plugin.delete",
@@ -647,21 +770,29 @@ def test_admin_alert_plugin_and_group_lifecycle_round_trip(
         assert plugin_delete_data["deleted"] is True
         alert_plugin_deleted = True
     finally:
+        cleanup_tasks: list[Callable[[], None]] = []
         if current_group_name and not alert_group_deleted:
-            run_dsctl(
-                live_repo_root,
-                ["alert-group", "delete", current_group_name, "--force"],
-                env_file=live_admin_env_file,
+            cleanup_tasks.append(
+                lambda: _cleanup_owned_governance_resource(
+                    live_repo_root,
+                    live_admin_env_file,
+                    command="alert-group",
+                    selector=group_cleanup_selector,
+                )
             )
         if current_plugin_name and not alert_plugin_deleted:
-            run_dsctl(
-                live_repo_root,
-                ["alert-plugin", "delete", current_plugin_name, "--force"],
-                env_file=live_admin_env_file,
+            cleanup_tasks.append(
+                lambda: _cleanup_owned_governance_resource(
+                    live_repo_root,
+                    live_admin_env_file,
+                    command="alert-plugin",
+                    selector=plugin_cleanup_selector,
+                )
             )
+        cleanup_live_resources(cleanup_tasks)
 
 
-def test_admin_namespace_read_surfaces_return_current_cluster_catalog(
+def test_admin_namespace_read_surfaces_decode_supported_shapes(
     live_repo_root: Path,
     live_admin_env_file: Path,
 ) -> None:
@@ -689,20 +820,42 @@ def test_admin_namespace_read_surfaces_return_current_cluster_catalog(
     require_list(available_payload["data"], label="namespace available data")
 
 
-def test_admin_namespace_mutation_and_grant_paths_reflect_missing_k8s_capability(
+def test_admin_namespace_missing_k8s_probe(
     live_repo_root: Path,
     live_admin_env_file: Path,
-    live_bootstrap_state: LiveBootstrapState,
     live_name_factory: Callable[[str], str],
 ) -> None:
-    user_name = live_bootstrap_state.user_name
-    if user_name is None:
-        pytest.skip("Namespace grant live test requires one managed ETL user.")
-
     cluster_name = live_name_factory("namespace-cluster")
     namespace_name = live_name_factory("namespace")
-    cluster_payload = require_ok_payload(
+    require_error_payload(
         run_dsctl(
+            live_repo_root,
+            ["cluster", "get", cluster_name],
+            env_file=live_admin_env_file,
+        ),
+        expected_action="cluster.get",
+        expected_type="not_found",
+        label="owned cluster name preflight",
+    )
+    require_error_payload(
+        run_dsctl(
+            live_repo_root,
+            ["namespace", "get", namespace_name],
+            env_file=live_admin_env_file,
+        ),
+        expected_action="namespace.get",
+        expected_type="not_found",
+        label="owned namespace name preflight",
+    )
+    inert_config = {
+        "k8s": "apiVersion: v1\nkind: Config\nclusters: []\n",
+        "yarn": "",
+    }
+    cluster_code: int | None = None
+    namespace_create_attempted = False
+    namespace_probe_absent = False
+    try:
+        cluster_result = run_dsctl(
             live_repo_root,
             [
                 "cluster",
@@ -710,30 +863,44 @@ def test_admin_namespace_mutation_and_grant_paths_reflect_missing_k8s_capability
                 "--name",
                 cluster_name,
                 "--config",
-                json.dumps(
-                    {
-                        "k8s": "apiVersion: v1\nkind: Config\nclusters: []\n",
-                        "yarn": "",
-                    }
-                ),
+                json.dumps(inert_config),
                 "--description",
                 "namespace capability probe cluster",
             ],
             env_file=live_admin_env_file,
-        ),
-        expected_action="cluster.create",
-        label="namespace probe cluster create",
-    )
-    cluster_data = require_mapping(
-        cluster_payload["data"],
-        label="namespace probe cluster create data",
-    )
-    cluster_code = require_int_value(
-        cluster_data.get("code"),
-        label="namespace probe cluster code",
-    )
-
-    try:
+        )
+        cluster_payload = require_ok_payload(
+            cluster_result,
+            expected_action="cluster.create",
+            label="namespace probe cluster create",
+        )
+        cluster_data = require_mapping(
+            cluster_payload["data"],
+            label="namespace probe cluster create data",
+        )
+        cluster_code = require_int_value(
+            cluster_data.get("code"),
+            label="namespace probe cluster code",
+        )
+        # Upstream checks Kubernetes before inserting the DS record.
+        # Read back the deliberately unresolvable kubeconfig before that call.
+        cluster_get_payload = require_ok_payload(
+            run_dsctl(
+                live_repo_root,
+                ["cluster", "get", str(cluster_code)],
+                env_file=live_admin_env_file,
+            ),
+            expected_action="cluster.get",
+            label="namespace probe cluster preflight",
+        )
+        cluster_get_data = require_mapping(
+            cluster_get_payload["data"],
+            label="namespace probe cluster preflight data",
+        )
+        stored_config = cluster_get_data.get("config")
+        assert isinstance(stored_config, str), "Cluster config must be JSON text"
+        assert json.loads(stored_config) == inert_config
+        namespace_create_attempted = True
         create_error = require_error_payload(
             run_dsctl(
                 live_repo_root,
@@ -768,59 +935,79 @@ def test_admin_namespace_mutation_and_grant_paths_reflect_missing_k8s_capability
             label="namespace get missing namespace",
         )
         assert get_error["type"] == "not_found"
-
-        delete_error = require_error_payload(
-            run_dsctl(
-                live_repo_root,
-                ["namespace", "delete", namespace_name, "--force"],
-                env_file=live_admin_env_file,
-            ),
-            expected_action="namespace.delete",
-            expected_type="not_found",
-            label="namespace delete missing namespace",
-        )
-        assert delete_error["type"] == "not_found"
-
-        grant_error = require_error_payload(
-            run_dsctl(
-                live_repo_root,
-                [
-                    "user",
-                    "grant",
-                    "namespace",
-                    user_name,
-                    "--namespace",
-                    namespace_name,
-                ],
-                env_file=live_admin_env_file,
-            ),
-            expected_action="user.grant.namespace",
-            expected_type="not_found",
-            label="user grant namespace missing namespace",
-        )
-        assert grant_error["type"] == "not_found"
-
-        revoke_error = require_error_payload(
-            run_dsctl(
-                live_repo_root,
-                [
-                    "user",
-                    "revoke",
-                    "namespace",
-                    user_name,
-                    "--namespace",
-                    namespace_name,
-                ],
-                env_file=live_admin_env_file,
-            ),
-            expected_action="user.revoke.namespace",
-            expected_type="not_found",
-            label="user revoke namespace missing namespace",
-        )
-        assert revoke_error["type"] == "not_found"
+        namespace_probe_absent = True
     finally:
+        cleanup_tasks: list[Callable[[], None]] = []
+        if namespace_create_attempted and not namespace_probe_absent:
+            cleanup_tasks.append(
+                lambda: _cleanup_owned_governance_resource(
+                    live_repo_root,
+                    live_admin_env_file,
+                    command="namespace",
+                    selector=namespace_name,
+                )
+            )
+        cleanup_tasks.append(
+            lambda: _cleanup_owned_governance_resource(
+                live_repo_root,
+                live_admin_env_file,
+                command="cluster",
+                selector=str(cluster_code)
+                if cluster_code is not None
+                else cluster_name,
+            )
+        )
+        cleanup_live_resources(cleanup_tasks)
+
+
+def test_admin_namespace_missing_resource_errors(
+    live_repo_root: Path,
+    live_admin_env_file: Path,
+    live_bootstrap_state: LiveBootstrapState,
+    live_name_factory: Callable[[str], str],
+) -> None:
+    user_name = live_bootstrap_state.user_name
+    if user_name is None:
+        pytest.skip("Namespace grant live test requires one managed ETL user.")
+    namespace_name = live_name_factory("namespace-missing")
+
+    require_error_payload(
         run_dsctl(
             live_repo_root,
-            ["cluster", "delete", str(cluster_code), "--force"],
+            ["namespace", "get", namespace_name],
             env_file=live_admin_env_file,
-        )
+        ),
+        expected_action="namespace.get",
+        expected_type="not_found",
+        label="namespace get missing namespace",
+    )
+    require_error_payload(
+        run_dsctl(
+            live_repo_root,
+            ["namespace", "delete", namespace_name, "--force"],
+            env_file=live_admin_env_file,
+        ),
+        expected_action="namespace.delete",
+        expected_type="not_found",
+        label="namespace delete missing namespace",
+    )
+    require_error_payload(
+        run_dsctl(
+            live_repo_root,
+            ["user", "grant", "namespace", user_name, "--namespace", namespace_name],
+            env_file=live_admin_env_file,
+        ),
+        expected_action="user.grant.namespace",
+        expected_type="not_found",
+        label="user grant namespace missing namespace",
+    )
+    require_error_payload(
+        run_dsctl(
+            live_repo_root,
+            ["user", "revoke", "namespace", user_name, "--namespace", namespace_name],
+            env_file=live_admin_env_file,
+        ),
+        expected_action="user.revoke.namespace",
+        expected_type="not_found",
+        label="user revoke namespace missing namespace",
+    )

@@ -1,19 +1,18 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
-    FakeProjectAdapter,
     FakeQueue,
     FakeQueueAdapter,
     FakeTenant,
     FakeTenantAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
-from dsctl.errors import ConflictError, UserInputError
-from dsctl.services import runtime as runtime_service
+from dsctl.errors import ApiResultError, ConflictError, UserInputError
 from dsctl.services import tenant as tenant_service
+from dsctl.upstream.tenants import TENANT_DOMAIN, TenantDomain
 
 
 def _install_tenant_service_fakes(
@@ -21,27 +20,15 @@ def _install_tenant_service_fakes(
     tenant_adapter: FakeTenantAdapter,
     queue_adapter: FakeQueueAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            tenant_adapter=tenant_adapter,
-            queue_adapter=queue_adapter,
-            profile=make_profile(),
-        ),
+    domain = TenantDomain(tenants=tenant_adapter, queues=queue_adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        tenant_service,
+        expected_domain=TENANT_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 def _queues() -> list[FakeQueue]:
@@ -256,9 +243,62 @@ def test_update_tenant_result_requires_one_change(
         tenant_service.update_tenant_result("tenant-prod")
 
     assert exc_info.value.suggestion == (
-        "Pass at least one update flag such as --tenant-code, --queue, or "
-        "--description."
+        "Pass at least one update flag such as --queue, --description, or "
+        "--clear-description."
     )
+
+
+def test_update_tenant_result_rejects_legacy_tenant_code_rename(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    queues = _queues()
+    tenant_adapter = FakeTenantAdapter(
+        tenants=[FakeTenant(id=7, tenant_code_value="tenant-prod")],
+        queues=queues,
+    )
+    queue_adapter = FakeQueueAdapter(queues=queues)
+    _install_tenant_service_fakes(monkeypatch, tenant_adapter, queue_adapter)
+
+    with pytest.raises(UserInputError, match="immutable") as exc_info:
+        tenant_service.update_tenant_result(
+            "tenant-prod",
+            tenant_code="tenant-renamed",
+        )
+
+    assert exc_info.value.suggestion is not None
+    assert "create a new tenant" in exc_info.value.suggestion
+
+
+def test_139_duplicate_create_error_is_distinct_from_generic_invalid_input() -> None:
+    duplicate = tenant_service._translate_tenant_api_error(
+        ApiResultError(result_code=10001, result_message="tenant exists"),
+        ds_version="1.3.9",
+        operation="create",
+        tenant_code="tenant-prod",
+    )
+    modern_invalid = tenant_service._translate_tenant_api_error(
+        ApiResultError(result_code=10001, result_message="invalid params"),
+        ds_version="3.4.1",
+        operation="create",
+        tenant_code="tenant-prod",
+    )
+
+    assert isinstance(duplicate, ConflictError)
+    assert isinstance(modern_invalid, UserInputError)
+
+
+def test_139_invalid_tenant_code_has_specific_input_guidance() -> None:
+    translated = tenant_service._translate_tenant_api_error(
+        ApiResultError(result_code=10089, result_message="verify tenant code error"),
+        ds_version="1.3.9",
+        operation="create",
+        tenant_code="bad code",
+    )
+
+    assert isinstance(translated, UserInputError)
+    assert "DolphinScheduler 1.3.9" in str(translated)
+    assert translated.suggestion is not None
+    assert "operating-system tenant code" in translated.suggestion
 
 
 def test_delete_tenant_result_returns_deleted_confirmation(

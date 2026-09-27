@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from functools import partial
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 import pytest
 
 from tests.live.support import (
-    require_error_payload,
+    cleanup_live_resources,
     require_list,
     require_mapping,
     require_ok_payload,
@@ -78,6 +80,86 @@ def _join_resource_path(directory: str, name: str) -> str:
     if directory == "/":
         return f"/{name}"
     return f"{directory.rstrip('/')}/{name}"
+
+
+def _resource_rows(repo_root: Path, env_file: Path) -> list[dict[str, object]]:
+    payload = require_ok_payload(
+        run_dsctl(
+            repo_root,
+            ["resource", "list", "--all"],
+            env_file=env_file,
+        ),
+        expected_action="resource.list",
+        label="complete resource list",
+    )
+    data = require_mapping(payload["data"], label="resource list data")
+    rows = require_list(data["totalList"], label="resource list rows")
+    coverage = require_mapping(data["coverage"], label="resource list coverage")
+    assert coverage["scope_complete"] is True
+    assert coverage["totals_changed"] is False
+    assert _require_int_value(data["total"], label="resource total") == len(rows)
+    return [require_mapping(row, label="resource row") for row in rows]
+
+
+def _resource_rows_by_full_name(
+    rows: list[dict[str, object]],
+) -> dict[tuple[str, str, str, str, str], dict[str, object]]:
+    indexed: dict[tuple[str, str, str, str, str], dict[str, object]] = {}
+    for row in rows:
+        full_name = _require_text_value(row.get("fullName"), label="resource fullName")
+        identity = _resource_full_name_identity(full_name)
+        assert identity not in indexed, f"Duplicate resource fullName: {full_name}"
+        indexed[identity] = row
+    return indexed
+
+
+def _resource_full_name_identity(value: str) -> tuple[str, str, str, str, str]:
+    parsed = urlsplit(value)
+    return (
+        parsed.scheme,
+        parsed.netloc,
+        parsed.path.rstrip("/") or "/",
+        parsed.query,
+        parsed.fragment,
+    )
+
+
+def _cleanup_resources(
+    repo_root: Path,
+    env_file: Path,
+    *,
+    registered_paths: list[str],
+    expected_paths: set[str],
+) -> None:
+    def delete_resource(path: str) -> None:
+        payload = require_ok_payload(
+            run_dsctl(
+                repo_root,
+                ["resource", "delete", path, "--force"],
+                env_file=env_file,
+            ),
+            expected_action="resource.delete",
+            label=f"resource delete {path}",
+        )
+        data = require_mapping(payload["data"], label="resource delete data")
+        assert data["deleted"] is True, f"Resource delete not confirmed: {path}"
+
+    def verify_absent() -> None:
+        remaining_identities = {
+            _resource_full_name_identity(
+                _require_text_value(row.get("fullName"), label="resource fullName")
+            )
+            for row in _resource_rows(repo_root, env_file)
+        }
+        expected_identities = {
+            _resource_full_name_identity(path) for path in expected_paths
+        }
+        residue = expected_identities.intersection(remaining_identities)
+        assert not residue, f"Test resources remain after cleanup: {sorted(residue)}"
+
+    cleanup_live_resources(
+        [*[partial(delete_resource, path) for path in registered_paths], verify_absent]
+    )
 
 
 @pytest.mark.live_admin
@@ -158,62 +240,49 @@ def test_admin_cluster_lifecycle_round_trips(
             for item in rows
         )
 
-        update_result = run_dsctl(
-            live_repo_root,
-            [
-                "cluster",
-                "update",
-                str(cluster_code),
-                "--name",
-                updated_name,
-                "--config",
-                updated_config,
-                "--description",
-                updated_description,
-            ],
-            env_file=live_admin_env_file,
+        update_payload = require_ok_payload(
+            run_dsctl(
+                live_repo_root,
+                [
+                    "cluster",
+                    "update",
+                    str(cluster_code),
+                    "--name",
+                    updated_name,
+                    "--config",
+                    updated_config,
+                    "--description",
+                    updated_description,
+                ],
+                env_file=live_admin_env_file,
+            ),
+            expected_action="cluster.update",
+            label="cluster update",
         )
-        if update_result.exit_code == 0:
-            update_payload = require_ok_payload(
-                update_result,
-                expected_action="cluster.update",
-                label="cluster update",
-            )
-            update_data = require_mapping(
-                update_payload["data"],
-                label="cluster update data",
-            )
-            assert update_data["code"] == cluster_code
-            assert update_data["name"] == updated_name
-            assert update_data["config"] == updated_config
-            assert update_data["description"] == updated_description
+        update_data = require_mapping(
+            update_payload["data"],
+            label="cluster update data",
+        )
+        assert update_data["code"] == cluster_code
+        assert update_data["name"] == updated_name
+        assert update_data["config"] == updated_config
+        assert update_data["description"] == updated_description
 
-            get_by_code_payload = require_ok_payload(
-                run_dsctl(
-                    live_repo_root,
-                    ["cluster", "get", str(cluster_code)],
-                    env_file=live_admin_env_file,
-                ),
-                expected_action="cluster.get",
-                label="cluster get by code",
-            )
-            get_by_code_data = require_mapping(
-                get_by_code_payload["data"],
-                label="cluster get by code data",
-            )
-            assert get_by_code_data["name"] == updated_name
-            assert get_by_code_data["config"] == updated_config
-        else:
-            update_error = require_error_payload(
-                update_result,
-                expected_action="cluster.update",
-                label="cluster update",
-            )
-            update_source = require_mapping(
-                update_error["source"],
-                label="cluster update source",
-            )
-            assert update_source["result_code"] == 120024
+        get_by_code_payload = require_ok_payload(
+            run_dsctl(
+                live_repo_root,
+                ["cluster", "get", str(cluster_code)],
+                env_file=live_admin_env_file,
+            ),
+            expected_action="cluster.get",
+            label="cluster get by code",
+        )
+        get_by_code_data = require_mapping(
+            get_by_code_payload["data"],
+            label="cluster get by code data",
+        )
+        assert get_by_code_data["name"] == updated_name
+        assert get_by_code_data["config"] == updated_config
     finally:
         delete_payload = require_ok_payload(
             run_dsctl(
@@ -392,9 +461,7 @@ def test_etl_resource_lifecycle_round_trips(
     upload_file = tmp_path / uploaded_name
     upload_file.write_text(uploaded_content, encoding="utf-8")
 
-    created_remote_file = False
-    uploaded_remote_file = False
-    created_remote_dir = False
+    registered_paths: list[str] = []
     try:
         create_payload = require_ok_payload(
             run_dsctl(
@@ -412,12 +479,12 @@ def test_etl_resource_lifecycle_round_trips(
             expected_action="resource.create",
             label="resource create",
         )
+        registered_paths.append(created_path)
         create_data = require_mapping(
             create_payload["data"],
             label="resource create data",
         )
         assert create_data["fullName"] == created_path
-        created_remote_file = True
 
         view_payload = require_ok_payload(
             run_dsctl(
@@ -445,12 +512,12 @@ def test_etl_resource_lifecycle_round_trips(
             expected_action="resource.upload",
             label="resource upload",
         )
+        registered_paths.append(uploaded_path)
         upload_data = require_mapping(
             upload_payload["data"],
             label="resource upload data",
         )
         assert upload_data["fullName"] == uploaded_path
-        uploaded_remote_file = True
 
         mkdir_payload = require_ok_payload(
             run_dsctl(
@@ -461,32 +528,28 @@ def test_etl_resource_lifecycle_round_trips(
             expected_action="resource.mkdir",
             label="resource mkdir",
         )
+        registered_paths.append(f"{directory_path}/")
         mkdir_data = require_mapping(mkdir_payload["data"], label="resource mkdir data")
         assert mkdir_data["fullName"] == directory_path
         assert mkdir_data["isDirectory"] is True
-        created_remote_dir = True
 
-        list_payload = require_ok_payload(
-            run_dsctl(
-                live_repo_root,
-                ["resource", "list", "--page-size", "50"],
-                env_file=live_etl_env_file,
-            ),
-            expected_action="resource.list",
-            label="resource list after mutations",
+        rows_by_identity = _resource_rows_by_full_name(
+            _resource_rows(live_repo_root, live_etl_env_file)
         )
-        list_data = require_mapping(list_payload["data"], label="resource list data")
-        rows = require_list(list_data["totalList"], label="resource list rows")
-        rows_by_name = {
-            _require_text_value(
-                require_mapping(item, label="resource row").get("fileName"),
-                label="resource row name",
-            ): require_mapping(item, label="resource row")
-            for item in rows
-        }
-        assert rows_by_name[created_name]["isDirectory"] is False
-        assert rows_by_name[uploaded_name]["isDirectory"] is False
-        assert rows_by_name[directory_name]["isDirectory"] is True
+        assert (
+            rows_by_identity[_resource_full_name_identity(created_path)]["isDirectory"]
+            is False
+        )
+        assert (
+            rows_by_identity[_resource_full_name_identity(uploaded_path)]["isDirectory"]
+            is False
+        )
+        assert (
+            rows_by_identity[_resource_full_name_identity(directory_path)][
+                "isDirectory"
+            ]
+            is True
+        )
 
         download_result = tmp_path / "downloaded.sql"
         download_payload = require_ok_payload(
@@ -512,48 +575,9 @@ def test_etl_resource_lifecycle_round_trips(
         assert download_data["fullName"] == uploaded_path
         assert download_result.read_text(encoding="utf-8") == uploaded_content
     finally:
-        if created_remote_file:
-            delete_created_payload = require_ok_payload(
-                run_dsctl(
-                    live_repo_root,
-                    ["resource", "delete", created_path, "--force"],
-                    env_file=live_etl_env_file,
-                ),
-                expected_action="resource.delete",
-                label="resource delete created file",
-            )
-            delete_created_data = require_mapping(
-                delete_created_payload["data"],
-                label="resource delete created file data",
-            )
-            assert delete_created_data["deleted"] is True
-        if uploaded_remote_file:
-            delete_uploaded_payload = require_ok_payload(
-                run_dsctl(
-                    live_repo_root,
-                    ["resource", "delete", uploaded_path, "--force"],
-                    env_file=live_etl_env_file,
-                ),
-                expected_action="resource.delete",
-                label="resource delete uploaded file",
-            )
-            delete_uploaded_data = require_mapping(
-                delete_uploaded_payload["data"],
-                label="resource delete uploaded file data",
-            )
-            assert delete_uploaded_data["deleted"] is True
-        if created_remote_dir:
-            delete_directory_payload = require_ok_payload(
-                run_dsctl(
-                    live_repo_root,
-                    ["resource", "delete", f"{directory_path}/", "--force"],
-                    env_file=live_etl_env_file,
-                ),
-                expected_action="resource.delete",
-                label="resource delete directory",
-            )
-            delete_directory_data = require_mapping(
-                delete_directory_payload["data"],
-                label="resource delete directory data",
-            )
-            assert delete_directory_data["deleted"] is True
+        _cleanup_resources(
+            live_repo_root,
+            live_etl_env_file,
+            registered_paths=registered_paths,
+            expected_paths={created_path, uploaded_path, directory_path},
+        )

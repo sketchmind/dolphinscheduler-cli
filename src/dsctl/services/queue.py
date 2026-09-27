@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 from dsctl.cli_surface import QUEUE_RESOURCE
 from dsctl.errors import (
@@ -12,23 +12,27 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import optional_text, serialize_queue
+from dsctl.services._page_result import paged_command_result
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_positive_int,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.resolver import ResolvedQueueData
-from dsctl.services.resolver import queue as resolve_queue
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.queues import QUEUE_DOMAIN, QueueDomain
+from dsctl.upstream.resolver import ResolvedQueueData
+from dsctl.upstream.resolver import queue as resolve_queue
+from dsctl.upstream.serialization import optional_text, serialize_queue
 
 if TYPE_CHECKING:
     from dsctl.upstream.protocol import QueueRecord
+
+
+QueueServiceRuntime: TypeAlias = BoundDomainServiceRuntime[QueueDomain]
 
 
 QUEUE_NOT_EXIST = 10128
@@ -60,8 +64,9 @@ def list_queues_result(
     require_positive_int(page_no, label="page_no")
     require_positive_int(page_size, label="page_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        QUEUE_DOMAIN,
         _list_queues_result,
         search=normalized_search,
         page_no=page_no,
@@ -76,8 +81,9 @@ def get_queue_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Resolve and fetch one queue payload."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        QUEUE_DOMAIN,
         _get_queue_result,
         queue=queue,
     )
@@ -99,8 +105,9 @@ def create_queue_result(
         label="queue",
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        QUEUE_DOMAIN,
         _create_queue_result,
         queue_name=normalized_queue_name,
         queue=normalized_queue,
@@ -131,8 +138,9 @@ def update_queue_result(
         require_non_empty_text(queue, label="queue") if queue is not None else None
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        QUEUE_DOMAIN,
         _update_queue_result,
         queue_identifier=queue_identifier,
         queue_name=normalized_queue_name,
@@ -149,23 +157,24 @@ def delete_queue_result(
     """Delete one queue after explicit confirmation."""
     require_delete_force(force=force, resource_label="Queue")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        QUEUE_DOMAIN,
         _delete_queue_result,
         queue=queue,
     )
 
 
 def _list_queues_result(
-    runtime: ServiceRuntime,
+    runtime: QueueServiceRuntime,
     *,
     search: str | None,
     page_no: int,
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.queues
-    data = requested_page_data(
+    adapter = runtime.domain.queues
+    return paged_command_result(
         lambda current_page_no, current_page_size: adapter.list(
             page_no=current_page_no,
             page_size=current_page_size,
@@ -176,7 +185,7 @@ def _list_queues_result(
         all_pages=all_pages,
         serialize_item=serialize_queue,
         resource=QUEUE_RESOURCE,
-        max_pages=MAX_AUTO_EXHAUST_PAGES,
+        resolved={"search": search},
         translate_error=lambda error: _translate_queue_api_error(
             error,
             operation="list",
@@ -184,25 +193,20 @@ def _list_queues_result(
         ),
     )
 
-    return CommandResult(
-        data=require_json_object(data, label="queue list data"),
-        resolved={
-            "search": search,
-            "page_no": page_no,
-            "page_size": page_size,
-            "all": all_pages,
-        },
-    )
-
 
 def _get_queue_result(
-    runtime: ServiceRuntime,
+    runtime: QueueServiceRuntime,
     *,
     queue: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.queues
-    resolved_queue = resolve_queue(queue, adapter=adapter)
-    fetched_queue = adapter.get(queue_id=resolved_queue.id)
+    adapter = runtime.domain.queues
+    try:
+        resolved_queue = resolve_queue(queue, adapter=adapter)
+        fetched_queue = adapter.get(queue_id=resolved_queue.id)
+    except ApiResultError as error:
+        raise _translate_queue_api_error(
+            error, operation="get", queue_name=queue
+        ) from error
     return CommandResult(
         data=require_json_object(
             serialize_queue(fetched_queue),
@@ -218,12 +222,12 @@ def _get_queue_result(
 
 
 def _create_queue_result(
-    runtime: ServiceRuntime,
+    runtime: QueueServiceRuntime,
     *,
     queue_name: str,
     queue: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.queues
+    adapter = runtime.domain.queues
     try:
         created_queue = adapter.create(queue=queue, queue_name=queue_name)
     except ApiResultError as error:
@@ -249,13 +253,13 @@ def _create_queue_result(
 
 
 def _update_queue_result(
-    runtime: ServiceRuntime,
+    runtime: QueueServiceRuntime,
     *,
     queue_identifier: str,
     queue_name: str | None,
     queue: str | None,
 ) -> CommandResult:
-    adapter = runtime.upstream.queues
+    adapter = runtime.domain.queues
     resolved_queue = resolve_queue(queue_identifier, adapter=adapter)
     current_queue = adapter.get(queue_id=resolved_queue.id)
     next_queue_name = current_queue.queueName if queue_name is None else queue_name
@@ -303,11 +307,11 @@ def _update_queue_result(
 
 
 def _delete_queue_result(
-    runtime: ServiceRuntime,
+    runtime: QueueServiceRuntime,
     *,
     queue: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.queues
+    adapter = runtime.domain.queues
     resolved_queue = resolve_queue(queue, adapter=adapter)
     try:
         deleted = adapter.delete(queue_id=resolved_queue.id)

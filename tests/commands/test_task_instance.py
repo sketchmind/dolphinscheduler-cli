@@ -5,7 +5,7 @@ from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.errors import ApiResultError
-from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
 from tests.fakes import (
     FakeEnumValue,
     FakeProject,
@@ -14,8 +14,8 @@ from tests.fakes import (
     FakeTaskInstanceAdapter,
     FakeWorkflowInstance,
     FakeWorkflowInstanceAdapter,
-    fake_service_runtime,
 )
+from tests.runtime_instance_domain_fakes import install_runtime_instance_domain_runtime
 from tests.support import make_profile
 
 runner = CliRunner()
@@ -104,15 +104,12 @@ def patch_task_instance_service(monkeypatch: pytest.MonkeyPatch) -> None:
         ],
         log_messages_by_task_instance_id={3001: ["line-1", "line-2", "line-3"]},
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-            task_instance_adapter=task_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
+        task_instance_adapter=task_instance_adapter,
     )
 
 
@@ -178,9 +175,16 @@ def test_task_instance_list_command_supports_project_filters() -> None:
     assert payload["data"]["totalList"][0]["id"] == 3002
 
 
-def test_task_instance_list_command_requires_project_without_workflow_instance() -> (
-    None
-):
+def test_task_instance_list_command_requires_project_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=FakeProjectAdapter(
+            projects=[FakeProject(code=7, name="etl-prod")]
+        ),
+        context=ResourceDefaults(),
+    )
     result = runner.invoke(app, ["task-instance", "list"])
 
     assert result.exit_code == 1
@@ -188,7 +192,7 @@ def test_task_instance_list_command_requires_project_without_workflow_instance()
     assert payload["action"] == "task-instance.list"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Pass --project NAME or run `dsctl use project NAME`."
+        "Pass --project NAME, or configure a project in the selected context."
     )
 
 
@@ -229,13 +233,35 @@ def test_task_instance_list_help_points_to_filter_discovery() -> None:
 def test_task_instance_get_command_returns_one_instance() -> None:
     result = runner.invoke(
         app,
-        ["task-instance", "get", "3001", "--workflow-instance", "901"],
+        [
+            "task-instance",
+            "get",
+            "3001",
+            "--project",
+            "etl-prod",
+            "--workflow-instance",
+            "901",
+        ],
     )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "task-instance.get"
     assert payload["data"]["workflowInstanceId"] == 901
+    assert payload["resolved"]["project"]["source"] == "flag"
+
+
+def test_task_instance_get_command_accepts_project_only_scope() -> None:
+    result = runner.invoke(
+        app,
+        ["task-instance", "get", "3001", "--project", "etl-prod"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["data"]["id"] == 3001
+    assert payload["resolved"]["taskInstance"] == {"id": 3001}
+    assert "workflowInstance" not in payload["resolved"]
 
 
 def test_task_instance_get_command_emits_stable_not_found_envelope(
@@ -261,15 +287,12 @@ def test_task_instance_get_command_emits_stable_not_found_envelope(
         del project_code, task_instance_id
 
     monkeypatch.setattr(task_instance_adapter, "get", missing_get)
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-            task_instance_adapter=task_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
+        task_instance_adapter=task_instance_adapter,
     )
 
     result = runner.invoke(
@@ -287,14 +310,31 @@ def test_task_instance_get_command_emits_stable_not_found_envelope(
         "workflow_instance_id": 901,
     }
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl task-instance list --workflow-instance 901` to inspect "
-        "available task instance ids."
+        "Run `dsctl task-instance list --project etl-prod --workflow-instance "
+        "901` to inspect available task instance ids."
     )
     assert "retryable" not in payload["error"]["details"]
 
 
-def test_task_instance_log_command_emits_stable_not_found_envelope(
+@pytest.mark.parametrize(
+    ("result_code", "result_message", "error_type"),
+    [
+        (10008, "task instance not found", "not_found"),
+        (
+            10103,
+            (
+                "TaskInstanceLogPath is empty, maybe the taskInstance doesn't "
+                "be dispatched"
+            ),
+            "task_not_dispatched",
+        ),
+    ],
+)
+def test_task_instance_log_command_emits_stable_error_envelope(
     monkeypatch: pytest.MonkeyPatch,
+    result_code: int,
+    result_message: str,
+    error_type: str,
 ) -> None:
     project_adapter = FakeProjectAdapter(
         projects=[FakeProject(code=7, name="etl-prod")]
@@ -304,24 +344,19 @@ def test_task_instance_log_command_emits_stable_not_found_envelope(
     def missing_log(
         *,
         task_instance_id: int,
-        skip_line_num: int,
-        limit: int,
     ) -> None:
-        del task_instance_id, skip_line_num, limit
+        del task_instance_id
         raise ApiResultError(
-            result_code=10008,
-            result_message="task instance not found",
+            result_code=result_code,
+            result_message=result_message,
         )
 
-    monkeypatch.setattr(task_instance_adapter, "log_chunk", missing_log)
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            task_instance_adapter=task_instance_adapter,
-        ),
+    monkeypatch.setattr(task_instance_adapter, "task_log_lines", missing_log)
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        task_instance_adapter=task_instance_adapter,
     )
 
     result = runner.invoke(app, ["task-instance", "log", "999999"])
@@ -329,11 +364,12 @@ def test_task_instance_log_command_emits_stable_not_found_envelope(
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
     assert payload["action"] == "task-instance.log"
-    assert payload["error"]["type"] == "not_found"
-    assert payload["error"]["source"]["result_code"] == 10008
+    assert payload["error"]["type"] == error_type
+    assert payload["error"]["source"]["result_code"] == result_code
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl workflow-instance list` to find the owning workflow instance "
-        "id, then run `dsctl task-instance list --workflow-instance ID`."
+        "Use `dsctl workflow-instance list` in the relevant project to find the "
+        "owning workflow instance, then inspect it with `dsctl task-instance "
+        "list --workflow-instance`."
     )
     assert "retryable" not in payload["error"]["details"]
 
@@ -358,10 +394,30 @@ def test_task_instance_watch_command_returns_finished_instance() -> None:
     assert payload["action"] == "task-instance.watch"
     assert payload["data"]["id"] == 3002
     assert payload["data"]["state"] == "FAILURE"
-    assert payload["resolved"] == {
-        "workflowInstance": {"id": 902},
-        "taskInstance": {"id": 3002},
-    }
+    assert payload["resolved"]["workflowInstance"] == {"id": 902}
+    assert payload["resolved"]["taskInstance"] == {"id": 3002}
+    assert payload["resolved"]["project"]["source"] == "context"
+
+
+def test_task_instance_watch_exit_status_preserves_failed_instance() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "task-instance",
+            "watch",
+            "3002",
+            "--workflow-instance",
+            "902",
+            "--exit-status",
+        ],
+    )
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    payload = json.loads(result.stderr)
+    assert payload["ok"] is False
+    assert payload["error"]["type"] == "execution_failed"
+    assert payload["data"]["state"] == "FAILURE"
+    assert payload["data"]["id"] == 3002
 
 
 def test_task_instance_sub_workflow_command_returns_child_relation() -> None:
@@ -374,10 +430,9 @@ def test_task_instance_sub_workflow_command_returns_child_relation() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "task-instance.sub-workflow"
     assert payload["data"] == {"subWorkflowInstanceId": 903}
-    assert payload["resolved"] == {
-        "workflowInstance": {"id": 902},
-        "taskInstance": {"id": 3003},
-    }
+    assert payload["resolved"]["workflowInstance"] == {"id": 902}
+    assert payload["resolved"]["taskInstance"] == {"id": 3003}
+    assert payload["resolved"]["project"]["source"] == "context"
 
 
 def test_task_instance_sub_workflow_command_reports_task_type_suggestion(
@@ -425,15 +480,12 @@ def test_task_instance_sub_workflow_command_reports_task_type_suggestion(
         "sub_workflow_instance_by_task",
         not_sub_workflow,
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-            task_instance_adapter=task_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
+        task_instance_adapter=task_instance_adapter,
     )
 
     result = runner.invoke(
@@ -446,9 +498,9 @@ def test_task_instance_sub_workflow_command_reports_task_type_suggestion(
     assert payload["action"] == "task-instance.sub-workflow"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl task-instance get 3001 --workflow-instance 901` to inspect "
-        "the task type. Only SUB_WORKFLOW task instances have a child workflow "
-        "instance."
+        "Run `dsctl task-instance get 3001 --project etl-prod "
+        "--workflow-instance 901` to inspect the task type. Only SUB_WORKFLOW "
+        "task instances have a child workflow instance."
     )
 
 
@@ -473,7 +525,7 @@ def test_task_instance_log_command_can_emit_raw_text() -> None:
     assert '"ok": true' not in result.stdout
 
 
-def test_task_instance_force_success_command_returns_forced_success_payload() -> None:
+def test_task_instance_force_success_command_returns_forced_result_payload() -> None:
     result = runner.invoke(
         app,
         [
@@ -511,9 +563,9 @@ def test_task_instance_force_success_command_reports_workflow_state_suggestion()
     assert payload["action"] == "task-instance.force-success"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl workflow-instance get 901` to inspect the owning workflow "
-        "instance. Wait for it to reach a final state, then retry "
-        "`task-instance force-success`."
+        "Run `dsctl workflow-instance get 901 --project etl-prod` to inspect the "
+        "owning workflow instance. Wait for it to reach a final state, then "
+        "retry `task-instance force-success`."
     )
 
 
@@ -618,9 +670,10 @@ def test_task_instance_stop_command_reports_running_state_suggestion() -> None:
     assert payload["action"] == "task-instance.stop"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl task-instance get 3002 --workflow-instance 902` to inspect "
-        "the current task state. `task-instance stop` only applies while the "
-        "task instance is still running."
+        "Run `dsctl task-instance get 3002 --project etl-prod "
+        "--workflow-instance 902` to inspect the current task state. "
+        "`task-instance stop` only applies while the task instance is still "
+        "running."
     )
 
 
@@ -665,15 +718,12 @@ def test_task_instance_savepoint_command_preserves_raw_remote_source(
         )
 
     monkeypatch.setattr(task_instance_adapter, "savepoint", broken_savepoint)
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-            task_instance_adapter=task_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
+        task_instance_adapter=task_instance_adapter,
     )
 
     result = runner.invoke(
@@ -698,3 +748,32 @@ def test_task_instance_savepoint_command_preserves_raw_remote_source(
         "result_code": 10196,
         "result_message": "task savepoint error",
     }
+
+
+def test_task_instance_log_window_exposes_source_coordinates_and_continuation() -> None:
+    result = runner.invoke(
+        app, ["task-instance", "log", "3001", "--start-line", "2", "--limit", "1"]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)["data"]
+    assert data["text"] == "line-2"
+    assert data["window"]["start_line"] == 2
+    assert data["window"]["end_line"] == 2
+    assert data["window"]["next_start_line"] == 3
+    assert data["window"]["lines_scanned"] == 2
+
+
+def test_task_instance_log_window_preserves_raw_and_rejects_explicit_tail() -> None:
+    raw = runner.invoke(
+        app,
+        ["task-instance", "log", "3001", "--start-line", "2", "--limit", "1", "--raw"],
+    )
+    assert raw.exit_code == 0
+    assert raw.stdout == "line-2"
+    invalid = runner.invoke(
+        app, ["task-instance", "log", "3001", "--tail", "200", "--limit", "1"]
+    )
+    assert invalid.exit_code != 0
+    payload = json.loads(invalid.stderr or invalid.stdout)
+    assert payload["error"]["type"] == "user_input_error"
+    assert "cannot be combined" in payload["error"]["message"]

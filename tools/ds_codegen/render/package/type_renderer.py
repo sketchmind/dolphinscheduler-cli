@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+import keyword
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
-from ds_codegen.ir import DtoFieldSpec, DtoSpec, EnumSpec, ModelSpec
+from ds_codegen.contract_type_refs import (
+    generic_base_type,
+    generic_inner_types,
+    substitute_type_parameters,
+)
+from ds_codegen.ir import (
+    DtoFieldSpec,
+    DtoSpec,
+    EnumFieldSpec,
+    EnumSpec,
+    EnumValueSpec,
+    ModelSpec,
+)
+from ds_codegen.java_literals import parse_java_numeric_literal
 from ds_codegen.render.package.planner import python_class_name
 from ds_codegen.render.package.render_support import (
     display_doc_text,
@@ -24,30 +38,32 @@ from ds_codegen.render.package.type_support import (
     render_annotation_type,
     render_scalar_annotation_type,
     resolve_owner_reference_import_path,
-    substitute_type_parameters,
-)
-from ds_codegen.render.requests_example import (
-    _enum_base_class,
-    _enum_member_attribute_name,
-    _enum_supports_from_code,
-    _enum_wire_field,
-    _enum_wire_literal,
-    _field_is_required,
-    _generic_base_type,
-    _generic_inner_types,
-    _render_enum_member_constructor,
-    _render_enum_new_method,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
     from ds_codegen.render.package.planner import PackageRenderContext, SpecializedModel
 
 _RenderableSpec = EnumSpec | DtoSpec | ModelSpec
+_StructuredSpec = TypeVar("_StructuredSpec", DtoSpec, ModelSpec)
 _BASE_DATASOURCE_PARAM_DTO_IMPORT = (
     "org.apache.dolphinscheduler.plugin.datasource.api.datasource."
     "BaseDataSourceParamDTO"
 )
 _ROOT_MODEL_ALIAS_NAMES = {"JsonObject", "JsonValue"}
+_NULLABLE_UPSTREAM_TASK_NAMES = frozenset(
+    [
+        *(f"3.0.{patch}" for patch in range(7)),
+        *(f"3.1.{patch}" for patch in range(10)),
+        *(f"3.2.{patch}" for patch in range(3)),
+        "3.3.1",
+        "3.3.2",
+        "3.4.0",
+        "3.4.1",
+    ]
+)
+_TASK_MAIN_INFO = "org.apache.dolphinscheduler.dao.entity.TaskMainInfo"
 
 
 @dataclass(frozen=True)
@@ -56,6 +72,8 @@ class TypeRenderDeps:
     base_view_model_name: str
     base_entity_model_name: str
     root_model_module_parts: tuple[str, ...]
+    strict_integer_fields: Callable[[str], Mapping[str, tuple[str, ...]]]
+    model_role_module_parts: Mapping[str, tuple[str, ...]]
 
 
 def module_export_names(
@@ -77,6 +95,44 @@ def module_export_names(
     return sorted(exported_names)
 
 
+def _sort_structured_specs_by_inheritance(
+    specs: list[_StructuredSpec],
+    context: PackageRenderContext,
+) -> list[_StructuredSpec]:
+    """Place materialized parents before children inside a flattened module."""
+    remaining = {spec.import_path: spec for spec in specs}
+    ordered: list[_StructuredSpec] = []
+    while remaining:
+        ready: list[_StructuredSpec] = []
+        for spec in remaining.values():
+            parent_import_path = (
+                None
+                if spec.extends is None
+                else resolve_owner_reference_import_path(
+                    spec.extends,
+                    spec.import_path,
+                    context,
+                )
+            )
+            if parent_import_path not in remaining:
+                ready.append(spec)
+        if not ready:
+            message = (
+                "generated structured-type inheritance contains a cycle: "
+                f"{sorted(remaining)!r}"
+            )
+            raise ValueError(message)
+        ready.sort(
+            key=lambda item: (
+                context.assignments_by_import_path[item.import_path].class_name
+            )
+        )
+        ordered.extend(ready)
+        for spec in ready:
+            del remaining[spec.import_path]
+    return ordered
+
+
 def render_type_module(
     *,
     module_parts: tuple[str, ...],
@@ -93,17 +149,13 @@ def render_type_module(
             context.assignments_by_import_path[item.import_path].class_name
         ),
     )
-    dto_specs = sorted(
+    dto_specs = _sort_structured_specs_by_inheritance(
         [spec for spec in specs if isinstance(spec, DtoSpec)],
-        key=lambda item: (
-            context.assignments_by_import_path[item.import_path].class_name
-        ),
+        context,
     )
-    model_specs = sorted(
+    model_specs = _sort_structured_specs_by_inheritance(
         [spec for spec in specs if isinstance(spec, ModelSpec)],
-        key=lambda item: (
-            context.assignments_by_import_path[item.import_path].class_name
-        ),
+        context,
     )
     resolved_model_shapes = {
         model_spec.import_path: _resolve_model_render_shape(
@@ -200,6 +252,7 @@ def render_type_module(
                     owner_import_path=specialized.base_import_path,
                     current_module_parts=module_parts,
                     context=context,
+                    specialized_java_type=specialized.java_type,
                 )
             )
 
@@ -237,7 +290,13 @@ def render_type_module(
             }
         )
         for dto_spec in dto_specs:
-            base_model_names.update(_field_root_model_alias_names(dto_spec.fields))
+            base_model_names.update(
+                _field_root_model_alias_names(
+                    dto_spec.fields,
+                    owner_import_path=dto_spec.import_path,
+                    context=context,
+                )
+            )
     if model_specs:
         base_model_names.update(
             primary_base_name
@@ -253,10 +312,20 @@ def render_type_module(
             }
         )
         for model_spec in model_specs:
-            base_model_names.update(_field_root_model_alias_names(model_spec.fields))
+            base_model_names.update(
+                _field_root_model_alias_names(
+                    model_spec.fields,
+                    owner_import_path=model_spec.import_path,
+                    context=context,
+                )
+            )
     if specialized_models:
         base_model_names.update(
-            _role_base_model_name(module_parts=specialized.module_parts, deps=deps)
+            _model_role_base_name(
+                specialized.base_import_path,
+                module_parts=specialized.module_parts,
+                deps=deps,
+            )
             for specialized in specialized_models
             if not _collect_type_variables(
                 model_specs_by_import_path[specialized.base_import_path].fields
@@ -285,7 +354,10 @@ def render_type_module(
                             documentation=field.documentation,
                         )
                         for field in base_model.fields
-                    ]
+                    ],
+                    owner_import_path=specialized.base_import_path,
+                    context=context,
+                    specialized_java_type=specialized.java_type,
                 )
             )
     if enum_specs:
@@ -296,6 +368,23 @@ def render_type_module(
         pydantic_import_names = ["Field"]
         if any(_needs_open_extra_model(model_spec) for model_spec in model_specs):
             pydantic_import_names.append("ConfigDict")
+        model_uses_strict_integer = any(
+            any(field.wire_name in strict_names for field in spec.fields)
+            for spec in model_specs
+            for strict_names in (
+                _strict_integer_fields_for_model(spec, context=context, deps=deps).get(
+                    spec.import_path, ()
+                ),
+            )
+        )
+        strict_integer_fields = deps.strict_integer_fields(context.snapshot.ds_version)
+        dto_uses_strict_integer = any(
+            field.wire_name in strict_integer_fields.get(spec.import_path, ())
+            for spec in dto_specs
+            for field in spec.fields
+        )
+        if model_uses_strict_integer or dto_uses_strict_integer:
+            pydantic_import_names.append("StrictInt")
         sections.append(
             "from pydantic import " + ", ".join(sorted(pydantic_import_names))
         )
@@ -360,6 +449,154 @@ def render_type_module(
         "__all__ = [" + ", ".join(f'"{name}"' for name in exported_names) + "]"
     )
     return "\n".join(section for section in sections if section is not None) + "\n"
+
+
+def _enum_base_class(wire_type: str) -> str:
+    if wire_type == "int":
+        return "IntEnum"
+    if wire_type == "str":
+        return "StrEnum"
+    return "Enum"
+
+
+def _enum_wire_field(enum_spec: EnumSpec) -> EnumFieldSpec | None:
+    if enum_spec.json_value_field is None:
+        return None
+    return next(
+        (
+            field
+            for field in enum_spec.fields
+            if field.name == enum_spec.json_value_field
+        ),
+        None,
+    )
+
+
+def _enum_member_attribute_name(field_name: str | None) -> str:
+    if field_name is None:
+        return "wire_value"
+    if field_name in {"name", "value"}:
+        return f"{field_name}_field"
+    return field_name
+
+
+def _enum_member_argument_name(field_name: str, attribute_name: str) -> str:
+    argument_name = (
+        f"{field_name}_arg" if field_name in {"name", "value"} else attribute_name
+    )
+    return f"{argument_name}_" if keyword.iskeyword(argument_name) else argument_name
+
+
+def _render_enum_new_method(
+    enum_spec: EnumSpec,
+    enum_name: str,
+    base_class: str,
+    wire_type: str,
+    member_fields: list[tuple[EnumFieldSpec, str]],
+) -> list[str]:
+    argument_specs: list[str] = []
+    wire_field_name = enum_spec.json_value_field
+    if wire_field_name is None:
+        argument_specs.append(f"wire_value: {wire_type}")
+    for field, attribute_name in member_fields:
+        argument_name = _enum_member_argument_name(field.name, attribute_name)
+        argument_specs.append(
+            f"{argument_name}: {render_scalar_annotation_type(field.java_type)}"
+        )
+
+    lines = [f"    def __new__(cls, {', '.join(argument_specs)}) -> {enum_name}:"]
+    wire_attribute_name = _enum_member_attribute_name(wire_field_name)
+    wire_argument_name = (
+        _enum_member_argument_name(wire_field_name, wire_attribute_name)
+        if wire_field_name is not None
+        else "wire_value"
+    )
+    if base_class == "IntEnum":
+        lines.append(f"        obj = int.__new__(cls, {wire_argument_name})")
+    elif base_class == "StrEnum":
+        lines.append(f"        obj = str.__new__(cls, {wire_argument_name})")
+    else:
+        lines.append("        obj = object.__new__(cls)")
+    lines.append(f"        obj._value_ = {wire_argument_name}")
+    for field, attribute_name in member_fields:
+        argument_name = _enum_member_argument_name(field.name, attribute_name)
+        lines.append(f"        obj.{attribute_name} = {argument_name}")
+    lines.append("        return obj")
+    return lines
+
+
+def _render_enum_member_constructor(
+    enum_spec: EnumSpec,
+    value: EnumValueSpec,
+    wire_type: str,
+) -> str:
+    constructor_parts: list[str] = []
+    if enum_spec.json_value_field is None:
+        constructor_parts.append(_render_python_literal(value.name, wire_type))
+    for index, field in enumerate(enum_spec.fields):
+        if index >= len(value.arguments):
+            break
+        constructor_parts.append(
+            _render_python_literal(
+                value.arguments[index],
+                render_scalar_annotation_type(field.java_type),
+            )
+        )
+    if len(constructor_parts) == 1:
+        return constructor_parts[0]
+    return f"({', '.join(constructor_parts)})"
+
+
+def _enum_supports_from_code(enum_spec: EnumSpec) -> bool:
+    return any(
+        field.name == "code" and render_scalar_annotation_type(field.java_type) == "int"
+        for field in enum_spec.fields
+    )
+
+
+def _enum_wire_literal(
+    enum_spec: EnumSpec,
+    enum_value: EnumValueSpec,
+    wire_type: str,
+) -> str:
+    argument_index = _enum_field_argument_index(enum_spec, enum_spec.json_value_field)
+    if argument_index is None:
+        return _render_python_literal(enum_value.name, "str")
+    return _render_python_literal(enum_value.arguments[argument_index], wire_type)
+
+
+def _enum_field_argument_index(
+    enum_spec: EnumSpec,
+    field_name: str | None,
+) -> int | None:
+    if field_name is None:
+        return None
+    return next(
+        (
+            index
+            for index, field in enumerate(enum_spec.fields)
+            if field.name == field_name
+        ),
+        None,
+    )
+
+
+def _render_python_literal(value: str, python_type: str) -> str:
+    numeric_value = parse_java_numeric_literal(value)
+    if python_type == "int":
+        if isinstance(numeric_value, int) and not isinstance(numeric_value, bool):
+            return str(numeric_value)
+        return repr(value)
+    if python_type == "float":
+        if isinstance(numeric_value, (int, float)) and not isinstance(
+            numeric_value,
+            bool,
+        ):
+            return str(float(numeric_value))
+        return repr(value)
+    if python_type == "bool":
+        return "True" if value.lower() == "true" else "False"
+    return repr(value)
 
 
 def _render_enum_member_lines(
@@ -448,6 +685,18 @@ def _role_base_model_name(
     return deps.base_contract_model_name
 
 
+def _model_role_base_name(
+    import_path: str,
+    *,
+    module_parts: tuple[str, ...],
+    deps: TypeRenderDeps,
+) -> str:
+    return _role_base_model_name(
+        module_parts=deps.model_role_module_parts.get(import_path, module_parts),
+        deps=deps,
+    )
+
+
 def _resolved_model_base_name(
     model_spec: ModelSpec,
     model_specs_by_import_path: dict[str, ModelSpec],
@@ -456,7 +705,8 @@ def _resolved_model_base_name(
     deps: TypeRenderDeps,
 ) -> str:
     assignment = context.assignments_by_import_path[model_spec.import_path]
-    base_name = _role_base_model_name(
+    base_name = _model_role_base_name(
+        model_spec.import_path,
         module_parts=assignment.module_parts,
         deps=deps,
     )
@@ -543,6 +793,9 @@ def _render_model_class(
         own_fields,
         owner_import_path=model_spec.import_path,
         context=context,
+        strict_integer_fields=_strict_integer_fields_for_model(
+            model_spec, context=context, deps=deps
+        ),
         extra_policy=("allow" if _needs_open_extra_model(model_spec) else None),
         docstring=(
             f"AST-inferred view from {model_spec.import_path}."
@@ -582,6 +835,7 @@ def _render_dto_class(
         own_fields,
         owner_import_path=dto_spec.import_path,
         context=context,
+        strict_integer_fields=deps.strict_integer_fields(context.snapshot.ds_version),
         dto_required=True,
         docstring=(
             display_doc_text(dto_spec.documentation)
@@ -608,6 +862,7 @@ def _render_specialized_model_class(
             specialized.java_type,
             owner_import_path=specialized.base_import_path,
             context=context,
+            resolution_java_type=specialized.java_type,
         )
         own_fields: list[DtoFieldSpec] = []
     else:
@@ -628,7 +883,8 @@ def _render_specialized_model_class(
             )
             for field in base_model.fields
         ]
-        base_expr = _role_base_model_name(
+        base_expr = _model_role_base_name(
+            specialized.base_import_path,
             module_parts=specialized.module_parts,
             deps=deps,
         )
@@ -638,6 +894,10 @@ def _render_specialized_model_class(
         own_fields,
         owner_import_path=specialized.base_import_path,
         context=context,
+        specialized_java_type=specialized.java_type,
+        strict_integer_fields=_strict_integer_fields_for_model(
+            base_model, context=context, deps=deps
+        ),
         docstring=(f"Specialized view for {specialized.java_type}."),
     )
 
@@ -649,6 +909,8 @@ def _render_pydantic_model_class(
     *,
     owner_import_path: str,
     context: PackageRenderContext,
+    strict_integer_fields: Mapping[str, tuple[str, ...]],
+    specialized_java_type: str | None = None,
     dto_required: bool = False,
     extra_policy: str | None = None,
     docstring: str | None = None,
@@ -681,7 +943,23 @@ def _render_pydantic_model_class(
             allow_none=field.nullable and not is_required,
             owner_import_path=owner_import_path,
             context=context,
+            specialized_java_type=specialized_java_type,
         )
+        rendered_type = _reviewed_map_value_nullability(
+            version=context.snapshot.ds_version,
+            owner_import_path=owner_import_path,
+            field=field,
+            rendered_type=rendered_type,
+        )
+        strict_field_names = strict_integer_fields.get(owner_import_path, ())
+        if field.wire_name in strict_field_names:
+            if rendered_type not in {"int", "int | None"}:
+                message = (
+                    "Cleanup strict integer overlay expected an integer field for "
+                    f"{owner_import_path}.{field.wire_name}, got {rendered_type}"
+                )
+                raise ValueError(message)
+            rendered_type = rendered_type.replace("int", "StrictInt", 1)
         default_expression = None
         default_factory = None
         if not is_required:
@@ -706,6 +984,32 @@ def _render_pydantic_model_class(
     return "\n".join(lines)
 
 
+def _reviewed_map_value_nullability(
+    *,
+    version: str,
+    owner_import_path: str,
+    field: DtoFieldSpec,
+    rendered_type: str,
+) -> str:
+    """Keep the upstream task-name map typed when its LEFT JOIN misses a row."""
+    if (
+        version not in _NULLABLE_UPSTREAM_TASK_NAMES
+        or owner_import_path != _TASK_MAIN_INFO
+        or field.wire_name != "upstreamTaskMap"
+    ):
+        return rendered_type
+    # TaskDefinitionServiceImpl puts the LEFT JOIN's nullable upstream name
+    # into this exact Java map without a null guard in these releases.
+    if (field.java_type, field.nullable, rendered_type) != (
+        "Map<Long, String>",
+        True,
+        "dict[int, str] | None",
+    ):
+        message = "reviewed TaskMainInfo.upstreamTaskMap shape changed"
+        raise ValueError(message)
+    return "dict[int, str | None] | None"
+
+
 def _needs_open_extra_model(model_spec: ModelSpec) -> bool:
     return model_spec.import_path == _BASE_DATASOURCE_PARAM_DTO_IMPORT
 
@@ -720,7 +1024,7 @@ def _dedupe_wire_fields(fields: list[DtoFieldSpec]) -> list[DtoFieldSpec]:
 
 
 def _rendered_field_is_required(field: DtoFieldSpec, *, dto_required: bool) -> bool:
-    if dto_required and _field_is_required(field):
+    if dto_required and field.required is True:
         return True
     if field.nullable:
         return False
@@ -739,10 +1043,33 @@ def _split_inherited_fields(
     ]
     if child_prefix_keys != parent_keys:
         return None
+    if child_fields[: len(parent_fields)] != parent_fields:
+        return None
     own_fields = child_fields[len(parent_fields) :]
     if any(field.wire_name in set(parent_keys) for field in own_fields):
         return None
     return own_fields
+
+
+def _strict_integer_fields_for_model(
+    model_spec: ModelSpec,
+    *,
+    context: PackageRenderContext,
+    deps: TypeRenderDeps,
+) -> Mapping[str, tuple[str, ...]]:
+    """Carry source-owner strict integer overlays into a derived view."""
+    strict_fields = dict(deps.strict_integer_fields(context.snapshot.ds_version))
+    if model_spec.kind != "generated_view" or model_spec.extends is None:
+        return strict_fields
+    source_import = resolve_owner_reference_import_path(
+        model_spec.extends,
+        model_spec.import_path,
+        context,
+    )
+    if source_import is None or source_import not in strict_fields:
+        return strict_fields
+    strict_fields[model_spec.import_path] = strict_fields[source_import]
+    return strict_fields
 
 
 def _resolve_model_render_shape(
@@ -753,7 +1080,8 @@ def _resolve_model_render_shape(
     deps: TypeRenderDeps,
 ) -> tuple[str, list[DtoFieldSpec]]:
     assignment = context.assignments_by_import_path[model_spec.import_path]
-    role_base_name = _role_base_model_name(
+    role_base_name = _model_role_base_name(
+        model_spec.import_path,
         module_parts=assignment.module_parts,
         deps=deps,
     )
@@ -1000,11 +1328,23 @@ def _primary_base_name(base_expr: str) -> str:
     return base_expr.split(", ", 1)[0]
 
 
-def _field_root_model_alias_names(fields: list[DtoFieldSpec]) -> set[str]:
+def _field_root_model_alias_names(
+    fields: list[DtoFieldSpec],
+    *,
+    owner_import_path: str,
+    context: PackageRenderContext,
+    specialized_java_type: str | None = None,
+) -> set[str]:
     import_names: set[str] = set()
     for field in fields:
+        rendered_annotation = render_annotation_type(
+            field.java_type,
+            owner_import_path=owner_import_path,
+            context=context,
+            specialized_java_type=specialized_java_type,
+        )
         for alias_name in _ROOT_MODEL_ALIAS_NAMES:
-            if re.search(rf"\b{re.escape(alias_name)}\b", field.java_type):
+            if re.search(rf"\b{re.escape(alias_name)}\b", rendered_annotation):
                 import_names.add(alias_name)
     return import_names
 
@@ -1015,12 +1355,14 @@ def _render_parameterized_base_expression(
     *,
     owner_import_path: str,
     context: PackageRenderContext,
+    resolution_java_type: str | None = None,
 ) -> str:
     rendered_args = ", ".join(
         render_annotation_type(
             generic_arg,
             owner_import_path=owner_import_path,
             context=context,
+            specialized_java_type=resolution_java_type,
         )
         for generic_arg in _generic_arguments(specialized_java_type)
     )
@@ -1030,13 +1372,13 @@ def _render_parameterized_base_expression(
 def _generic_arguments(java_type: str) -> list[str]:
     if "<" not in java_type or not java_type.endswith(">"):
         return []
-    return _generic_inner_types(java_type)
+    return generic_inner_types(java_type)
 
 
 def _generic_base_name(java_type: str) -> str | None:
     if "<" not in java_type or not java_type.endswith(">"):
         return None
-    return _generic_base_type(java_type)
+    return generic_base_type(java_type)
 
 
 def _is_type_variable(java_type: str) -> bool:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 from dsctl.cli_surface import WORKER_GROUP_RESOURCE
 from dsctl.errors import (
@@ -10,19 +10,20 @@ from dsctl.errors import (
     InvalidStateError,
     NotFoundError,
     PermissionDeniedError,
+    UnsupportedFeatureError,
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
-    optional_text,
-    serialize_worker_group,
-)
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_positive_int,
 )
-from dsctl.services.pagination import (
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
+)
+from dsctl.upstream.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_AUTO_EXHAUST_PAGES,
     PageResult,
@@ -30,14 +31,25 @@ from dsctl.services.pagination import (
     materialize_page_data,
     render_page_data,
 )
-from dsctl.services.resolver import ResolvedWorkerGroupData
-from dsctl.services.resolver import worker_group as resolve_worker_group
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.resolver import ResolvedWorkerGroupData
+from dsctl.upstream.resolver import worker_group as resolve_worker_group
+from dsctl.upstream.serialization import (
+    optional_text,
+    serialize_worker_group,
+)
+from dsctl.upstream.worker_groups import (
+    WORKER_GROUP_DOMAIN,
+    WorkerGroupDomain,
+    worker_group_same_name_update_limitation,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from dsctl.upstream.protocol import WorkerGroupOperations, WorkerGroupRecord
+
+
+WorkerGroupServiceRuntime: TypeAlias = BoundDomainServiceRuntime[WorkerGroupDomain]
 
 
 NAME_NULL = 10134
@@ -87,8 +99,9 @@ def list_worker_groups_result(
     require_positive_int(page_no, label="page_no")
     require_positive_int(page_size, label="page_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        WORKER_GROUP_DOMAIN,
         _list_worker_groups_result,
         search=normalized_search,
         page_no=page_no,
@@ -103,8 +116,9 @@ def get_worker_group_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Resolve and fetch one worker-group payload."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        WORKER_GROUP_DOMAIN,
         _get_worker_group_result,
         worker_group=worker_group,
     )
@@ -122,8 +136,9 @@ def create_worker_group_result(
     normalized_addresses = _normalize_addresses(addresses or [])
     normalized_description = optional_text(description)
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        WORKER_GROUP_DOMAIN,
         _create_worker_group_result,
         name=normalized_name,
         addr_list=_worker_group_addr_list(normalized_addresses),
@@ -166,8 +181,9 @@ def update_worker_group_result(
         else UNSET
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        WORKER_GROUP_DOMAIN,
         _update_worker_group_result,
         worker_group=worker_group,
         name=normalized_name,
@@ -185,22 +201,23 @@ def delete_worker_group_result(
     """Delete one worker group after explicit confirmation."""
     require_delete_force(force=force, resource_label="Worker-group")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        WORKER_GROUP_DOMAIN,
         _delete_worker_group_result,
         worker_group=worker_group,
     )
 
 
 def _list_worker_groups_result(
-    runtime: ServiceRuntime,
+    runtime: WorkerGroupServiceRuntime,
     *,
     search: str | None,
     page_no: int,
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.worker_groups
+    adapter = runtime.domain.worker_groups
     if all_pages:
         page = _collect_all_worker_group_pages(
             adapter,
@@ -236,11 +253,11 @@ def _list_worker_groups_result(
 
 
 def _get_worker_group_result(
-    runtime: ServiceRuntime,
+    runtime: WorkerGroupServiceRuntime,
     *,
     worker_group: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.worker_groups
+    adapter = runtime.domain.worker_groups
     resolved_worker_group = resolve_worker_group(worker_group, adapter=adapter)
     return CommandResult(
         data=require_json_object(
@@ -257,13 +274,13 @@ def _get_worker_group_result(
 
 
 def _create_worker_group_result(
-    runtime: ServiceRuntime,
+    runtime: WorkerGroupServiceRuntime,
     *,
     name: str,
     addr_list: str,
     description: str | None,
 ) -> CommandResult:
-    adapter = runtime.upstream.worker_groups
+    adapter = runtime.domain.worker_groups
     try:
         created_worker_group = adapter.create(
             name=name,
@@ -293,14 +310,14 @@ def _create_worker_group_result(
 
 
 def _update_worker_group_result(
-    runtime: ServiceRuntime,
+    runtime: WorkerGroupServiceRuntime,
     *,
     worker_group: str,
     name: str | None,
     addresses: AddressesUpdate,
     description: DescriptionUpdate,
 ) -> CommandResult:
-    adapter = runtime.upstream.worker_groups
+    adapter = runtime.domain.worker_groups
     resolved_worker_group = resolve_worker_group(worker_group, adapter=adapter)
     if resolved_worker_group.system_default or resolved_worker_group.id is None:
         message = "Config-derived worker groups cannot be updated through CRUD APIs"
@@ -330,6 +347,26 @@ def _update_worker_group_result(
         raise UserInputError(
             message,
             suggestion=("Pass a different --name, --addr, or --description value."),
+        )
+
+    limitation = worker_group_same_name_update_limitation(runtime.profile.ds_version)
+    if limitation is not None and next_name == resolved_worker_group.name:
+        message = (
+            f"DolphinScheduler {runtime.profile.ds_version} rejects worker-group "
+            "updates that keep the current name, even when other fields change."
+        )
+        raise UnsupportedFeatureError(
+            message,
+            details={
+                "selected_version": runtime.profile.ds_version,
+                "reason": limitation,
+                "id": resolved_worker_group.id,
+                "name": resolved_worker_group.name,
+            },
+            suggestion=(
+                "Use DolphinScheduler 3.1.2 or newer, or, if changing the group "
+                "name is acceptable, pass a new unique --name with the update."
+            ),
         )
 
     try:
@@ -363,11 +400,11 @@ def _update_worker_group_result(
 
 
 def _delete_worker_group_result(
-    runtime: ServiceRuntime,
+    runtime: WorkerGroupServiceRuntime,
     *,
     worker_group: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.worker_groups
+    adapter = runtime.domain.worker_groups
     resolved_worker_group = resolve_worker_group(worker_group, adapter=adapter)
     if resolved_worker_group.system_default or resolved_worker_group.id is None:
         message = "Config-derived worker groups cannot be deleted through CRUD APIs"

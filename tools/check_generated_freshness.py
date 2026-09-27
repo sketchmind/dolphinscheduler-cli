@@ -19,6 +19,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import shutil
 import stat
@@ -26,22 +27,43 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ds_codegen.api import (
-    build_contract_snapshot,
-    write_generated_package,
+from ds_codegen.runtime_bundles import (
+    DEFAULT_RUNTIME_BUNDLE_MANIFEST,
+    DEFAULT_RUNTIME_SNAPSHOT_DIR,
+    RUNTIME_SNAPSHOT_MODES,
+    RuntimeBundleSourceIdentity,
+    RuntimeSnapshotMode,
+    load_runtime_bundle_source_identities,
+    load_runtime_bundles,
+    render_runtime_bundles,
+    require_runtime_bundle_sources_unchanged,
+)
+from ds_codegen.task_profiles import (
+    DEFAULT_TASK_PROFILE_FACTS,
+    DEFAULT_TASK_PROFILE_REVIEWS,
+    GENERATED_TASK_PROFILE_PATH,
+    compile_task_profile_data,
+    load_task_profile_document,
+    render_task_profile_data,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_GENERATED = ROOT / "src" / "dsctl" / "generated" / "versions"
 CACHE_ROOT = ROOT / "build" / "ds_contract" / ".freshness_cache"
 CACHE_OUTPUT = CACHE_ROOT / "fresh"
+CACHE_GENERATED_ROOT = CACHE_OUTPUT / "generated"
 CACHE_STAMP = CACHE_ROOT / ".stamp"
 PYTHON = ROOT / ".venv" / "bin" / "python"
+RUNTIME_BUNDLE_MANIFEST = DEFAULT_RUNTIME_BUNDLE_MANIFEST
+SNAPSHOT_DIR = ROOT / DEFAULT_RUNTIME_SNAPSHOT_DIR
+TASK_PROFILE_FACTS = DEFAULT_TASK_PROFILE_FACTS
+TASK_PROFILE_REVIEWS = DEFAULT_TASK_PROFILE_REVIEWS
+TASK_PROFILE_OUTPUT = ROOT / GENERATED_TASK_PROFILE_PATH
 INPUT_ROOTS = (
     ROOT / "tools" / "ds_codegen",
-    ROOT / "tools" / "generate_ds_contract.py",
+    ROOT / "tools" / "runtime_bundle_manifest.py",
+    ROOT / "tools" / "generate_ds_runtime_bundles.py",
     ROOT / "tools" / "check_generated_freshness.py",
-    ROOT / "references" / "dolphinscheduler",
 )
 IGNORED_INPUT_DIRS = {"__pycache__", "target", ".git"}
 IGNORED_GENERATED_ENTRIES = frozenset({"__pycache__"})
@@ -58,10 +80,12 @@ def _find_version_dirs(base: Path) -> list[Path]:
     ]
 
 
-def _iter_input_entries() -> list[tuple[str, Path]]:
+def _iter_input_entries(
+    input_roots: tuple[Path, ...] | None = None,
+) -> list[tuple[str, Path]]:
     """Return deterministic codegen input paths for cache fingerprinting."""
     entries: list[tuple[str, Path]] = []
-    for root in INPUT_ROOTS:
+    for root in input_roots if input_roots is not None else INPUT_ROOTS:
         root_label = _input_path_label(root)
         entries.append((root_label, root))
         if not root.is_dir():
@@ -82,14 +106,21 @@ def _input_path_label(path: Path) -> str:
         return path.absolute().as_posix()
 
 
-def _input_fingerprint() -> str:
+def _input_fingerprint(
+    input_roots: tuple[Path, ...] | None = None,
+    *,
+    source_identities: tuple[str, ...] = (),
+) -> str:
     """Hash input paths, entry kinds, and contents into one cache key."""
     digest = hashlib.sha256()
-    for label, path in _iter_input_entries():
+    for label, path in _iter_input_entries(input_roots):
         kind, content_digest = _input_entry_signature(path)
         _update_digest(digest, label)
         _update_digest(digest, kind)
         _update_digest(digest, content_digest)
+    _update_digest(digest, "exact-source-identities")
+    for identity in source_identities:
+        _update_digest(digest, identity)
     return digest.hexdigest()
 
 
@@ -148,19 +179,54 @@ def _cache_is_fresh(input_fingerprint: str) -> bool:
     return cached_fingerprint == input_fingerprint
 
 
-def _materialize_fresh_output() -> Path:
+def _materialize_fresh_output(
+    *,
+    snapshot_mode: RuntimeSnapshotMode = "prefer",
+    snapshot_dir: Path = SNAPSHOT_DIR,
+) -> Path:
     """Return the output root containing fresh generated package output."""
-    input_fingerprint = _input_fingerprint()
-    if _cache_is_fresh(input_fingerprint):
+    # Validate exact sources and calculate the cache key before the expensive
+    # contract extraction. A cache miss is the only path that loads bundles.
+    source_identities = load_runtime_bundle_source_identities(
+        ROOT,
+        RUNTIME_BUNDLE_MANIFEST,
+    )
+    fingerprint_values = _runtime_input_fingerprint_values(
+        source_identities,
+        snapshot_mode=snapshot_mode,
+        snapshot_dir=snapshot_dir,
+    )
+    input_fingerprint = _input_fingerprint(source_identities=fingerprint_values)
+    if snapshot_mode != "source" and _cache_is_fresh(input_fingerprint):
         return CACHE_OUTPUT
 
+    bundles = load_runtime_bundles(
+        ROOT,
+        RUNTIME_BUNDLE_MANIFEST,
+        snapshot_dir=snapshot_dir,
+        snapshot_mode=snapshot_mode,
+    )
+    _report_snapshot_fallbacks(bundles)
+    # A preferred-cache miss refreshes the local snapshots after exact source
+    # extraction. Key the rendered cache to that post-refresh state.
+    input_fingerprint = _input_fingerprint(
+        source_identities=_runtime_input_fingerprint_values(
+            source_identities,
+            snapshot_mode=snapshot_mode,
+            snapshot_dir=snapshot_dir,
+        )
+    )
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
     tmp_root = Path(tempfile.mkdtemp(prefix="freshness_cache_", dir=CACHE_ROOT))
     tmp_output = tmp_root / "fresh"
     try:
-        snapshot = build_contract_snapshot(ROOT)
-        write_generated_package(ROOT, snapshot, tmp_output)
-        _require_unchanged_inputs(input_fingerprint)
+        render_runtime_bundles(bundles, tmp_output)
+        require_runtime_bundle_sources_unchanged(bundles)
+        _require_unchanged_inputs(
+            input_fingerprint,
+            snapshot_mode=snapshot_mode,
+            snapshot_dir=snapshot_dir,
+        )
         if CACHE_OUTPUT.exists():
             shutil.rmtree(CACHE_OUTPUT)
         tmp_output.replace(CACHE_OUTPUT)
@@ -173,11 +239,79 @@ def _materialize_fresh_output() -> Path:
     return CACHE_OUTPUT
 
 
-def _require_unchanged_inputs(expected_fingerprint: str) -> None:
-    if _input_fingerprint() == expected_fingerprint:
+def _require_unchanged_inputs(
+    expected_fingerprint: str,
+    *,
+    snapshot_mode: RuntimeSnapshotMode = "prefer",
+    snapshot_dir: Path = SNAPSHOT_DIR,
+) -> None:
+    source_identities = load_runtime_bundle_source_identities(
+        ROOT,
+        RUNTIME_BUNDLE_MANIFEST,
+    )
+    if (
+        _input_fingerprint(
+            source_identities=_runtime_input_fingerprint_values(
+                source_identities,
+                snapshot_mode=snapshot_mode,
+                snapshot_dir=snapshot_dir,
+            ),
+        )
+        == expected_fingerprint
+    ):
         return
     message = "Codegen inputs changed while freshness output was generated"
     raise RuntimeError(message)
+
+
+def _source_identity_fingerprint_values(
+    identities: tuple[RuntimeBundleSourceIdentity, ...],
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for identity in identities:
+        values.extend(
+            (
+                identity.version,
+                identity.selection,
+                identity.source_tag,
+                identity.source_commit,
+                identity.source_tree,
+            )
+        )
+    return tuple(values)
+
+
+def _runtime_input_fingerprint_values(
+    identities: tuple[RuntimeBundleSourceIdentity, ...],
+    *,
+    snapshot_mode: RuntimeSnapshotMode,
+    snapshot_dir: Path,
+) -> tuple[str, ...]:
+    values = [
+        "snapshot-mode",
+        snapshot_mode,
+        *_source_identity_fingerprint_values(identities),
+    ]
+    if snapshot_mode == "source":
+        return tuple(values)
+    values.extend(("snapshot-dir", _input_path_label(snapshot_dir)))
+    for identity in identities:
+        snapshot_path = snapshot_dir / f"ds-{identity.version}-contract.json"
+        kind, digest = _input_entry_signature(snapshot_path)
+        values.extend((identity.version, kind, digest))
+    return tuple(values)
+
+
+def _report_snapshot_fallbacks(bundles: tuple[object, ...]) -> None:
+    for bundle in bundles:
+        reason = getattr(bundle, "snapshot_fallback_reason", None)
+        if not isinstance(reason, str):
+            continue
+        spec = getattr(bundle, "spec", None)
+        version = getattr(spec, "version", "unknown")
+        print(
+            f"check_generated_freshness: snapshot fallback for DS {version}: {reason}"
+        )
 
 
 def _compare_trees(src: Path, ref: Path) -> list[str]:
@@ -222,7 +356,43 @@ def _tree_entries(root: Path) -> dict[Path, tuple[str, str]]:
     return entries
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Verify the complete exact-version generated namespace"
+    )
+    parser.add_argument(
+        "--snapshot-mode",
+        choices=sorted(RUNTIME_SNAPSHOT_MODES),
+        default="prefer",
+        help=(
+            "prefer verified contract snapshots (default), require them, or "
+            "force a cache-bypassing exact-source extraction"
+        ),
+    )
+    parser.add_argument(
+        "--snapshot-dir",
+        type=Path,
+        default=SNAPSHOT_DIR,
+        help="exact contract snapshot cache directory",
+    )
+    return parser
+
+
+def _task_profile_freshness_error() -> str | None:
+    """Return a deterministic task-profile divergence message, when stale."""
+    facts = load_task_profile_document(TASK_PROFILE_FACTS)
+    reviews = load_task_profile_document(TASK_PROFILE_REVIEWS)
+    rendered = render_task_profile_data(compile_task_profile_data(facts, reviews))
+    if (
+        TASK_PROFILE_OUTPUT.is_file()
+        and TASK_PROFILE_OUTPUT.read_text(encoding="utf-8") == rendered
+    ):
+        return None
+    return f"stale: {_input_path_label(TASK_PROFILE_OUTPUT)}"
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args([] if argv is None else argv)
     # --- Guard: committed generated code must contain at least one version. ---
     version_dirs = _find_version_dirs(SRC_GENERATED)
     if not version_dirs:
@@ -232,7 +402,19 @@ def main() -> int:
     command_hint = str(PYTHON) if PYTHON.exists() else sys.executable
 
     try:
-        fresh_output = _materialize_fresh_output()
+        task_profile_error = _task_profile_freshness_error()
+        if task_profile_error is not None:
+            print("check_generated_freshness: FAILED — task profiles have diverged.")
+            print()
+            print("Regenerate the exact task-profile runtime data with:")
+            print(f"  {command_hint} tools/generate_ds_task_profiles.py")
+            print()
+            print(task_profile_error)
+            return 1
+        fresh_output = _materialize_fresh_output(
+            snapshot_mode=args.snapshot_mode,
+            snapshot_dir=args.snapshot_dir.resolve(),
+        )
     except Exception as exc:
         print("check_generated_freshness: generator failed:")
         print(str(exc))
@@ -247,8 +429,8 @@ def main() -> int:
         print()
         print("The following files in src/dsctl/generated/ do not match a fresh")
         print("codegen run. Generated code must only be changed by re-running:")
-        print(f"  {command_hint} tools/generate_ds_contract.py --package-output <dir>")
-        print("`--package-output` only writes src/dsctl/generated/... style output.")
+        print(f"  {command_hint} tools/generate_ds_runtime_bundles.py")
+        print("The runtime bundle generator replaces the complete generated namespace.")
         print()
         print("\n".join(all_diffs))
         return 1
@@ -258,4 +440,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

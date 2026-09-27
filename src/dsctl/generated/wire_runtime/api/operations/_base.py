@@ -1,0 +1,484 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import httpx
+
+from typing import (
+    IO,
+    Mapping,
+    NoReturn,
+    Protocol,
+    Sequence,
+    TypeGuard,
+    TypeAlias,
+    TypeVar,
+    TypedDict,
+    Unpack,
+    cast,
+    runtime_checkable,
+)
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    JsonValue as JsonValue,
+    TypeAdapter,
+    ValidationError,
+)
+
+T = TypeVar("T")
+
+JsonScalar: TypeAlias = str | int | float | bool | None
+JsonLike: TypeAlias = JsonScalar | Sequence["JsonLike"] | Mapping[str, "JsonLike"]
+RequestScalar: TypeAlias = str | int | float | bool | None
+RequestValue: TypeAlias = RequestScalar | list["RequestScalar"]
+RequestMapping: TypeAlias = dict[str, RequestValue]
+RequestContent: TypeAlias = str
+JsonObject: TypeAlias = dict[str, JsonValue]
+RequestData: TypeAlias = RequestMapping
+
+@runtime_checkable
+class UploadFileStream(Protocol):
+    def read(self, size: int = -1) -> bytes: ...
+
+UploadFileContent: TypeAlias = UploadFileStream | bytes
+UploadFileLike: TypeAlias = (
+    UploadFileContent
+    | tuple[str, UploadFileContent]
+    | tuple[str, UploadFileContent, str]
+    | tuple[str, UploadFileContent, str, dict[str, str]]
+)
+
+HttpxUploadFileContent: TypeAlias = IO[bytes] | bytes | str
+HttpxUploadFileLike: TypeAlias = (
+    HttpxUploadFileContent
+    | tuple[str | None, HttpxUploadFileContent]
+    | tuple[str | None, HttpxUploadFileContent, str | None]
+    | tuple[
+        str | None,
+        HttpxUploadFileContent,
+        str | None,
+        Mapping[str, str],
+    ]
+)
+HttpxRequestFiles: TypeAlias = Mapping[str, HttpxUploadFileLike]
+
+def _as_httpx_request_files(
+    files: dict[str, UploadFileLike] | None,
+) -> HttpxRequestFiles | None:
+    # The generated API accepts the smaller runtime protocol that
+    # httpx consumes; keep the nominal IO cast at this boundary.
+    return cast(HttpxRequestFiles | None, files)
+
+class BinaryPayload(Protocol):
+    @property
+    def content(self) -> bytes: ...
+
+    @property
+    def headers(self) -> dict[str, str]: ...
+
+    @property
+    def content_type(self) -> str | None: ...
+
+@dataclass(frozen=True)
+class _RequestsBinaryPayload:
+    content: bytes
+    headers: dict[str, str]
+    content_type: str | None
+
+class RequestKwargs(TypedDict, total=False):
+    params: RequestMapping
+    json: JsonValue
+    data: RequestData
+    content: RequestContent
+    files: dict[str, UploadFileLike]
+
+class ClientRequestKwargs(RequestKwargs, total=False):
+    headers: dict[str, str]
+
+def _is_request_value(value: object) -> TypeGuard[RequestValue]:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return True
+    if isinstance(value, list):
+        return all(
+            item is None or isinstance(item, (str, int, float, bool))
+            for item in value
+        )
+    return False
+
+def _is_json_value(value: object) -> TypeGuard[JsonValue]:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return True
+    if isinstance(value, list):
+        return all(_is_json_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(key, str) and _is_json_value(item)
+            for key, item in value.items()
+        )
+    return False
+
+def _require_json_value(value: object, *, label: str) -> JsonValue:
+    if _is_json_value(value):
+        return value
+    raise TypeError(f"{label} must be JSON-compatible")
+
+def _require_json_object(value: object, *, label: str) -> JsonObject:
+    json_value = _require_json_value(value, label=label)
+    if isinstance(json_value, dict):
+        return json_value
+    raise TypeError(f"{label} must be a JSON object")
+
+def _require_request_mapping(
+    value: object,
+    *,
+    label: str,
+) -> RequestMapping:
+    if not isinstance(value, dict):
+        raise TypeError(f"{label} must be a request mapping")
+    request_mapping: RequestMapping = {}
+    for key, item in value.items():
+        if not isinstance(key, str) or not _is_request_value(item):
+            raise TypeError(f"{label} must be request-compatible")
+        request_mapping[key] = item
+    return request_mapping
+
+class ApiResultError(RuntimeError):
+    def __init__(
+        self,
+        *,
+        code: int | None,
+        message: str,
+        data: JsonValue,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.result_message = message
+        self.data = data
+
+class ApiPayloadValidationError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        validation_error_count: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.validation_error_count = validation_error_count
+
+class BaseParamsModel(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        extra="forbid",
+    )
+
+class SessionLike(Protocol):
+    # Session implementations own HTTP execution and DS envelope
+    # normalization. Operation methods should only see logical payloads.
+    def request(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        **kwargs: Unpack[RequestKwargs],
+    ) -> JsonValue: ...
+
+    def request_binary(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        **kwargs: Unpack[RequestKwargs],
+    ) -> BinaryPayload: ...
+
+    def raise_payload_error(
+        self,
+        message: str,
+        *,
+        validation_error_count: int | None = None,
+        cause: Exception | None = None,
+    ) -> NoReturn: ...
+
+    def raise_result_error(
+        self,
+        *,
+        code: int | None,
+        message: str,
+        data: JsonValue,
+    ) -> NoReturn: ...
+
+class _RequestsSessionAdapter:
+    def __init__(self, session: httpx.Client | None = None) -> None:
+        if session is None:
+            session = httpx.Client()
+        self._session = session
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        **kwargs: Unpack[RequestKwargs],
+    ) -> JsonValue:
+        response = self._session.request(
+            method,
+            url,
+            headers=headers,
+            params=kwargs.get("params"),
+            json=kwargs.get("json"),
+            data=kwargs.get("data"),
+            content=kwargs.get("content"),
+            files=_as_httpx_request_files(kwargs.get("files")),
+        )
+        response.raise_for_status()
+        payload = _require_json_value(
+            response.json(),
+            label="response body",
+        )
+        return self._unwrap_payload(payload)
+
+    def request_binary(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        **kwargs: Unpack[RequestKwargs],
+    ) -> BinaryPayload:
+        response = self._session.request(
+            method,
+            url,
+            headers=headers,
+            params=kwargs.get("params"),
+            json=kwargs.get("json"),
+            data=kwargs.get("data"),
+            content=kwargs.get("content"),
+            files=_as_httpx_request_files(kwargs.get("files")),
+        )
+        response.raise_for_status()
+        return _RequestsBinaryPayload(
+            content=response.content,
+            headers=dict(response.headers),
+            content_type=response.headers.get("content-type"),
+        )
+
+    def raise_payload_error(
+        self,
+        message: str,
+        *,
+        validation_error_count: int | None = None,
+        cause: Exception | None = None,
+    ) -> NoReturn:
+        error = ApiPayloadValidationError(
+            message,
+            validation_error_count=validation_error_count,
+        )
+        if cause is None:
+            raise error
+        raise error from cause
+
+    def raise_result_error(
+        self,
+        *,
+        code: int | None,
+        message: str,
+        data: JsonValue,
+    ) -> NoReturn:
+        raise ApiResultError(code=code, message=message, data=data)
+
+    def _unwrap_payload(self, payload: JsonValue) -> JsonValue:
+        if isinstance(payload, dict) and {"code", "msg"}.issubset(payload):
+            if "data" not in payload and "dataList" not in payload:
+                return payload
+            result_code = payload.get("code")
+            data = payload.get("data")
+            if data is None and "data" not in payload:
+                data = payload.get("dataList")
+            if result_code != 0:
+                result_message = str(payload.get("msg") or "DS API error")
+                self.raise_result_error(
+                    code=(result_code if isinstance(result_code, int) else None),
+                    message=result_message,
+                    data=data,
+                )
+            return data
+        return payload
+
+class BaseRequestsClient:
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        *,
+        session: SessionLike | None = None,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.token = token
+        if session is None:
+            session = _RequestsSessionAdapter()
+        self._session = session
+
+    def _default_headers(self) -> dict[str, str]:
+        return {"accept": "application/json", "token": self.token}
+
+    def _clean_mapping(
+        self,
+        values: RequestMapping,
+    ) -> RequestMapping:
+        return {
+            key: value
+            for key, value in values.items()
+            if value is not None
+        }
+
+    def _model_mapping(self, value: BaseModel) -> RequestMapping:
+        payload = value.model_dump(
+            by_alias=True,
+            exclude_none=True,
+            exclude_unset=True,
+            mode="json",
+        )
+        return self._clean_mapping(
+            _require_request_mapping(
+                payload,
+                label="request payload",
+            )
+        )
+
+    def _multipart_mapping(
+        self,
+        value: BaseModel,
+        *,
+        file_fields: Mapping[str, str],
+    ) -> tuple[RequestData, dict[str, UploadFileLike]]:
+        payload = value.model_dump(
+            by_alias=True,
+            exclude=set(file_fields),
+            exclude_none=True,
+            exclude_unset=True,
+            mode="json",
+        )
+        data = self._clean_mapping(
+            _require_request_mapping(
+                payload,
+                label="multipart payload",
+            )
+        )
+        files: dict[str, UploadFileLike] = {}
+        for attribute_name, wire_name in file_fields.items():
+            file_value = getattr(value, attribute_name)
+            if file_value is not None:
+                files[wire_name] = cast(UploadFileLike, file_value)
+        return data, files
+
+    def _json_payload(self, value: BaseModel | JsonLike) -> JsonValue:
+        if isinstance(value, BaseModel):
+            value = value.model_dump(
+                by_alias=True,
+                exclude_none=True,
+                exclude_unset=True,
+                mode="json",
+            )
+        return _require_json_value(value, label="json payload")
+
+    def _validate_payload(self, value: object, adapter: TypeAdapter[T]) -> T:
+        try:
+            return adapter.validate_python(value)
+        except ValidationError as error:
+            self._session.raise_payload_error(
+                "Response payload did not match generated API contract",
+                validation_error_count=error.error_count(),
+                cause=error,
+            )
+
+    def _project_status_data(self, value: JsonValue) -> JsonValue:
+        if not isinstance(value, dict):
+            return value
+        status = value.get("status")
+        if status is None:
+            return value
+        payload = _require_json_object(value, label="status payload")
+        data = payload.get("data")
+        if data is None and "data" not in payload:
+            data = payload.get("dataList")
+        if status != "SUCCESS":
+            self._session.raise_result_error(
+                code=None,
+                message=str(payload.get("msg") or "DS API error"),
+                data=data,
+            )
+        return _require_json_value(data, label="status payload data")
+
+    def _project_single_data(self, value: JsonValue) -> JsonValue:
+        return self._project_single_field(value, field_name="data")
+
+    def _project_single_data_list(self, value: JsonValue) -> JsonValue:
+        return self._project_single_field(value, field_name="dataList")
+
+    def _project_single_field(
+        self,
+        value: JsonValue,
+        *,
+        field_name: str,
+    ) -> JsonValue:
+        if not isinstance(value, dict):
+            return value
+        payload = _require_json_object(value, label="single-field payload")
+        if field_name not in payload:
+            message = f"single-field payload must contain {field_name}"
+            self._session.raise_payload_error(message)
+        return _require_json_value(
+            payload[field_name],
+            label=f"single-field payload {field_name}",
+        )
+
+    def _request(self, method: str, path: str, **kwargs: Unpack[ClientRequestKwargs]) -> JsonValue:
+        headers = self._default_headers()
+        extra_headers = kwargs.pop("headers", None)
+        if extra_headers is not None:
+            headers.update(extra_headers)
+        request_kwargs: RequestKwargs = {}
+        if "params" in kwargs:
+            request_kwargs["params"] = kwargs["params"]
+        if "json" in kwargs:
+            request_kwargs["json"] = kwargs["json"]
+        if "data" in kwargs:
+            request_kwargs["data"] = kwargs["data"]
+        if "content" in kwargs:
+            request_kwargs["content"] = kwargs["content"]
+        if "files" in kwargs:
+            request_kwargs["files"] = kwargs["files"]
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        return self._session.request(
+            method,
+            url,
+            headers=headers,
+            **request_kwargs,
+        )
+
+    def _request_binary(self, method: str, path: str, **kwargs: Unpack[ClientRequestKwargs]) -> BinaryPayload:
+        headers = self._default_headers()
+        extra_headers = kwargs.pop("headers", None)
+        if extra_headers is not None:
+            headers.update(extra_headers)
+        request_kwargs: RequestKwargs = {}
+        if "params" in kwargs:
+            request_kwargs["params"] = kwargs["params"]
+        if "json" in kwargs:
+            request_kwargs["json"] = kwargs["json"]
+        if "data" in kwargs:
+            request_kwargs["data"] = kwargs["data"]
+        if "content" in kwargs:
+            request_kwargs["content"] = kwargs["content"]
+        if "files" in kwargs:
+            request_kwargs["files"] = kwargs["files"]
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        return self._session.request_binary(
+            method,
+            url,
+            headers=headers,
+            **request_kwargs,
+        )
+
+__all__ = ["BaseRequestsClient", "BaseParamsModel", "BinaryPayload", "UploadFileLike", "SessionLike", "ApiResultError", "ApiPayloadValidationError"]

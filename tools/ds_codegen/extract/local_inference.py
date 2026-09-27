@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 import javalang
 
+from ds_codegen.java_source import SourceResolutionScope
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
@@ -75,7 +77,7 @@ def infer_local_return_statement_payload_type(
     if isinstance(expression, javalang.tree.MethodInvocation):
         qualifier = expression.qualifier or ""
         if (
-            expression.member == "returnDataList"
+            expression.member in {"returnDataList", "returnDataListPaging"}
             and qualifier in {"", "this"}
             and expression.arguments
             and isinstance(expression.arguments[0], javalang.tree.MemberReference)
@@ -153,6 +155,23 @@ def infer_local_variable_payload_type(
             owner_methods=owner_methods,
             active_same_class_methods=active_same_class_methods,
         )
+        assignment_types.extend(
+            _collect_local_variable_reassignment_types(
+                repo_root=repo_root,
+                controller_path=controller_path,
+                method=method,
+                variable_name=variable_name,
+                variable_type=variable_type,
+                controller_field_types=controller_field_types,
+                variable_types=variable_types,
+                variable_initializers=variable_initializers,
+                import_map=import_map,
+                package_name=package_name,
+                deps=deps,
+                owner_methods=owner_methods,
+                active_same_class_methods=active_same_class_methods,
+            )
+        )
         inferred_assignment_type = deps.resolve_inferred_return_type(
             assignment_types,
             saw_success_like_void=False,
@@ -171,6 +190,24 @@ def infer_local_variable_payload_type(
             deps=deps,
         ):
             return "Void"
+
+    if variable_type == "ArrayNode":
+        structured_node_type = deps.infer_local_data_structure_type(
+            repo_root=repo_root,
+            controller_path=controller_path,
+            method=method,
+            variable_name=variable_name,
+            view_name_hint=f"{controller_path.stem}_{method.name}_{variable_name}",
+            variable_types=variable_types,
+            variable_initializers=variable_initializers,
+            controller_field_types=controller_field_types,
+            import_map=import_map,
+            package_name=package_name,
+            owner_methods=owner_methods,
+            active_same_class_methods=active_same_class_methods,
+        )
+        if structured_node_type is not None:
+            return structured_node_type
 
     if (
         not variable_type.startswith("Map<")
@@ -229,6 +266,23 @@ def infer_local_variable_payload_type(
             owner_methods=owner_methods,
             active_same_class_methods=active_same_class_methods,
         )
+        assignment_types.extend(
+            _collect_local_variable_reassignment_types(
+                repo_root=repo_root,
+                controller_path=controller_path,
+                method=method,
+                variable_name=variable_name,
+                variable_type=variable_type,
+                controller_field_types=controller_field_types,
+                variable_types=variable_types,
+                variable_initializers=variable_initializers,
+                import_map=import_map,
+                package_name=package_name,
+                deps=deps,
+                owner_methods=owner_methods,
+                active_same_class_methods=active_same_class_methods,
+            )
+        )
         inferred_assignment_type = deps.resolve_inferred_return_type(
             assignment_types,
             saw_success_like_void=False,
@@ -267,6 +321,55 @@ def infer_local_variable_payload_type(
     ):
         return initializer_payload_type
     return None
+
+
+def _collect_local_variable_reassignment_types(
+    *,
+    repo_root: Path,
+    controller_path: Path,
+    method: javalang.tree.MethodDeclaration,
+    variable_name: str,
+    variable_type: str,
+    controller_field_types: dict[str, str],
+    variable_types: dict[str, str],
+    variable_initializers: dict[str, object],
+    import_map: dict[str, str],
+    package_name: str | None,
+    deps: LocalInferenceDeps,
+    owner_methods: list[javalang.tree.MethodDeclaration] | None = None,
+    active_same_class_methods: tuple[tuple[str, int], ...] = (),
+) -> list[str]:
+    """Infer payloads assigned to a returned wrapper or map local."""
+
+    method_key = deps.method_signature_key(method)
+    nested_active_methods = active_same_class_methods
+    if method_key not in nested_active_methods:
+        nested_active_methods = (*nested_active_methods, method_key)
+    inferred_types: list[str] = []
+    for _, assignment in method.filter(javalang.tree.Assignment):
+        target = assignment.expressionl
+        if not isinstance(target, javalang.tree.MemberReference):
+            continue
+        if target.qualifier or target.member != variable_name:
+            continue
+        inferred_type = deps.infer_expression_return_type(
+            repo_root=repo_root,
+            controller_path=controller_path,
+            expression=assignment.value,
+            controller_field_types=controller_field_types,
+            variable_types=variable_types,
+            variable_initializers=variable_initializers,
+            import_map=import_map,
+            package_name=package_name,
+            owner_methods=owner_methods,
+            active_same_class_methods=nested_active_methods,
+        )
+        if inferred_type is None or inferred_type in {"Void", variable_type}:
+            continue
+        if deps.is_weak_inferred_type(inferred_type):
+            continue
+        inferred_types.append(inferred_type)
+    return inferred_types
 
 
 def _collect_local_variable_assignment_types(
@@ -491,8 +594,7 @@ def _creates_empty_result_like_initializer(
     import_path = deps.resolve_referenced_import_path(
         repo_root,
         created_type_name,
-        import_map,
-        package_name,
+        SourceResolutionScope(import_map, package_name),
     )
     if import_path is None:
         return False
@@ -528,8 +630,7 @@ def _is_result_like_java_type(
     import_path = deps.resolve_referenced_import_path(
         repo_root,
         generic_base_type,
-        import_map,
-        package_name,
+        SourceResolutionScope(import_map, package_name),
     )
     if import_path is None:
         return False

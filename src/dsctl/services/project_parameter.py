@@ -12,34 +12,36 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
-    ProjectParameterData,
-    optional_text,
-    require_resource_text,
-    serialize_project_parameter,
+from dsctl.services._project_scope import (
+    resolve_code_project,
+    selected_project_data,
 )
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_positive_int,
 )
-from dsctl.services.pagination import (
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
+)
+from dsctl.upstream.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_AUTO_EXHAUST_PAGES,
     PageData,
     requested_page_data,
 )
-from dsctl.services.resolver import (
-    ResolvedProjectData,
-    ResolvedProjectParameterData,
+from dsctl.upstream.project_parameters import (
+    PROJECT_PARAMETER_DOMAIN,
+    ProjectParameterDomain,
 )
-from dsctl.services.resolver import project as resolve_project
-from dsctl.services.resolver import project_parameter as resolve_project_parameter
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
-from dsctl.services.selection import (
-    SelectedValue,
-    require_project_selection,
-    with_selection_source,
+from dsctl.upstream.resolver import ResolvedProjectParameterData
+from dsctl.upstream.resolver import project_parameter as resolve_project_parameter
+from dsctl.upstream.serialization import (
+    ProjectParameterData,
+    optional_text,
+    require_resource_text,
+    serialize_project_parameter,
 )
 
 if TYPE_CHECKING:
@@ -88,8 +90,9 @@ def list_project_parameters_result(
     require_positive_int(page_no, label="page_no")
     require_positive_int(page_size, label="page_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_PARAMETER_DOMAIN,
         _list_project_parameters_result,
         project=project,
         search=normalized_search,
@@ -107,8 +110,9 @@ def get_project_parameter_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Resolve and fetch one project parameter inside one selected project."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_PARAMETER_DOMAIN,
         _get_project_parameter_result,
         project_parameter=project_parameter,
         project=project,
@@ -130,8 +134,9 @@ def create_project_parameter_result(
         label="project parameter data type",
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_PARAMETER_DOMAIN,
         _create_project_parameter_result,
         project=project,
         name=parameter_name,
@@ -170,8 +175,9 @@ def update_project_parameter_result(
         else None
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_PARAMETER_DOMAIN,
         _update_project_parameter_result,
         project_parameter=project_parameter,
         project=project,
@@ -191,8 +197,9 @@ def delete_project_parameter_result(
     """Delete one project parameter after explicit confirmation."""
     require_delete_force(force=force, resource_label="Project parameter")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_PARAMETER_DOMAIN,
         _delete_project_parameter_result,
         project_parameter=project_parameter,
         project=project,
@@ -200,7 +207,7 @@ def delete_project_parameter_result(
 
 
 def _list_project_parameters_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectParameterDomain],
     *,
     project: str | None,
     search: str | None,
@@ -209,15 +216,15 @@ def _list_project_parameters_result(
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
     )
-    adapter = runtime.upstream.project_parameters
+    adapter = runtime.domain.parameters
     data: ProjectParameterPageData = requested_page_data(
         lambda current_page_no, current_page_size: adapter.list(
-            project_code=resolved_project.code,
+            project_code=project_code,
             page_no=current_page_no,
             page_size=current_page_size,
             search=search,
@@ -231,7 +238,7 @@ def _list_project_parameters_result(
         max_pages=MAX_AUTO_EXHAUST_PAGES,
         translate_error=lambda error: _translate_project_parameter_api_error(
             error,
-            project_code=resolved_project.code,
+            project_code=project_code,
         ),
     )
 
@@ -239,7 +246,7 @@ def _list_project_parameters_result(
         data=require_json_object(data, label="project parameter list data"),
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             ),
             "search": search,
@@ -252,24 +259,24 @@ def _list_project_parameters_result(
 
 
 def _get_project_parameter_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectParameterDomain],
     *,
     project_parameter: str,
     project: str | None,
 ) -> CommandResult:
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
     )
     resolved_parameter = resolve_project_parameter(
         project_parameter,
-        adapter=runtime.upstream.project_parameters,
-        project_code=resolved_project.code,
+        adapter=runtime.domain.parameters,
+        project_code=project_code,
     )
     fetched_parameter = _get_project_parameter(
         runtime,
-        project_code=resolved_project.code,
+        project_code=project_code,
         code=resolved_parameter.code,
     )
     return CommandResult(
@@ -279,7 +286,7 @@ def _get_project_parameter_result(
         ),
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             ),
             "projectParameter": require_json_object(
@@ -291,21 +298,21 @@ def _get_project_parameter_result(
 
 
 def _create_project_parameter_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectParameterDomain],
     *,
     project: str | None,
     name: str,
     value: str,
     data_type: str,
 ) -> CommandResult:
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
     )
     try:
-        created_parameter = runtime.upstream.project_parameters.create(
-            project_code=resolved_project.code,
+        created_parameter = runtime.domain.parameters.create(
+            project_code=project_code,
             name=name,
             value=value,
             data_type=data_type,
@@ -313,7 +320,7 @@ def _create_project_parameter_result(
     except ApiResultError as error:
         raise _translate_project_parameter_api_error(
             error,
-            project_code=resolved_project.code,
+            project_code=project_code,
             name=name,
         ) from error
 
@@ -324,7 +331,7 @@ def _create_project_parameter_result(
         ),
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             ),
             "projectParameter": require_json_object(
@@ -336,7 +343,7 @@ def _create_project_parameter_result(
 
 
 def _update_project_parameter_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectParameterDomain],
     *,
     project_parameter: str,
     project: str | None,
@@ -344,19 +351,19 @@ def _update_project_parameter_result(
     value: ValueUpdate,
     data_type: str | None,
 ) -> CommandResult:
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
     )
     resolved_parameter = resolve_project_parameter(
         project_parameter,
-        adapter=runtime.upstream.project_parameters,
-        project_code=resolved_project.code,
+        adapter=runtime.domain.parameters,
+        project_code=project_code,
     )
     current_parameter = _get_project_parameter(
         runtime,
-        project_code=resolved_project.code,
+        project_code=project_code,
         code=resolved_parameter.code,
     )
     updated_name = (
@@ -384,8 +391,8 @@ def _update_project_parameter_result(
     )
 
     try:
-        updated_parameter = runtime.upstream.project_parameters.update(
-            project_code=resolved_project.code,
+        updated_parameter = runtime.domain.parameters.update(
+            project_code=project_code,
             code=resolved_parameter.code,
             name=updated_name,
             value=updated_value,
@@ -394,7 +401,7 @@ def _update_project_parameter_result(
     except ApiResultError as error:
         raise _translate_project_parameter_api_error(
             error,
-            project_code=resolved_project.code,
+            project_code=project_code,
             code=resolved_parameter.code,
             name=updated_name,
         ) from error
@@ -406,7 +413,7 @@ def _update_project_parameter_result(
         ),
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             ),
             "projectParameter": require_json_object(
@@ -418,30 +425,30 @@ def _update_project_parameter_result(
 
 
 def _delete_project_parameter_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectParameterDomain],
     *,
     project_parameter: str,
     project: str | None,
 ) -> CommandResult:
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
     )
     resolved_parameter = resolve_project_parameter(
         project_parameter,
-        adapter=runtime.upstream.project_parameters,
-        project_code=resolved_project.code,
+        adapter=runtime.domain.parameters,
+        project_code=project_code,
     )
     try:
-        deleted = runtime.upstream.project_parameters.delete(
-            project_code=resolved_project.code,
+        deleted = runtime.domain.parameters.delete(
+            project_code=project_code,
             code=resolved_parameter.code,
         )
     except ApiResultError as error:
         raise _translate_project_parameter_api_error(
             error,
-            project_code=resolved_project.code,
+            project_code=project_code,
             code=resolved_parameter.code,
         ) from error
 
@@ -455,7 +462,7 @@ def _delete_project_parameter_result(
         ),
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             ),
             "projectParameter": require_json_object(
@@ -467,13 +474,13 @@ def _delete_project_parameter_result(
 
 
 def _get_project_parameter(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectParameterDomain],
     *,
     project_code: int,
     code: int,
 ) -> ProjectParameterRecord:
     try:
-        return runtime.upstream.project_parameters.get(
+        return runtime.domain.parameters.get(
             project_code=project_code,
             code=code,
         )
@@ -483,20 +490,6 @@ def _get_project_parameter(
             project_code=project_code,
             code=code,
         ) from error
-
-
-def _selected_project_data(
-    project: ResolvedProjectData,
-    selected_project: SelectedValue,
-) -> dict[str, int | str | None]:
-    return with_selection_source(
-        {
-            "code": project["code"],
-            "name": project["name"],
-            "description": project["description"],
-        },
-        selected_project,
-    )
 
 
 def _require_project_parameter_value(value: str | None) -> str:

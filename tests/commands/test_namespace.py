@@ -5,12 +5,12 @@ from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.errors import ApiResultError
-from dsctl.services import runtime as runtime_service
+from dsctl.services import namespace as namespace_service
+from dsctl.upstream.namespaces import NAMESPACE_DOMAIN, NamespaceDomain
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeNamespace,
     FakeNamespaceAdapter,
-    FakeProjectAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
 
@@ -50,14 +50,14 @@ def patch_namespace_service(
     monkeypatch: pytest.MonkeyPatch,
     fake_namespace_adapter: FakeNamespaceAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            namespace_adapter=fake_namespace_adapter,
-            profile=make_profile(),
-        ),
+    domain = NamespaceDomain(namespaces=fake_namespace_adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        namespace_service,
+        expected_domain=NAMESPACE_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 
@@ -96,7 +96,15 @@ def test_namespace_available_command_returns_current_user_visible_set() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "namespace.available"
-    assert payload["resolved"] == {"scope": "current_user"}
+    assert payload["resolved"] == {
+        "selection": {
+            "source": "unconfigured",
+            "context": None,
+            "env_file": None,
+            "api_url": None,
+        },
+        "scope": "current_user",
+    }
     assert payload["data"][0]["namespace"] == "etl-prod"
 
 

@@ -45,7 +45,7 @@ class RequestContext(TypedDict):
     url: str
     attempts: int
     max_attempts: int
-    retryable: bool
+    request_replay_safe: bool
 
 
 @dataclass(frozen=True)
@@ -55,6 +55,14 @@ class BinaryResponse:
     content: bytes
     headers: dict[str, str]
     content_type: str | None
+
+
+@dataclass(frozen=True)
+class ReadExecutionPolicy:
+    """Limit an uncertain target to one reviewed generated read closure."""
+
+    action: str
+    program_fingerprints: frozenset[str]
 
 
 RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
@@ -67,19 +75,21 @@ class DolphinSchedulerClient:
     def __init__(
         self,
         profile: ClusterProfile,
-        timeout: float = 10.0,
+        timeout: float | None = None,
         *,
         transport: httpx.BaseTransport | None = None,
+        read_policy: ReadExecutionPolicy | None = None,
     ) -> None:
         """Create a client bound to a cluster profile and optional mock transport."""
         self.profile = profile
-        self.timeout = timeout
+        self.read_policy = read_policy
+        self.timeout = profile.api_timeout_seconds if timeout is None else timeout
         self.retry_attempts = max(1, profile.api_retry_attempts)
         self.retry_backoff_ms = max(0, profile.api_retry_backoff_ms)
         self._base_url = profile.api_url.rstrip("/")
         self._client = httpx.Client(
             headers=build_auth_headers(profile),
-            timeout=timeout,
+            timeout=self.timeout,
             transport=transport,
         )
 
@@ -162,10 +172,17 @@ class DolphinSchedulerClient:
         path: str,
         *,
         params: HttpQueryParams | None = None,
+        headers: HttpHeaders | None = None,
         retryable: bool = True,
     ) -> BinaryResponse:
         """Issue a GET request and return the raw binary response body."""
-        response, _ = self._request("GET", path, params=params, retryable=retryable)
+        response, _ = self._request(
+            "GET",
+            path,
+            params=params,
+            headers=headers,
+            retryable=retryable,
+        )
         return BinaryResponse(
             content=response.content,
             headers=dict(response.headers),
@@ -375,7 +392,7 @@ class DolphinSchedulerClient:
             raise ApiTransportError(
                 message,
                 details={
-                    **_request_context_details(request_details),
+                    **_request_error_details(request_details, retryable=False),
                     "status_code": response.status_code,
                     "body": _truncate_text(response.text),
                 },
@@ -424,16 +441,17 @@ class DolphinSchedulerClient:
                 message = f"Request failed: {exc}"
                 raise ApiTransportError(
                     message,
-                    details=_request_context_details(
+                    details=_request_error_details(
                         _request_context(
                             method=method,
                             path=path,
                             url=url,
                             attempts=attempt,
                             max_attempts=max_attempts,
-                            retryable=retryable,
+                            request_replay_safe=retryable,
                             request_id=request_id,
-                        )
+                        ),
+                        retryable=_is_retryable_transport_error(exc),
                     ),
                 ) from exc
 
@@ -443,7 +461,7 @@ class DolphinSchedulerClient:
                 url=url,
                 attempts=attempt,
                 max_attempts=max_attempts,
-                retryable=retryable,
+                request_replay_safe=retryable,
                 request_id=request_id,
             )
             if response.status_code >= 400:
@@ -459,7 +477,10 @@ class DolphinSchedulerClient:
                     message,
                     status_code=response.status_code,
                     body=_decode_response_body(response),
-                    details=_request_context_details(request_details),
+                    details=_request_error_details(
+                        request_details,
+                        retryable=response.status_code in RETRYABLE_STATUS_CODES,
+                    ),
                 )
             return response, request_details
 
@@ -578,6 +599,7 @@ def _unwrap_result(
         details = dict(request_details or {})
         details.setdefault("method", method)
         details.setdefault("path", path)
+        details["retryable"] = False
         raise ApiResultError(
             result_code=result_code if isinstance(result_code, int) else None,
             result_message=str(
@@ -647,7 +669,7 @@ def _request_context(
     url: str,
     attempts: int,
     max_attempts: int,
-    retryable: bool,
+    request_replay_safe: bool,
     request_id: str,
 ) -> RequestContext:
     return {
@@ -657,11 +679,13 @@ def _request_context(
         "url": url,
         "attempts": attempts,
         "max_attempts": max_attempts,
-        "retryable": retryable,
+        "request_replay_safe": request_replay_safe,
     }
 
 
-def _request_context_details(request_details: RequestContext) -> dict[str, JsonValue]:
+def _request_error_details(
+    request_details: RequestContext, *, retryable: bool
+) -> dict[str, JsonValue]:
     return {
         "request_id": request_details["request_id"],
         "method": request_details["method"],
@@ -669,7 +693,8 @@ def _request_context_details(request_details: RequestContext) -> dict[str, JsonV
         "url": request_details["url"],
         "attempts": request_details["attempts"],
         "max_attempts": request_details["max_attempts"],
-        "retryable": request_details["retryable"],
+        "request_replay_safe": request_details["request_replay_safe"],
+        "retryable": retryable,
     }
 
 

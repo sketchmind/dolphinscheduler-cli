@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from dsctl.errors import ConfigError, NotFoundError, ResolutionError
-from dsctl.output import CommandResult, dry_run_result, error_payload, success_payload
+from dsctl.output import CommandResult, dry_run_result, error_payload, result_payload
 
 if TYPE_CHECKING:
     from dsctl.support.json_types import JsonObject, JsonValue
@@ -16,8 +16,26 @@ def test_command_result_rejects_non_json_data() -> None:
         CommandResult(data=cast("JsonValue", {"bad": object()}))
 
 
-def test_success_payload_uses_json_safe_result_shapes() -> None:
-    payload = success_payload(
+def test_failed_result_retains_its_diagnostic_report() -> None:
+    payload = result_payload(
+        "doctor",
+        CommandResult(
+            data={"status": "error", "checks": [{"name": "api", "status": "error"}]},
+            failure=ConfigError("API check failed"),
+        ),
+    )
+    assert payload["ok"] is False
+    assert payload["data"] == {
+        "status": "error",
+        "checks": [{"name": "api", "status": "error"}],
+    }
+    error = payload["error"]
+    assert isinstance(error, dict)
+    assert error["type"] == "config_error"
+
+
+def test_result_payload_uses_json_safe_result_shapes() -> None:
+    payload = result_payload(
         "context",
         CommandResult(
             data={"project": "etl-prod"},
@@ -37,8 +55,7 @@ def test_success_payload_uses_json_safe_result_shapes() -> None:
         "action": "context",
         "resolved": {"project": "etl-prod"},
         "data": {"project": "etl-prod"},
-        "warnings": ["dry run"],
-        "warning_details": [
+        "warnings": [
             {
                 "code": "example_warning",
                 "message": "dry run",
@@ -47,7 +64,7 @@ def test_success_payload_uses_json_safe_result_shapes() -> None:
     }
 
 
-def test_success_payload_does_not_fail_when_optional_navigation_fails(
+def test_result_payload_does_not_fail_when_optional_navigation_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fail_navigation(*args: object, **kwargs: object) -> object:
@@ -57,7 +74,7 @@ def test_success_payload_does_not_fail_when_optional_navigation_fails(
 
     monkeypatch.setattr("dsctl.output.navigation_for", fail_navigation)
 
-    payload = success_payload(
+    payload = result_payload(
         "workflow-instance.list",
         CommandResult(data={"totalList": [{"id": 263, "state": "SUCCESS"}]}),
     )
@@ -67,12 +84,35 @@ def test_success_payload_does_not_fail_when_optional_navigation_fails(
         "action": "workflow-instance.list",
         "resolved": {},
         "data": {"totalList": [{"id": 263, "state": "SUCCESS"}]},
-        "warnings": [],
-        "warning_details": [],
     }
 
 
-def test_success_payload_does_not_fail_when_optional_navigation_is_not_json(
+def test_warning_payload_has_one_message_and_retains_structured_facts() -> None:
+    result = CommandResult(
+        data={"value": None, "items": [], "empty": {}},
+        warnings=["Request accepted; completion is unknown."],
+        warning_details=[{"code": "pending", "completed": False}],
+    )
+    payload = result_payload("example", result)
+    assert payload["warnings"] == [
+        {
+            "code": "pending",
+            "completed": False,
+            "message": "Request accepted; completion is unknown.",
+        }
+    ]
+    assert "warning_details" not in payload
+    assert payload["data"] == {"value": None, "items": [], "empty": {}}
+    assert result.warning_details == [{"code": "pending", "completed": False}]
+
+
+def test_error_without_warnings_omits_optional_warning_fields() -> None:
+    payload = error_payload("example", ConfigError("missing configuration"))
+    assert "warnings" not in payload
+    assert "warning_details" not in payload
+
+
+def test_result_payload_does_not_fail_when_optional_navigation_is_not_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -80,7 +120,7 @@ def test_success_payload_does_not_fail_when_optional_navigation_is_not_json(
         lambda *args, **kwargs: {"action_index": object()},
     )
 
-    payload = success_payload(
+    payload = result_payload(
         "workflow-instance.list",
         CommandResult(data={"totalList": [{"id": 263, "state": "SUCCESS"}]}),
     )
@@ -112,14 +152,22 @@ def test_dry_run_result_emits_standard_warning_detail() -> None:
         path="/projects/7",
     )
 
-    assert result.warnings == ["dry run: no request was sent"]
+    assert result.warnings == [
+        "dry run: no mutation was sent; lookup and verification reads may occur"
+    ]
     assert result.warning_details == [
         {
-            "code": "dry_run_no_request_sent",
-            "message": "dry run: no request was sent",
-            "request_sent": False,
+            "code": "dry_run_no_mutation_sent",
+            "message": (
+                "dry run: no mutation was sent; lookup and verification reads may occur"
+            ),
+            "mutation_sent": False,
         }
     ]
+    assert result.data == {
+        "dry_run": True,
+        "requests": [{"method": "GET", "path": "/projects/7"}],
+    }
 
 
 def test_dry_run_result_appends_extra_warning_details() -> None:
@@ -136,14 +184,16 @@ def test_dry_run_result_appends_extra_warning_details() -> None:
     )
 
     assert result.warnings == [
-        "dry run: no request was sent",
+        "dry run: no mutation was sent; lookup and verification reads may occur",
         "extra warning",
     ]
     assert result.warning_details == [
         {
-            "code": "dry_run_no_request_sent",
-            "message": "dry run: no request was sent",
-            "request_sent": False,
+            "code": "dry_run_no_mutation_sent",
+            "message": (
+                "dry run: no mutation was sent; lookup and verification reads may occur"
+            ),
+            "mutation_sent": False,
         },
         {
             "code": "extra_warning",
@@ -170,8 +220,8 @@ def test_dry_run_result_omits_duplicate_single_request_plan() -> None:
     )
 
     data = cast("JsonObject", result.data)
-    assert data["request"] == request
-    assert "requests" not in data
+    assert data["requests"] == [request]
+    assert "request" not in data
 
 
 def test_dry_run_result_preserves_ordered_multi_request_plan() -> None:
@@ -200,7 +250,7 @@ def test_dry_run_result_preserves_ordered_multi_request_plan() -> None:
     )
 
     data = cast("JsonObject", result.data)
-    assert data["request"] == first
+    assert "request" not in data
     assert data["requests"] == [first, second]
 
 
@@ -223,14 +273,15 @@ def test_dry_run_result_rejects_request_plan_with_different_first_request() -> N
         )
 
 
-def test_dry_run_result_rejects_empty_request_plan() -> None:
-    with pytest.raises(ValueError, match="request plan cannot be empty"):
-        dry_run_result(
-            method="POST",
-            path="/projects/7/workflow-definition",
-            form_data={"name": "luna"},
-            requests=[],
-        )
+def test_dry_run_result_accepts_explicit_empty_request_plan() -> None:
+    result = dry_run_result(
+        method="POST",
+        path="/projects/7/workflow-definition",
+        form_data={"name": "luna"},
+        requests=[],
+    )
+
+    assert result.data == {"dry_run": True, "requests": []}
 
 
 def test_error_payload_includes_exception_class_for_unexpected_errors() -> None:

@@ -1,19 +1,19 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
 from tests.fakes import (
     FakeAudit,
     FakeAuditAdapter,
     FakeAuditModelType,
     FakeAuditOperationType,
-    FakeProjectAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
 from dsctl.errors import UserInputError
 from dsctl.services import audit as audit_service
 from dsctl.services import runtime as runtime_service
+from dsctl.upstream.observability import AuditDomain
 
 
 def _install_audit_service_fakes(
@@ -22,24 +22,12 @@ def _install_audit_service_fakes(
 ) -> None:
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            audit_adapter=audit_adapter,
+        "open_bound_domain_service_runtime",
+        lambda domain, env_file=None: fake_bound_domain_service_runtime(
+            AuditDomain(audits=audit_adapter),
             profile=make_profile(),
         ),
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 @pytest.fixture

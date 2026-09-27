@@ -5,16 +5,14 @@ from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.errors import ApiResultError
-from dsctl.services import runtime as runtime_service
 from tests.fakes import (
     FakeAccessToken,
     FakeAccessTokenAdapter,
-    FakeProjectAdapter,
     FakeUser,
     FakeUserAdapter,
-    fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.security_fakes import install_access_token_service_fakes
+from tests.support import normalize_cli_help
 
 runner = CliRunner()
 
@@ -58,15 +56,10 @@ def patch_access_token_service(
     fake_user_adapter: FakeUserAdapter,
     fake_access_token_adapter: FakeAccessTokenAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            access_token_adapter=fake_access_token_adapter,
-            user_adapter=fake_user_adapter,
-            profile=make_profile(),
-        ),
+    install_access_token_service_fakes(
+        monkeypatch,
+        fake_access_token_adapter,
+        fake_user_adapter,
     )
 
 
@@ -151,11 +144,12 @@ def test_access_token_create_command_returns_created_token() -> None:
 
 def test_access_token_create_help_points_to_user_list_and_time_format() -> None:
     result = runner.invoke(app, ["access-token", "create", "--help"])
+    help_text = normalize_cli_help(result.stdout)
 
     assert result.exit_code == 0
-    assert "dsctl user list" in result.stdout
-    assert "2027-01-01" in result.stdout
-    assert "00:00:00" in result.stdout
+    assert "dsctl user list" in help_text
+    assert "2027-01-01" in help_text
+    assert "00:00:00" in help_text
 
 
 def test_access_token_update_command_can_regenerate_token() -> None:

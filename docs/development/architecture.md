@@ -1,533 +1,427 @@
 # Architecture
 
-## Goal
+`dsctl` is a REST-only DolphinScheduler CLI. Generated contracts own the exact
+wire; handwritten modules own user intent, domain recipes, transport and output.
+A contributor changing one DS release should follow one exact source decision
+through one domain binding, without editing parallel CRUD wrappers or command
+parameter lists.
 
-Build `dolphinscheduler-cli` around generated, versioned DS-native contracts,
-with handwritten compatibility and command logic layered above them.
-
-The documentation set is split by audience:
-
-- `README.md`
-- `docs/user/` for installation, configuration, command usage, workflow
-  authoring, runtime operations, and supported DS versions
-- `docs/development/` for architecture, generated contracts, testing, release,
-  and roadmap material
-- `docs/reference/` for stable machine-readable contracts, domain models, and
-  error semantics
-
-Reference-only grounding lives under `docs/reference/`, especially:
-
-- `docs/reference/domain-model.md`
-- `docs/reference/error-model.md`
+The accepted compatibility policy is recorded in
+[ADR 0001](decisions/0001-multi-version-compatibility.md) and
+[Multi-Version Compatibility Architecture](multi-version-architecture.md).
+[Refactoring Plan](refactoring-plan.md) records the current simplification
+baseline and acceptance criteria. Task-specific public behavior belongs in the
+[CLI Contract](../reference/cli-contract.md) and
+[Workflow Authoring](../user/workflow-authoring.md).
 
 ## Current Stable Surface
 
-The current stable CLI surface is:
+The installed CLI has 181 actions. All 6,697 action/version coordinates have an
+explicit decision: 5,797 supported, 5 limited and 895 upstream-absent. This
+coverage is separate from live verification. DS 3.4.1 remains the stable target; other exact
+profiles retain their recorded support and evidence status. The original `3.4.3` admission added
+source and contract coverage without claiming live evidence at admission.
+Current artifact-bound coverage is recorded in the
+[live evidence matrix](live-testing.md#exact-version-profile-gates).
+Its task updates use the whole-workflow transaction, user/token identity
+selection uses the native summary VO, instance lists use their native summary,
+and schedules expose their native missed-fire policy. None of these recipes
+inherit a neighbouring profile.
 
-- `dsctl version`
-- `dsctl context`
-- `dsctl doctor`
-- `dsctl schema`
-- `dsctl capabilities`
-- `dsctl enum names`
-- `dsctl enum list ENUM`
-- `dsctl lint workflow FILE`
-- `dsctl task-type list|get|schema`
-- `dsctl environment list|get|create|update|delete`
-- `dsctl cluster list|get|create|update|delete`
-- `dsctl datasource list|get|create|update|delete|test`
-- `dsctl namespace list|get|available|create|delete`
-- `dsctl resource list|view|upload|create|mkdir|download|delete`
-- `dsctl queue list|get|create|update|delete`
-- `dsctl worker-group list|get|create|update|delete`
-- `dsctl task-group list|get|create|update|close|start`
-- `dsctl task-group queue list|force-start|set-priority`
-- `dsctl alert-plugin list|get|schema|create|update|delete|test`
-- `dsctl alert-plugin definition list`
-- `dsctl alert-group list|get|create|update|delete`
-- `dsctl tenant list|get|create|update|delete`
-- `dsctl user list|get|create|update|delete`
-- `dsctl user grant project|datasource|namespace`
-- `dsctl user revoke project|datasource|namespace`
-- `dsctl access-token list|get|create|update|delete|generate`
-- `dsctl monitor health|server|database`
-- `dsctl audit list|model-types|operation-types`
-- `dsctl use project|workflow|--clear`
-- `dsctl project list|get|create|update|delete`
-- `dsctl project-parameter list|get|create|update|delete`
-- `dsctl project-preference get|update|enable|disable`
-- `dsctl project-worker-group list|set|clear`
-- `dsctl schedule list|get|preview|explain|create|update|delete|online|offline`
-- `dsctl template workflow|workflow-patch|workflow-instance-patch|params|environment|cluster|datasource|task`
-- `dsctl workflow list|get|export|describe|digest|create|edit|online|offline|run|run-task|backfill|delete`
-- `dsctl workflow lineage list|get|dependent-tasks`
-- `dsctl workflow-instance list|get|export|parent|digest|edit|watch|stop|rerun|recover-failed|execute-task`
-- `dsctl task list|get|update`
-- `dsctl task-instance list|get|watch|sub-workflow|log|force-success|savepoint|stop`
-
-Everything else remains roadmap work.
+Use `dsctl --help` to discover a group, `dsctl GROUP ACTION --help` for an
+invocation, and `dsctl schema --command GROUP.ACTION` for structured details. Command
+syntax lives in the command catalog, rather than another architecture list.
 
 ## DS Model Lens
 
-`dsctl` follows the DS object model rather than UI menus or controller names.
-The most useful split is:
-
-| Plane | Core objects |
+| Plane | Objects |
 | --- | --- |
-| Governance | user, access-token, tenant, queue, worker group, environment, cluster, datasource, namespace, resource, alert plugin, alert group |
-| Project | project, project parameter, project preference, project worker-group, task group |
-| Design | workflow, task, relation, workflow lineage, schedule |
-| Runtime | command, workflow-instance, task-instance, audit log, logs, health |
+| Governance | User, token, tenant, queue, worker group, environment, cluster, datasource, namespace, resource, alert plugin/group |
+| Project | Project, project parameter/preference/worker-group, task group |
+| Design | Workflow definition, task definition, relation, lineage, schedule |
+| Runtime | Workflow instance, task instance, command, audit, log, health |
 
-Meta/self-description command groups such as `use`, `template`, `enum`,
-`lint`, and `doctor` sit above those DS resource planes and describe or steer
-the CLI itself.
-
-Useful term mapping:
-
-| `dsctl` term | DS term |
-| --- | --- |
-| workflow | workflow definition / process definition |
-| workflow-instance | process instance / workflow instance |
-| task-instance | task instance |
-
-See `docs/reference/domain-model.md` for the grounded domain model.
-
-Schedule remains a top-level design resource. In DS 3.4.1 it is persisted
-separately from workflow definitions, created and updated through the schedule
-API, and brought into effect by a separate online/offline lifecycle that
-materializes Quartz jobs.
-
-## Project Structure
-
-```text
-dolphinscheduler-cli/
-├── skills/dsctl/
-│   ├── SKILL.md
-│   └── references/
-│       ├── errors.md
-│       ├── runtime.md
-│       ├── schedules.md
-│       └── workflows.md
-├── README.md
-├── AGENTS.md
-├── docs/
-│   ├── user/
-│   │   ├── installation.md
-│   │   ├── configuration.md
-│   │   ├── commands.md
-│   │   ├── workflow-authoring.md
-│   │   ├── runtime.md
-│   │   └── version-compatibility.md
-│   ├── development/
-│   │   ├── architecture.md
-│   │   ├── codegen.md
-│   │   ├── live-testing.md
-│   │   ├── release.md
-│   │   ├── tooling.md
-│   │   └── roadmap.md
-│   └── reference/
-│       ├── cli-contract.md
-│       ├── domain-model.md
-│       ├── error-model.md
-│       └── future-capabilities.md
-├── src/dsctl/
-│   ├── commands/
-│   ├── services/
-│   ├── support/
-│   ├── upstream/
-│   ├── generated/
-│   ├── app.py
-│   ├── client.py
-│   ├── cli_runtime.py
-│   ├── config.py
-│   ├── context.py
-│   ├── errors.py
-│   ├── output.py
-│   └── result_navigation.py
-├── tools/
-│   ├── ds_codegen/
-│   ├── generate_ds_contract.py
-│   ├── check_quality_gate.py
-│   ├── extract_ds_api_error_inventory.py
-│   ├── audit_dsctl_error_translation.py
-│   ├── extract_dsctl_error_translation_matrix.py
-│   ├── check_error_translation_governance.py
-│   ├── check_generated_freshness.py
-│   ├── check_explicit_object.py
-│   └── check_project_layout.py
-└── tests/
-```
-
-`references/` is not part of the tracked product tree. When present, it is an
-ignored local workspace for upstream DolphinScheduler source checkouts used by
-code generation and source review. The installed CLI and published packages do
-not depend on it.
+The CLI calls a DS process definition a workflow. Native IDs and codes remain
+distinct values. Names are opaque strings; numeric-looking names do not become
+IDs implicitly. Resources use DS `fullName` paths. Schedules and runtime
+instances use their documented IDs. See [Domain Model](../reference/domain-model.md).
 
 ## Layer Architecture
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│ commands/          CLI surface                              │
-│ Parse options → call service → emit rendered command        │
-├──────────────────────────────────────────────────────────────┤
-│ services/          business logic                           │
-│ Selection, resolution, validation, pagination, YAML shaping │
-├──────────────────────────────────────────────────────────────┤
-│ upstream/          version adapter                          │
-│ Bind transport → expose version-stable operation groups     │
-├──────────────────────────────────────────────────────────────┤
-│ generated/         generated DS contracts                   │
-│ Typed requests, responses, enums, operation clients         │
-├──────────────────────────────────────────────────────────────┤
-│ foundation         transport and runtime support            │
-│ client/config/context/errors/output/support                 │
-└──────────────────────────────────────────────────────────────┘
+command catalog ──> Typer adapter ──> typed command callbacks
+                                         │
+                                      services
+                                         │
+                                  bound domain recipes
+                                         │
+                              exact generated wire programs
+                                         │
+                              WireExecutor ──> HTTP client
 ```
+
+| Owner | Responsibility | Does not own |
+| --- | --- | --- |
+| Foundation | Configuration, HTTP transport, JSON boundary checks, errors, output | DS version recipes |
+| Command catalog | Routes, ordered inputs, help, aliases, defaults, resolution and path rules | Service execution |
+| Commands | Typed callback arguments, service calls, result emission | HTTP, DS field names or version branches |
+| Services | Selection context, authoring intent, confirmation, public errors and output shaping | Generated imports, controller paths or transport retry policy |
+| Upstream domains | Native identity resolution, exact recipes, preparation, preservation and readback | Typer, stdout or service imports |
+| Generated | Reviewed exact request/response schemas, bindings and provenance | CLI ergonomics or inferred compatibility |
+
+`import-linter` enforces the direction: commands → services → upstream →
+generated. Shared foundation modules do not import upward. `JsonValue` and
+`JsonObject` are boundary types; domain interfaces use named records and intents.
 
 ### Foundation
 
-Foundation owns:
+Configuration resolves one immutable invocation snapshot from an explicit
+context/file selector, process selector, present process connection values, or
+saved user default, in that order. One user registry stores named env-file
+references, their bound API URLs and optional project defaults; credentials
+remain in the source files. URL/token/version select identity; retry and timeout
+policies resolve independently from process, selected profile, then defaults.
+No directory or legacy selection files participate.
+Registry writes use a short lock and atomic replacement; network operations use
+the resolved snapshot outside that lock. Workflows require explicit selection.
+See [Configuration](../user/configuration.md) and the
+[acceptance design](persistent-connection-context-design.md).
 
-- HTTP transport and retry
-- auth header construction
-- config loading
-- context persistence
-- error types
-- JSON/YAML boundary helpers
-- output adapters and exact stdout/stderr/exit-code routing
-- pure, bounded lifecycle and list-action navigation derived from an already
-  completed command result
+The shared `DolphinSchedulerClient` owns connection settings, authentication,
+timeouts, HTTP errors, result envelopes and transport retry behavior. A bound
+wire program supplies its reviewed execution mode so a read can retry while an
+uncertain mutation is not silently repeated.
 
-Foundation does not import upward into commands, services, or upstream.
+Services translate upstream failures into the stable public error contract.
+Generated-response diagnostics contain bounded field/type information without
+repeating rejected values. Output rendering owns JSON, table, TSV and column
+projection. Services return data and an optional failed outcome; they do not write stdout.
+A failed diagnostic result retains its report while the shared renderer chooses
+stderr and a nonzero exit status.
 
-`context.py` is the persistence boundary for the current two-layer local
-selection model. It owns layer paths, tuple invariants, source-aware effective
-resolution, atomic same-directory replacement that preserves configured
-symlink indirection, and stable `ConfigError` translation for read/write/clear
-filesystem failures. Services decide how a context mutation is presented,
-including post-write effective readback and shadowing diagnostics; commands
-only parse the canonical invocation and emit that result. Context inspection
-and mutation are local-only operations and do not imply remote selector
-validation.
+Service facts, the selected information view, and format encoding are separate
+steps. YAML templates store one body; line views are derived by the renderer.
+Dry-run preparation stores one ordered request plan; default rendering retains
+semantic changes and prepared stage order, while explicit columns expand wire
+details. `json-compact` encodes only business row collections explicitly marked
+with `data_shape.compact_rows: true`, at their existing `row_path`, including
+explicitly declared nested collections in summary views. Sibling data remains
+unchanged. A broken declared path or row shape raises `output_contract_error`.
+It retains all selected top-level fields in a shared `columns` array and native
+JSON values in `rows`; other views only compact whitespace. The renderer does
+not infer eligibility from row count or sparsity, recursively encode nested
+values, or apply table/TSV defaults to remove JSON fields. Error details and
+changing page coverage remain visible in text formats.
 
-`result_navigation.py` is the single deep module for optional JSON navigation:
-bounded complete `next_actions` and grouped list `action_index` discovery. Its
-public interface accepts `action`, `resolved`, `data`, and the optional explicit
-env-file target; its private rules own safe fact extraction, lifecycle-state
-decisions, numeric selector preference, target preservation, shell encoding,
-deterministic ordering, de-duplication, and output limits. Action indexes are
-computed only from returned rows, cap unique selectors, and state explicitly
-that authorization and non-row eligibility were not evaluated. The module
-performs no I/O and imports no service, upstream, or generated contracts. The
-standard success-envelope builder calls it once, so domain services do not need
-to remember an output-navigation hook and table/TSV/raw renderers remain
-row/artifact-only.
+`execution_states.py` owns reviewed state meanings shared by runtime validation
+and navigation. Exact action availability and permission decisions remain
+separate. Navigation binds concrete targets through the command catalog; replay
+baselines, trigger receipts and log continuation come from the responsible
+runtime domains rather than being guessed from a final state.
 
-### Generated
+### Target Version Resolution
 
-`src/dsctl/generated/` is tracked runtime code produced by the generator.
+Pure configuration separates `TargetSettings` and `ConnectionSettings` from
+an exact `ClusterProfile`. `services/version_resolution.py` resolves the target
+once per command before availability checks and runtime binding. The CLI
+composition root injects its invocation scope into the emitter; foundation
+modules do not import services. Runtime callers can carry an already resolved
+profile through workflow authoring and execution.
 
-Rules:
+`upstream/version_discovery.py` owns bounded REST bootstrap probes. The canonical
+runtime compiler derives product metadata and public document facts from all
+37 exact source snapshots before slicing. `generated/version_discovery.py`
+exports those facts from logical evidence, type, parameter, operation and
+profile modules. Equal records can share implementation; source memberships
+remain independent. Bootstrap discovery adds no domain operation or public
+command, and explicit versions remain authoritative.
 
-- never hand-edit generated packages
-- improve the generator first when DS-facing shapes are wrong
-- use `tools/check_generated_freshness.py` to keep generated output in sync
+Resolution distinguishes exact metadata from `CompatibilityResolution`.
+`upstream/api_contract_discovery.py` requires complete public route coverage
+within each document group to retain candidates, then matches verifiable
+operation parameters across every candidate. This is evidence of a compatible
+surface, not exact release identification. Unknown nested request shapes and
+mismatches cannot authorize their operations; custom builds remain possible.
 
-The generated runtime routes response-contract and result-envelope failures
-through explicit `SessionLike` hooks. Its standalone default adapter raises
-self-contained generated exceptions, while the production
-`GeneratedSessionAdapter` translates the same hooks into stable `dsctl`
-transport and result errors. Response validation errors preserve a bounded,
-value-free list of sanitized field paths, types, and static messages so callers
-can diagnose a contract mismatch without echoing rejected values. Resource adapters must not
-add one-off catches for generated payload validation.
+`upstream/read_compatibility.py` independently reviews an action's transitive
+read closure, codec behavior, selectors, projections, enums and error semantics.
+Only observed compatible operations can enter that closure. An admitted read
+uses an existing exact compiler profile internally, with a transport policy
+that rejects unapproved or mutating requests. Public output keeps the exact
+server version unknown and adds `resolved.target` plus a `read_compatibility`
+warning. Writes and authoring continue to require exact selection.
 
-When upstream Java declarations are less precise than observed JSON behavior,
-the generator may apply a narrowly keyed field normalization grounded in
-upstream implementation/tests and live response evidence. This keeps the
-runtime correction generated and local to the DS-native model instead of
-cleaning values in command or adapter code.
+A URL- and credential-scoped five-minute cache supports offline discovery;
+candidate entries also bind the generated discovery digest. Every remote
+invocation and automatic `doctor` refreshes the observation. Successful
+unresolved results replace positive entries, and failed probes invalidate old
+entries. No stale or default selection rescues a failed remote probe. Cold-cache
+schema/capabilities expose only the installed catalog; candidate enum discovery
+requires equal complete members across all candidates. Untargeted local
+authoring keeps its documented baseline, while help and context stay offline.
 
-### Upstream
-
-`upstream/` owns:
-
-- binding a shared `DolphinSchedulerClient`
-- adapting generated clients into version-stable operation groups
-- normalizing version differences at the handwritten bridge
-- selecting between generated DS endpoints when one version exposes the same
-  domain operation through contracts with different semantics
-- resolving `DS_VERSION` to support metadata, adapter family, and generated
-  contract version
-- exposing version-specific DS enum semantics needed by services without
-  leaking generated imports upward
-
-The upstream package is the only handwritten place that imports generated
-packages.
-
-Version support is additive and registry-driven. A selectable DS server version
-must have support metadata before services can bind it. Compatibility families
-such as `workflow-3.3-plus` can share adapter logic when upstream REST
-semantics are stable; older `process-*` API families should be implemented as
-separate legacy adapters instead of service-layer branches.
-
-Endpoint selection is an adapter implementation detail. For example, DS 3.4.1
-cannot represent every schedule state through its v2 create/update request
-models: no-environment schedules and zero-valued update fields collide with v2
-primitive sentinels. Its generated legacy schedule operations preserve those
-DS-native states. The schedule interface keeps `None` as the version-stable
-meaning of “no environment”; callers do not choose legacy versus v2 routes.
-
-### Services
-
-`services/` owns:
-
-- `flag > context` selection rules
-- name/code resolution
-- command-level validation
-- pagination and output shaping
-- schedule lifecycle shaping
-- runtime instance inspection and log shaping
-- stateless risk confirmation for high-impact mutations
-- current YAML rendering for workflow reads
-- current YAML parsing, optional schedule block handling, and legacy form
-  compilation for workflow create
-
-`services/` does not own:
-
-- Typer
-- direct generated imports
-- stdout rendering
-
-Workflow discovery has two explicit upstream seams. `list_refs` returns the
-minimal DS identity contract used by selector resolution; `list_page` returns
-the rich paged contract used by the public `workflow list` service. Keeping the
-operations separate avoids an ambiguous generic `list`, prevents rich public
-discovery from adding cost to every name lookup, and leaves pagination/output
-shaping in the service layer without N+1 detail requests.
-
-Workflow detail and DAG responses are not authoritative for attached schedules
-in DS 3.4.1; only the independently persisted schedule resource and rich
-workflow paging query join that state. A service-internal attached-schedule
-lookup is therefore the single seam for workflow get/describe/digest/export,
-edit, release, and delete behavior. It performs one exact project/workflow
-schedule query, enforces the DS zero-or-one invariant, and treats lookup or
-shape failure as an error rather than reusing `schedule: null`. Selector
-resolution stays on `list_refs` and does not pay this cost. Workflow create
-reuses the schedule returned by its own mutation, while workflow offline
-refreshes the attached schedule after DS applies its cascading state change.
-Definition edit compilation deliberately excludes this independently persisted
-schedule from its live baseline; schedule constraints and output shaping consume
-the authoritative record at the workflow service boundary instead. A full-file
-edit may carry the `schedule:` emitted by workflow export, but the edit module
-treats it only as a concurrency snapshot: it verifies the authoritative fields,
-accepts DS's workflow-offline schedule cascade only when the exported document
-still requests both workflow and schedule `ONLINE`, strips the block, and never
-compiles or sends a schedule mutation.
-
-Workflow task identity allocation is split across the service and upstream
-layers. The compiler always receives an explicit allocator. Lint and dry-run
-use deterministic preview-only codes, while an applied workflow create,
-workflow edit, or workflow-instance edit first completes the same local
-compile preflight and then obtains persistent task codes from DolphinScheduler
-through the bound `TaskOperations` interface. The upstream 3.4.1 adapter backs
-that interface with the generated `gen-task-codes` REST operation and batches
-requests to the server limit of 100 codes. Existing-task and no-op edits do not
-request new codes.
+[Contract Read Discovery](contract-read-discovery.md) records the current
+bounds and reviewed action scope. [Automatic Exact Version Discovery](automatic-version-discovery.md)
+retains the earlier metadata-only wheel receipt; it does not attest this extension.
 
 ### Commands
 
-`commands/` owns:
+`command_contract.py` exposes the contract API; `_command_catalog.py` contains
+all 181 invocation declarations and `_command_contract_model.py` their immutable
+value types. The Typer adapter binds these declarations to ordinary typed
+callbacks. It validates parameter names and types before constructing parser
+metadata. Callbacks retain explicit service calls and normal Python defaults.
 
-- Typer declarations
-- option parsing
-- calling service functions
-- delegating result emission to `cli_runtime.emit_result()`
+Schema discovery derives its command tree directly from catalog routes.
+Every catalog action declares its remote/local effects, including the conditional
+dry-run effect where applicable. Schema 3 projects those same declarations.
+Group descriptions and domain payload overrides add only facts
+that the invocation catalog does not own; there is no parallel action tree.
+Selected-version availability enriches the resulting commands. Parse defaults, context resolution and
+service requirements are distinct facts: an optional parser argument may still
+be required by a service, and an exact version may constrain an input further.
+Hidden compatibility options stay hidden in help and discovery. Help, schema and
+shell-safe follow-up commands consume one invocation source.
 
-`commands/` does not own:
+### Generated
 
-- HTTP
-- DS DTO details
-- name resolution
+Source inventory, reviewed membership, and runtime packaging have separate
+owners. `exact_sources.json` can inventory an unreviewed release;
+`version_profile_decisions.json` owns reviewed exact profiles;
+`runtime_bundles.json` selects which reviewed profiles are installed. The default
+files currently name the same 37 releases, but neither source discovery nor a
+matching contract adds a runtime profile. A selected profile must have every
+required domain, task, and datasource decision before generation succeeds.
 
-### Progressive Self-Description
+Extractor response corrections also separate reusable source rules from exact
+review membership. Candidate rules must prove their declared Java structure
+against the candidate's own source. Historical exact-only corrections remain
+exact-only; sharing an extraction rule does not share a support decision.
 
-`services.schema` is a deep module over the generated/handwritten command
-catalog. Its interface exposes index, group, action, list, and expanded queries;
-callers do not need to know how action nodes, DS-version identity, payload
-metadata, data shapes, or correction candidates are assembled.
+`tools/generate_ds_runtime_bundles.py` atomically regenerates the tracked runtime
+from the exact sources declared in `tools/ds_codegen/runtime_bundles.json`.
+Never hand-edit generated output or refresh one tracked version independently.
+Use `tools/generate_ds_contract.py` for a complete single-source audit artifact.
+Full audit contracts remain reproducible even when their unused code is absent
+from the installed CLI. Exact runtime slices with no remaining source operations
+contain only their enums and identity artifacts; their empty client, model and
+operation facades are not emitted. The standalone audit generator still emits
+the complete contract package.
 
-The normal discovery path is deliberately bounded:
+The shared compiler builds 21 domain plans independently from every original
+exact bundle. The `workflow_runtime` plan includes workflow definitions,
+schedules, lineage, tasks, runtime instances and logs; the other plans own their
+respective DS domains. Only after all plans are compiled does the compiler strip
+their local source-operation ownership union and unreferenced type closure from
+the legacy slices. Explicit domain-port dependencies preserve cross-domain reads
+without duplicating local executable ownership.
 
-```text
-schema index -> group action index -> action-local contract
-```
+| Generated area | Role |
+| --- | --- |
+| `versions/` | Exact enums, source manifests and artifact identity |
+| `wire_programs/` | Exact domain profiles, programs and codec records |
+| `wire_programs/_schemas/` | Request roots, response closures and shared closed types |
+| `wire_runtime/` | Shared request/response support |
+| Profile modules | Reviewed decisions, recipes, task/runtime profiles and conformance catalogs |
 
-An agent that already knows an action may jump directly to the final step.
-`--full` selects the expanded projection adapter for catalog audits and
-generators. It is not the default representation.
+There is one executable compiled-domain pipeline. The retired family catalog,
+wrapper kernels and broad generated sessions are no longer alternate runtime
+paths. Historical artifact schemas keep their empty family-binding identity
+fields for audit compatibility.
 
-The root help is the routing seam for callers that cannot read repository
-documentation. It directs agents to inspect only the immediate command through
-leaf help or an action-local schema, using one relevant group only when the
-action is unknown and without preloading downstream actions. Successful
-lifecycle results then carry complete, output-bounded `next_actions` commands.
-Row-oriented lists provide a bounded `action_index` so an agent can discover
-which stable actions apply to returned selectors before paying for another help
-or schema read. Callers preserve a goal-aligned, authorized `next_actions`
-selection unchanged and serialize mutations before dependent reads.
+Mechanical sharing does not create semantic membership. Codec records and
+identical closed type definitions may share implementation, while each exact
+profile retains its source closure and reviewed bindings. A shared type identity
+includes its complete definition; a changed enum member, order or value must
+produce a separate node. Root executable digests and the artifact manifest cover
+the resulting imports and shared module bytes. Missing or modified dependencies
+fail installation validation.
 
-Interaction is help-first with schema on demand; implementation is
-contract-first. The pure `command_contract` deep module owns canonical root
-option facts, explicit action routes, ordered input facts, parser versus fixed
-default semantics, path rules, value-source resolution, and shell-safe command
-rendering. Typer help/parser metadata, bounded schema JSON, and lifecycle
-navigation are separate adapters at that seam. Strongly typed command callbacks
-remain explicit, and Click-tree parity tests verify that their observable parser
-contract matches the canonical facts. Migration is incremental; the four root
-options and `workflow.create` form the initial three-adapter tracer bullet.
-Commands with hidden compatibility flags or multiple aliases remain
-handwritten until the canonical grammar models visibility and aliases; they
-must not be forced through a lossy projection merely to increase coverage.
+Generated default annotations represent the value actually stored by Pydantic,
+including unresolved native symbolic defaults. The validation schema still uses
+the original DS input type: a stored omitted default does not make an otherwise
+invalid explicit input acceptable. Regression tests cover values, validation,
+serialization and schema output together.
 
-Each modeled command fact has one construction source. The versioned wire
-contract may retain a compatibility projection of that fact—for example a
-legacy `default` beside the richer `resolution` object—but adapters do not
-redefine it. In particular, action-local JSON owns one `command` object and
-does not carry duplicate renderer rows. The output adapter derives table, TSV,
-and explicit column projection rows from that object. Schema view-aware data
-shapes keep index, list, group, and command projection paths local to the
-output boundary.
+### Upstream
 
-`services.task_authoring` applies the same deep-module rule to task-type
-contracts. It builds canonical metadata, fields, and state rules once, then
-lazily derives only the bounded field, exact field, JSON Schema, compile
-mapping, or explicit legacy-full projection requested. Commands do not assemble
-these representations. View-dependent row paths and document restrictions are
-registered by action in the shared output data-shape module, so
-table/TSV/column adapters do not contain task-type-specific branches.
+A bound domain selects an exact profile once, then exposes caller-oriented
+methods. Domain recipes may perform resolution and verification reads around
+one explicit mutation. They retain native name/id/code distinctions, field
+omission, response normalization and version-specific preservation rules.
+No exact profile imports or inherits a neighboring version's package.
 
-Static cross-field command constraints live in the schema constraint registry
-and mirror service/command validation (`exactly_one_of`, `requires`, mode
-alternatives, and related forms). Tests require every referenced flag or
-placeholder to exist in the action contract. Dynamic runtime facts, including
-confirmation tokens derived from a concrete mutation, stay in service errors
-rather than being guessed by the static schema.
+Handwritten integration modules use domain or role names such as `projects.py`,
+`workflows.py`, `code_native_reads.py` and `id_native_reads.py`. `wire.py` owns
+request preparation and execution, `response_projection.py` owns response
+decoding helpers, and `mutation_outcomes.py` owns dispatch/readback uncertainty.
+The old `generated_*` adapter names are retired. Actual generated code lives
+under `generated/`, including the task-profile data.
 
-Self-description quality is evaluated at the task level rather than by response
-size alone: necessary tokens, discovery round trips, retry tokens, and
-ambiguity/misoperation risk all count. Byte-budget tests bound common responses
-without removing information needed to construct the next correct command.
-Layout compaction is secondary: semantic projection and avoiding duplicate
-representations normally save more task tokens than removing JSON whitespace.
+A compiled program validates and detaches one `WireRequest` during preparation.
+`WireExecutor` sends that request directly through the shared client, then gives
+the payload to a decoder with no transport capability. Dry-run and apply use the
+same prepared request. Fingerprint checks bind preparation to the selected
+program and installed generated bytes. File upload and binary download keep
+explicit transport methods.
 
-### Separately Installable Agent Skill
+Project definition reads and lifecycle readback share `CompiledProjectReads`.
+Its compiled list/get execution and paging have one owner. Each read boundary
+retains its identity validation and error vocabulary; legacy owner lookup and
+mutation verification remain explicit domain policies.
 
-`skills/dsctl` is the repository-owned source of the independently installable
-agent skill for operating DolphinScheduler through the CLI. Its interface is
-the skill metadata and one goal-oriented operating loop; the implementation
-knowledge for commands, versions, REST transport, selectors, output, and errors
-remains behind the `dsctl` process interface and its progressive
-self-description.
+`TaskLogTail` is the canonical log paging and response-normalization seam.
+Task-definition mutation similarly hides whether an exact profile can safely
+update one task or needs a whole-workflow operation. Services request intent;
+the selected domain owns that DS recipe.
 
-The skill lives outside `src/dsctl/` because it is neither Python runtime code
-nor a second command adapter. It does not wrap `dsctl`, copy the command catalog,
-or depend on generated/upstream packages. Its conditional agent guidance is
-bundled under `references/`, so the skill directory remains self-contained when
-installed independently from the PyPI package. Those references encode agent
-decision processes; live help, action schema, capabilities, and output remain
-the command-contract authority.
+### Composition Policy
 
-The root `skills/` location is the authoring and distribution-source seam, not a
-Python release unit or a repository-local auto-discovery location. Users install
-the skill separately from the PyPI package; a future plugin may package this
-same directory without moving its source. Every relative Markdown pointer in
-the skill must resolve inside the independently copyable skill directory.
+Task source facts and reviewed authoring claims have separate owners.
+`task_profile_facts.json` contains extracted upstream facts;
+`task_profile_reviews.json` contains exact reviewed claims. The task compiler
+materializes `generated/task_profiles.py`, both through the canonical atomic
+runtime generator and the focused `generate_ds_task_profiles.py` command.
+Services consume its selected facts through `upstream/task_profiles.py`.
+A source-present plugin is not automatically a typed authoring capability.
 
-## Dependency Rules
+The model layer registers each reviewed family's canonical parameter model once.
+The catalog reads structural field types, requiredness, choices and defaults
+from the selected model where they agree with the public contract; semantic
+exceptions and ambiguous union paths stay explicit. Upstream projection pairs
+encode/decode functions by family with separate typed signatures for resources,
+workflow references and local task references. These registrations choose
+implementation; exact review data still decides eligibility. Discovery uses the
+same `TaskAuthoringField` value type as reviewed catalog entries, including the
+seven explicitly registered model-only families. No dormant generic DEPENDENT
+builder competes with the selected-version reviewed facet.
 
-```text
-commands/ -> services/ -> upstream/ -> generated/
-foundation supports all layers but does not import upward.
-```
+The handwritten task packages organize changes by task family within each
+existing layer:
 
-Hard rules:
+| Package | Family implementation | Shared owner |
+| --- | --- | --- |
+| `models/task_spec/` | Canonical models, nested values and field validators | Base types, normalization and explicit model registry |
+| `upstream/task_authoring_surface/` | Exact support, runtime epochs and preservation boundaries | Surface aggregation and shared records |
+| `upstream/task_parameter_projection/` | Paired encoding, decoding and preservation checks | Typed dispatch, graph context and reference interfaces |
+| `services/task_authoring_catalog/` | Field descriptions, templates and authoring policy | Catalog lookup, explicit registration and model-derived structure |
 
-- `commands/` never imports `generated/`
-- `services/` never imports `generated/`
-- `services/` never imports `commands/`
-- `upstream/` never imports `services/`
-- generated code stays self-contained
-- `JsonValue` and `JsonObject` stay boundary-oriented types
-- names are treated as opaque strings; business code must not infer structure
-  from delimiters
+For example, K8S changes start in each package's `k8s.py`; Kubeflow retains its
+own semantic module. A family may contain several exact wire epochs. These
+packages do not merge model availability, authoring authorization or wire
+selection into one registry, and do not discover plugins dynamically.
 
-`import-linter` enforces the layered dependency direction.
+`task_references.py` owns the reviewed local-reference locations used by DAG
+construction, patch rename and exact parameter projection. Each consumer keeps
+its own validation, runtime-state and preservation policy. `task_settings.py`
+owns direct authoring-to-native task-node bindings and their actual encoding and
+export normalization. Discovery and authorized overlay derive native field names
+from those bindings; timeout coupling and exact overlay permissions stay explicit.
 
-## Selection and Naming
+Typed validation, exact projection, explicit opaque authoring and unchanged
+preservation are distinct operations. Invalid typed input must not downgrade to
+opaque input. Preservation that requires an existing-server baseline cannot be
+recreated by exporting YAML and later importing it independently. Runtime holes,
+resource/parameter restrictions and worker prerequisites remain exact decisions.
+Use the selected task schema for the family-specific contract.
 
-Current naming rules:
+### Services
 
-- governance and definition resources such as environment, datasource, namespace,
-  queue, worker-group, tenant, user, project, workflow, and task are
-  name-first
-- `resource` is path-first and uses the DS `fullName` path selector directly
-- lifecycle and runtime resources such as schedule, workflow-instance, and
-  task-instance are id-first
-- DS codes and ids are resolved underneath
-- positional arguments mean raw names unless the command explicitly documents a
-  numeric code, id shortcut, or DS-native path selector
-- names are opaque strings, not path fragments
-- resource paths are DS-owned paths, not CLI-invented handles
+Services resolve explicit flags and saved context, validate command intent,
+prepare canonical authoring plans, apply confirmation policy and shape results.
+Paged list services share the result envelope around the existing pagination
+engine, while retaining domain serializers and error translators.
 
-The current implementation does not expose handles. If handles or richer
-selector forms are added later, they must complement the current name-first,
-path-first, and id-first surface instead of reintroducing delimiter-based refs.
+The output boundary emits each warning once as a structured object and omits
+the warning field when empty. JSON layouts share that same envelope; table/TSV
+project business data and send diagnostic messages to stderr. Navigation uses
+only already returned identities and state, derives command effects from the
+catalog, and performs no I/O. A related instance id does not by itself establish
+its project, so cross-object hints require the target's scope as well as its id.
 
-## Codegen Toolchain
+`services/workflow/` exposes the command-facing operations and groups their
+implementations into reads, creation, editing, execution and lifecycle. Selected
+native identities, schedule lookup, execution options and error translation
+have local owners. `services/workflow_instance/` similarly separates reads,
+editing, actions and watching. Shared authoring, compilation, patching,
+rendering and schedule helpers live in `services/_workflow/`; they do not
+import the public service packages. The package entry points export operations
+without duplicating their implementations.
 
-The codegen stack lives under `tools/ds_codegen/`.
+Workflow compilation captures an isolated specification, task identities, edges
+and deterministic preview once. Apply binds server-allocated identities to that
+plan after preflight. Existing-task and no-op edits allocate no new codes.
 
-- `tools/generate_ds_contract.py` is the regeneration entrypoint
-- `tools/ds_codegen/api.py` is the internal façade
-- `tools/ds_codegen/extract/` handles Java parsing and inference
-- `tools/ds_codegen/render/` and `render/package/` handle output generation
-- `tools/check_generated_freshness.py` verifies committed generated output
+Native graph encoding and preservation sit below the service seam. Legacy
+string task IDs and modern numeric task codes must not be conflated. Read
+hydration resolves resource and child-workflow references best effort; unresolved
+or richer state keeps its opaque provenance. Authoring resolution verifies
+required targets before mutation.
 
-Prefer `generate_ds_contract.py` or `ds_codegen.api` over reaching into leaf
-modules from outside the codegen package.
+Attached schedules are independently persisted resources. Their authoritative
+lookup is separate from workflow detail and lightweight selector resolution.
+Export includes that record; full-file edit treats it as a concurrency snapshot
+and sends no schedule mutation. A workflow-offline cascade is handled according
+to the documented edit contract. Workflow create reuses its schedule mutation's
+result, and workflow offline refreshes schedule state after the cascade.
+
+Workflow templates resolve the same local exact target as task templates and
+lint. One canonical skeleton demonstrates shared parameters and task dependencies;
+task templates own runtime controls and task-specific graph rules. Optional
+metadata defaults come from the authoring model, and execution-mode availability
+comes from the generated workflow recipe. Schedule templates and parsing share
+the schedule recipe's timezone capability. The workflow-create schema derives
+file structure from those same models and exact capabilities, separates CLI
+arguments from YAML fields, and links to task and execution-context contracts.
+Semantic validation remains in the authoring and graph compiler; a bounded task
+schema outline is not a substitute for those checks. No separate per-release
+templates or parallel field-definition registry is maintained.
+
+## DS Evolution Workflow
+
+1. Add an explicit exact source identity and prepare its read-only checkout.
+2. Extract the source contract; inspect structural changes and the source,
+   effective-wire, consumed-projection and preservation fingerprint axes.
+3. Review changed domain recipes and authoring claims against controller,
+   model and executor evidence. Record unsupported or absent coordinates
+   explicitly; matching shapes do not approve a new version.
+4. Change compiler inputs or generator logic, then regenerate the complete
+   runtime atomically. Retain complete reviewed source closures and provenance.
+5. Test independent exact request/response expectations, invalid inputs,
+   preservation and transport uncertainty. Run the development gate.
+6. For release or promotion, build one canonical wheel, run the required exact
+   installed-wheel campaigns, track receipts and pass the release gate. Do not
+   rebuild an attested wheel or reuse a historical receipt for changed bytes.
+
+See [Codegen](codegen.md), [Tooling](tooling.md) and [Release](release.md) for
+commands and detailed obligations. `references/` is optional ignored workspace
+state, read-only from this project's perspective.
+
+The [3.4.2 EMR Serverless evolution exercise](task-evolution-exercise.md)
+traces a real new task through those owners. Every generated authoring review
+or exclusion must register its implementation; model-only families are explicit
+registrations. An omitted builder fails instead of silently bypassing facet
+policy.
 
 ## Quality Gate
 
-For full local validation, prefer:
+`python tools/check_quality_gate.py --mode development` runs lint, formatting,
+architecture and type checks, generated freshness, static conformance assessment,
+and portable, source-contract and source-rebuild tests. `--portable` is the
+clean-checkout lane; additional Python versions use `--portable --tests-only`.
+Diagnostic skips report partial checks.
 
-- `python tools/check_quality_gate.py`
-- `python tools/check_quality_gate.py --include-live`
-  This appends `tests/live` and expects the live-test environment variables to
-  already be configured.
+`--mode release` includes all development checks plus the three current-wheel
+evidence checks. It rejects partial lanes and skip options. `--include-live`
+explicitly appends the destructive source-tree suite and requires configured
+live-test flags and credentials; it does not replace installed-wheel receipts.
 
-Substantial changes should keep these green:
+Tests should cross the public module seam and assert independent observable
+behavior. Share expensive exact-source preparation, but retain independent
+expected requests, version matrices and negative cases. Fakes should represent
+collaborator outcomes without reimplementing DS routes, field projection or the
+compiler. Verify a clean built wheel as well as the source tree.
 
-- `ruff check src tests tools`
-  This includes `B008` and a `C90` complexity gate.
-- `ruff format --check src tests tools`
-- `mypy src tests tools`
-- `lint-imports`
-- `tools/check_generated_freshness.py`
-- `tools/check_error_translation_governance.py`
-- relevant `pytest` targets
-
-When changing DS-facing failure handling, use these review tools to keep error
-translation grounded in upstream behavior:
-
-- `tools/extract_ds_api_error_inventory.py --format summary`
-  Builds the upstream error inventory from local DS source.
-- `tools/audit_dsctl_error_translation.py --format summary`
-  Audits handwritten service translation coverage and pagination hooks.
-- `tools/extract_dsctl_error_translation_matrix.py --format summary`
-  Shows the current DS-code-to-dsctl-error mapping implemented by services.
-
-For cluster-interacting surfaces, offline tests alone are not sufficient proof
-of correctness. Keep the corresponding live coverage defined in
-`docs/development/live-testing.md`.
+[Dependency compatibility](dependency-compatibility.md) records the executable
+dependency floor and its CI matrix. [Maintainability validation](maintainability-validation.md)
+records the process journeys, artifact checks and current campaign status.

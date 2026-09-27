@@ -1,17 +1,43 @@
 # Reviewed allowlist for intentional explicit `object` usage.
 # Each line is path|context|snippet.
-src/dsctl/app.py|_GlobalOptionGroup.parse_args(ctx)|object
+# Typer 0.26 vendors Click while older Typer exposes top-level Click types.
+# These broad override inputs isolate that nominal type fork; runtime callers
+# still come from Typer, and the one context-manager boundary narrows arguments.
+# One reviewed opaque seam for heterogeneous, exact-version generated Python
+# models/clients/results. Adapters validate shape before stable projection; JSON
+# payloads use JsonValue/JsonObject and must not use this alias.
+# User registry YAML is untrusted and can contain non-JSON YAML values. These
+# parsing seams reject duplicate/non-string keys and validate the closed record
+# before returning NamedContext/ContextRegistry; object stays inside the boundary.
+# Authored YAML diagnostics inspect unresolved parser values before model entry;
+# dates, binary values and non-string keys must remain representable for rejection.
+src/dsctl/models/common.py|yaml_value_validation_issue(value)|object
 src/dsctl/client.py|_require_json_value(value)|object
+src/dsctl/command_references.py|_normalize_pattern_value(value)|object
+src/dsctl/command_references.py|_project_mapping(value)|dict[object, object]
+src/dsctl/command_references.py|project_command_references(value)|object
+src/dsctl/commands/_contract_adapter.py|SemanticMetavarCommand.format_help(ctx)|object
+src/dsctl/commands/_contract_adapter.py|SemanticMetavarCommand.format_help(formatter)|object
+src/dsctl/commands/_contract_adapter.py|SemanticMetavarGroup.format_help(ctx)|object
+src/dsctl/commands/_contract_adapter.py|SemanticMetavarGroup.format_help(formatter)|object
+src/dsctl/commands/_contract_adapter.py|_semantic_argument_help_types(parameters)|Sequence[object]
+src/dsctl/commands/_contract_adapter.py|_validate_callback_type(annotation)|object
+src/dsctl/context.py|_RegistryLoader.construct_mapping.key|object
+src/dsctl/context.py|_RegistryLoader.construct_mapping:return|dict[object, object]
+src/dsctl/context.py|_check_keys(data)|dict[str, object]
+src/dsctl/context.py|_mapping(value)|object
+src/dsctl/context.py|_mapping:return|dict[str, object]
+src/dsctl/context.py|_parse_registry(loaded)|object
+src/dsctl/context.py|_required_string(value)|object
+src/dsctl/context.py|load_registry.loaded|object
 src/dsctl/output.py|require_json_object(value)|object
 src/dsctl/output.py|require_json_value(value)|object
-src/dsctl/services/_schema_groups_governance.py|task_group_group:return|dict[str, object]
+src/dsctl/services/_task_datasource_refs.py|_datasource_semantic_mode(params)|Mapping[str, object] | None
+src/dsctl/services/_task_datasource_refs.py|_positive_datasource_id(params)|Mapping[str, object] | None
+src/dsctl/services/_task_datasource_refs.py|_resolution_error_details:return|dict[str, object]
+src/dsctl/services/_task_datasource_refs.py|_task_params_object(value)|object
+src/dsctl/services/_task_datasource_refs.py|_task_params_object:return|Mapping[str, object] | None
+src/dsctl/services/template.py|_template_result_data(value)|object
 src/dsctl/support/json_types.py|is_json_value(value)|object
 src/dsctl/support/json_types.py|require_json_object(value)|object
-src/dsctl/upstream/generated_session.py|_is_http_query_scalar(value)|object
-src/dsctl/upstream/generated_session.py|_is_json_value(value)|object
-src/dsctl/upstream/generated_session.py|_json_value_or_none(value)|object
-src/dsctl/upstream/generated_session.py|_multipart_files_or_none(value)|object
-src/dsctl/upstream/generated_session.py|_query_params_or_none(value)|object
-src/dsctl/upstream/generated_session.py|_request_data_or_none(value)|object
-src/dsctl/upstream/registry.py|VersionSupport.adapter|UpstreamAdapter[object]
-src/dsctl/upstream/registry.py|get_adapter:return|UpstreamAdapter[object]
+src/dsctl/upstream/_generated_types.py|OpaqueGeneratedValue:type-alias|object

@@ -25,6 +25,89 @@ def write_model_base_module(
     )
 
 
+def write_compiled_schema_module(package_root: Path) -> None:
+    """Write atomic request/response schema entries below upstream adapters."""
+    schema_path = package_root / "_compiled_schema.py"
+    schema_path.write_text(render_compiled_schema_module(), encoding="utf-8")
+
+
+def render_compiled_schema_module() -> str:
+    """Render the Pydantic-independent compiled-schema registry ABI."""
+    return "\n".join(
+        [
+            '"""Atomic executable-schema entries for generated wire registries."""',
+            "",
+            "from __future__ import annotations",
+            "",
+            "from dataclasses import dataclass",
+            "from typing import TYPE_CHECKING, TypeAlias",
+            "",
+            "if TYPE_CHECKING:",
+            "    from pydantic import BaseModel",
+            "",
+            "OpaqueSchemaAnnotation: TypeAlias = object",
+            "",
+            "@dataclass(frozen=True)",
+            "class CompiledRequestSchema:",
+            '    """One generated request model and its compiler-owned identity."""',
+            "",
+            "    model: type[BaseModel]",
+            "    digest: str",
+            "",
+            "@dataclass(frozen=True)",
+            "class CompiledResponseSchema:",
+            '    """One generated response type and its compiler-owned identity."""',
+            "",
+            "    annotation: OpaqueSchemaAnnotation",
+            "    digest: str",
+            "",
+            "__all__ = [",
+            '    "CompiledRequestSchema",',
+            '    "CompiledResponseSchema",',
+            "]",
+            "",
+        ]
+    )
+
+
+def write_model_base_facade_module(
+    package_root: Path,
+    *,
+    base_contract_model_name: str,
+    base_view_model_name: str,
+    base_entity_model_name: str,
+) -> None:
+    """Bind an exact package to the one shared model-base implementation."""
+    export_names = sorted(
+        (
+            base_contract_model_name,
+            base_entity_model_name,
+            base_view_model_name,
+            "JsonObject",
+            "JsonValue",
+        )
+    )
+    model_base_path = package_root / "_models.py"
+    model_base_path.write_text(
+        "\n".join(
+            [
+                "from __future__ import annotations",
+                "",
+                "# Generated wire-runtime facade; do not edit.",
+                "from dsctl.generated.wire_runtime._models import (",
+                *(f"    {name}," for name in export_names),
+                ")",
+                "",
+                "__all__ = [",
+                *(f'    "{name}",' for name in export_names),
+                "]",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def render_model_base_module(
     *,
     base_contract_model_name: str,
@@ -98,9 +181,50 @@ def write_base_operations_module(
         requests_base_class_name,
         "ApiPayloadValidationError",
         "ApiResultError",
+        "BinaryPayload",
         "UploadFileLike",
         "SessionLike",
     ]
+
+
+def write_base_operations_facade_module(
+    package_root: Path,
+    package_exports: dict[tuple[str, ...], dict[str, list[str]]],
+    *,
+    requests_base_class_name: str,
+    base_params_model_name: str,
+) -> None:
+    """Bind an exact package to the one shared wire-runtime implementation."""
+    export_names = [
+        requests_base_class_name,
+        base_params_model_name,
+        "BinaryPayload",
+        "UploadFileLike",
+        "SessionLike",
+        "ApiResultError",
+        "ApiPayloadValidationError",
+    ]
+    base_path = package_root / "api" / "operations" / "_base.py"
+    base_path.parent.mkdir(parents=True, exist_ok=True)
+    base_path.write_text(
+        "\n".join(
+            [
+                "from __future__ import annotations",
+                "",
+                "# Generated wire-runtime facade; do not edit.",
+                "from dsctl.generated.wire_runtime.api.operations._base import (",
+                *(f"    {name}," for name in (*export_names, "JsonValue")),
+                ")",
+                "",
+                "__all__ = [",
+                *(f'    "{name}",' for name in export_names),
+                "]",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    package_exports[("api", "operations")]["_base"] = export_names
 
 
 def render_base_operations_module(
@@ -111,6 +235,8 @@ def render_base_operations_module(
     return "\n".join(
         [
             "from __future__ import annotations",
+            "",
+            "from dataclasses import dataclass",
             "",
             "import httpx",
             "",
@@ -125,11 +251,14 @@ def render_base_operations_module(
             "    TypeVar,",
             "    TypedDict,",
             "    Unpack,",
+            "    cast,",
+            "    runtime_checkable,",
             ")",
             "",
             "from pydantic import (",
             "    BaseModel,",
             "    ConfigDict,",
+            "    JsonValue as JsonValue,",
             "    TypeAdapter,",
             "    ValidationError,",
             ")",
@@ -137,8 +266,6 @@ def render_base_operations_module(
             'T = TypeVar("T")',
             "",
             "JsonScalar: TypeAlias = str | int | float | bool | None",
-            'JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | '
-            'dict[str, "JsonValue"]',
             'JsonLike: TypeAlias = JsonScalar | Sequence["JsonLike"] | '
             'Mapping[str, "JsonLike"]',
             "RequestScalar: TypeAlias = str | int | float | bool | None",
@@ -148,13 +275,54 @@ def render_base_operations_module(
             "JsonObject: TypeAlias = dict[str, JsonValue]",
             "RequestData: TypeAlias = RequestMapping",
             "",
-            "UploadFileContent: TypeAlias = IO[bytes] | bytes",
+            "@runtime_checkable",
+            "class UploadFileStream(Protocol):",
+            "    def read(self, size: int = -1) -> bytes: ...",
+            "",
+            "UploadFileContent: TypeAlias = UploadFileStream | bytes",
             "UploadFileLike: TypeAlias = (",
             "    UploadFileContent",
             "    | tuple[str, UploadFileContent]",
             "    | tuple[str, UploadFileContent, str]",
             "    | tuple[str, UploadFileContent, str, dict[str, str]]",
             ")",
+            "",
+            "HttpxUploadFileContent: TypeAlias = IO[bytes] | bytes | str",
+            "HttpxUploadFileLike: TypeAlias = (",
+            "    HttpxUploadFileContent",
+            "    | tuple[str | None, HttpxUploadFileContent]",
+            "    | tuple[str | None, HttpxUploadFileContent, str | None]",
+            "    | tuple[",
+            "        str | None,",
+            "        HttpxUploadFileContent,",
+            "        str | None,",
+            "        Mapping[str, str],",
+            "    ]",
+            ")",
+            "HttpxRequestFiles: TypeAlias = Mapping[str, HttpxUploadFileLike]",
+            "",
+            "def _as_httpx_request_files(",
+            "    files: dict[str, UploadFileLike] | None,",
+            ") -> HttpxRequestFiles | None:",
+            "    # The generated API accepts the smaller runtime protocol that",
+            "    # httpx consumes; keep the nominal IO cast at this boundary.",
+            "    return cast(HttpxRequestFiles | None, files)",
+            "",
+            "class BinaryPayload(Protocol):",
+            "    @property",
+            "    def content(self) -> bytes: ...",
+            "",
+            "    @property",
+            "    def headers(self) -> dict[str, str]: ...",
+            "",
+            "    @property",
+            "    def content_type(self) -> str | None: ...",
+            "",
+            "@dataclass(frozen=True)",
+            "class _RequestsBinaryPayload:",
+            "    content: bytes",
+            "    headers: dict[str, str]",
+            "    content_type: str | None",
             "",
             "class RequestKwargs(TypedDict, total=False):",
             "    params: RequestMapping",
@@ -254,6 +422,14 @@ def render_base_operations_module(
             "        **kwargs: Unpack[RequestKwargs],",
             "    ) -> JsonValue: ...",
             "",
+            "    def request_binary(",
+            "        self,",
+            "        method: str,",
+            "        url: str,",
+            "        headers: dict[str, str],",
+            "        **kwargs: Unpack[RequestKwargs],",
+            "    ) -> BinaryPayload: ...",
+            "",
             "    def raise_payload_error(",
             "        self,",
             "        message: str,",
@@ -291,7 +467,7 @@ def render_base_operations_module(
             '            json=kwargs.get("json"),',
             '            data=kwargs.get("data"),',
             '            content=kwargs.get("content"),',
-            '            files=kwargs.get("files"),',
+            '            files=_as_httpx_request_files(kwargs.get("files")),',
             "        )",
             "        response.raise_for_status()",
             "        payload = _require_json_value(",
@@ -299,6 +475,30 @@ def render_base_operations_module(
             '            label="response body",',
             "        )",
             "        return self._unwrap_payload(payload)",
+            "",
+            "    def request_binary(",
+            "        self,",
+            "        method: str,",
+            "        url: str,",
+            "        headers: dict[str, str],",
+            "        **kwargs: Unpack[RequestKwargs],",
+            "    ) -> BinaryPayload:",
+            "        response = self._session.request(",
+            "            method,",
+            "            url,",
+            "            headers=headers,",
+            '            params=kwargs.get("params"),',
+            '            json=kwargs.get("json"),',
+            '            data=kwargs.get("data"),',
+            '            content=kwargs.get("content"),',
+            '            files=_as_httpx_request_files(kwargs.get("files")),',
+            "        )",
+            "        response.raise_for_status()",
+            "        return _RequestsBinaryPayload(",
+            "            content=response.content,",
+            "            headers=dict(response.headers),",
+            '            content_type=response.headers.get("content-type"),',
+            "        )",
             "",
             "    def raise_payload_error(",
             "        self,",
@@ -393,6 +593,32 @@ def render_base_operations_module(
             '                label="request payload",',
             "            )",
             "        )",
+            "",
+            "    def _multipart_mapping(",
+            "        self,",
+            "        value: BaseModel,",
+            "        *,",
+            "        file_fields: Mapping[str, str],",
+            "    ) -> tuple[RequestData, dict[str, UploadFileLike]]:",
+            "        payload = value.model_dump(",
+            "            by_alias=True,",
+            "            exclude=set(file_fields),",
+            "            exclude_none=True,",
+            "            exclude_unset=True,",
+            '            mode="json",',
+            "        )",
+            "        data = self._clean_mapping(",
+            "            _require_request_mapping(",
+            "                payload,",
+            '                label="multipart payload",',
+            "            )",
+            "        )",
+            "        files: dict[str, UploadFileLike] = {}",
+            "        for attribute_name, wire_name in file_fields.items():",
+            "            file_value = getattr(value, attribute_name)",
+            "            if file_value is not None:",
+            "                files[wire_name] = cast(UploadFileLike, file_value)",
+            "        return data, files",
             "",
             "    def _json_payload(self, value: BaseModel | JsonLike) -> JsonValue:",
             "        if isinstance(value, BaseModel):",
@@ -490,11 +716,41 @@ def render_base_operations_module(
             "            **request_kwargs,",
             "        )",
             "",
+            (
+                "    def _request_binary("
+                "self, method: str, path: str, **kwargs: "
+                "Unpack[ClientRequestKwargs]"
+                ") -> BinaryPayload:"
+            ),
+            "        headers = self._default_headers()",
+            '        extra_headers = kwargs.pop("headers", None)',
+            "        if extra_headers is not None:",
+            "            headers.update(extra_headers)",
+            "        request_kwargs: RequestKwargs = {}",
+            '        if "params" in kwargs:',
+            '            request_kwargs["params"] = kwargs["params"]',
+            '        if "json" in kwargs:',
+            '            request_kwargs["json"] = kwargs["json"]',
+            '        if "data" in kwargs:',
+            '            request_kwargs["data"] = kwargs["data"]',
+            '        if "content" in kwargs:',
+            '            request_kwargs["content"] = kwargs["content"]',
+            '        if "files" in kwargs:',
+            '            request_kwargs["files"] = kwargs["files"]',
+            "        url = f\"{self.base_url}/{path.lstrip('/')}\"",
+            "        return self._session.request_binary(",
+            "            method,",
+            "            url,",
+            "            headers=headers,",
+            "            **request_kwargs,",
+            "        )",
+            "",
             '__all__ = ["'
             + requests_base_class_name
             + '", "'
             + base_params_model_name
-            + '", "UploadFileLike", "SessionLike", "ApiResultError", '
+            + '", "BinaryPayload", "UploadFileLike", "SessionLike", '
+            '"ApiResultError", '
             '"ApiPayloadValidationError"]',
             "",
         ]

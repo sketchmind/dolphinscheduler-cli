@@ -4,12 +4,13 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.services import runtime as runtime_service
+from dsctl.errors import ApiResultError
+from dsctl.services import queue as queue_service
+from dsctl.upstream.queues import QUEUE_DOMAIN, QueueDomain
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
-    FakeProjectAdapter,
     FakeQueue,
     FakeQueueAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
 
@@ -31,14 +32,14 @@ def patch_queue_service(
     monkeypatch: pytest.MonkeyPatch,
     fake_queue_adapter: FakeQueueAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            queue_adapter=fake_queue_adapter,
-            profile=make_profile(),
-        ),
+    domain = QueueDomain(queues=fake_queue_adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        queue_service,
+        expected_domain=QUEUE_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 
@@ -148,3 +149,24 @@ def test_queue_delete_command_returns_deleted_confirmation() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "queue.delete"
     assert payload["data"]["deleted"] is True
+
+
+@pytest.mark.parametrize("selector", ["default", "7"])
+def test_queue_get_translates_native_admin_permission_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_queue_adapter: FakeQueueAdapter,
+    selector: str,
+) -> None:
+    def denied(*, queue_id: int) -> FakeQueue:
+        # DS 1.3.9 QueueService.queryList -> checkAdmin -> Status 30001.
+        raise ApiResultError(
+            result_code=30001, result_message="user has no operation privilege"
+        )
+
+    monkeypatch.setattr(fake_queue_adapter, "get", denied)
+    result = runner.invoke(app, ["queue", "get", selector])
+
+    assert result.exit_code == 1
+    error = json.loads(result.stderr)["error"]
+    assert error["type"] == "permission_denied"
+    assert error["details"]["operation"] == "get"

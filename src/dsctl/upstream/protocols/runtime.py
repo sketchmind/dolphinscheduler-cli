@@ -7,7 +7,6 @@ if TYPE_CHECKING:
 
     from dsctl.upstream.protocols.base import StringEnumValue
     from dsctl.upstream.protocols.design import (
-        TaskPayloadRecord,
         TaskRecord,
         WorkflowDagRecord,
         WorkflowPayloadRecord,
@@ -258,19 +257,6 @@ class TaskOperations(Protocol):
     def list(self, *, project_code: int, workflow_code: int) -> Sequence[TaskRecord]:
         """Return tasks belonging to one workflow."""
 
-    def get(self, *, code: int) -> TaskPayloadRecord:
-        """Fetch one task definition by code."""
-
-    def update(
-        self,
-        *,
-        project_code: int,
-        code: int,
-        task_definition_json: str,
-        upstream_codes: Sequence[int],
-    ) -> None:
-        """Update one task definition and its upstream relations."""
-
 
 class TaskInstanceRecord(Protocol):
     """Structural task-instance payload exposed to runtime services."""
@@ -408,16 +394,16 @@ class TaskInstancePageRecord(Protocol):
         """Alternate remote page number field."""
 
 
-class TaskLogRecord(Protocol):
-    """Structural task-log chunk returned by upstream logger operations."""
+class TaskLogTailRecord(Protocol):
+    """Canonical task-log tail returned by upstream runtime operations."""
 
     @property
-    def lineNum(self) -> int:  # noqa: N802
-        """Number of lines returned in this chunk."""
+    def text(self) -> str:
+        """Tail text after exact-version pagination and normalization."""
 
     @property
-    def message(self) -> str | None:
-        """Chunk payload text."""
+    def line_count(self) -> int:
+        """Number of lines retained in the canonical tail."""
 
 
 class TaskInstanceOperations(Protocol):
@@ -452,14 +438,13 @@ class TaskInstanceOperations(Protocol):
     ) -> TaskInstanceRecord | None:
         """Fetch one task instance by id, or ``None`` when DS returns no body."""
 
-    def log_chunk(
+    def tail_task_log(
         self,
         *,
         task_instance_id: int,
-        skip_line_num: int,
-        limit: int,
-    ) -> TaskLogRecord:
-        """Fetch one incremental log chunk for a task instance."""
+        max_lines: int,
+    ) -> TaskLogTailRecord:
+        """Fetch one complete, bounded tail for a task instance."""
 
     def force_success(
         self,

@@ -7,34 +7,39 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ds_codegen.contract_type_refs import generic_base_type
+from ds_codegen.contract_visibility import (
+    has_executable_response_type,
+    is_client_supplied_parameter,
+    is_required_parameter,
+)
+from ds_codegen.operation_paths import operation_path_arguments
+from ds_codegen.render.package.render_support import (
+    render_parameter_default_annotation,
+    snake_case,
+)
 from ds_codegen.render.package.surface_renderer import (
     controller_module_name,
     controller_operations_class_name,
 )
-from ds_codegen.render.requests_client import (
-    _explicit_content_type,
-    _visible_operation_parameters,
-    _visible_request_params,
-)
-from ds_codegen.render.requests_example import (
-    _generic_base_type,
-    _parameter_is_required,
-    _render_path_arguments,
-    _render_python_path_template,
-    _RenderContext,
-    _snake_case,
-)
+from ds_codegen.snapshot_resolution import ResolutionScope
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from ds_codegen.ir import OperationSpec
+    from ds_codegen.ir import OperationSpec, ParameterSpec, ReferenceOwnerKind
     from ds_codegen.render.package.planner import PackageRenderContext
 
 AnnotationImportTarget = tuple[tuple[str, ...], str]
 _STRICT_INT_LIST_RESPONSE_OPERATION_IDS = frozenset(
     {"TaskDefinitionController.genTaskCodeList"}
+)
+_STRICT_INT_RESPONSE_OPERATION_IDS = frozenset(
+    {
+        "TaskDefinitionController.updateTaskDefinition",
+        "TaskDefinitionController.updateTaskWithUpstream",
+    }
 )
 
 
@@ -53,6 +58,56 @@ class OperationRenderDeps:
     render_annotation_type: Callable[..., str]
     render_docstring_lines: Callable[..., list[str]]
     render_parameter_field_config: Callable[..., str | None]
+
+
+@dataclass(frozen=True)
+class OperationResponseUse:
+    """Exact payload type selected after applying an operation projection."""
+
+    java_type: str
+    owner_kind: ReferenceOwnerKind
+    owner_ref: str
+
+
+def _visible_operation_parameters(
+    operation: OperationSpec,
+) -> list[ParameterSpec]:
+    return [
+        parameter
+        for parameter in operation.parameters
+        if is_client_supplied_parameter(parameter)
+    ]
+
+
+def _visible_request_params(operation: OperationSpec) -> list[ParameterSpec]:
+    return [
+        parameter
+        for parameter in _visible_operation_parameters(operation)
+        if parameter.binding == "request_param"
+    ]
+
+
+def _render_python_path_template(operation: OperationSpec) -> str:
+    path_template = operation.path
+    for placeholder in re.findall(r"\{([^{}]+)\}", operation.path):
+        path_template = path_template.replace(
+            f"{{{placeholder}}}",
+            f"{{{snake_case(placeholder)}}}",
+        )
+    return path_template
+
+
+def _explicit_content_type(
+    operation: OperationSpec,
+    *,
+    request_bodies: list[ParameterSpec],
+) -> str | None:
+    if not request_bodies:
+        return operation.consumes[0] if operation.consumes else None
+    request_body = request_bodies[0]
+    if request_body.java_type != "String":
+        return None
+    return operation.consumes[0] if operation.consumes else "application/json"
 
 
 def write_operations_modules(
@@ -99,23 +154,64 @@ def render_operations_module(
     needs_upload_alias = any(
         _module_uses_upload_alias(operation) for operation in operations
     )
+    uses_binary_response = any(
+        _is_binary_response_operation(operation) for operation in operations
+    )
+    return_uses = {
+        operation.operation_id: operation_response_use(operation, context)
+        for operation in operations
+    }
+    annotation_uses = [
+        (parameter.java_type, operation.operation_id, "operation_request")
+        for operation in operations
+        for parameter in _visible_operation_parameters(operation)
+    ]
+    annotation_uses.extend(
+        (
+            return_uses[operation.operation_id].java_type,
+            return_uses[operation.operation_id].owner_ref,
+            return_uses[operation.operation_id].owner_kind,
+        )
+        for operation in operations
+        if not _is_binary_response_operation(operation)
+    )
+    uses_json_value = any(
+        "JsonValue"
+        in deps.render_annotation_type(
+            java_type,
+            owner_import_path=owner_ref,
+            context=context,
+            owner_kind=owner_kind,
+        )
+        for java_type, owner_ref, owner_kind in annotation_uses
+    )
     base_import_names = [deps.requests_base_class_name]
     if uses_request_params:
         base_import_names.append(deps.base_params_model_name)
     if needs_upload_alias:
         base_import_names.append("UploadFileLike")
+    if uses_binary_response:
+        base_import_names.append("BinaryPayload")
+    if uses_json_value:
+        base_import_names.append("JsonValue")
     base_import = f"from ._base import {', '.join(base_import_names)}"
     uses_validated_returns = any(
-        deps.render_annotation_type(
-            _inferred_return_type(operation, context),
-            owner_import_path=None,
+        not _is_binary_response_operation(operation)
+        and deps.render_annotation_type(
+            return_uses[operation.operation_id].java_type,
+            owner_import_path=return_uses[operation.operation_id].owner_ref,
             context=context,
+            owner_kind=return_uses[operation.operation_id].owner_kind,
         )
         != "None"
         for operation in operations
     )
     uses_strict_int_list_response = any(
         operation.operation_id in _STRICT_INT_LIST_RESPONSE_OPERATION_IDS
+        for operation in operations
+    )
+    uses_strict_int_response = any(
+        operation.operation_id in _STRICT_INT_RESPONSE_OPERATION_IDS
         for operation in operations
     )
 
@@ -128,7 +224,7 @@ def render_operations_module(
     pydantic_imports: list[str] = []
     if uses_request_params:
         pydantic_imports.append("Field")
-    if uses_strict_int_list_response:
+    if uses_strict_int_list_response or uses_strict_int_response:
         pydantic_imports.append("StrictInt")
     if uses_validated_returns:
         pydantic_imports.append("TypeAdapter")
@@ -142,9 +238,10 @@ def render_operations_module(
             import_targets.update(
                 deps.collect_annotation_import_targets(
                     parameter.java_type,
-                    owner_import_path=None,
+                    owner_import_path=operation.operation_id,
                     current_module_parts=current_module_parts,
                     context=context,
+                    owner_kind="operation_request",
                 )
             )
         for parameter in _visible_operation_parameters(operation):
@@ -157,19 +254,22 @@ def render_operations_module(
             import_targets.update(
                 deps.collect_annotation_import_targets(
                     parameter.java_type,
-                    owner_import_path=None,
+                    owner_import_path=operation.operation_id,
                     current_module_parts=current_module_parts,
                     context=context,
+                    owner_kind="operation_request",
                 )
             )
-        import_targets.update(
-            deps.collect_annotation_import_targets(
-                _inferred_return_type(operation, context),
-                owner_import_path=None,
-                current_module_parts=current_module_parts,
-                context=context,
+        if not _is_binary_response_operation(operation):
+            import_targets.update(
+                deps.collect_annotation_import_targets(
+                    return_uses[operation.operation_id].java_type,
+                    owner_import_path=return_uses[operation.operation_id].owner_ref,
+                    current_module_parts=current_module_parts,
+                    context=context,
+                    owner_kind=return_uses[operation.operation_id].owner_kind,
+                )
             )
-        )
     if import_targets:
         sections.extend(
             sorted(
@@ -184,7 +284,7 @@ def render_operations_module(
         sections.append("")
 
     request_param_blocks = [
-        _render_operation_request_params(operation, context, deps=deps)
+        render_operation_request_params(operation, context, deps=deps)
         for operation in operations
         if _visible_request_params(operation)
     ]
@@ -193,7 +293,11 @@ def render_operations_module(
         sections.append("")
 
     method_blocks = [
-        _render_operation_method(operation, context, deps=deps)
+        _render_operation_method(
+            operation,
+            context,
+            deps=deps,
+        )
         for operation in operations
     ]
     sections.append(f"class {operation_class_name}({deps.requests_base_class_name}):")
@@ -216,34 +320,47 @@ def _module_uses_upload_alias(operation: OperationSpec) -> bool:
     return False
 
 
-def _render_operation_request_params(
+def render_operation_request_params(
     operation: OperationSpec,
     context: PackageRenderContext,
     *,
     deps: OperationRenderDeps,
+    class_name: str | None = None,
+    include_docstring: bool = True,
+    honor_parameter_defaults: bool = False,
 ) -> str:
-    class_name = _operation_request_params_class_name(operation, deps=deps)
-    lines = [f"class {class_name}({deps.base_params_model_name}):"]
-    lines.extend(
-        deps.render_docstring_lines(
-            _operation_params_docstring(operation, deps=deps),
-            indent="    ",
-        )
+    class_name = class_name or _operation_request_params_class_name(
+        operation,
+        deps=deps,
     )
+    lines = [f"class {class_name}({deps.base_params_model_name}):"]
+    if include_docstring:
+        lines.extend(
+            deps.render_docstring_lines(
+                _operation_params_docstring(operation, deps=deps),
+                indent="    ",
+            )
+        )
     for parameter in _visible_request_params(operation):
-        is_required = _parameter_is_required(parameter)
+        is_required = is_required_parameter(parameter)
         attribute_name = deps.pydantic_field_name(parameter.wire_name or parameter.name)
         rendered_type = deps.field_annotation_type(
             parameter.java_type,
             allow_none=not is_required,
-            owner_import_path=None,
+            owner_import_path=operation.operation_id,
             context=context,
+            owner_kind="operation_request",
         )
         field_config = deps.render_parameter_field_config(
             parameter,
             required=is_required,
             attribute_name=attribute_name,
+            honor_default_value=honor_parameter_defaults,
         )
+        if honor_parameter_defaults and not is_required:
+            rendered_type = render_parameter_default_annotation(
+                parameter, rendered_type
+            )
         if field_config is None:
             if is_required:
                 lines.append(f"    {attribute_name}: {rendered_type}")
@@ -251,6 +368,8 @@ def _render_operation_request_params(
                 lines.append(f"    {attribute_name}: {rendered_type} = None")
             continue
         lines.append(f"    {attribute_name}: {rendered_type} = Field({field_config})")
+    if len(lines) == 1:
+        lines.append("    pass")
     return "\n".join(lines)
 
 
@@ -272,7 +391,11 @@ def _render_operation_method(
 ) -> str:
     method_name = _operation_method_name(operation)
     visible_parameters = _visible_operation_parameters(operation)
-    path_arguments = _render_path_arguments(operation, _empty_name_context(context))
+    path_arguments = _render_operation_path_arguments(
+        operation,
+        context,
+        deps=deps,
+    )
     request_params = [
         parameter
         for parameter in visible_parameters
@@ -306,27 +429,39 @@ def _render_operation_method(
             "request: "
             + deps.render_annotation_type(
                 model_attribute.java_type,
-                owner_import_path=None,
+                owner_import_path=operation.operation_id,
                 context=context,
+                owner_kind="operation_request",
             )
         )
     if request_bodies:
         request_body = request_bodies[0]
         signature_items.append(
-            f"{_snake_case(request_body.name)}: "
+            f"{snake_case(request_body.name)}: "
             + deps.render_annotation_type(
                 request_body.java_type,
-                owner_import_path=None,
+                owner_import_path=operation.operation_id,
                 context=context,
+                owner_kind="operation_request",
             )
         )
 
-    return_type = deps.render_annotation_type(
-        _inferred_return_type(operation, context),
-        owner_import_path=None,
-        context=context,
+    is_binary_response = _is_binary_response_operation(operation)
+    return_use = operation_response_use(operation, context)
+    return_type = (
+        "BinaryPayload"
+        if is_binary_response
+        else deps.render_annotation_type(
+            return_use.java_type,
+            owner_import_path=return_use.owner_ref,
+            context=context,
+            owner_kind=return_use.owner_kind,
+        )
     )
-    payload_adapter_type = _payload_adapter_type(operation, return_type=return_type)
+    payload_adapter_type = response_adapter_annotation(
+        operation,
+        return_type=return_type,
+    )
     lines = [
         f"    def {method_name}(",
         "        " + ",\n        ".join(signature_items),
@@ -368,12 +503,40 @@ def _render_operation_method(
         payload_var_name = (
             "query_params" if operation.http_method in {"DELETE", "GET"} else "data"
         )
-        lines.append(
-            f"        {payload_var_name} = self._model_mapping({payload_arg_name})"
-        )
-        request_keyword_lines.append(
-            f"            {request_keyword_name}={payload_var_name},"
-        )
+        multipart_fields = [
+            parameter
+            for parameter in request_params
+            if "MultipartFile" in parameter.java_type
+        ]
+        if multipart_fields:
+            if operation.http_method in {"DELETE", "GET"}:
+                message = (
+                    f"multipart operation {operation.operation_id} cannot use "
+                    f"{operation.http_method}"
+                )
+                raise ValueError(message)
+            field_items = ", ".join(
+                f"{deps.pydantic_field_name(parameter.wire_name or parameter.name)!r}: "
+                f"{(parameter.wire_name or parameter.name)!r}"
+                for parameter in multipart_fields
+            )
+            lines.append(
+                "        data, files = self._multipart_mapping("
+                f"{payload_arg_name}, file_fields={{{field_items}}})"
+            )
+            request_keyword_lines.extend(
+                [
+                    "            data=data,",
+                    "            files=files,",
+                ]
+            )
+        else:
+            lines.append(
+                f"        {payload_var_name} = self._model_mapping({payload_arg_name})"
+            )
+            request_keyword_lines.append(
+                f"            {request_keyword_name}={payload_var_name},"
+            )
     if model_attributes:
         payload_var_name = (
             "query_params" if operation.http_method in {"DELETE", "GET"} else "data"
@@ -391,15 +554,15 @@ def _render_operation_method(
             )
     if request_bodies:
         request_body = request_bodies[0]
-        body_arg_name = _snake_case(request_body.name)
+        body_arg_name = snake_case(request_body.name)
         if request_body.java_type == "String":
             if explicit_content_type is None:
                 message = "String request bodies must render one explicit content type"
                 raise ValueError(message)
+            request_keyword_lines.append(f"            content={body_arg_name},")
             lines.append(
                 f'        headers = {{"Content-Type": "{explicit_content_type}"}}'
             )
-            request_keyword_lines.append(f"            content={body_arg_name},")
             request_keyword_lines.append("            headers=headers,")
         else:
             request_keyword_lines.append(
@@ -410,8 +573,14 @@ def _render_operation_method(
         request_keyword_lines.append("            headers=headers,")
 
     if not request_keyword_lines:
-        request_expr = f'self._request("{operation.http_method}", {request_path})'
-        if return_type == "None":
+        request_expr = _request_expression(
+            operation,
+            request_path=request_path,
+            is_binary_response=is_binary_response,
+        )
+        if is_binary_response:
+            lines.append(f"        return {request_expr}")
+        elif return_type == "None":
             lines.append(f"        {request_expr}")
             lines.append("        return None")
         else:
@@ -425,13 +594,16 @@ def _render_operation_method(
             )
         return "\n".join(lines)
 
-    request_call_lines = [
-        "self._request(",
-        f'    "{operation.http_method}",',
-        f"    {request_path},",
-        *[line.strip() for line in request_keyword_lines],
-        ")",
-    ]
+    request_call_lines = _request_call_lines(
+        operation,
+        request_path=request_path,
+        request_keyword_lines=request_keyword_lines,
+        is_binary_response=is_binary_response,
+    )
+    if is_binary_response:
+        lines.append(f"        return {request_call_lines[0]}")
+        lines.extend(f"        {line}" for line in request_call_lines[1:])
+        return "\n".join(lines)
     if return_type == "None":
         lines.append("        " + request_call_lines[0])
         lines.extend(f"        {line}" for line in request_call_lines[1:])
@@ -450,6 +622,55 @@ def _render_operation_method(
     return "\n".join(lines)
 
 
+def _request_expression(
+    operation: OperationSpec,
+    *,
+    request_path: str,
+    is_binary_response: bool,
+) -> str:
+    request_helper = "_request_binary" if is_binary_response else "_request"
+    return f'self.{request_helper}("{operation.http_method}", {request_path})'
+
+
+def _request_call_lines(
+    operation: OperationSpec,
+    *,
+    request_path: str,
+    request_keyword_lines: list[str],
+    is_binary_response: bool,
+) -> list[str]:
+    return [
+        f"self.{'_request_binary' if is_binary_response else '_request'}(",
+        f'    "{operation.http_method}",',
+        f"    {request_path},",
+        *[line.strip() for line in request_keyword_lines],
+        ")",
+    ]
+
+
+def _render_operation_path_arguments(
+    operation: OperationSpec,
+    context: PackageRenderContext,
+    *,
+    deps: OperationRenderDeps,
+) -> list[tuple[str, str]]:
+    arguments: list[tuple[str, str]] = []
+    for argument in operation_path_arguments(operation):
+        parameter = argument.parameter
+        annotation = (
+            "int"
+            if parameter is None
+            else deps.render_annotation_type(
+                parameter.java_type,
+                owner_import_path=operation.operation_id,
+                context=context,
+                owner_kind="operation_request",
+            )
+        )
+        arguments.append((snake_case(argument.name), annotation))
+    return arguments
+
+
 def _projected_payload_lines(operation: OperationSpec) -> list[str]:
     if operation.response_projection == "status_data":
         return ["        payload = self._project_status_data(payload)"]
@@ -460,22 +681,36 @@ def _projected_payload_lines(operation: OperationSpec) -> list[str]:
     return []
 
 
-def _payload_adapter_type(operation: OperationSpec, *, return_type: str) -> str:
+def response_adapter_annotation(
+    operation: OperationSpec,
+    *,
+    return_type: str,
+) -> str:
     """Render endpoint-specific response validation without widening annotations."""
-    if operation.operation_id not in _STRICT_INT_LIST_RESPONSE_OPERATION_IDS:
-        return return_type
-    if return_type != "list[int]":
+    if operation.operation_id in _STRICT_INT_LIST_RESPONSE_OPERATION_IDS:
+        if return_type != "list[int]":
+            message = (
+                f"Strict integer-list response override for {operation.operation_id} "
+                f"expected list[int], got {return_type}"
+            )
+            raise ValueError(message)
+        return "list[StrictInt]"
+    if operation.operation_id in _STRICT_INT_RESPONSE_OPERATION_IDS:
+        if return_type == "int":
+            return "StrictInt"
+        if return_type == "int | None":
+            return "StrictInt | None"
         message = (
-            f"Strict integer-list response override for {operation.operation_id} "
-            f"expected list[int], got {return_type}"
+            f"Strict integer response override for {operation.operation_id} "
+            f"expected int or int | None, got {return_type}"
         )
         raise ValueError(message)
-    return "list[StrictInt]"
+    return return_type
 
 
 def _operation_method_name(operation: OperationSpec) -> str:
     suffix = operation.operation_id.split(".", 1)[1]
-    return _snake_case(suffix)
+    return snake_case(suffix)
 
 
 def _operation_params_docstring(
@@ -535,15 +770,18 @@ def _operation_method_docstring(
         if part is not None and deps.display_doc_text(part) != title
     ]
     detail_parts = [deps.display_doc_text(part) for part in detail_parts]
-    detail_parts.append(
-        f"DS operation: {operation.controller}.{operation.method_name} | "
-        f"{operation.http_method} /{operation.path}"
+    source_method = f"{operation.controller}.{operation.method_name}"
+    operation_metadata = (
+        f"DS operation: {source_method} | {operation.http_method} /{operation.path}"
     )
+    if operation.operation_id != source_method:
+        operation_metadata += f"\nDS operation ID: {operation.operation_id}"
+    detail_parts.append(operation_metadata)
     sections.append("\n\n".join(detail_parts))
 
     arg_lines: list[str] = []
     path_argument_docs = {
-        _snake_case(parameter.name): parameter.description
+        snake_case(parameter.name): parameter.description
         for parameter in operation.parameters
         if parameter.binding == "path_variable" and parameter.description is not None
     }
@@ -568,7 +806,7 @@ def _operation_method_docstring(
             for parameter in operation.parameters
             if parameter.binding == "request_body"
         )
-        arg_lines.append(f"{_snake_case(request_body.name)}: Request body payload.")
+        arg_lines.append(f"{snake_case(request_body.name)}: Request body payload.")
     if arg_lines:
         sections.append("Args:\n" + "\n".join(f"    {line}" for line in arg_lines))
 
@@ -578,27 +816,57 @@ def _operation_method_docstring(
     return "\n\n".join(section for section in sections if section)
 
 
-def _inferred_return_type(
+def operation_response_use(
     operation: OperationSpec,
     context: PackageRenderContext,
-) -> str:
-    name_context = _empty_name_context(context)
-    model = name_context.models_by_name.get(
-        _generic_base_type(operation.logical_return_type)
+) -> OperationResponseUse:
+    operation_scope = ResolutionScope("operation_response", operation.operation_id)
+    base_name = generic_base_type(operation.logical_return_type)
+    if context.type_resolver.state(base_name) == "missing":
+        return OperationResponseUse(
+            operation.logical_return_type,
+            operation_scope.owner_kind,
+            operation_scope.owner_ref,
+        )
+    import_path = context.type_resolver.resolve(
+        base_name,
+        scope=operation_scope,
+    )
+    model = next(
+        (
+            candidate
+            for candidate in context.snapshot.models
+            if candidate.import_path == import_path
+        ),
+        None,
     )
     if model is None or model.kind != "generated_view" or len(model.fields) != 1:
-        return operation.logical_return_type
+        return OperationResponseUse(
+            operation.logical_return_type,
+            operation_scope.owner_kind,
+            operation_scope.owner_ref,
+        )
     field = model.fields[0]
     if field.name not in {"data", "dataList"}:
-        return operation.logical_return_type
-    return field.java_type
-
-
-def _empty_name_context(context: PackageRenderContext) -> _RenderContext:
-    return _RenderContext(
-        dtos_by_name={dto.name: dto for dto in context.snapshot.dtos},
-        models_by_name={model.name: model for model in context.snapshot.models},
-        enums_by_name={
-            enum_spec.name: enum_spec for enum_spec in context.snapshot.enums
-        },
+        return OperationResponseUse(
+            operation.logical_return_type,
+            operation_scope.owner_kind,
+            operation_scope.owner_ref,
+        )
+    return OperationResponseUse(
+        field.java_type,
+        "structured_type",
+        model.import_path,
     )
+
+
+def _is_binary_response_operation(operation: OperationSpec) -> bool:
+    """Identify the exact raw-download shapes used by DS REST controllers."""
+    return not has_executable_response_type(operation)
+
+
+def _is_void_response_operation(operation: OperationSpec) -> bool:
+    return generic_base_type(operation.logical_return_type).rsplit(".", 1)[-1] in {
+        "Void",
+        "void",
+    }

@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -38,11 +39,37 @@ def _configure_cached_trees(
         (version_root / "__init__.py").write_text("", encoding="utf-8")
 
     cache_stamp = tmp_path / "cache" / ".stamp"
+    snapshot_dir = tmp_path / "snapshots"
     monkeypatch.setattr(freshness, "SRC_GENERATED", src_generated / "versions")
     monkeypatch.setattr(freshness, "CACHE_OUTPUT", fresh_output)
     monkeypatch.setattr(freshness, "CACHE_STAMP", cache_stamp)
+    monkeypatch.setattr(freshness, "SNAPSHOT_DIR", snapshot_dir)
     monkeypatch.setattr(freshness, "INPUT_ROOTS", ())
-    cache_stamp.write_text(freshness._input_fingerprint(), encoding="utf-8")
+    monkeypatch.setattr(
+        freshness,
+        "load_runtime_bundle_source_identities",
+        lambda _repo_root, _manifest_path: (),
+    )
+    monkeypatch.setattr(
+        freshness,
+        "load_runtime_bundles",
+        lambda _repo_root, _manifest_path, **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        freshness,
+        "require_runtime_bundle_sources_unchanged",
+        lambda _bundles: None,
+    )
+    cache_stamp.write_text(
+        freshness._input_fingerprint(
+            source_identities=freshness._runtime_input_fingerprint_values(
+                (),
+                snapshot_mode="prefer",
+                snapshot_dir=snapshot_dir,
+            )
+        ),
+        encoding="utf-8",
+    )
     return src_generated, fresh_generated
 
 
@@ -79,6 +106,25 @@ def test_main_fails_when_fresh_generation_adds_a_version(
     assert "ds_3_5_0" in capsys.readouterr().out
 
 
+def test_main_reports_a_version_removed_from_the_bundle_plan_as_hand_added(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    freshness = _load_module()
+    src_generated, _ = _configure_cached_trees(freshness, tmp_path, monkeypatch)
+    stale_version = src_generated / "versions" / "ds_3_2_2"
+    stale_version.mkdir()
+    (stale_version / "__init__.py").write_text("", encoding="utf-8")
+
+    exit_code = freshness.main()
+
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "hand-added:" in output
+    assert "generated/versions/ds_3_2_2" in output
+
+
 def test_main_fails_when_generated_root_init_has_drifted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -92,6 +138,34 @@ def test_main_fails_when_generated_root_init_has_drifted(
 
     assert exit_code == 1
     assert "generated/__init__.py" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "runtime_instance_profiles.py",
+        "task_definition_profiles.py",
+        "version_discovery.py",
+        "workflow_profiles.py",
+    ],
+)
+def test_main_fails_when_generated_runtime_profile_has_drifted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    filename: str,
+) -> None:
+    freshness = _load_module()
+    _, fresh_generated = _configure_cached_trees(freshness, tmp_path, monkeypatch)
+    (fresh_generated / filename).write_text(
+        "fresh\n",
+        encoding="utf-8",
+    )
+
+    exit_code = freshness.main()
+
+    assert exit_code == 1
+    assert f"generated/{filename}" in capsys.readouterr().out
 
 
 def test_main_fails_when_generated_versions_init_has_drifted(
@@ -160,6 +234,142 @@ def test_main_ignores_python_bytecode_cache(
 
     assert exit_code == 0
     assert "generated code is fresh" in capsys.readouterr().out
+
+
+def test_main_revalidates_exact_sources_before_accepting_a_cache_hit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    freshness = _load_module()
+    _configure_cached_trees(freshness, tmp_path, monkeypatch)
+
+    def reject_non_exact_sources(_repo_root: Path, _manifest_path: Path) -> object:
+        message = "3.2.2 source is not a clean exact Git tag"
+        raise ValueError(message)
+
+    monkeypatch.setattr(
+        freshness,
+        "load_runtime_bundle_source_identities",
+        reject_non_exact_sources,
+    )
+
+    exit_code = freshness.main()
+
+    assert exit_code == 2
+    assert "not a clean exact Git tag" in capsys.readouterr().out
+
+
+def test_main_cache_hit_skips_contract_extraction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    freshness = _load_module()
+    _configure_cached_trees(freshness, tmp_path, monkeypatch)
+
+    def reject_extraction(
+        _repo_root: Path,
+        _manifest_path: Path,
+        **_kwargs: object,
+    ) -> object:
+        message = "full contract extraction must not run on a cache hit"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(freshness, "load_runtime_bundles", reject_extraction)
+
+    assert freshness.main() == 0
+
+
+def test_main_rejects_stale_generated_task_profiles(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    freshness = _load_module()
+    _configure_cached_trees(freshness, tmp_path, monkeypatch)
+    stale_output = tmp_path / "src" / "dsctl" / "generated" / "task_profiles.py"
+    stale_output.parent.mkdir(parents=True, exist_ok=True)
+    stale_output.write_text("# stale\n", encoding="utf-8")
+    monkeypatch.setattr(freshness, "TASK_PROFILE_OUTPUT", stale_output)
+
+    assert freshness.main() == 1
+    output = capsys.readouterr().out
+    assert "generate_ds_task_profiles.py" in output
+    assert "task_profiles.py" in output
+
+
+def test_source_mode_bypasses_the_freshness_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    freshness = _load_module()
+    src_generated, _ = _configure_cached_trees(freshness, tmp_path, monkeypatch)
+    calls: list[str] = []
+
+    def load_from_source(
+        _repo_root: Path,
+        _manifest_path: Path,
+        **kwargs: object,
+    ) -> tuple[object, ...]:
+        calls.append(str(kwargs["snapshot_mode"]))
+        return ()
+
+    monkeypatch.setattr(freshness, "load_runtime_bundles", load_from_source)
+    _install_regenerator(
+        freshness,
+        monkeypatch,
+        src_generated=src_generated,
+    )
+
+    assert freshness.main(["--snapshot-mode", "source"]) == 0
+    assert calls == ["source"]
+
+
+def test_snapshot_content_change_invalidates_the_freshness_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    freshness = _load_module()
+    src_generated, _ = _configure_cached_trees(freshness, tmp_path, monkeypatch)
+    snapshot_dir = freshness.SNAPSHOT_DIR
+    snapshot_dir.mkdir(parents=True)
+    snapshot_path = snapshot_dir / "ds-3.4.1-contract.json"
+    snapshot_path.write_text("alpha\n", encoding="utf-8")
+    original_mtime = snapshot_path.stat().st_mtime_ns
+    identity = SimpleNamespace(
+        version="3.4.1",
+        selection="full",
+        source_tag="3.4.1",
+        source_commit="a" * 40,
+        source_tree="b" * 40,
+    )
+    identities = (identity,)
+    monkeypatch.setattr(
+        freshness,
+        "load_runtime_bundle_source_identities",
+        lambda _repo_root, _manifest_path: identities,
+    )
+    freshness.CACHE_STAMP.write_text(
+        freshness._input_fingerprint(
+            source_identities=freshness._runtime_input_fingerprint_values(
+                identities,
+                snapshot_mode="prefer",
+                snapshot_dir=snapshot_dir,
+            )
+        ),
+        encoding="utf-8",
+    )
+    calls = _install_regenerator(
+        freshness,
+        monkeypatch,
+        src_generated=src_generated,
+    )
+
+    snapshot_path.write_text("bravo\n", encoding="utf-8")
+    os.utime(snapshot_path, ns=(original_mtime, original_mtime))
+
+    assert freshness.main() == 0
+    assert calls == ["generated"]
 
 
 def test_main_compares_contents_when_file_metadata_matches(
@@ -308,6 +518,119 @@ def test_main_invalidates_cache_when_symlinked_input_content_changes(
     assert regeneration_calls == ["generated"]
 
 
+def test_main_keeps_the_previous_cache_when_bundle_rendering_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    freshness = _load_module()
+    _, fresh_generated = _configure_cached_trees(freshness, tmp_path, monkeypatch)
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    input_file = input_root / "manifest.json"
+    input_file.write_text("before\n", encoding="utf-8")
+    monkeypatch.setattr(freshness, "INPUT_ROOTS", (input_root,))
+    freshness.CACHE_STAMP.write_text(
+        freshness._input_fingerprint(),
+        encoding="utf-8",
+    )
+    original_init = fresh_generated / "versions" / "ds_3_4_1" / "__init__.py"
+    original_init.write_text("previous cache\n", encoding="utf-8")
+    input_file.write_text("after\n", encoding="utf-8")
+
+    def fail_after_partial_render(
+        _bundles: tuple[object, ...],
+        output: Path,
+    ) -> None:
+        partial = output / "generated" / "versions" / "ds_3_2_2" / "partial.py"
+        partial.parent.mkdir(parents=True)
+        partial.write_text("partial\n", encoding="utf-8")
+        message = "second bundle failed"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(
+        freshness,
+        "render_runtime_bundles",
+        fail_after_partial_render,
+    )
+
+    exit_code = freshness.main()
+
+    assert exit_code == 2
+    assert "second bundle failed" in capsys.readouterr().out
+    assert original_init.read_text(encoding="utf-8") == "previous cache\n"
+    assert not (
+        freshness.CACHE_OUTPUT / "generated" / "versions" / "ds_3_2_2" / "partial.py"
+    ).exists()
+
+
+def test_main_invalidates_cache_when_exact_source_identity_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    freshness = _load_module()
+    src_generated, _ = _configure_cached_trees(freshness, tmp_path, monkeypatch)
+    monkeypatch.setattr(freshness, "INPUT_ROOTS", ())
+    current_commit = ["a" * 40]
+
+    def load_runtime_bundle_source_identities(
+        _repo_root: Path,
+        _manifest_path: Path,
+    ) -> tuple[object]:
+        return (
+            SimpleNamespace(
+                version="3.4.1",
+                selection="full",
+                source_tag="3.4.1",
+                source_commit=current_commit[0],
+                source_tree="b" * 40,
+            ),
+        )
+
+    def load_runtime_bundles(
+        _repo_root: Path,
+        _manifest_path: Path,
+        **_kwargs: object,
+    ) -> tuple[object]:
+        return (
+            SimpleNamespace(
+                spec=SimpleNamespace(version="3.4.1"),
+                metadata=SimpleNamespace(
+                    version="3.4.1",
+                    source_tag="3.4.1",
+                    source_commit=current_commit[0],
+                    source_tree="b" * 40,
+                    source_contract_digest="sha256:" + "c" * 64,
+                    rendered_contract_digest="sha256:" + "d" * 64,
+                ),
+            ),
+        )
+
+    render_calls: list[str] = []
+
+    def render_runtime_bundles(_bundles: tuple[object], output: Path) -> None:
+        render_calls.append(current_commit[0])
+        shutil.copytree(src_generated, output / "generated")
+
+    monkeypatch.setattr(freshness, "load_runtime_bundles", load_runtime_bundles)
+    monkeypatch.setattr(
+        freshness,
+        "load_runtime_bundle_source_identities",
+        load_runtime_bundle_source_identities,
+    )
+    monkeypatch.setattr(
+        freshness,
+        "render_runtime_bundles",
+        render_runtime_bundles,
+    )
+
+    assert freshness.main() == 0
+    current_commit[0] = "e" * 40
+    assert freshness.main() == 0
+
+    assert render_calls == ["a" * 40, "e" * 40]
+
+
 def _write_generated_entry(path: Path, *, kind: str) -> None:
     if kind == "file":
         path.write_text("same\n", encoding="utf-8")
@@ -330,17 +653,16 @@ def _install_regenerator(
 ) -> list[str]:
     calls: list[str] = []
 
-    def build_contract_snapshot(_root: Path) -> object:
-        calls.append("generated")
-        return object()
-
-    def write_generated_package(
-        _root: Path,
-        _snapshot: object,
+    def render_runtime_bundles(
+        _bundles: tuple[object, ...],
         output: Path,
     ) -> None:
+        calls.append("generated")
         shutil.copytree(src_generated, output / "generated")
 
-    monkeypatch.setattr(freshness, "build_contract_snapshot", build_contract_snapshot)
-    monkeypatch.setattr(freshness, "write_generated_package", write_generated_package)
+    monkeypatch.setattr(
+        freshness,
+        "render_runtime_bundles",
+        render_runtime_bundles,
+    )
     return calls

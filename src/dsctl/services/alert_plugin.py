@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
 
@@ -15,34 +16,35 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
-    AlertPluginData,
-    StructuredDataValue,
-    optional_text,
-    serialize_alert_plugin_list_item,
-    serialize_plugin_define,
-)
+from dsctl.services._page_result import paged_command_result
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_positive_int,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.resolver import ResolvedAlertPluginData
-from dsctl.services.resolver import alert_plugin as resolve_alert_plugin
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.alert_plugins import (
+    ALERT_PLUGIN_DOMAIN,
+    AlertPluginDomain,
+)
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.resolver import ResolvedAlertPluginData
+from dsctl.upstream.resolver import alert_plugin as resolve_alert_plugin
+from dsctl.upstream.serialization import (
+    StructuredDataValue,
+    optional_text,
+    serialize_alert_plugin_list_item,
+    serialize_plugin_define,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from dsctl.upstream.protocol import (
         AlertPluginListItemRecord,
-        AlertPluginPayloadRecord,
         PluginDefineRecord,
     )
 
@@ -64,7 +66,7 @@ ALERT_SERVER_NOT_EXIST = 110017
 USER_NO_OPERATION_PERM = 30001
 ALERT_PLUGIN_TYPE = "ALERT"
 
-AlertPluginPageData: TypeAlias = PageData[AlertPluginData]
+AlertPluginRuntime: TypeAlias = BoundDomainServiceRuntime[AlertPluginDomain]
 
 
 class DeleteAlertPluginData(TypedDict):
@@ -122,8 +124,9 @@ def list_alert_plugins_result(
     normalized_search = optional_text(search)
     normalized_page_no = require_positive_int(page_no, label="page_no")
     normalized_page_size = require_positive_int(page_size, label="page_size")
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_PLUGIN_DOMAIN,
         _list_alert_plugins_result,
         search=normalized_search,
         page_no=normalized_page_no,
@@ -138,8 +141,9 @@ def get_alert_plugin_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Resolve and fetch one alert-plugin instance."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_PLUGIN_DOMAIN,
         _get_alert_plugin_result,
         alert_plugin=alert_plugin,
     )
@@ -152,8 +156,9 @@ def get_alert_plugin_schema_result(
 ) -> CommandResult:
     """Fetch one alert-plugin definition schema by name or id."""
     normalized_plugin = require_non_empty_text(plugin, label="alert plugin")
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_PLUGIN_DOMAIN,
         _get_alert_plugin_schema_result,
         plugin=normalized_plugin,
     )
@@ -164,8 +169,9 @@ def list_alert_plugin_definitions_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """List alert-plugin definitions supported by the current DS runtime."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_PLUGIN_DOMAIN,
         _list_alert_plugin_definitions_result,
     )
 
@@ -194,8 +200,9 @@ def create_alert_plugin_result(
         file=file,
         required=False,
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_PLUGIN_DOMAIN,
         _create_alert_plugin_result,
         name=normalized_name,
         plugin=normalized_plugin,
@@ -238,8 +245,9 @@ def update_alert_plugin_result(
         file=file,
         required=False,
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_PLUGIN_DOMAIN,
         _update_alert_plugin_result,
         alert_plugin=alert_plugin,
         name=normalized_name,
@@ -256,8 +264,9 @@ def delete_alert_plugin_result(
 ) -> CommandResult:
     """Delete one alert-plugin instance after explicit confirmation."""
     require_delete_force(force=force, resource_label="Alert-plugin")
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_PLUGIN_DOMAIN,
         _delete_alert_plugin_result,
         alert_plugin=alert_plugin,
     )
@@ -269,23 +278,24 @@ def send_test_alert_plugin_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Send one test alert using one existing alert-plugin instance."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ALERT_PLUGIN_DOMAIN,
         _send_test_alert_plugin_result,
         alert_plugin=alert_plugin,
     )
 
 
 def _list_alert_plugins_result(
-    runtime: ServiceRuntime,
+    runtime: AlertPluginRuntime,
     *,
     search: str | None,
     page_no: int,
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.alert_plugins
-    data: AlertPluginPageData = requested_page_data(
+    adapter = runtime.domain.alert_plugins
+    return paged_command_result(
         lambda current_page_no, current_page_size: adapter.list(
             page_no=current_page_no,
             page_size=current_page_size,
@@ -296,32 +306,23 @@ def _list_alert_plugins_result(
         all_pages=all_pages,
         serialize_item=serialize_alert_plugin_list_item,
         resource=ALERT_PLUGIN_RESOURCE,
-        max_pages=MAX_AUTO_EXHAUST_PAGES,
+        resolved={"search": search},
         translate_error=lambda error: _translate_alert_plugin_api_error(
             error,
             operation="list",
             instance_name=search,
         ),
     )
-    return CommandResult(
-        data=require_json_object(data, label="alert-plugin list data"),
-        resolved={
-            "search": search,
-            "page_no": page_no,
-            "page_size": page_size,
-            "all": all_pages,
-        },
-    )
 
 
 def _get_alert_plugin_result(
-    runtime: ServiceRuntime,
+    runtime: AlertPluginRuntime,
     *,
     alert_plugin: str,
 ) -> CommandResult:
     resolved_alert_plugin = resolve_alert_plugin(
         alert_plugin,
-        adapter=runtime.upstream.alert_plugins,
+        adapter=runtime.domain.alert_plugins,
     )
     fetched_alert_plugin = _require_alert_plugin_list_item(
         runtime,
@@ -342,7 +343,7 @@ def _get_alert_plugin_result(
 
 
 def _get_alert_plugin_schema_result(
-    runtime: ServiceRuntime,
+    runtime: AlertPluginRuntime,
     *,
     plugin: str,
 ) -> CommandResult:
@@ -361,9 +362,11 @@ def _get_alert_plugin_schema_result(
     )
 
 
-def _list_alert_plugin_definitions_result(runtime: ServiceRuntime) -> CommandResult:
+def _list_alert_plugin_definitions_result(
+    runtime: AlertPluginRuntime,
+) -> CommandResult:
     try:
-        plugin_defines = runtime.upstream.ui_plugins.list(plugin_type=ALERT_PLUGIN_TYPE)
+        plugin_defines = runtime.domain.ui_plugins.list(plugin_type=ALERT_PLUGIN_TYPE)
     except ApiResultError as error:
         raise _translate_ui_plugin_api_error(error) from error
     definitions = [
@@ -389,7 +392,7 @@ def _list_alert_plugin_definitions_result(runtime: ServiceRuntime) -> CommandRes
 
 
 def _create_alert_plugin_result(
-    runtime: ServiceRuntime,
+    runtime: AlertPluginRuntime,
     *,
     name: str,
     plugin: str,
@@ -404,7 +407,7 @@ def _create_alert_plugin_result(
             existing_params=None,
         )
     try:
-        created_alert_plugin = runtime.upstream.alert_plugins.create(
+        created_alert_plugin = runtime.domain.alert_plugins.create(
             plugin_define_id=_plugin_define_id(plugin_define),
             instance_name=name,
             plugin_instance_params=plugin_instance_params,
@@ -416,24 +419,14 @@ def _create_alert_plugin_result(
             instance_name=name,
         ) from error
 
-    created_alert_plugin_id = _alert_plugin_id_from_payload(
-        runtime,
-        payload=created_alert_plugin,
-        instance_name=name,
-        plugin_define_id=_plugin_define_id(plugin_define),
-    )
-    refreshed = _require_alert_plugin_list_item(
-        runtime,
-        alert_plugin_id=created_alert_plugin_id,
-    )
     return CommandResult(
         data=require_json_object(
-            serialize_alert_plugin_list_item(refreshed),
+            serialize_alert_plugin_list_item(created_alert_plugin),
             label="alert-plugin data",
         ),
         resolved={
             "alertPlugin": require_json_object(
-                _resolved_alert_plugin_data(refreshed),
+                _resolved_alert_plugin_data(created_alert_plugin),
                 label="resolved alert-plugin",
             ),
             "pluginDefine": require_json_object(
@@ -445,7 +438,7 @@ def _create_alert_plugin_result(
 
 
 def _update_alert_plugin_result(
-    runtime: ServiceRuntime,
+    runtime: AlertPluginRuntime,
     *,
     alert_plugin: str,
     name: str | None,
@@ -454,7 +447,7 @@ def _update_alert_plugin_result(
 ) -> CommandResult:
     resolved_alert_plugin = resolve_alert_plugin(
         alert_plugin,
-        adapter=runtime.upstream.alert_plugins,
+        adapter=runtime.domain.alert_plugins,
     )
     current_alert_plugin = _require_alert_plugin_list_item(
         runtime,
@@ -483,7 +476,7 @@ def _update_alert_plugin_result(
             details={"resource": ALERT_PLUGIN_RESOURCE, "id": resolved_alert_plugin.id},
         )
     try:
-        runtime.upstream.alert_plugins.update(
+        updated_alert_plugin = runtime.domain.alert_plugins.update(
             alert_plugin_id=resolved_alert_plugin.id,
             instance_name=next_name,
             plugin_instance_params=next_params,
@@ -496,13 +489,9 @@ def _update_alert_plugin_result(
             instance_name=next_name,
         ) from error
 
-    refreshed = _require_alert_plugin_list_item(
-        runtime,
-        alert_plugin_id=resolved_alert_plugin.id,
-    )
     return CommandResult(
         data=require_json_object(
-            serialize_alert_plugin_list_item(refreshed),
+            serialize_alert_plugin_list_item(updated_alert_plugin),
             label="alert-plugin data",
         ),
         resolved={
@@ -515,16 +504,16 @@ def _update_alert_plugin_result(
 
 
 def _delete_alert_plugin_result(
-    runtime: ServiceRuntime,
+    runtime: AlertPluginRuntime,
     *,
     alert_plugin: str,
 ) -> CommandResult:
     resolved_alert_plugin = resolve_alert_plugin(
         alert_plugin,
-        adapter=runtime.upstream.alert_plugins,
+        adapter=runtime.domain.alert_plugins,
     )
     try:
-        deleted = runtime.upstream.alert_plugins.delete(
+        deleted = runtime.domain.alert_plugins.delete(
             alert_plugin_id=resolved_alert_plugin.id
         )
     except ApiResultError as error:
@@ -552,13 +541,13 @@ def _delete_alert_plugin_result(
 
 
 def _send_test_alert_plugin_result(
-    runtime: ServiceRuntime,
+    runtime: AlertPluginRuntime,
     *,
     alert_plugin: str,
 ) -> CommandResult:
     resolved_alert_plugin = resolve_alert_plugin(
         alert_plugin,
-        adapter=runtime.upstream.alert_plugins,
+        adapter=runtime.domain.alert_plugins,
     )
     current_alert_plugin = _require_alert_plugin_list_item(
         runtime,
@@ -572,7 +561,7 @@ def _send_test_alert_plugin_result(
             details={"resource": ALERT_PLUGIN_RESOURCE, "id": resolved_alert_plugin.id},
         )
     try:
-        tested = runtime.upstream.alert_plugins.test_send(
+        tested = runtime.domain.alert_plugins.test_send(
             plugin_define_id=current_alert_plugin.pluginDefineId,
             plugin_instance_params=plugin_instance_params,
         )
@@ -598,14 +587,14 @@ def _send_test_alert_plugin_result(
 
 
 def _resolve_plugin_define(
-    runtime: ServiceRuntime,
+    runtime: AlertPluginRuntime,
     *,
     plugin: str,
 ) -> PluginDefineRecord:
     plugin_id = _parse_int(plugin)
     if plugin_id is not None:
         try:
-            plugin_define = runtime.upstream.ui_plugins.get(plugin_id=plugin_id)
+            plugin_define = runtime.domain.ui_plugins.get(plugin_id=plugin_id)
         except ApiResultError as error:
             raise _translate_ui_plugin_api_error(
                 error,
@@ -614,7 +603,7 @@ def _resolve_plugin_define(
         return _require_alert_plugin_define_type(plugin_define)
 
     try:
-        plugin_defines = runtime.upstream.ui_plugins.list(plugin_type=ALERT_PLUGIN_TYPE)
+        plugin_defines = runtime.domain.ui_plugins.list(plugin_type=ALERT_PLUGIN_TYPE)
     except ApiResultError as error:
         raise _translate_ui_plugin_api_error(error) from error
     matches = [
@@ -648,7 +637,7 @@ def _resolve_plugin_define(
         )
     plugin_define_id = _plugin_define_id(matches[0])
     try:
-        detailed_plugin_define = runtime.upstream.ui_plugins.get(
+        detailed_plugin_define = runtime.domain.ui_plugins.get(
             plugin_id=plugin_define_id
         )
     except ApiResultError as error:
@@ -660,12 +649,12 @@ def _resolve_plugin_define(
 
 
 def _require_alert_plugin_list_item(
-    runtime: ServiceRuntime,
+    runtime: AlertPluginRuntime,
     *,
     alert_plugin_id: int,
 ) -> AlertPluginListItemRecord:
     try:
-        alert_plugins = runtime.upstream.alert_plugins.list_all()
+        alert_plugins = runtime.domain.alert_plugins.list_all()
     except ApiResultError as error:
         raise _translate_alert_plugin_api_error(
             error,
@@ -679,40 +668,6 @@ def _require_alert_plugin_list_item(
     raise NotFoundError(
         message,
         details={"resource": ALERT_PLUGIN_RESOURCE, "id": alert_plugin_id},
-    )
-
-
-def _alert_plugin_id_from_payload(
-    runtime: ServiceRuntime,
-    *,
-    payload: AlertPluginPayloadRecord,
-    instance_name: str,
-    plugin_define_id: int,
-) -> int:
-    if payload.id is not None:
-        return payload.id
-    try:
-        alert_plugins = runtime.upstream.alert_plugins.list_all()
-    except ApiResultError as error:
-        raise _translate_alert_plugin_api_error(
-            error,
-            operation="get",
-            instance_name=instance_name,
-        ) from error
-    for alert_plugin in alert_plugins:
-        if (
-            alert_plugin.instanceName == instance_name
-            and alert_plugin.pluginDefineId == plugin_define_id
-        ):
-            return alert_plugin.id
-    message = "Alert-plugin create/update response was missing the new instance id"
-    raise ApiTransportError(
-        message,
-        details={
-            "resource": ALERT_PLUGIN_RESOURCE,
-            "instanceName": instance_name,
-            "pluginDefineId": plugin_define_id,
-        },
     )
 
 
@@ -853,7 +808,7 @@ def _plugin_instance_params_input(
     if text is None:
         return None
     try:
-        parsed = json.loads(text)
+        parsed: StructuredDataValue = json.loads(text)
     except json.JSONDecodeError as error:
         message = "Alert-plugin params must be valid JSON"
         raise UserInputError(
@@ -881,7 +836,51 @@ def _plugin_instance_params_input(
                 "template, fill the value fields, then retry."
             ),
         )
+    _validate_plugin_param_input_items(parsed)
     return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
+
+
+def _validate_plugin_param_input_items(
+    items: Sequence[StructuredDataValue],
+) -> None:
+    for item in items:
+        if not isinstance(item, Mapping):
+            message = "Alert-plugin params must be a JSON array of objects"
+            raise UserInputError(message)
+        param = item
+        missing = [
+            field
+            for field in ("field", "type")
+            if not isinstance(param.get(field), str) or not param[field]
+        ]
+        if not isinstance(param.get("title"), str):
+            missing.append("title")
+        if missing:
+            message = "Alert-plugin params are missing required UI fields"
+            raise UserInputError(
+                message,
+                details={"resource": ALERT_PLUGIN_RESOURCE, "missing": missing},
+                suggestion=(
+                    "Use `alert-plugin schema PLUGIN` to fetch the DS UI params "
+                    "template, fill the value fields, then retry."
+                ),
+            )
+        _validate_plugin_param_input_value(param.get("value"))
+
+
+def _validate_plugin_param_input_value(value: StructuredDataValue) -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        message = "Alert-plugin param value cannot be verified safely"
+        raise UserInputError(
+            message,
+            suggestion="Use a string value for non-finite numbers.",
+        )
+    if isinstance(value, list):
+        for item in value:
+            _validate_plugin_param_input_value(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            _validate_plugin_param_input_value(item)
 
 
 def _plugin_instance_params_from_inline(
@@ -957,6 +956,11 @@ def _plugin_param_template(
 def _plugin_param_values(existing_params: str | None) -> dict[str, StructuredDataValue]:
     if existing_params is None:
         return {}
+    try:
+        if json.loads(existing_params) is None:
+            return {}
+    except json.JSONDecodeError:
+        pass
     values: dict[str, StructuredDataValue] = {}
     for item in _parse_plugin_param_array(
         existing_params,
@@ -1177,6 +1181,15 @@ def _translate_alert_plugin_api_error(
         return ConflictError(
             "Alert-plugin is still referenced by one or more alert groups",
             details=details,
+            suggestion=(
+                "Run `dsctl alert-group list --all`, then `dsctl alert-group get "
+                "GROUP` for each group to inspect `alertInstanceIds`. Remove "
+                f"instance id {alert_plugin_id} from referencing groups with "
+                "`dsctl alert-group update GROUP --instance-id ID`, repeating "
+                "--instance-id for all ids to keep in the same command, or "
+                "use --clear-instance-ids if none remain; then "
+                "retry the alert-plugin delete."
+            ),
         )
     if error.result_code == ALERT_SERVER_NOT_EXIST:
         return InvalidStateError(

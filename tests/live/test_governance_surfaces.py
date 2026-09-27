@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING
 
 import pytest
 
 from tests.live.support import (
+    DsctlCommandResult,
     LiveProfileConfig,
+    cleanup_live_resources,
     future_expire_time,
     require_error_payload,
     require_list,
@@ -13,6 +16,11 @@ from tests.live.support import (
     require_ok_payload,
     run_dsctl,
     write_profile_env,
+)
+from tests.live.task_group_support import (
+    require_task_group_get_absent,
+    require_task_group_list_absent,
+    require_task_group_project_cleanup_version,
 )
 
 if TYPE_CHECKING:
@@ -37,13 +45,97 @@ def _require_text_value(value: object, *, label: str) -> str:
     return value
 
 
+def _worker_address(repo_root: Path, admin_env_file: Path) -> str:
+    payload = require_ok_payload(
+        run_dsctl(repo_root, ["monitor", "server", "worker"], env_file=admin_env_file),
+        expected_action="monitor.server",
+        label="discover live worker address",
+    )
+    rows = require_list(payload["data"], label="worker monitor rows")
+    assert rows, "A live worker is required for the worker-group lifecycle"
+    row = require_mapping(rows[0], label="worker monitor row")
+    host = _require_text_value(row.get("host"), label="worker host")
+    port = _require_int_value(row.get("port"), label="worker port")
+    assert type(port) is int
+    assert 0 < port <= 65535
+    return f"{host}:{port}"
+
+
+def _tenant_create_denial_from_queue_visibility(
+    result: DsctlCommandResult, *, queue_id: int
+) -> str:
+    if result.exit_code != 0:
+        require_error_payload(
+            result,
+            expected_action="queue.list",
+            expected_type="permission_denied",
+            label="ETL queue visibility",
+        )
+        return "permission_denied"
+    payload = require_ok_payload(
+        result, expected_action="queue.list", label="ETL queue visibility"
+    )
+    data = require_mapping(payload["data"], label="ETL queue list data")
+    rows = require_list(data["totalList"], label="ETL queue rows")
+    coverage = require_mapping(data["coverage"], label="ETL queue coverage")
+    assert coverage["scope_complete"] is True
+    assert coverage["totals_changed"] is False
+    assert data["total"] == len(rows)
+    visible = any(
+        require_mapping(row, label="queue row").get("id") == queue_id for row in rows
+    )
+    return "permission_denied" if visible else "not_found"
+
+
+def _user_create_denial_from_tenant_visibility(
+    result: DsctlCommandResult, *, tenant_code: str
+) -> str:
+    if result.exit_code != 0:
+        require_error_payload(
+            result,
+            expected_action="tenant.list",
+            expected_type="permission_denied",
+            label="ETL tenant visibility",
+        )
+        return "permission_denied"
+    payload = require_ok_payload(
+        result, expected_action="tenant.list", label="ETL tenant visibility"
+    )
+    data = require_mapping(payload["data"], label="ETL tenant list data")
+    rows = require_list(data["totalList"], label="ETL tenant rows")
+    coverage = require_mapping(data["coverage"], label="ETL tenant coverage")
+    assert coverage["scope_complete"] is True
+    assert coverage["totals_changed"] is False
+    assert data["total"] == len(rows)
+    visible = any(
+        require_mapping(row, label="tenant row").get("tenantCode") == tenant_code
+        for row in rows
+    )
+    return "permission_denied" if visible else "not_found"
+
+
+def _require_user_create_denial(
+    result: DsctlCommandResult, *, expected_type: str, tenant_code: str
+) -> None:
+    error = require_error_payload(
+        result,
+        expected_action="user.create",
+        expected_type=expected_type,
+        label="etl user create",
+    )
+    assert error["type"] == expected_type
+    if expected_type == "not_found":
+        details = require_mapping(error["details"], label="tenant visibility denial")
+        assert details["resource"] == "tenant"
+        assert details["tenantCode"] == tenant_code
+
+
 def _safe_suffix(name_factory: Callable[[str], str], stem: str) -> str:
-    raw = name_factory(stem).lower()
-    compact = "".join(char for char in raw if char.isalnum())
-    if compact == "":
-        message = "live name factory returned no usable identifier characters"
+    raw = name_factory(stem)
+    if raw == "":
+        message = "live name factory returned an empty identifier"
         raise AssertionError(message)
-    return compact[-12:]
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
 
 
 def _create_queue(
@@ -99,6 +191,7 @@ def _create_tenant(
     tenant_code: str,
     queue: str,
     description: str | None = None,
+    on_created: Callable[[], None] | None = None,
 ) -> int:
     argv = [
         "tenant",
@@ -115,6 +208,8 @@ def _create_tenant(
         expected_action="tenant.create",
         label="tenant create",
     )
+    if on_created is not None:
+        on_created()
     data = require_mapping(payload["data"], label="tenant create data")
     return _require_int_value(data.get("id"), label="tenant id")
 
@@ -147,6 +242,7 @@ def _create_user(
     email: str,
     tenant: str,
     phone: str | None = None,
+    on_created: Callable[[], None] | None = None,
 ) -> int:
     argv = [
         "user",
@@ -169,6 +265,8 @@ def _create_user(
         expected_action="user.create",
         label="user create",
     )
+    if on_created is not None:
+        on_created()
     data = require_mapping(payload["data"], label="user create data")
     return _require_int_value(data.get("id"), label="user id")
 
@@ -179,11 +277,17 @@ def _delete_user(
     *,
     user: str,
 ) -> None:
-    run_dsctl(
-        repo_root,
-        ["user", "delete", user, "--force"],
-        env_file=admin_env_file,
+    payload = require_ok_payload(
+        run_dsctl(
+            repo_root,
+            ["user", "delete", user, "--force"],
+            env_file=admin_env_file,
+        ),
+        expected_action="user.delete",
+        label="user delete",
     )
+    data = require_mapping(payload["data"], label="user delete data")
+    assert data["deleted"] is True
 
 
 def _create_access_token(
@@ -191,6 +295,7 @@ def _create_access_token(
     admin_env_file: Path,
     *,
     user_name: str,
+    on_created: Callable[[int], None] | None = None,
 ) -> tuple[int, str]:
     payload = require_ok_payload(
         run_dsctl(
@@ -210,6 +315,8 @@ def _create_access_token(
     )
     data = require_mapping(payload["data"], label="access-token create data")
     token_id = _require_int_value(data.get("id"), label="access-token id")
+    if on_created is not None:
+        on_created(token_id)
     token = _require_text_value(data.get("token"), label="access-token token")
     return token_id, token
 
@@ -220,11 +327,17 @@ def _delete_access_token(
     *,
     token_id: int,
 ) -> None:
-    run_dsctl(
-        repo_root,
-        ["access-token", "delete", str(token_id), "--force"],
-        env_file=admin_env_file,
+    payload = require_ok_payload(
+        run_dsctl(
+            repo_root,
+            ["access-token", "delete", str(token_id), "--force"],
+            env_file=admin_env_file,
+        ),
+        expected_action="access-token.delete",
+        label="access-token delete",
     )
+    data = require_mapping(payload["data"], label="access-token delete data")
+    assert data["deleted"] is True
 
 
 def _create_project(
@@ -233,7 +346,8 @@ def _create_project(
     *,
     name: str,
     description: str,
-) -> int:
+    on_created: Callable[[], None] | None = None,
+) -> None:
     payload = require_ok_payload(
         run_dsctl(
             repo_root,
@@ -250,8 +364,11 @@ def _create_project(
         expected_action="project.create",
         label="project create",
     )
+    if on_created is not None:
+        on_created()
     data = require_mapping(payload["data"], label="project create data")
-    return _require_int_value(data.get("code"), label="project code")
+    assert _require_text_value(data.get("name"), label="project name") == name
+    assert data.get("description") == description
 
 
 def _delete_project(
@@ -260,10 +377,28 @@ def _delete_project(
     *,
     project: str,
 ) -> None:
-    run_dsctl(
-        repo_root,
-        ["project", "delete", project, "--force"],
-        env_file=admin_env_file,
+    payload = require_ok_payload(
+        run_dsctl(
+            repo_root,
+            ["project", "delete", project, "--force"],
+            env_file=admin_env_file,
+        ),
+        expected_action="project.delete",
+        label="project delete",
+    )
+    data = require_mapping(payload["data"], label="project delete data")
+    assert data["deleted"] is True
+
+
+def _cleanup_user_project_resources(
+    *,
+    token: Callable[[], None] | None,
+    user: Callable[[], None] | None,
+    project: Callable[[], None] | None,
+    tenant: Callable[[], None] | None,
+) -> None:
+    cleanup_live_resources(
+        [task for task in (token, user, project, tenant) if task is not None]
     )
 
 
@@ -380,6 +515,7 @@ def test_admin_worker_group_lifecycle_round_trips(
     live_admin_env_file: Path,
     live_name_factory: Callable[[str], str],
 ) -> None:
+    worker_address = _worker_address(live_repo_root, live_admin_env_file)
     suffix = _safe_suffix(live_name_factory, "worker-group")
     worker_group_name = f"dsctl-worker-{suffix}"
     updated_worker_group_name = f"dsctl-worker-upd-{suffix}"
@@ -392,22 +528,21 @@ def test_admin_worker_group_lifecycle_round_trips(
                 "create",
                 "--name",
                 worker_group_name,
-                "--description",
-                "live worker-group create path",
+                "--addr",
+                worker_address,
             ],
             env_file=live_admin_env_file,
         ),
         expected_action="worker-group.create",
         label="worker-group create",
     )
-    create_data = require_mapping(
-        create_payload["data"],
-        label="worker-group create data",
-    )
-    assert create_data["name"] == worker_group_name
     current_worker_group = worker_group_name
-
     try:
+        create_data = require_mapping(
+            create_payload["data"],
+            label="worker-group create data",
+        )
+        assert create_data["name"] == worker_group_name
         get_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
@@ -419,7 +554,6 @@ def test_admin_worker_group_lifecycle_round_trips(
         )
         get_data = require_mapping(get_payload["data"], label="worker-group get data")
         assert get_data["name"] == worker_group_name
-        assert get_data["description"] == "live worker-group create path"
 
         list_payload = require_ok_payload(
             run_dsctl(
@@ -457,21 +591,20 @@ def test_admin_worker_group_lifecycle_round_trips(
                     current_worker_group,
                     "--name",
                     updated_worker_group_name,
-                    "--description",
-                    "live worker-group update path",
+                    "--addr",
+                    worker_address,
                 ],
                 env_file=live_admin_env_file,
             ),
             expected_action="worker-group.update",
             label="worker-group update",
         )
+        current_worker_group = updated_worker_group_name
         update_data = require_mapping(
             update_payload["data"],
             label="worker-group update data",
         )
         assert update_data["name"] == updated_worker_group_name
-        assert update_data["description"] == "live worker-group update path"
-        current_worker_group = updated_worker_group_name
     finally:
         delete_payload = require_ok_payload(
             run_dsctl(
@@ -511,6 +644,22 @@ def test_admin_tenant_lifecycle_round_trips_and_etl_is_denied(
     tenant_code = f"dsltt{suffix}"
     updated_description = "live tenant update path"
 
+    queue_payload = require_ok_payload(
+        run_dsctl(
+            live_repo_root, ["queue", "get", "default"], env_file=live_admin_env_file
+        ),
+        expected_action="queue.get",
+        label="admin default queue",
+    )
+    queue_data = require_mapping(queue_payload["data"], label="default queue data")
+    queue_id = _require_int_value(queue_data.get("id"), label="default queue id")
+    expected_denial = _tenant_create_denial_from_queue_visibility(
+        run_dsctl(
+            live_repo_root, ["queue", "list", "--all"], env_file=live_etl_env_file
+        ),
+        queue_id=queue_id,
+    )
+
     permission_error = require_error_payload(
         run_dsctl(
             live_repo_root,
@@ -520,15 +669,21 @@ def test_admin_tenant_lifecycle_round_trips_and_etl_is_denied(
                 "--tenant-code",
                 tenant_code,
                 "--queue",
-                "default",
+                str(queue_id),
             ],
             env_file=live_etl_env_file,
         ),
         expected_action="tenant.create",
-        expected_type="not_found",
+        expected_type=expected_denial,
         label="etl tenant create",
     )
-    assert permission_error["type"] == "not_found"
+    assert permission_error["type"] == expected_denial
+    if expected_denial == "not_found":
+        details = require_mapping(
+            permission_error["details"], label="queue visibility denial"
+        )
+        assert details["resource"] == "queue"
+        assert details["id"] == queue_id
 
     tenant_id = _create_tenant(
         live_repo_root,
@@ -611,6 +766,7 @@ def test_admin_user_lifecycle_and_project_grant_effect(
     live_admin_env_file: Path,
     live_admin_profile: LiveProfileConfig,
     live_etl_env_file: Path,
+    live_bootstrap_state: object,
     live_name_factory: Callable[[str], str],
     tmp_path: Path,
 ) -> None:
@@ -621,43 +777,107 @@ def test_admin_user_lifecycle_and_project_grant_effect(
     email = f"{user_name}@example.com"
     updated_phone = "13800000000"
     project_name = f"dsctl-admin-project-{suffix}"
-    token_id: int | None = None
-    user_env_file: Path | None = None
-    user_deleted = False
-    project_deleted = False
-
-    _create_tenant(
-        live_repo_root,
-        live_admin_env_file,
-        tenant_code=tenant_code,
-        queue="default",
+    etl_tenant_code = _require_text_value(
+        getattr(live_bootstrap_state, "tenant_code", None),
+        label="managed ETL tenant code",
     )
+    token_cleanup: Callable[[], None] | None = None
+    user_cleanup: Callable[[], None] | None = None
+    project_cleanup: Callable[[], None] | None = None
+    tenant_cleanup: Callable[[], None] | None = None
+    user_env_file: Path | None = None
+
+    def cleanup_tenant() -> None:
+        _delete_tenant(
+            live_repo_root,
+            live_admin_env_file,
+            tenant=tenant_code,
+        )
+
+    def register_tenant_cleanup() -> None:
+        nonlocal tenant_cleanup
+        tenant_cleanup = cleanup_tenant
+
+    def cleanup_user() -> None:
+        _delete_user(
+            live_repo_root,
+            live_admin_env_file,
+            user=user_name,
+        )
+
+    def register_user_cleanup() -> None:
+        nonlocal user_cleanup
+        user_cleanup = cleanup_user
+
+    def register_token_cleanup(token_id: int) -> None:
+        nonlocal token_cleanup
+
+        def cleanup_token() -> None:
+            _delete_access_token(
+                live_repo_root,
+                live_admin_env_file,
+                token_id=token_id,
+            )
+
+        token_cleanup = cleanup_token
+
+    def cleanup_project() -> None:
+        _delete_project(
+            live_repo_root,
+            live_admin_env_file,
+            project=project_name,
+        )
+
+    def register_project_cleanup() -> None:
+        nonlocal project_cleanup
+        project_cleanup = cleanup_project
 
     try:
-        permission_error = require_error_payload(
-            run_dsctl(
-                live_repo_root,
-                [
-                    "user",
-                    "create",
-                    "--user-name",
-                    user_name,
-                    "--password",
-                    password,
-                    "--email",
-                    email,
-                    "--tenant",
-                    tenant_code,
-                    "--state",
-                    "1",
-                ],
-                env_file=live_etl_env_file,
-            ),
-            expected_action="user.create",
-            expected_type="permission_denied",
-            label="etl user create",
+        tenant_id = _create_tenant(
+            live_repo_root,
+            live_admin_env_file,
+            tenant_code=tenant_code,
+            queue="default",
+            on_created=register_tenant_cleanup,
         )
-        assert permission_error["type"] == "permission_denied"
+
+        tenant_visibility = run_dsctl(
+            live_repo_root,
+            ["tenant", "list", "--search", etl_tenant_code, "--all"],
+            env_file=live_etl_env_file,
+        )
+        expected_denial = _user_create_denial_from_tenant_visibility(
+            tenant_visibility,
+            tenant_code=etl_tenant_code,
+        )
+        permission_result = run_dsctl(
+            live_repo_root,
+            [
+                "user",
+                "create",
+                "--user-name",
+                user_name,
+                "--password",
+                password,
+                "--email",
+                email,
+                "--tenant",
+                etl_tenant_code,
+                "--state",
+                "1",
+            ],
+            env_file=live_etl_env_file,
+        )
+        if (
+            permission_result.exit_code == 0
+            and permission_result.payload.get("ok") is True
+        ):
+            register_user_cleanup()
+        _require_user_create_denial(
+            permission_result,
+            expected_type=expected_denial,
+            tenant_code=etl_tenant_code,
+        )
 
         user_id = _create_user(
             live_repo_root,
@@ -666,6 +886,7 @@ def test_admin_user_lifecycle_and_project_grant_effect(
             password=password,
             email=email,
             tenant=tenant_code,
+            on_created=register_user_cleanup,
         )
 
         get_payload = require_ok_payload(
@@ -680,7 +901,8 @@ def test_admin_user_lifecycle_and_project_grant_effect(
         get_data = require_mapping(get_payload["data"], label="user get data")
         assert get_data["id"] == user_id
         assert get_data["userName"] == user_name
-        assert get_data["tenantCode"] == tenant_code
+        assert get_data["tenantId"] == tenant_id
+        assert get_data.get("tenantCode") in (None, tenant_code)
 
         list_payload = require_ok_payload(
             run_dsctl(
@@ -707,8 +929,6 @@ def test_admin_user_lifecycle_and_project_grant_effect(
                     user_name,
                     "--phone",
                     updated_phone,
-                    "--time-zone",
-                    "Asia/Shanghai",
                 ],
                 env_file=live_admin_env_file,
             ),
@@ -718,17 +938,16 @@ def test_admin_user_lifecycle_and_project_grant_effect(
         update_data = require_mapping(update_payload["data"], label="user update data")
         assert update_data["id"] == user_id
         assert update_data["phone"] == updated_phone
-        assert update_data["timeZone"] == "Asia/Shanghai"
 
         token_id, token = _create_access_token(
             live_repo_root,
             live_admin_env_file,
             user_name=user_name,
+            on_created=register_token_cleanup,
         )
         user_env_file = write_profile_env(
             tmp_path / f"{user_name}.env",
-            LiveProfileConfig(
-                api_url=live_admin_profile.api_url,
+            live_admin_profile.with_credentials(
                 api_token=token,
                 tenant_code=tenant_code,
             ),
@@ -739,6 +958,7 @@ def test_admin_user_lifecycle_and_project_grant_effect(
             live_admin_env_file,
             name=project_name,
             description="live admin grant project path",
+            on_created=register_project_cleanup,
         )
 
         before_grant_payload = require_ok_payload(
@@ -818,6 +1038,15 @@ def test_admin_user_lifecycle_and_project_grant_effect(
         )
         assert after_revoke_error["type"] == "not_found"
 
+        # A failed response cannot prove the delete was not applied.
+        token_cleanup = None
+        _delete_access_token(
+            live_repo_root,
+            live_admin_env_file,
+            token_id=token_id,
+        )
+
+        user_cleanup = None
         delete_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
@@ -829,7 +1058,6 @@ def test_admin_user_lifecycle_and_project_grant_effect(
         )
         delete_data = require_mapping(delete_payload["data"], label="user delete data")
         assert delete_data["deleted"] is True
-        user_deleted = True
 
         not_found_error = require_error_payload(
             run_dsctl(
@@ -843,34 +1071,18 @@ def test_admin_user_lifecycle_and_project_grant_effect(
         )
         assert not_found_error["type"] == "not_found"
     finally:
-        if token_id is not None:
-            _delete_access_token(
-                live_repo_root,
-                live_admin_env_file,
-                token_id=token_id,
-            )
-        if not user_deleted:
-            _delete_user(
-                live_repo_root,
-                live_admin_env_file,
-                user=user_name,
-            )
-        if not project_deleted:
-            _delete_project(
-                live_repo_root,
-                live_admin_env_file,
-                project=project_name,
-            )
-        _delete_tenant(
-            live_repo_root,
-            live_admin_env_file,
-            tenant=tenant_code,
+        _cleanup_user_project_resources(
+            token=token_cleanup,
+            user=user_cleanup,
+            project=project_cleanup,
+            tenant=tenant_cleanup,
         )
 
 
 def test_etl_task_group_lifecycle_round_trips_with_project_grant(
     live_repo_root: Path,
     live_admin_env_file: Path,
+    live_admin_profile: LiveProfileConfig,
     live_bootstrap_state: object,
     live_etl_env_file: Path,
     live_run_prefix: str,
@@ -882,19 +1094,38 @@ def test_etl_task_group_lifecycle_round_trips_with_project_grant(
             "project grant."
         )
 
+    require_task_group_project_cleanup_version(
+        live_repo_root,
+        live_admin_env_file,
+        live_admin_profile.ds_version,
+        execute=run_dsctl,
+    )
+
     suffix = _safe_suffix(lambda stem: f"{live_run_prefix}-{stem}", "task-group")
     project_name = f"live-task-group-project-{suffix}"
     task_group_name = f"live-task-group-{suffix}"
 
-    project_created = False
+    project_cleanup: Callable[[], None] | None = None
+
+    def cleanup_project() -> None:
+        _delete_project(
+            live_repo_root,
+            live_admin_env_file,
+            project=project_name,
+        )
+
+    def register_project_cleanup() -> None:
+        nonlocal project_cleanup
+        project_cleanup = cleanup_project
+
     try:
         _create_project(
             live_repo_root,
             live_admin_env_file,
             name=project_name,
             description="live task-group lifecycle",
+            on_created=register_project_cleanup,
         )
-        project_created = True
 
         grant_payload = require_ok_payload(
             run_dsctl(
@@ -1073,9 +1304,21 @@ def test_etl_task_group_lifecycle_round_trips_with_project_grant(
         )
         assert isinstance(queue_rows, list)
     finally:
-        if project_created:
-            _delete_project(
-                live_repo_root,
-                live_admin_env_file,
-                project=project_name,
+        if project_cleanup is not None:
+            cleanup_live_resources(
+                [
+                    project_cleanup,
+                    lambda: require_task_group_get_absent(
+                        live_repo_root,
+                        live_etl_env_file,
+                        task_group=task_group_name,
+                        execute=run_dsctl,
+                    ),
+                    lambda: require_task_group_list_absent(
+                        live_repo_root,
+                        live_etl_env_file,
+                        task_group=task_group_name,
+                        execute=run_dsctl,
+                    ),
+                ]
             )

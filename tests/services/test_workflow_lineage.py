@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import cast
 
 import pytest
@@ -14,14 +14,14 @@ from tests.fakes import (
     FakeWorkflowLineageAdapter,
     FakeWorkflowLineageDetail,
     FakeWorkflowLineageRelation,
-    fake_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.workflow_domain_fakes import install_workflow_domain_runtime
 
-from dsctl.context import SessionContext
 from dsctl.errors import ApiResultError, InvalidStateError
-from dsctl.services import runtime as runtime_service
 from dsctl.services import workflow_lineage as workflow_lineage_service
+from dsctl.services.selection import ResourceDefaults
 
 
 @pytest.fixture(autouse=True)
@@ -104,17 +104,14 @@ def patch_workflow_lineage_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
             ]
         },
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            workflow_lineage_adapter=workflow_lineage_adapter,
-            task_adapter=task_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        profile=make_profile(),
+        context=ResourceDefaults(project="etl-prod"),
+        workflow_lineage_adapter=workflow_lineage_adapter,
     )
 
 
@@ -142,12 +139,12 @@ def test_list_workflow_lineage_result_returns_project_graph() -> None:
     }
 
 
-def test_get_workflow_lineage_result_uses_workflow_context() -> None:
-    result = workflow_lineage_service.get_workflow_lineage_result(None)
+def test_get_workflow_lineage_result_uses_explicit_workflow() -> None:
+    result = workflow_lineage_service.get_workflow_lineage_result("daily-sync")
     resolved = _mapping(result.resolved)
     data = _mapping(result.data)
 
-    assert _mapping(resolved["workflow"])["source"] == "context"
+    assert _mapping(resolved["workflow"])["source"] == "flag"
     assert data["workFlowRelationList"] == [
         {"sourceWorkFlowCode": 101, "targetWorkFlowCode": 102}
     ]
@@ -155,7 +152,7 @@ def test_get_workflow_lineage_result_uses_workflow_context() -> None:
 
 def test_list_workflow_dependent_tasks_result_resolves_task_selector() -> None:
     result = workflow_lineage_service.list_workflow_dependent_tasks_result(
-        None,
+        "daily-sync",
         task="extract",
     )
     resolved = _mapping(result.resolved)
@@ -203,17 +200,16 @@ def test_list_workflow_lineage_result_translates_upstream_query_errors(
             message = "unexpected call"
             raise AssertionError(message)
 
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod"),
-            workflow_lineage_adapter=cast(
-                "FakeWorkflowLineageAdapter",
-                ErrorWorkflowLineageAdapter(),
-            ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=FakeWorkflowAdapter(workflows=[], dags={}),
+        task_adapter=FakeTaskAdapter(workflow_tasks={}),
+        profile=make_profile(),
+        context=ResourceDefaults(project="etl-prod"),
+        workflow_lineage_adapter=cast(
+            "FakeWorkflowLineageAdapter",
+            ErrorWorkflowLineageAdapter(),
         ),
     )
 
@@ -224,8 +220,3 @@ def test_list_workflow_lineage_result_translates_upstream_query_errors(
     assert error.details["result_code"] == 10161
     assert error.source is not None
     assert error.source["type"] == "api_result_error"
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value

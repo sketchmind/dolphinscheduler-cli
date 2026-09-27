@@ -22,6 +22,9 @@ def command_contract_rows(
     if isinstance(invocation, str):
         command_row["invocation"] = invocation
     rows: list[JsonObject] = [command_row]
+    effects = command_data.get("effects")
+    if isinstance(effects, Mapping):
+        rows.extend(_mapping_rows("effects", effects))
     rows.extend(
         _parameter_row("argument", item)
         for item in _command_items(command_data, "arguments")
@@ -71,6 +74,9 @@ def _parameter_row(kind: str, item: Mapping[str, JsonValue]) -> JsonObject:
     discovery_command = item.get("discovery_command")
     if isinstance(discovery_command, str):
         row["discovery_command"] = discovery_command
+    discovery_command_pattern = item.get("discovery_command_pattern")
+    if isinstance(discovery_command_pattern, str):
+        row["discovery_command_pattern"] = discovery_command_pattern
     return row
 
 
@@ -148,6 +154,9 @@ def _choices_summary(
 ) -> str:
     if len(choices) <= 8:
         return _compact_value(choices)
+    discovery_command_pattern = item.get("discovery_command_pattern")
+    if isinstance(discovery_command_pattern, str):
+        return f"{len(choices)} values; use discovery_command_pattern"
     discovery_command = item.get("discovery_command")
     if isinstance(discovery_command, str):
         return f"{len(choices)} values; use discovery_command"
@@ -165,6 +174,8 @@ def _payload_rows(payload: Mapping[str, JsonValue]) -> list[JsonObject]:
         "template_command_pattern",
         "patch_template_command",
         "file_source_command",
+        "file_source_command_pattern",
+        "file_target_command_pattern",
         "file_schedule",
         "file_template_command",
         "schedule_on_create",
@@ -174,7 +185,11 @@ def _payload_rows(payload: Mapping[str, JsonValue]) -> list[JsonObject]:
         "template_payload_path",
         "paste_into",
         "target_command",
+        "target_command_pattern",
         "target_commands",
+        "target_command_patterns",
+        "export_command_pattern",
+        "inspect_command_pattern",
         "type_discovery_command",
         "type_enum",
         "upstream_request_shape",

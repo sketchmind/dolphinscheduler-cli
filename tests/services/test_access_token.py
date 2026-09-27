@@ -1,48 +1,22 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
 from tests.fakes import (
     FakeAccessToken,
     FakeAccessTokenAdapter,
-    FakeProjectAdapter,
     FakeUser,
     FakeUserAdapter,
-    fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.security_fakes import (
+    install_access_token_service_fakes as _install_access_token_service_fakes,
+)
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
-from dsctl.errors import ApiResultError, PermissionDeniedError, UserInputError
+from dsctl.errors import (
+    ApiResultError,
+    PermissionDeniedError,
+    UserInputError,
+)
 from dsctl.services import access_token as access_token_service
-from dsctl.services import runtime as runtime_service
-
-
-def _install_access_token_service_fakes(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    access_token_adapter: FakeAccessTokenAdapter,
-    user_adapter: FakeUserAdapter,
-) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            access_token_adapter=access_token_adapter,
-            user_adapter=user_adapter,
-            profile=make_profile(),
-        ),
-    )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 @pytest.fixture

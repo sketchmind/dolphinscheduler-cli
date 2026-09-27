@@ -1,0 +1,107 @@
+schema_version: 1
+kind: dolphinscheduler-task-plugin-impact-review
+
+base:
+  label: 3.4.1
+  contract_fingerprint: sha256:ffa3776fe202a54fbaa7a987437a1cac69cdc93bc3e90263b8f47cacac27e4cd
+  source_identity_fingerprint: sha256:d13005e4fbaecc9e4a4ea73b27128b26362d06e43082059f75caba8b4e399a65
+
+target:
+  label: 3.4.2
+  contract_fingerprint: sha256:2ffee258e0dd1e5b91aa10483a2b70b60867a3ba14db57dbff7f5417b1e23ea5
+  source_identity_fingerprint: sha256:afe7dfdd7acbbffa2c91ec22f0f6212a7106cbfe6c46c8d47f2a60e176fb1f99
+
+facets:
+  - id: SQL/inline_script
+    compatibility: equivalent
+    implementation_status: existing
+    wire_fields:
+      - type
+      - datasource
+      - sql
+      - sqlType
+    notes:
+      - Missing sqlSource remains valid for legacy inline payloads.
+      - The 3.4.2 server uses nonempty inline sql before sqlResource.
+
+  - id: SQL/resource_file
+    compatibility: added
+    implementation_status: not_implemented
+    wire_fields:
+      - sqlSource
+      - sqlResource
+    server_behavior:
+      - sqlSource is not the server-side runtime discriminator.
+      - Nonempty sqlResource participates in the task resource closure.
+      - When both inputs exist, inline sql wins at execution time.
+    authoring_policy:
+      default_sql_source: SCRIPT
+      require_exactly_one_source: true
+      resource_selector_value: fullName
+    upstream_gap:
+      summary: >-
+        The 3.4.2 UI exposes sqlSource and sqlResource, but its workflow task
+        serializer does not copy those fields into taskParams.
+      impact: Keep UI evidence separate from effective wire evidence.
+
+decisions:
+  - id: sql-3.4.2-resource-file-facet
+    change_ids:
+      - SQL:behavior:checkParameters:changed
+      - SQL:behavior:getResourceFilesList:changed
+      - SQL:enum:org.apache.dolphinscheduler.plugin.task.api.enums.SqlSourceType:added
+      - SQL:field:sqlResource:added
+      - SQL:field:sqlSource:added
+    cli_impact: affected
+    evidence_planes:
+      - server_parameter_model
+      - server_enum
+      - server_execution
+      - ui_authoring
+      - ui_serialization
+    facets:
+      - SQL/inline_script
+      - SQL/resource_file
+    implementation_status: not_implemented
+    affected_actions:
+      - action: task-type.get
+        role: discover
+      - action: task-type.schema
+        role: discover
+      - action: template.task
+        role: render
+      - action: lint.workflow
+        role: validate
+      - action: workflow.create
+        role: compile
+      - action: workflow.edit
+        role: compile-and-preserve
+      - action: task.update
+        role: compile-and-preserve
+      - action: workflow-instance.edit
+        role: compile-and-preserve
+      - action: workflow.export
+        role: preserve
+    unaffected_action_classes:
+      - runtime-control
+      - watch-and-log
+      - task-type-list
+      - command-syntax-schema
+    rationale: >-
+      Inline SQL remains one shared semantic facet. Resource-backed SQL is a
+      new independently gated authoring facet, not a reason to fork the whole
+      SQL model or the 3.4.2 adapter. The CLI must preserve unknown payload
+      fields on reads and edits before it claims authoring support.
+
+evidence:
+  server_parameter_model:
+    - dolphinscheduler-task-plugin/dolphinscheduler-task-api/src/main/java/org/apache/dolphinscheduler/plugin/task/api/parameters/SqlParameters.java
+  server_enum:
+    - dolphinscheduler-task-plugin/dolphinscheduler-task-api/src/main/java/org/apache/dolphinscheduler/plugin/task/api/enums/SqlSourceType.java
+  server_execution:
+    - dolphinscheduler-task-plugin/dolphinscheduler-task-sql/src/main/java/org/apache/dolphinscheduler/plugin/task/sql/SqlTask.java
+  ui_authoring:
+    - dolphinscheduler-ui/src/views/projects/task/components/node/fields/use-sql.ts
+    - dolphinscheduler-ui/src/views/projects/task/components/node/tasks/use-sql.ts
+  ui_serialization:
+    - dolphinscheduler-ui/src/views/projects/task/components/node/format-data.ts

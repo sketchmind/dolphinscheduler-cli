@@ -6,12 +6,15 @@ from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.errors import ApiResultError
-from dsctl.services import runtime as runtime_service
+from dsctl.services import env as env_service
+from dsctl.upstream.environments import (
+    ENVIRONMENT_DOMAIN,
+    EnvironmentDomain,
+)
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeEnvironment,
     FakeEnvironmentAdapter,
-    FakeProjectAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile, normalize_cli_help
 
@@ -33,14 +36,14 @@ def patch_env_service(
     monkeypatch: pytest.MonkeyPatch,
     fake_environment_adapter: FakeEnvironmentAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            environment_adapter=fake_environment_adapter,
-            profile=make_profile(),
-        ),
+    domain = EnvironmentDomain(environments=fake_environment_adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        env_service,
+        expected_domain=ENVIRONMENT_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 
@@ -139,7 +142,8 @@ def test_env_create_command_requires_config_source() -> None:
     assert payload["action"] == "environment.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Pass --config TEXT or --config-file PATH. Run `dsctl template environment` "
+        "Pass --config CONFIG or --config-file CONFIG_FILE. Run `dsctl template "
+        "environment` "
         "for an example shell/export config."
     )
 

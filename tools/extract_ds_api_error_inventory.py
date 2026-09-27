@@ -8,17 +8,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REFERENCES_ROOT = ROOT / "references" / "dolphinscheduler"
-API_SRC_ROOT = REFERENCES_ROOT / "dolphinscheduler-api" / "src" / "main" / "java"
-STATUS_PATH = (
-    API_SRC_ROOT
-    / "org"
-    / "apache"
-    / "dolphinscheduler"
-    / "api"
-    / "enums"
-    / "Status.java"
-)
+DEFAULT_DS_SOURCE_ROOT = ROOT / "references" / "dolphinscheduler"
 
 STATUS_ENTRY_PATTERN = re.compile(
     r"^\s*(?P<name>[A-Z0-9_]+)\("
@@ -110,13 +100,23 @@ def find_direct_http_status_sites(
     ]
 
 
-def build_inventory() -> InventoryReport:
-    status_entries = extract_status_entries(STATUS_PATH.read_text(encoding="utf-8"))
+def build_inventory(ds_source_root: Path = DEFAULT_DS_SOURCE_ROOT) -> InventoryReport:
+    api_src_root = ds_source_root / "dolphinscheduler-api" / "src" / "main" / "java"
+    status_path = (
+        api_src_root
+        / "org"
+        / "apache"
+        / "dolphinscheduler"
+        / "api"
+        / "enums"
+        / "Status.java"
+    )
+    status_entries = extract_status_entries(status_path.read_text(encoding="utf-8"))
     bare_service_exceptions: list[SourceFinding] = []
     direct_http_status_sites: list[SourceFinding] = []
 
-    for path in sorted(API_SRC_ROOT.rglob("*.java")):
-        relative_path = path.relative_to(ROOT).as_posix()
+    for path in sorted(api_src_root.rglob("*.java")):
+        relative_path = _relative_source_path(path, ds_source_root=ds_source_root)
         source = path.read_text(encoding="utf-8")
         bare_service_exceptions.extend(
             find_bare_service_exceptions(source, relative_path=relative_path)
@@ -233,6 +233,14 @@ def _normalize_snippet(value: str) -> str:
     return " ".join(value.split())
 
 
+def _relative_source_path(path: Path, *, ds_source_root: Path) -> str:
+    try:
+        relative = path.relative_to(ROOT)
+    except ValueError:
+        relative = path.relative_to(ds_source_root)
+    return relative.as_posix()
+
+
 def _write_output(*, output: str, path: Path | None) -> None:
     if path is None:
         print(output)
@@ -243,6 +251,12 @@ def _write_output(*, output: str, path: Path | None) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--ds-source",
+        type=Path,
+        default=DEFAULT_DS_SOURCE_ROOT,
+        help="DolphinScheduler source root to inventory",
+    )
     parser.add_argument(
         "--format",
         choices=("summary", "json", "markdown"),
@@ -256,7 +270,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    report = build_inventory()
+    report = build_inventory(args.ds_source)
     if args.format == "summary":
         rendered = render_summary(report)
     elif args.format == "json":

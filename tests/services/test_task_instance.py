@@ -1,4 +1,4 @@
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable
 
 import pytest
 from tests.fakes import (
@@ -9,9 +9,11 @@ from tests.fakes import (
     FakeTaskInstanceAdapter,
     FakeWorkflowInstance,
     FakeWorkflowInstanceAdapter,
-    fake_service_runtime,
 )
+from tests.runtime_instance_domain_fakes import install_runtime_instance_domain_runtime
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
 from dsctl.errors import (
     ApiResultError,
@@ -22,8 +24,10 @@ from dsctl.errors import (
     UserInputError,
     WaitTimeoutError,
 )
-from dsctl.services import runtime as runtime_service
 from dsctl.services import task_instance as task_instance_service
+from dsctl.services.selection import ResourceDefaults
+
+_PROJECT_CONTEXT = ResourceDefaults(project="etl-prod")
 
 
 def _install_task_instance_service_fakes(
@@ -32,28 +36,16 @@ def _install_task_instance_service_fakes(
     project_adapter: FakeProjectAdapter,
     workflow_instance_adapter: FakeWorkflowInstanceAdapter,
     task_instance_adapter: FakeTaskInstanceAdapter,
+    context: ResourceDefaults = _PROJECT_CONTEXT,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-            task_instance_adapter=task_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
+        task_instance_adapter=task_instance_adapter,
+        context=context,
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 @pytest.fixture
@@ -141,6 +133,22 @@ def fake_task_instance_adapter() -> FakeTaskInstanceAdapter:
                 start_time_value="2026-04-11 10:10:00",
                 executor_name_value="alice",
                 task_execute_type_value=FakeEnumValue("BATCH"),
+            ),
+            FakeTaskInstance(
+                id=4001,
+                name="stream-orders",
+                task_type_value="FLINK_STREAM",
+                workflow_instance_id_value=0,
+                workflow_instance_name_value="stream-orders",
+                project_code_value=7,
+                task_code_value=401,
+                task_definition_version_value=1,
+                process_definition_name_value="stream-orders",
+                state_value=FakeEnumValue("RUNNING_EXECUTION"),
+                start_time_value="2026-04-11 10:15:00",
+                host="worker-2",
+                executor_name_value="carol",
+                task_execute_type_value=FakeEnumValue("STREAM"),
             ),
         ],
         log_messages_by_task_instance_id={
@@ -231,21 +239,102 @@ def test_list_task_instances_result_supports_project_scoped_filters(
     assert _mapping(items[0])["id"] == 3002
 
 
-def test_list_task_instances_result_requires_project_without_workflow_instance(
+@pytest.mark.parametrize("workflow_instance", [None, 901])
+def test_list_task_instances_result_requires_project_selection_before_domain_io(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
     fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
     fake_task_instance_adapter: FakeTaskInstanceAdapter,
+    workflow_instance: int | None,
 ) -> None:
+    workflow_detail_calls = 0
+    task_page_calls = 0
+
+    def unexpected_workflow_get(*, workflow_instance_id: int) -> object:
+        nonlocal workflow_detail_calls
+        del workflow_instance_id
+        workflow_detail_calls += 1
+        message = "workflow detail I/O must not run"
+        raise AssertionError(message)
+
+    def unexpected_task_list(**kwargs: object) -> object:
+        nonlocal task_page_calls
+        del kwargs
+        task_page_calls += 1
+        message = "task-instance page I/O must not run"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(
+        fake_workflow_instance_adapter,
+        "get",
+        unexpected_workflow_get,
+    )
+    monkeypatch.setattr(fake_task_instance_adapter, "list", unexpected_task_list)
     _install_task_instance_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
         workflow_instance_adapter=fake_workflow_instance_adapter,
         task_instance_adapter=fake_task_instance_adapter,
+        context=ResourceDefaults(),
+    )
+
+    with pytest.raises(UserInputError, match="Project is required") as exc_info:
+        task_instance_service.list_task_instances_result(
+            workflow_instance=workflow_instance
+        )
+
+    assert exc_info.value.suggestion == (
+        "Pass --project NAME, or configure a project in the selected context."
+    )
+    assert workflow_detail_calls == 0
+    assert task_page_calls == 0
+
+
+def test_get_task_instance_result_requires_project_before_detail_io(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    workflow_detail_calls = 0
+    task_detail_calls = 0
+
+    def unexpected_workflow_get(*, workflow_instance_id: int) -> object:
+        nonlocal workflow_detail_calls
+        del workflow_instance_id
+        workflow_detail_calls += 1
+        message = "workflow detail I/O must not run"
+        raise AssertionError(message)
+
+    def unexpected_task_get(*, project_code: int, task_instance_id: int) -> object:
+        nonlocal task_detail_calls
+        del project_code, task_instance_id
+        task_detail_calls += 1
+        message = "task detail I/O must not run"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(
+        fake_workflow_instance_adapter,
+        "get",
+        unexpected_workflow_get,
+    )
+    monkeypatch.setattr(fake_task_instance_adapter, "get", unexpected_task_get)
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+        context=ResourceDefaults(),
     )
 
     with pytest.raises(UserInputError, match="Project is required"):
-        task_instance_service.list_task_instances_result()
+        task_instance_service.get_task_instance_result(
+            3001,
+            workflow_instance=901,
+        )
+
+    assert workflow_detail_calls == 0
+    assert task_detail_calls == 0
 
 
 def test_list_task_instances_result_rejects_workflow_definition_filter() -> None:
@@ -294,6 +383,58 @@ def test_get_task_instance_result_returns_one_payload(
     assert data["taskCode"] == 201
 
 
+@pytest.mark.parametrize(
+    ("task_instance_id", "expected_type"),
+    [(3001, "BATCH"), (4001, "STREAM")],
+)
+def test_get_task_instance_result_can_resolve_project_only(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+    task_instance_id: int,
+    expected_type: str,
+) -> None:
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    result = task_instance_service.get_task_instance_result(task_instance_id)
+
+    assert _mapping(result.data)["taskExecuteType"] == expected_type
+    assert result.resolved["taskInstance"] == {"id": task_instance_id}
+    assert "workflowInstance" not in result.resolved
+
+
+def test_project_only_task_instance_read_does_not_cross_projects(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    project_adapter = FakeProjectAdapter(
+        projects=[
+            FakeProject(code=7, name="etl-prod"),
+            FakeProject(code=8, name="other"),
+        ]
+    )
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(NotFoundError) as exc_info:
+        task_instance_service.get_task_instance_result(4001, project="other")
+
+    assert exc_info.value.details == {"resource": "task-instance", "id": 4001}
+    assert "project 'other'" in str(exc_info.value)
+    assert "--execute-type STREAM" in (exc_info.value.suggestion or "")
+
+
 def test_get_sub_workflow_instance_result_returns_child_relation(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -313,10 +454,9 @@ def test_get_sub_workflow_instance_result_returns_child_relation(
     )
 
     assert result.data == {"subWorkflowInstanceId": 903}
-    assert result.resolved == {
-        "workflowInstance": {"id": 902},
-        "taskInstance": {"id": 3003},
-    }
+    assert result.resolved["workflowInstance"] == {"id": 902}
+    assert result.resolved["taskInstance"] == {"id": 3003}
+    assert _mapping(result.resolved["project"])["source"] == "context"
 
 
 def test_get_sub_workflow_instance_result_rejects_non_sub_workflow_task(
@@ -356,30 +496,10 @@ def test_get_sub_workflow_instance_result_rejects_non_sub_workflow_task(
         )
 
     assert exc_info.value.suggestion == (
-        "Run `dsctl task-instance get 3001 --workflow-instance 901` to inspect "
-        "the task type. Only SUB_WORKFLOW task instances have a child workflow "
-        "instance."
+        "Run `dsctl task-instance get 3001 --project etl-prod "
+        "--workflow-instance 901` to inspect the task type. Only SUB_WORKFLOW "
+        "task instances have a child workflow instance."
     )
-
-
-def test_get_task_instance_log_result_returns_tail_lines(
-    monkeypatch: pytest.MonkeyPatch,
-    fake_project_adapter: FakeProjectAdapter,
-    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
-    fake_task_instance_adapter: FakeTaskInstanceAdapter,
-) -> None:
-    _install_task_instance_service_fakes(
-        monkeypatch,
-        project_adapter=fake_project_adapter,
-        workflow_instance_adapter=fake_workflow_instance_adapter,
-        task_instance_adapter=fake_task_instance_adapter,
-    )
-
-    result = task_instance_service.get_task_instance_log_result(3001, tail=2)
-    data = _mapping(result.data)
-
-    assert data["lineCount"] == 2
-    assert data["text"] == "line-3\nline-4"
 
 
 def test_get_task_instance_log_result_translates_not_dispatched(
@@ -398,10 +518,8 @@ def test_get_task_instance_log_result_translates_not_dispatched(
     def not_dispatched_log(
         *,
         task_instance_id: int,
-        skip_line_num: int,
-        limit: int,
     ) -> None:
-        del task_instance_id, skip_line_num, limit
+        del task_instance_id
         raise ApiResultError(
             result_code=10103,
             result_message=(
@@ -410,7 +528,9 @@ def test_get_task_instance_log_result_translates_not_dispatched(
             ),
         )
 
-    monkeypatch.setattr(fake_task_instance_adapter, "log_chunk", not_dispatched_log)
+    monkeypatch.setattr(
+        fake_task_instance_adapter, "task_log_lines", not_dispatched_log
+    )
 
     with pytest.raises(TaskNotDispatchedError) as exc_info:
         task_instance_service.get_task_instance_log_result(3001)
@@ -435,13 +555,11 @@ def test_get_task_instance_log_result_preserves_generic_log_failure(
     def failed_log(
         *,
         task_instance_id: int,
-        skip_line_num: int,
-        limit: int,
     ) -> None:
-        del task_instance_id, skip_line_num, limit
+        del task_instance_id
         raise upstream_error
 
-    monkeypatch.setattr(fake_task_instance_adapter, "log_chunk", failed_log)
+    monkeypatch.setattr(fake_task_instance_adapter, "task_log_lines", failed_log)
     _install_task_instance_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -514,8 +632,8 @@ def test_task_instance_reads_translate_v2_empty_success_body(
         "workflow_instance_id": 901,
     }
     assert error.suggestion == (
-        "Run `dsctl task-instance list --workflow-instance 901` to inspect "
-        "available task instance ids."
+        "Run `dsctl task-instance list --project etl-prod --workflow-instance "
+        "901` to inspect available task instance ids."
     )
     assert "retryable" not in error.details
 
@@ -600,6 +718,36 @@ def test_task_instance_reads_translate_project_permission_failure(
     assert error.to_payload()["source"] == upstream_error.source
 
 
+def test_project_only_task_read_preserves_permission_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=30002,
+        result_message="user has no project operation privilege",
+    )
+
+    def fail_get(*, project_code: int, task_instance_id: int) -> None:
+        del project_code, task_instance_id
+        raise upstream_error
+
+    monkeypatch.setattr(fake_task_instance_adapter, "get", fail_get)
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        task_instance_service.get_task_instance_result(4001)
+
+    assert exc_info.value.details == {"resource": "task-instance", "id": 4001}
+    assert exc_info.value.to_payload()["source"] == upstream_error.source
+
+
 def test_task_instance_log_translates_missing_result_code(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -614,13 +762,11 @@ def test_task_instance_log_translates_missing_result_code(
     def missing_log(
         *,
         task_instance_id: int,
-        skip_line_num: int,
-        limit: int,
     ) -> None:
-        del task_instance_id, skip_line_num, limit
+        del task_instance_id
         raise upstream_error
 
-    monkeypatch.setattr(fake_task_instance_adapter, "log_chunk", missing_log)
+    monkeypatch.setattr(fake_task_instance_adapter, "task_log_lines", missing_log)
     _install_task_instance_service_fakes(
         monkeypatch,
         project_adapter=fake_project_adapter,
@@ -632,13 +778,11 @@ def test_task_instance_log_translates_missing_result_code(
         task_instance_service.get_task_instance_log_result(9999)
 
     error = exc_info.value
-    assert error.details == {
-        "resource": "task-instance",
-        "id": 9999,
-    }
+    assert error.details == {"resource": "task-instance", "id": 9999}
     assert error.suggestion == (
-        "Run `dsctl workflow-instance list` to find the owning workflow instance "
-        "id, then run `dsctl task-instance list --workflow-instance ID`."
+        "Use `dsctl workflow-instance list` in the relevant project to find the "
+        "owning workflow instance, then inspect it with `dsctl task-instance "
+        "list --workflow-instance`."
     )
     assert error.to_payload()["source"] == upstream_error.source
     assert "retryable" not in error.details
@@ -697,6 +841,50 @@ def test_watch_task_instance_result_waits_for_finished_state(
     assert _mapping(result.resolved)["taskInstance"] == {"id": 3001}
 
 
+def test_watch_stream_task_instance_uses_project_only_scope(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+) -> None:
+    stream_adapter = FakeTaskInstanceAdapter(
+        task_instances=[],
+        task_instance_sequences_by_id={
+            4001: [
+                FakeTaskInstance(
+                    id=4001,
+                    workflow_instance_id_value=0,
+                    project_code_value=7,
+                    state_value=FakeEnumValue("RUNNING_EXECUTION"),
+                    task_execute_type_value=FakeEnumValue("STREAM"),
+                ),
+                FakeTaskInstance(
+                    id=4001,
+                    workflow_instance_id_value=0,
+                    project_code_value=7,
+                    state_value=FakeEnumValue("SUCCESS"),
+                    task_execute_type_value=FakeEnumValue("STREAM"),
+                ),
+            ]
+        },
+    )
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=stream_adapter,
+    )
+    monkeypatch.setattr("dsctl.services.task_instance.time.sleep", lambda _: None)
+
+    result = task_instance_service.watch_task_instance_result(
+        4001,
+        interval_seconds=1,
+        timeout_seconds=5,
+    )
+
+    assert _mapping(result.data)["state"] == "SUCCESS"
+    assert "workflowInstance" not in result.resolved
+
+
 def test_watch_task_instance_result_times_out(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -727,11 +915,12 @@ def test_watch_task_instance_result_times_out(
     assert exc_info.value.details["last_state"] == "RUNNING_EXECUTION"
     assert exc_info.value.suggestion == (
         "Retry with a larger --timeout-seconds value or inspect the current "
-        "state with `dsctl task-instance get 3001 --workflow-instance 901`."
+        "state with `dsctl task-instance get 3001 --project etl-prod "
+        "--workflow-instance 901`."
     )
 
 
-def test_force_success_task_instance_result_returns_forced_success_payload(
+def test_force_success_task_instance_result_returns_forced_result_payload(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
     fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
@@ -775,9 +964,9 @@ def test_force_success_task_instance_result_requires_finished_workflow_instance(
         )
 
     assert exc_info.value.suggestion == (
-        "Run `dsctl workflow-instance get 901` to inspect the owning workflow "
-        "instance. Wait for it to reach a final state, then retry "
-        "`task-instance force-success`."
+        "Run `dsctl workflow-instance get 901 --project etl-prod` to inspect the "
+        "owning workflow instance. Wait for it to reach a final state, then "
+        "retry `task-instance force-success`."
     )
 
 
@@ -801,9 +990,10 @@ def test_force_success_task_instance_result_reports_task_state_suggestion(
         )
 
     assert exc_info.value.suggestion == (
-        "Run `dsctl task-instance get 3003 --workflow-instance 902` to inspect "
-        "the current task state. `task-instance force-success` only applies to "
-        "FAILURE, NEED_FAULT_TOLERANCE, or KILL."
+        "Run `dsctl task-instance get 3003 --project etl-prod "
+        "--workflow-instance 902` to inspect the current task state. "
+        "`task-instance force-success` only applies to FAILURE, "
+        "NEED_FAULT_TOLERANCE, or KILL."
     )
 
 
@@ -831,6 +1021,27 @@ def test_savepoint_task_instance_result_returns_requested_wrapper(
     assert fake_task_instance_adapter.savepoint_ids == [3001]
 
 
+def test_stream_task_savepoint_resolves_directly_from_project(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    result = task_instance_service.savepoint_task_instance_result(4001)
+
+    assert _mapping(result.data)["requested"] is True
+    assert result.resolved["taskInstance"] == {"id": 4001}
+    assert "workflowInstance" not in result.resolved
+    assert fake_task_instance_adapter.savepoint_ids == [4001]
+
+
 def test_savepoint_task_instance_result_reports_running_state_suggestion(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -851,9 +1062,10 @@ def test_savepoint_task_instance_result_reports_running_state_suggestion(
         )
 
     assert exc_info.value.suggestion == (
-        "Run `dsctl task-instance get 3002 --workflow-instance 902` to inspect "
-        "the current task state. `task-instance savepoint` only applies while "
-        "the task instance is still running."
+        "Run `dsctl task-instance get 3002 --project etl-prod "
+        "--workflow-instance 902` to inspect the current task state. "
+        "`task-instance savepoint` only applies while the task instance is "
+        "still running."
     )
 
 
@@ -917,6 +1129,27 @@ def test_stop_task_instance_result_returns_requested_wrapper(
     assert data["requested"] is True
     assert _mapping(data["taskInstance"])["id"] == 3001
     assert fake_task_instance_adapter.stopped_ids == [3001]
+
+
+def test_stream_task_stop_resolves_directly_from_project(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+    )
+
+    result = task_instance_service.stop_task_instance_result(4001)
+
+    assert _mapping(result.data)["requested"] is True
+    assert result.resolved["taskInstance"] == {"id": 4001}
+    assert "workflowInstance" not in result.resolved
+    assert fake_task_instance_adapter.stopped_ids == [4001]
 
 
 def test_stop_task_instance_result_preserves_generic_upstream_failure(
@@ -1033,7 +1266,35 @@ def test_stop_task_instance_result_reports_running_state_suggestion(
         )
 
     assert exc_info.value.suggestion == (
-        "Run `dsctl task-instance get 3002 --workflow-instance 902` to inspect "
-        "the current task state. `task-instance stop` only applies while the "
-        "task instance is still running."
+        "Run `dsctl task-instance get 3002 --project etl-prod "
+        "--workflow-instance 902` to inspect the current task state. "
+        "`task-instance stop` only applies while the task instance is still "
+        "running."
     )
+
+
+def test_task_instance_dynamic_suggestion_shell_quotes_selected_project(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_workflow_instance_adapter: FakeWorkflowInstanceAdapter,
+    fake_task_instance_adapter: FakeTaskInstanceAdapter,
+) -> None:
+    _install_task_instance_service_fakes(
+        monkeypatch,
+        project_adapter=FakeProjectAdapter(
+            projects=[FakeProject(code=7, name="etl prod")]
+        ),
+        workflow_instance_adapter=fake_workflow_instance_adapter,
+        task_instance_adapter=fake_task_instance_adapter,
+        context=ResourceDefaults(project="etl prod"),
+    )
+
+    with pytest.raises(InvalidStateError, match="still be running") as exc_info:
+        task_instance_service.stop_task_instance_result(
+            3002,
+            workflow_instance=902,
+        )
+
+    suggestion = exc_info.value.suggestion
+    assert suggestion is not None
+    assert "--project 'etl prod'" in suggestion
+    assert "--project PROJECT" not in suggestion

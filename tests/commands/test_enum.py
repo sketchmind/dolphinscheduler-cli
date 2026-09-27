@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -20,7 +21,7 @@ def test_enum_names_command_returns_supported_enum_names() -> None:
 
 
 def test_enum_names_command_can_render_table_rows() -> None:
-    result = runner.invoke(app, ["--output-format", "table", "enum", "names"])
+    result = runner.invoke(app, ["--format", "table", "enum", "names"])
 
     assert result.exit_code == 0
     assert "name" in result.stdout
@@ -46,6 +47,50 @@ def test_enum_list_command_accepts_class_name_alias() -> None:
     payload = json.loads(result.stdout)
     assert payload["resolved"]["enum"]["name"] == "release-state"
     assert payload["data"]["member_count"] == 2
+
+
+def test_enum_discovery_uses_the_exact_342_runtime_slice(
+    isolated_cwd: Path,
+) -> None:
+    (isolated_cwd / "cluster.env").write_text(
+        "DS_VERSION=3.4.2\n",
+        encoding="utf-8",
+    )
+
+    names_result = runner.invoke(
+        app,
+        ["--env-file", "cluster.env", "enum", "names"],
+    )
+    list_result = runner.invoke(
+        app,
+        ["--env-file", "cluster.env", "enum", "list", "priority"],
+    )
+
+    assert names_result.exit_code == 0
+    assert list_result.exit_code == 0
+    names_payload = json.loads(names_result.stdout)
+    list_payload = json.loads(list_result.stdout)
+    assert {item["name"] for item in names_payload["data"]} >= {"priority"}
+    assert list_payload["resolved"]["enum"]["name"] == "priority"
+
+
+def test_cli_preflight_remains_fail_closed_for_an_unsupported_legacy_action(
+    isolated_cwd: Path,
+) -> None:
+    (isolated_cwd / "cluster.env").write_text(
+        "DS_VERSION=3.0.6\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        ["--env-file", "cluster.env", "task-type", "list"],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["type"] == "unsupported_feature"
+    assert payload["error"]["details"]["selected_version"] == "3.0.6"
 
 
 def test_enum_list_command_rejects_unknown_enum() -> None:

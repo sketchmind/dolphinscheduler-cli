@@ -61,7 +61,11 @@ _RESOURCE_RESOLUTION_HINTS: dict[str, tuple[str, str, str | None]] = {
         "id",
         "in the selected project",
     ),
-    WORKFLOW_INSTANCE_RESOURCE: ("dsctl workflow-instance list", "id", None),
+    WORKFLOW_INSTANCE_RESOURCE: (
+        "dsctl workflow-instance list",
+        "id",
+        "in the selected project",
+    ),
     TASK_INSTANCE_RESOURCE: (
         "dsctl task-instance list",
         "id",
@@ -116,6 +120,18 @@ class UserInputError(DsctlError):
     """Raised when a user-supplied value fails validation."""
 
     error_type = "user_input_error"
+
+
+class OutputContractError(DsctlError):
+    """Raised when a result violates its declared CLI output shape."""
+
+    error_type = "output_contract_error"
+
+
+class UnsupportedFeatureError(DsctlError):
+    """Raised before transport when the selected profile cannot serve an intent."""
+
+    error_type = "unsupported_feature"
 
 
 class ConflictError(DsctlError):
@@ -173,6 +189,18 @@ class WaitTimeoutError(DsctlError):
     error_type = "timeout"
 
 
+class CheckFailedError(DsctlError):
+    """Raised when a completed diagnostic contains failed checks."""
+
+    error_type = "check_failed"
+
+
+class ExecutionFailedError(DsctlError):
+    """Raised when an explicitly gated execution finishes without success."""
+
+    error_type = "execution_failed"
+
+
 class ResolutionError(DsctlError):
     """Raised when a name-to-code lookup cannot be resolved."""
 
@@ -227,6 +255,12 @@ class ApiTransportError(DsctlError):
     """Raised for transport-layer or response-decoding failures."""
 
     error_type = "api_transport_error"
+
+
+class MutationOutcomeUnknownError(DsctlError):
+    """Raised when a dispatched mutation request has no trustworthy outcome."""
+
+    error_type = "mutation_outcome_unknown"
 
 
 class ApiHttpError(DsctlError):
@@ -422,7 +456,14 @@ def _scoped_resolution_list_command(
         and workflow_code is not None
     ):
         return f"{base_command} --project {project_code} --workflow {workflow_code}"
+    if resource == WORKFLOW_INSTANCE_RESOURCE and project_code is not None:
+        return f"dsctl workflow-instance list --project {project_code}"
     if resource == TASK_INSTANCE_RESOURCE and workflow_instance_id is not None:
+        if project_code is not None:
+            return (
+                "dsctl task-instance list "
+                f"--project {project_code} --workflow-instance {workflow_instance_id}"
+            )
         return f"{base_command} --workflow-instance {workflow_instance_id}"
     return base_command
 

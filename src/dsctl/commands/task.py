@@ -1,24 +1,12 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.task import get_task_result, list_tasks_result, update_task_result
 
 task_app = typer.Typer(
     help="Manage DolphinScheduler task definitions inside workflows.",
     no_args_is_help=True,
-)
-
-PROJECT_HELP = (
-    "Project name or code. Run `dsctl project list` to discover values; falls "
-    "back to stored project context."
-)
-TASK_HELP = "Task name or numeric code. Use `dsctl task list` to discover values."
-WORKFLOW_HELP = (
-    "Workflow name or code. Run `dsctl workflow list` in the selected project "
-    "to discover values. When omitted, uses workflow context only when project "
-    "also comes from context; otherwise pass --workflow."
 )
 
 
@@ -28,34 +16,14 @@ def register_task_commands(app: typer.Typer) -> None:
 
 
 @task_app.command("list")
+@bind_command("task.list")
 def list_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    workflow: Annotated[
-        str | None,
-        typer.Option(
-            "--workflow",
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help=(
-                "Filter tasks by name substring after fetching the workflow task list."
-            ),
-        ),
-    ] = None,
+    project: str | None,
+    workflow: str,
+    search: str | None,
 ) -> None:
-    """List tasks inside one workflow."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -70,29 +38,14 @@ def list_command(
 
 
 @task_app.command("get")
+@bind_command("task.get")
 def get_command(
     ctx: typer.Context,
-    task: Annotated[
-        str,
-        typer.Argument(help=TASK_HELP),
-    ],
+    task: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    workflow: Annotated[
-        str | None,
-        typer.Option(
-            "--workflow",
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    project: str | None,
+    workflow: str,
 ) -> None:
-    """Get one task definition by name or code."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -107,51 +60,16 @@ def get_command(
 
 
 @task_app.command("update")
+@bind_command("task.update")
 def update_command(
     ctx: typer.Context,
-    task: Annotated[
-        str,
-        typer.Argument(help=TASK_HELP),
-    ],
+    task: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    workflow: Annotated[
-        str | None,
-        typer.Option(
-            "--workflow",
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
-    set_values: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--set",
-            help=(
-                "Inline KEY=VALUE update for this single task. Repeat as "
-                "needed. Common keys: command, retry.times, timeout, "
-                "depends_on. Run `dsctl schema --command task.update` for all "
-                "supported keys."
-            ),
-        ),
-    ] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help="Compile the native task update request without sending it.",
-        ),
-    ] = False,
+    project: str | None,
+    workflow: str,
+    set_values: list[str] | None,
+    dry_run: bool,
 ) -> None:
-    """Update one task; use workflow edit for DAG changes.
-
-    Use workflow-instance edit for repairs.
-    """
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

@@ -4,14 +4,14 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.services import runtime as runtime_service
+from dsctl.services import tenant as tenant_service
+from dsctl.upstream.tenants import TENANT_DOMAIN, TenantDomain
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
-    FakeProjectAdapter,
     FakeQueue,
     FakeQueueAdapter,
     FakeTenant,
     FakeTenantAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
 
@@ -59,15 +59,17 @@ def patch_tenant_service(
     fake_tenant_adapter: FakeTenantAdapter,
     fake_queue_adapter: FakeQueueAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            tenant_adapter=fake_tenant_adapter,
-            queue_adapter=fake_queue_adapter,
-            profile=make_profile(),
-        ),
+    domain = TenantDomain(
+        tenants=fake_tenant_adapter,
+        queues=fake_queue_adapter,
+    )
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        tenant_service,
+        expected_domain=TENANT_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 
@@ -146,6 +148,54 @@ def test_tenant_update_command_returns_updated_tenant() -> None:
     assert payload["data"]["queueId"] == 12
 
 
+def test_tenant_update_does_not_expose_tenant_code_as_mutable() -> None:
+    help_result = runner.invoke(app, ["tenant", "update", "--help"])
+
+    assert help_result.exit_code == 0
+    assert "--tenant-code" not in help_result.stdout
+    assert "tenant code is immutable" in help_result.stdout
+
+    update_result = runner.invoke(
+        app,
+        [
+            "tenant",
+            "update",
+            "tenant-prod",
+            "--tenant-code",
+            "tenant-renamed",
+        ],
+    )
+
+    assert update_result.exit_code == 1
+    payload = json.loads(update_result.stderr)
+    assert payload["action"] == "tenant.update"
+    assert payload["error"]["type"] == "user_input_error"
+    assert payload["error"]["message"] == (
+        "Tenant code is immutable and cannot be changed"
+    )
+    assert "create a new tenant" in payload["error"]["suggestion"]
+
+
+def test_tenant_update_accepts_matching_legacy_tenant_code() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "tenant",
+            "update",
+            "tenant-prod",
+            "--tenant-code",
+            "tenant-prod",
+            "--queue",
+            "analytics",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["data"]["tenantCode"] == "tenant-prod"
+    assert payload["data"]["queueId"] == 12
+
+
 def test_tenant_update_command_requires_one_change() -> None:
     result = runner.invoke(app, ["tenant", "update", "tenant-prod"])
 
@@ -154,8 +204,8 @@ def test_tenant_update_command_requires_one_change() -> None:
     assert payload["action"] == "tenant.update"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Pass at least one update flag such as --tenant-code, --queue, or "
-        "--description."
+        "Pass at least one update flag such as --queue, --description, or "
+        "--clear-description."
     )
 
 

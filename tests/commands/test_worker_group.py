@@ -4,12 +4,15 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.services import runtime as runtime_service
+from dsctl.services import worker_group as worker_group_service
+from dsctl.upstream.worker_groups import (
+    WORKER_GROUP_DOMAIN,
+    WorkerGroupDomain,
+)
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
-    FakeProjectAdapter,
     FakeWorkerGroup,
     FakeWorkerGroupAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
 
@@ -31,14 +34,14 @@ def patch_worker_group_service(
     monkeypatch: pytest.MonkeyPatch,
     fake_worker_group_adapter: FakeWorkerGroupAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            worker_group_adapter=fake_worker_group_adapter,
-            profile=make_profile(),
-        ),
+    domain = WorkerGroupDomain(worker_groups=fake_worker_group_adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        worker_group_service,
+        expected_domain=WORKER_GROUP_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 

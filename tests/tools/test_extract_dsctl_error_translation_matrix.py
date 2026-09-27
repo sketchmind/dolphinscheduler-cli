@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import pytest
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -70,9 +74,59 @@ def test_real_report_contains_known_matrix_rows() -> None:
         for mapping in access_token.mappings
     )
     workflow_instance = helpers[
-        ("workflow_instance", "_raise_workflow_instance_action_error")
+        ("workflow_instance._errors", "_raise_workflow_instance_action_error")
     ]
     assert any(
         "InvalidStateError" in mapping.outcomes
         for mapping in workflow_instance.mappings
     )
+
+
+@pytest.mark.parametrize("domain", ["workflow", "workflow_instance"])
+def test_workflow_package_matrix_preserves_frozen_codes_and_outcomes(
+    domain: str,
+) -> None:
+    matrix = _load_module()
+    fixture = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "error_translation"
+        / "pre_package_workflow_inventory.json"
+    )
+    expected = json.loads(fixture.read_text(encoding="utf-8"))[domain][
+        "branch_mappings"
+    ]
+    if domain == "workflow":
+        # The reviewed RPC branch preserves uncertainty as a transport error;
+        # other 50014 start errors retain their previous handling.
+        assert expected["_raise_workflow_run_error"] == []
+        expected["_raise_workflow_run_error"] = [
+            {
+                "codes": [{"name": "START_WORKFLOW_INSTANCE_ERROR", "value": 50014}],
+                "outcomes": ["ApiTransportError"],
+            }
+        ]
+    if domain == "workflow_instance":
+        action_mappings = expected["_raise_workflow_instance_action_error"]
+        assert all(
+            mapping["codes"]
+            != [{"name": "EXECUTE_WORKFLOW_INSTANCE_ERROR", "value": 50015}]
+            for mapping in action_mappings
+        )
+        expected["_raise_workflow_instance_action_error"] = [
+            {
+                "codes": [{"name": "EXECUTE_WORKFLOW_INSTANCE_ERROR", "value": 50015}],
+                "outcomes": ["MutationOutcomeUnknownError"],
+            },
+            *action_mappings,
+        ]
+    actual = {
+        helper.helper: [
+            {key: value for key, value in asdict(mapping).items() if key != "line"}
+            for mapping in helper.mappings
+        ]
+        for helper in matrix.build_report().helpers
+        if helper.module.startswith(f"{domain}.")
+    }
+
+    assert actual == expected

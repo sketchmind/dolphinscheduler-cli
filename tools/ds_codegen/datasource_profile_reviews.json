@@ -1,0 +1,431 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "legacy-inline": {},
+    "hdfs-oracle": {
+      "HIVE": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "SPARK": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "ORACLE": [
+        "connectType"
+      ]
+    },
+    "athena": {
+      "HIVE": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "SPARK": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "ORACLE": [
+        "connectType"
+      ],
+      "ATHENA": [
+        "awsRegion"
+      ]
+    },
+    "extended-public-key": {
+      "HIVE": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "SPARK": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "ORACLE": [
+        "connectType"
+      ],
+      "REDSHIFT": [
+        "mode",
+        "dbUser"
+      ],
+      "ATHENA": [
+        "awsRegion"
+      ],
+      "AZURESQL": [
+        "mode",
+        "MSIClientId",
+        "endpoint"
+      ],
+      "OCEANBASE": [
+        "compatibleMode"
+      ],
+      "SSH": [
+        "publicKey"
+      ]
+    },
+    "extended-public-key-tools": {
+      "HIVE": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "SPARK": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "ORACLE": [
+        "connectType"
+      ],
+      "REDSHIFT": [
+        "mode",
+        "dbUser"
+      ],
+      "ATHENA": [
+        "awsRegion"
+      ],
+      "AZURESQL": [
+        "mode",
+        "MSIClientId",
+        "endpoint"
+      ],
+      "OCEANBASE": [
+        "compatibleMode"
+      ],
+      "SSH": [
+        "publicKey"
+      ],
+      "ZEPPELIN": [
+        "restEndpoint"
+      ],
+      "SAGEMAKER": [
+        "awsRegion"
+      ]
+    },
+    "extended-cloud-public-key": {
+      "HIVE": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "SPARK": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "ORACLE": [
+        "connectType"
+      ],
+      "REDSHIFT": [
+        "mode",
+        "dbUser"
+      ],
+      "ATHENA": [
+        "awsRegion"
+      ],
+      "AZURESQL": [
+        "mode",
+        "MSIClientId",
+        "endpoint"
+      ],
+      "OCEANBASE": [
+        "compatibleMode"
+      ],
+      "SSH": [
+        "publicKey"
+      ],
+      "ZEPPELIN": [
+        "restEndpoint"
+      ],
+      "SAGEMAKER": [
+        "awsRegion"
+      ],
+      "K8S": [
+        "kubeConfig",
+        "namespace"
+      ],
+      "ALIYUN_SERVERLESS_SPARK": [
+        "accessKeyId",
+        "accessKeySecret",
+        "regionId",
+        "endpoint"
+      ]
+    },
+    "extended-cloud-private-key": {
+      "HIVE": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "SPARK": [
+        "principal",
+        "javaSecurityKrb5Conf",
+        "loginUserKeytabUsername",
+        "loginUserKeytabPath"
+      ],
+      "ORACLE": [
+        "connectType"
+      ],
+      "REDSHIFT": [
+        "mode",
+        "dbUser"
+      ],
+      "ATHENA": [
+        "awsRegion"
+      ],
+      "AZURESQL": [
+        "mode",
+        "MSIClientId",
+        "endpoint"
+      ],
+      "OCEANBASE": [
+        "compatibleMode"
+      ],
+      "SSH": [
+        "privateKey"
+      ],
+      "ZEPPELIN": [
+        "restEndpoint"
+      ],
+      "SAGEMAKER": [
+        "awsRegion"
+      ],
+      "K8S": [
+        "kubeConfig",
+        "namespace"
+      ],
+      "ALIYUN_SERVERLESS_SPARK": [
+        "accessKeyId",
+        "accessKeySecret",
+        "regionId",
+        "endpoint"
+      ]
+    }
+  },
+  "versions": {
+    "1.3.9": "legacy-inline",
+    "2.0.0": "hdfs-oracle",
+    "2.0.1": "hdfs-oracle",
+    "2.0.2": "hdfs-oracle",
+    "2.0.3": "hdfs-oracle",
+    "2.0.4": "hdfs-oracle",
+    "2.0.5": "hdfs-oracle",
+    "2.0.6": "hdfs-oracle",
+    "2.0.7": "hdfs-oracle",
+    "2.0.8": "hdfs-oracle",
+    "2.0.9": "hdfs-oracle",
+    "3.0.0": "hdfs-oracle",
+    "3.0.1": "hdfs-oracle",
+    "3.0.2": "hdfs-oracle",
+    "3.0.3": "hdfs-oracle",
+    "3.0.4": "hdfs-oracle",
+    "3.0.5": "hdfs-oracle",
+    "3.0.6": "hdfs-oracle",
+    "3.1.0": "athena",
+    "3.1.1": "athena",
+    "3.1.2": "athena",
+    "3.1.3": "athena",
+    "3.1.4": "athena",
+    "3.1.5": "athena",
+    "3.1.6": "athena",
+    "3.1.7": "athena",
+    "3.1.8": "athena",
+    "3.1.9": "athena",
+    "3.2.0": "extended-public-key",
+    "3.2.1": "extended-public-key-tools",
+    "3.2.2": "extended-public-key-tools",
+    "3.3.1": "extended-cloud-public-key",
+    "3.3.2": "extended-cloud-public-key",
+    "3.4.0": "extended-cloud-private-key",
+    "3.4.1": "extended-cloud-private-key",
+    "3.4.2": "extended-cloud-private-key",
+    "3.4.3": "extended-cloud-private-key"
+  },
+  "evidence": {
+    "base": "BaseDataSourceParamDTO or legacy DataSourceController.updateDataSource",
+    "plugins": "Exact-tag DataSourceParamDTO inheritance closures",
+    "types": "Exact-tag org.apache.dolphinscheduler DbType",
+    "intermediate_releases": {
+      "scope": "Exact DTO inheritance, field types, annotations and initializers; no JDBC driver or processor execution claim.",
+      "dto_root": "dolphinscheduler-datasource-plugin",
+      "digest_format": "SHA-256 of compact JSON [[repository-relative DTO path, file SHA-256], ...], sorted by path; UTF-8.",
+      "package_transition": "2.0.1 moves BaseDataSourceParamDTO from common.datasource to plugin.datasource.api.datasource; 3.1.x concrete DTOs reside in their datasource plugin modules.",
+      "sources": {
+        "2.0.1": {
+          "tag": "2.0.1",
+          "commit": "bf2197995ac835c66b44874b8658579a3da916b0",
+          "tree": "7ddc02688bbd1cfca3e5865225c2deb27fbc658b",
+          "dto_file_count": 11,
+          "dto_files_digest": "sha256:d814fa80ff5b5f134756ad7c0021ffc44a2ccbc397722567eab2a23b63c4a8cc"
+        },
+        "2.0.2": {
+          "tag": "2.0.2",
+          "commit": "24ddd07493c6260a877db8a5c73e654263d356ad",
+          "tree": "0b680c1d8b07e4ec17b2d5a87ea52d6e532f82bd",
+          "dto_file_count": 11,
+          "dto_files_digest": "sha256:d814fa80ff5b5f134756ad7c0021ffc44a2ccbc397722567eab2a23b63c4a8cc"
+        },
+        "2.0.3": {
+          "tag": "2.0.3",
+          "commit": "f1a3c52a66eb8dec1f853b9c9a02b88cdebbd0dc",
+          "tree": "74e785a2682e8b5dffa1b390c569e4bfb1a2174c",
+          "dto_file_count": 11,
+          "dto_files_digest": "sha256:d814fa80ff5b5f134756ad7c0021ffc44a2ccbc397722567eab2a23b63c4a8cc"
+        },
+        "2.0.4": {
+          "tag": "2.0.4",
+          "commit": "0ff01e3c68da6a174836216f87c05f707233f7f9",
+          "tree": "6b737bb42173e798d3b12e92f9b3d28a484224c2",
+          "dto_file_count": 11,
+          "dto_files_digest": "sha256:d814fa80ff5b5f134756ad7c0021ffc44a2ccbc397722567eab2a23b63c4a8cc"
+        },
+        "2.0.5": {
+          "tag": "2.0.5",
+          "commit": "f31328276c12821c21d1ce07e824bc74146c19b2",
+          "tree": "a1b4b125b4dbbd5cc6139165d2835c8d3710554b",
+          "dto_file_count": 11,
+          "dto_files_digest": "sha256:d814fa80ff5b5f134756ad7c0021ffc44a2ccbc397722567eab2a23b63c4a8cc"
+        },
+        "2.0.6": {
+          "tag": "2.0.6",
+          "commit": "6aaf6e39ed87fae47fbaf276e86c65f7e1f75c65",
+          "tree": "39513599daa7936c79841106327e0b31cad46964",
+          "dto_file_count": 11,
+          "dto_files_digest": "sha256:d814fa80ff5b5f134756ad7c0021ffc44a2ccbc397722567eab2a23b63c4a8cc"
+        },
+        "2.0.7": {
+          "tag": "2.0.7",
+          "commit": "bf5a0f228b7858c8a3e682a0caa225e3569db15e",
+          "tree": "630fb83a9ac473e40919c6062b63599c518efef5",
+          "dto_file_count": 11,
+          "dto_files_digest": "sha256:d814fa80ff5b5f134756ad7c0021ffc44a2ccbc397722567eab2a23b63c4a8cc"
+        },
+        "2.0.8": {
+          "tag": "2.0.8",
+          "commit": "2a22b960580c907f67128a294df2b10b4380312a",
+          "tree": "7323fe0bba7e0a2808e6fa853f12b44e633461be",
+          "dto_file_count": 11,
+          "dto_files_digest": "sha256:d814fa80ff5b5f134756ad7c0021ffc44a2ccbc397722567eab2a23b63c4a8cc"
+        },
+        "3.0.1": {
+          "tag": "3.0.1",
+          "commit": "cb03ca8166cb9d6d8e63db43664b4a2126ea43b4",
+          "tree": "d64ff1169ef3de7a6f5be42780cdc0585f292978",
+          "dto_file_count": 12,
+          "dto_files_digest": "sha256:c95569130abc50d0db8d7f23b8b4da1269ec033197d4f845a03238761ccd33ae"
+        },
+        "3.0.2": {
+          "tag": "3.0.2",
+          "commit": "d2ba3d4cfb3ab9f252340aa603ea036baa52f88c",
+          "tree": "14d98a50d3acef6109f77993e76341aa5036503a",
+          "dto_file_count": 12,
+          "dto_files_digest": "sha256:c95569130abc50d0db8d7f23b8b4da1269ec033197d4f845a03238761ccd33ae"
+        },
+        "3.0.3": {
+          "tag": "3.0.3",
+          "commit": "a3b882a80a91d2b8d1335e42b5d19a8ef144fe3b",
+          "tree": "4f2ca0d740ecc3b35dd65353c4097de3a7ad9d01",
+          "dto_file_count": 12,
+          "dto_files_digest": "sha256:c95569130abc50d0db8d7f23b8b4da1269ec033197d4f845a03238761ccd33ae"
+        },
+        "3.0.4": {
+          "tag": "3.0.4",
+          "commit": "0a4175261e93ebfe5557fec023ac4b1c2ec950ee",
+          "tree": "0d65b6bd85f5c31f7660238eefbc0ce3c5ae0cf3",
+          "dto_file_count": 12,
+          "dto_files_digest": "sha256:c95569130abc50d0db8d7f23b8b4da1269ec033197d4f845a03238761ccd33ae"
+        },
+        "3.0.5": {
+          "tag": "3.0.5",
+          "commit": "dc3c9651342529fcfde47dd0949a0ced18ce9e4a",
+          "tree": "1723ed11710fd8939b8748b54f04a4d76e6e351e",
+          "dto_file_count": 12,
+          "dto_files_digest": "sha256:c95569130abc50d0db8d7f23b8b4da1269ec033197d4f845a03238761ccd33ae"
+        },
+        "3.1.1": {
+          "tag": "3.1.1",
+          "commit": "efc03679994a7522a0adc1e6662285ab8f617f61",
+          "tree": "09b903bb229e41e664122f381b6d2f59b805f795",
+          "dto_file_count": 13,
+          "dto_files_digest": "sha256:a3b33d51d59f7feccbb5336e145cba256399881c824d32658daa4ff59d956f85"
+        },
+        "3.1.2": {
+          "tag": "3.1.2",
+          "commit": "f1aefae5e25daa5beef08accd8fbd26c32fb6b47",
+          "tree": "6ad3cbb6a776c2312631f043e2d2b5d6866efa89",
+          "dto_file_count": 13,
+          "dto_files_digest": "sha256:a3b33d51d59f7feccbb5336e145cba256399881c824d32658daa4ff59d956f85"
+        },
+        "3.1.3": {
+          "tag": "3.1.3",
+          "commit": "4a3299ac8cba79c8e40ce082b0f2594c369b4073",
+          "tree": "28c4a45ebca040966570a4cb20546fe2349c1485",
+          "dto_file_count": 13,
+          "dto_files_digest": "sha256:a3b33d51d59f7feccbb5336e145cba256399881c824d32658daa4ff59d956f85"
+        },
+        "3.1.4": {
+          "tag": "3.1.4",
+          "commit": "2d6393d722f8288dfb7ab5eddbbb8319b491824e",
+          "tree": "3b9bb618d598d8032c5f4b3c0489109c6e2ecb52",
+          "dto_file_count": 13,
+          "dto_files_digest": "sha256:a3b33d51d59f7feccbb5336e145cba256399881c824d32658daa4ff59d956f85"
+        },
+        "3.1.5": {
+          "tag": "3.1.5",
+          "commit": "9e5b0a1cc3469cd7f56f15966f8fe2ebcc1f40b0",
+          "tree": "655d40a64afbb81d9eb74f74ecb7ce0387568528",
+          "dto_file_count": 13,
+          "dto_files_digest": "sha256:a3b33d51d59f7feccbb5336e145cba256399881c824d32658daa4ff59d956f85"
+        },
+        "3.1.6": {
+          "tag": "3.1.6",
+          "commit": "7780fdc2f537aa6978d76ee62f2088f730b5969d",
+          "tree": "b008ef6530483e144c41b69ac4a04bc9cff84202",
+          "dto_file_count": 13,
+          "dto_files_digest": "sha256:a3b33d51d59f7feccbb5336e145cba256399881c824d32658daa4ff59d956f85"
+        },
+        "3.1.7": {
+          "tag": "3.1.7",
+          "commit": "b570a187f6eb92b20d6daacae01eeca17c774007",
+          "tree": "65c7a7933713d8b098c41cf9963a0030f7a56224",
+          "dto_file_count": 13,
+          "dto_files_digest": "sha256:a3b33d51d59f7feccbb5336e145cba256399881c824d32658daa4ff59d956f85"
+        },
+        "3.1.8": {
+          "tag": "3.1.8",
+          "commit": "df9becb770455d9d8aae661a54ce1a2a1b131964",
+          "tree": "e508c6a238b97eb9a21a481d99bff142dd380da2",
+          "dto_file_count": 13,
+          "dto_files_digest": "sha256:a3b33d51d59f7feccbb5336e145cba256399881c824d32658daa4ff59d956f85"
+        }
+      }
+    },
+    "release_3_4_3": {
+      "scope": "Exact DTO inheritance, field types, annotations and initializers; no JDBC driver or processor execution claim.",
+      "tag": "3.4.3",
+      "commit": "a190201acffa03d199d4ca216288734a6513de3d",
+      "tree": "cec73c3d19d6cb132cb612c220e193e19194646d",
+      "baseline_tag": "3.4.2",
+      "dto_file_count": 30,
+      "dto_files_digest": "sha256:5286a1bd47703a3316b3b478131408a0aefabf754833db69add29547ac4440b2",
+      "digest_format": "SHA-256 of compact JSON [[repository-relative DTO path, file SHA-256], ...], sorted by path; UTF-8.",
+      "review": "Every DataSourceParamDTO source is byte-identical to exact 3.4.2. Plugin source changes remove password content from a salt-mismatch warning and replace the Hive UGI cache with ConcurrentHashMap; neither changes accepted DTO fields or grants additional permissions."
+    }
+  }
+}

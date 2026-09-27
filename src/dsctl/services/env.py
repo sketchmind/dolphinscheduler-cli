@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.cli_surface import ENV_RESOURCE
 from dsctl.errors import (
@@ -12,25 +12,27 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
-    EnvironmentData,
-    optional_text,
-    serialize_environment,
-)
+from dsctl.services._page_result import paged_command_result
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_positive_int,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.resolver import ResolvedEnvironmentData
-from dsctl.services.resolver import environment as resolve_environment
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.environments import (
+    ENVIRONMENT_DOMAIN,
+    EnvironmentDomain,
+)
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.resolver import ResolvedEnvironmentData
+from dsctl.upstream.resolver import environment as resolve_environment
+from dsctl.upstream.serialization import (
+    optional_text,
+    serialize_environment,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -40,13 +42,13 @@ if TYPE_CHECKING:
     )
 
 
-EnvironmentPageData: TypeAlias = PageData[EnvironmentData]
-
 ENVIRONMENT_NAME_EXISTS = 120002
 ENVIRONMENT_NAME_IS_NULL = 120003
 ENVIRONMENT_CONFIG_IS_NULL = 120004
 DELETE_ENVIRONMENT_RELATED_TASK_EXISTS = 120007
 QUERY_ENVIRONMENT_BY_CODE_ERROR = 1200009
+LEGACY_ENVIRONMENT_WORKER_GROUPS_IS_INVALID = 1200012
+LEGACY_UPDATE_ENVIRONMENT_WORKER_GROUP_RELATION_ERROR = 1200013
 ENVIRONMENT_WORKER_GROUPS_IS_INVALID = 130015
 UPDATE_ENVIRONMENT_WORKER_GROUP_RELATION_ERROR = 130016
 USER_NO_OPERATION_PERM = 30001
@@ -81,8 +83,9 @@ def list_environments_result(
     require_positive_int(page_no, label="page_no")
     require_positive_int(page_size, label="page_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ENVIRONMENT_DOMAIN,
         _list_environments_result,
         search=normalized_search,
         page_no=page_no,
@@ -97,8 +100,9 @@ def get_environment_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Resolve and fetch a single environment."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ENVIRONMENT_DOMAIN,
         _get_environment_result,
         environment=environment,
     )
@@ -120,8 +124,9 @@ def create_environment_result(
         None if worker_groups is None else _normalize_worker_groups(worker_groups)
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ENVIRONMENT_DOMAIN,
         _create_environment_result,
         name=environment_name,
         config=environment_config,
@@ -177,8 +182,9 @@ def update_environment_result(
         else UNSET
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ENVIRONMENT_DOMAIN,
         _update_environment_result,
         environment=environment,
         name=normalized_name,
@@ -197,23 +203,24 @@ def delete_environment_result(
     """Delete one environment after explicit confirmation."""
     require_delete_force(force=force, resource_label="Environment")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ENVIRONMENT_DOMAIN,
         _delete_environment_result,
         environment=environment,
     )
 
 
 def _list_environments_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[EnvironmentDomain],
     *,
     search: str | None,
     page_no: int,
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.environments
-    data: EnvironmentPageData = requested_page_data(
+    adapter = runtime.domain.environments
+    return paged_command_result(
         lambda current_page_no, current_page_size: adapter.list(
             page_no=current_page_no,
             page_size=current_page_size,
@@ -224,7 +231,7 @@ def _list_environments_result(
         all_pages=all_pages,
         serialize_item=serialize_environment,
         resource=ENV_RESOURCE,
-        max_pages=MAX_AUTO_EXHAUST_PAGES,
+        resolved={"search": search},
         translate_error=lambda error: _translate_environment_api_error(
             error,
             operation="list",
@@ -232,28 +239,33 @@ def _list_environments_result(
         ),
     )
 
-    return CommandResult(
-        data=require_json_object(data, label="environment list data"),
-        resolved={
-            "search": search,
-            "page_no": page_no,
-            "page_size": page_size,
-            "all": all_pages,
-        },
-    )
-
 
 def _get_environment_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[EnvironmentDomain],
     *,
     environment: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.environments
-    resolved_environment = resolve_environment(
-        environment,
-        adapter=adapter,
-    )
-    fetched_environment = adapter.get(code=resolved_environment.code)
+    adapter = runtime.domain.environments
+    try:
+        resolved_environment = resolve_environment(
+            environment,
+            adapter=adapter,
+        )
+    except ApiResultError as error:
+        raise _translate_environment_api_error(
+            error,
+            operation="get",
+            name=environment,
+        ) from error
+    try:
+        fetched_environment = adapter.get(code=resolved_environment.code)
+    except ApiResultError as error:
+        raise _translate_environment_api_error(
+            error,
+            operation="get",
+            code=resolved_environment.code,
+            name=resolved_environment.name,
+        ) from error
     return CommandResult(
         data=require_json_object(
             serialize_environment(fetched_environment),
@@ -269,14 +281,14 @@ def _get_environment_result(
 
 
 def _create_environment_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[EnvironmentDomain],
     *,
     name: str,
     config: str,
     description: str | None,
     worker_groups: list[str] | None,
 ) -> CommandResult:
-    adapter = runtime.upstream.environments
+    adapter = runtime.domain.environments
     try:
         created_environment = adapter.create(
             name=name,
@@ -306,7 +318,7 @@ def _create_environment_result(
 
 
 def _update_environment_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[EnvironmentDomain],
     *,
     environment: str,
     name: str | None,
@@ -314,9 +326,24 @@ def _update_environment_result(
     description: DescriptionUpdate,
     worker_groups: WorkerGroupsUpdate,
 ) -> CommandResult:
-    adapter = runtime.upstream.environments
-    resolved_environment = resolve_environment(environment, adapter=adapter)
-    current_environment = adapter.get(code=resolved_environment.code)
+    adapter = runtime.domain.environments
+    try:
+        resolved_environment = resolve_environment(environment, adapter=adapter)
+    except ApiResultError as error:
+        raise _translate_environment_api_error(
+            error,
+            operation="update",
+            name=environment,
+        ) from error
+    try:
+        current_environment = adapter.get(code=resolved_environment.code)
+    except ApiResultError as error:
+        raise _translate_environment_api_error(
+            error,
+            operation="get",
+            code=resolved_environment.code,
+            name=resolved_environment.name,
+        ) from error
 
     updated_description = (
         current_environment.description
@@ -365,12 +392,19 @@ def _update_environment_result(
 
 
 def _delete_environment_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[EnvironmentDomain],
     *,
     environment: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.environments
-    resolved_environment = resolve_environment(environment, adapter=adapter)
+    adapter = runtime.domain.environments
+    try:
+        resolved_environment = resolve_environment(environment, adapter=adapter)
+    except ApiResultError as error:
+        raise _translate_environment_api_error(
+            error,
+            operation="delete",
+            name=environment,
+        ) from error
     try:
         deleted = adapter.delete(code=resolved_environment.code)
     except ApiResultError as error:
@@ -455,7 +489,10 @@ def _translate_environment_api_error(
     name: str | None = None,
 ) -> Exception:
     result_code = error.result_code
-    details: dict[str, int | str] = {"operation": operation}
+    details: dict[str, int | str] = {
+        "resource": ENV_RESOURCE,
+        "operation": operation,
+    }
     if code is not None:
         details["code"] = code
     if name is not None:
@@ -468,6 +505,7 @@ def _translate_environment_api_error(
     if result_code in {
         ENVIRONMENT_NAME_EXISTS,
         DELETE_ENVIRONMENT_RELATED_TASK_EXISTS,
+        LEGACY_UPDATE_ENVIRONMENT_WORKER_GROUP_RELATION_ERROR,
         UPDATE_ENVIRONMENT_WORKER_GROUP_RELATION_ERROR,
     }:
         return ConflictError(error.message, details=details)
@@ -477,6 +515,7 @@ def _translate_environment_api_error(
     if result_code in {
         ENVIRONMENT_NAME_IS_NULL,
         ENVIRONMENT_CONFIG_IS_NULL,
+        LEGACY_ENVIRONMENT_WORKER_GROUPS_IS_INVALID,
         ENVIRONMENT_WORKER_GROUPS_IS_INVALID,
     }:
         return UserInputError(

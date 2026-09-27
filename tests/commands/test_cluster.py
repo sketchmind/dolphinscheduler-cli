@@ -5,12 +5,12 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.services import runtime as runtime_service
+from dsctl.services import cluster as cluster_service
+from dsctl.upstream.clusters import CLUSTER_DOMAIN, ClusterDomain
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeCluster,
     FakeClusterAdapter,
-    FakeProjectAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
 
@@ -32,14 +32,14 @@ def patch_cluster_service(
     monkeypatch: pytest.MonkeyPatch,
     fake_cluster_adapter: FakeClusterAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            cluster_adapter=fake_cluster_adapter,
-            profile=make_profile(),
-        ),
+    domain = ClusterDomain(clusters=fake_cluster_adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        cluster_service,
+        expected_domain=CLUSTER_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 
@@ -121,7 +121,7 @@ def test_cluster_create_command_requires_one_config_source() -> None:
     assert payload["action"] == "cluster.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Pass --config TEXT or --config-file PATH. Run "
+        "Pass --config CONFIG or --config-file CONFIG_FILE. Run "
         "`dsctl template cluster` for an example JSON config."
     )
 

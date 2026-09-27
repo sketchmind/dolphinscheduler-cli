@@ -6,10 +6,10 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.context import SessionContext
 from dsctl.errors import ApiResultError
 from dsctl.services import runtime as runtime_service
-from dsctl.services import workflow as workflow_service
+from dsctl.services.selection import ResourceDefaults
+from dsctl.services.workflow import _types as workflow_types
 from tests.fakes import (
     FakeDag,
     FakeDependentLineageTask,
@@ -27,9 +27,11 @@ from tests.fakes import (
     FakeWorkflowLineageDetail,
     FakeWorkflowLineageRelation,
     FakeWorkflowTaskRelation,
-    fake_service_runtime,
+    fake_read_service_runtime,
 )
+from tests.request_assertions import first_dry_run_request
 from tests.support import make_profile, normalize_cli_help
+from tests.workflow_domain_fakes import install_workflow_domain_runtime
 
 runner = CliRunner()
 
@@ -182,17 +184,33 @@ def patch_workflow_service(monkeypatch: pytest.MonkeyPatch) -> None:
             ],
         },
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
+
+    def read_runtime_factory(
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        return fake_read_service_runtime(
             project_adapter,
             profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
+            context=ResourceDefaults(project="etl-prod"),
             workflow_adapter=workflow_adapter,
-            workflow_lineage_adapter=workflow_lineage_adapter,
-            task_adapter=task_adapter,
-        ),
+        )
+
+    monkeypatch.setattr(
+        runtime_service,
+        "open_read_service_runtime",
+        read_runtime_factory,
+    )
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        workflow_lineage_adapter=workflow_lineage_adapter,
+        task_adapter=task_adapter,
+        context=ResourceDefaults(project="etl-prod"),
+        profile=make_profile(),
     )
 
 
@@ -203,7 +221,10 @@ def test_workflow_list_command_returns_filtered_workflows() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.list"
     assert payload["resolved"]["project"]["source"] == "context"
-    assert payload["data"] == {
+    page_without_coverage = {
+        key: value for key, value in payload["data"].items() if key != "coverage"
+    }
+    assert page_without_coverage == {
         "totalList": [
             {
                 "code": 101,
@@ -220,6 +241,8 @@ def test_workflow_list_command_returns_filtered_workflows() -> None:
         "currentPage": 1,
         "pageNo": 1,
     }
+    assert payload["data"]["coverage"]["scope"] == "requested_page"
+    assert payload["data"]["coverage"]["pages_read"] == 1
 
 
 def test_workflow_list_command_supports_standard_paging_controls() -> None:
@@ -236,12 +259,17 @@ def test_workflow_list_command_supports_standard_paging_controls() -> None:
     ]
     assert payload["data"]["total"] == 2
     assert payload["data"]["pageSize"] == 2
+    assert payload["data"]["coverage"]["scope"] == "initial_page_range"
+    assert payload["data"]["coverage"]["initial_total"] == 2
+    assert payload["data"]["coverage"]["initial_total_pages"] == 2
+    assert payload["data"]["coverage"]["pages_read"] == 2
+    assert payload["data"]["coverage"]["rows_read"] == 2
     assert payload["resolved"]["page_size"] == 1
     assert payload["resolved"]["all"] is True
 
 
 def test_workflow_export_command_emits_yaml() -> None:
-    result = runner.invoke(app, ["workflow", "export"])
+    result = runner.invoke(app, ["workflow", "export", "daily-sync"])
 
     assert result.exit_code == 0
     assert result.stdout.startswith("workflow:\n")
@@ -253,7 +281,7 @@ def test_workflow_list_help_points_to_project_discovery() -> None:
     result = runner.invoke(app, ["workflow", "list", "--help"])
 
     assert result.exit_code == 0
-    assert "project list" in result.stdout
+    assert "project list" in normalize_cli_help(result.stdout)
 
 
 def test_workflow_get_help_points_to_workflow_discovery() -> None:
@@ -262,10 +290,9 @@ def test_workflow_get_help_points_to_workflow_discovery() -> None:
     assert result.exit_code == 0
     help_text = normalize_cli_help(result.stdout)
     assert "workflow list" in help_text
-    assert "context only when project also comes from" in help_text
-    assert "otherwise pass WORKFLOW" in help_text
+    assert "Pass WORKFLOW explicitly" in help_text
     assert "--raw" not in help_text
-    assert "--format" not in help_text
+    assert "--format" in help_text
 
 
 def test_workflow_export_help_points_to_workflow_discovery() -> None:
@@ -288,12 +315,12 @@ def test_workflow_export_help_points_to_workflow_discovery() -> None:
 
 
 def test_workflow_digest_command_returns_compact_graph_summary() -> None:
-    result = runner.invoke(app, ["workflow", "digest"])
+    result = runner.invoke(app, ["workflow", "digest", "daily-sync"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.digest"
-    assert payload["resolved"]["workflow"]["source"] == "context"
+    assert payload["resolved"]["workflow"]["source"] == "flag"
     assert payload["data"]["taskCount"] == 2
     assert payload["data"]["taskTypeCounts"] == {"SHELL": 2}
     assert payload["data"]["rootTasks"] == [{"code": 201, "name": "extract"}]
@@ -314,13 +341,13 @@ def test_workflow_lineage_list_command_returns_project_graph() -> None:
     )
 
 
-def test_workflow_lineage_get_command_uses_workflow_context() -> None:
-    result = runner.invoke(app, ["workflow", "lineage", "get"])
+def test_workflow_lineage_get_command_uses_explicit_workflow() -> None:
+    result = runner.invoke(app, ["workflow", "lineage", "get", "daily-sync"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.lineage.get"
-    assert payload["resolved"]["workflow"]["source"] == "context"
+    assert payload["resolved"]["workflow"]["source"] == "flag"
     assert payload["data"]["workFlowRelationDetailList"][1]["sourceWorkFlowCode"] == (
         "101"
     )
@@ -329,7 +356,7 @@ def test_workflow_lineage_get_command_uses_workflow_context() -> None:
 def test_workflow_lineage_dependent_tasks_command_can_filter_by_task() -> None:
     result = runner.invoke(
         app,
-        ["workflow", "lineage", "dependent-tasks", "--task", "extract"],
+        ["workflow", "lineage", "dependent-tasks", "daily-sync", "--task", "extract"],
     )
 
     assert result.exit_code == 0
@@ -355,15 +382,8 @@ def test_workflow_lineage_dependent_tasks_help_points_to_task_discovery() -> Non
 
 
 def test_workflow_create_command_can_dry_run_yaml_spec(
-    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    codes = iter([7201, 7202, 7203])
-    monkeypatch.setattr(
-        workflow_service,
-        "preview_task_codes",
-        lambda count: [next(codes) for _ in range(count)],
-    )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
         """
@@ -387,19 +407,22 @@ tasks:
 
     result = runner.invoke(
         app,
-        ["workflow", "create", "--file", str(spec_path), "--dry-run"],
+        ["workflow", "create", "--file", str(spec_path), "--dry-run", "--columns", "*"],
     )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.create"
     assert payload["data"]["dry_run"] is True
-    assert payload["data"]["request"]["path"] == "/projects/7/workflow-definition"
-    assert "requests" not in payload["data"]
-    assert len(result.stdout.encode("utf-8")) < 4_608
+    assert (
+        first_dry_run_request(payload["data"])["path"]
+        == "/projects/7/workflow-definition"
+    )
+    assert "request" not in payload["data"]
     assert shlex.split(payload["next_actions"][0]["command"]) == [
         "dsctl",
-        "--compact",
+        "--format",
+        "json-compact",
         "--columns",
         "code,name,releaseState",
         "workflow",
@@ -411,16 +434,36 @@ tasks:
     ]
 
 
+@pytest.mark.parametrize("content", ["", "- not-a-workflow\n"])
+def test_workflow_create_command_translates_non_mapping_yaml_root(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(content, encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["workflow", "create", "--file", str(spec_path), "--dry-run"],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "workflow.create"
+    assert payload["error"] == {
+        "type": "user_input_error",
+        "message": "Workflow YAML root must be a mapping",
+        "details": {"file": str(spec_path)},
+        "suggestion": (
+            "Run `dsctl template workflow` to inspect the stable YAML surface, "
+            "then run `dsctl lint workflow PATH` before retrying create."
+        ),
+    }
+
+
 def test_workflow_create_command_can_dry_run_schedule_plan(
-    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    codes = iter([7202])
-    monkeypatch.setattr(
-        workflow_service,
-        "preview_task_codes",
-        lambda count: [next(codes) for _ in range(count)],
-    )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
         """
@@ -444,7 +487,7 @@ schedule:
 
     result = runner.invoke(
         app,
-        ["workflow", "create", "--file", str(spec_path), "--dry-run"],
+        ["workflow", "create", "--file", str(spec_path), "--dry-run", "--columns", "*"],
     )
 
     assert result.exit_code == 0
@@ -482,16 +525,13 @@ def test_workflow_create_command_requires_confirmation_for_high_frequency_schedu
             "2024-01-01 00:20:00",
         ],
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-            schedule_adapter=schedule_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        schedule_adapter=schedule_adapter,
+        profile=make_profile(),
     )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
@@ -579,23 +619,20 @@ def test_workflow_create_command_suggests_review_for_remote_validation_error(
         dags={},
         create_errors_by_name={
             "nightly-sync": ApiResultError(
-                result_code=workflow_service.CHECK_WORKFLOW_TASK_RELATION_ERROR,
+                result_code=workflow_types.CHECK_WORKFLOW_TASK_RELATION_ERROR,
                 result_message="workflow task relation invalid",
             )
         },
     )
     task_adapter = FakeTaskAdapter(workflow_tasks={})
     schedule_adapter = FakeScheduleAdapter(schedules=[])
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-            schedule_adapter=schedule_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        schedule_adapter=schedule_adapter,
+        profile=make_profile(),
     )
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
@@ -620,19 +657,19 @@ tasks:
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "workflow task relation invalid"
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl lint workflow FILE` and `dsctl workflow create --file FILE "
-        "--dry-run` to inspect the workflow spec and compiled DS-native payload "
-        "before retrying."
+        "Lint the same workflow file and repeat the create command with --dry-run "
+        "to inspect the workflow spec and compiled DS-native payload before "
+        "retrying."
     )
 
 
 def test_workflow_run_command_returns_created_instance_ids() -> None:
-    result = runner.invoke(app, ["workflow", "run"])
+    result = runner.invoke(app, ["workflow", "run", "daily-sync"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.run"
-    assert payload["resolved"]["workflow"]["source"] == "context"
+    assert payload["resolved"]["workflow"]["source"] == "flag"
     assert payload["resolved"]["worker_group"]["source"] == "default"
     assert payload["resolved"]["tenant"]["source"] == "default"
     assert payload["data"]["workflowInstanceIds"] == [901]
@@ -652,18 +689,18 @@ def test_workflow_run_help_points_to_runtime_selector_discovery() -> None:
 
 
 def test_workflow_run_task_command_returns_created_instance_ids_and_warning() -> None:
-    result = runner.invoke(app, ["workflow", "run-task", "--task", "extract"])
+    result = runner.invoke(
+        app, ["workflow", "run-task", "daily-sync", "--task", "extract"]
+    )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.run-task"
-    assert payload["resolved"]["workflow"]["source"] == "context"
+    assert payload["resolved"]["workflow"]["source"] == "flag"
     assert payload["resolved"]["task"]["code"] == 201
     assert payload["resolved"]["scope"] == "self"
     assert payload["data"]["workflowInstanceIds"] == [901]
-    assert payload["warning_details"][0]["code"] == (
-        "workflow_run_task_dependent_context"
-    )
+    assert payload["warnings"][0]["code"] == ("workflow_run_task_dependent_context")
 
 
 def test_workflow_run_task_help_points_to_task_discovery() -> None:
@@ -680,7 +717,10 @@ def test_workflow_run_command_can_dry_run_runtime_options() -> None:
         [
             "workflow",
             "run",
+            "daily-sync",
             "--dry-run",
+            "--columns",
+            "*",
             "--execution-dry-run",
             "--param",
             "bizdate=20260415",
@@ -691,11 +731,12 @@ def test_workflow_run_command_can_dry_run_runtime_options() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.run"
     assert payload["data"]["dry_run"] is True
-    form = payload["data"]["request"]["form"]
+    form = first_dry_run_request(payload["data"])["form"]
+    assert isinstance(form, dict)
     assert form["dryRun"] == 1
     assert form["startParams"] == '{"bizdate":"20260415"}'
-    assert [item["code"] for item in payload["warning_details"]] == [
-        "dry_run_no_request_sent",
+    assert [item["code"] for item in payload["warnings"]] == [
+        "dry_run_no_mutation_sent",
         "workflow_execution_dry_run",
     ]
 
@@ -706,6 +747,7 @@ def test_workflow_backfill_command_can_dry_run_task_scope() -> None:
         [
             "workflow",
             "backfill",
+            "daily-sync",
             "--date",
             "2026-04-01 00:00:00",
             "--task",
@@ -713,6 +755,8 @@ def test_workflow_backfill_command_can_dry_run_task_scope() -> None:
             "--scope",
             "self",
             "--dry-run",
+            "--columns",
+            "*",
         ],
     )
 
@@ -721,7 +765,8 @@ def test_workflow_backfill_command_can_dry_run_task_scope() -> None:
     assert payload["action"] == "workflow.backfill"
     assert payload["data"]["dry_run"] is True
     assert payload["resolved"]["scope"] == "self"
-    form = payload["data"]["request"]["form"]
+    form = first_dry_run_request(payload["data"])["form"]
+    assert isinstance(form, dict)
     assert form["execType"] == "COMPLEMENT_DATA"
     assert form["startNodeList"] == "201"
     assert form["taskDependType"] == "TASK_ONLY"
@@ -739,10 +784,30 @@ def test_workflow_backfill_help_points_to_task_and_runtime_discovery() -> None:
     assert "environment" in result.stdout
 
 
-def test_workflow_backfill_command_reports_missing_time_selection() -> None:
-    result = runner.invoke(app, ["workflow", "backfill"])
+def test_workflow_backfill_command_reports_missing_time_before_version_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preflight_called = False
+
+    def unexpected_preflight(*args: object, **kwargs: object) -> None:
+        nonlocal preflight_called
+        del args, kwargs
+        preflight_called = True
+        message = "version preflight must not run for invalid local input"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(
+        "dsctl.app.preflight_selected_action",
+        unexpected_preflight,
+    )
+
+    result = runner.invoke(
+        app,
+        ["workflow", "backfill", "daily-sync", "--start", "2026-04-01 00:00:00"],
+    )
 
     assert result.exit_code == 1
+    assert preflight_called is False
     payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.backfill"
     assert payload["error"]["type"] == "user_input_error"
@@ -754,7 +819,7 @@ def test_workflow_backfill_command_reports_missing_time_selection() -> None:
 def test_workflow_run_task_command_reports_scope_choices() -> None:
     result = runner.invoke(
         app,
-        ["workflow", "run-task", "--task", "extract", "--scope", "down"],
+        ["workflow", "run-task", "daily-sync", "--task", "extract", "--scope", "down"],
     )
 
     assert result.exit_code == 1
@@ -767,7 +832,7 @@ def test_workflow_run_task_command_reports_scope_choices() -> None:
 
 
 def test_workflow_delete_command_requires_force() -> None:
-    result = runner.invoke(app, ["workflow", "delete"])
+    result = runner.invoke(app, ["workflow", "delete", "daily-sync"])
 
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
@@ -778,12 +843,12 @@ def test_workflow_delete_command_requires_force() -> None:
 
 
 def test_workflow_delete_command_returns_deleted_payload() -> None:
-    result = runner.invoke(app, ["workflow", "delete", "--force"])
+    result = runner.invoke(app, ["workflow", "delete", "daily-sync", "--force"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.delete"
-    assert payload["resolved"]["workflow"]["source"] == "context"
+    assert payload["resolved"]["workflow"]["source"] == "flag"
     assert payload["data"]["deleted"] is True
     assert payload["data"]["workflow"]["name"] == "daily-sync"
 
@@ -817,19 +882,16 @@ def test_workflow_delete_command_suggests_offline_before_delete(
         },
     )
     task_adapter = FakeTaskAdapter(workflow_tasks={101: []})
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        context=ResourceDefaults(project="etl-prod"),
+        profile=make_profile(),
     )
 
-    result = runner.invoke(app, ["workflow", "delete", "--force"])
+    result = runner.invoke(app, ["workflow", "delete", "daily-sync", "--force"])
 
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
@@ -870,19 +932,16 @@ def test_workflow_delete_command_suggests_schedule_cleanup_for_online_schedule(
         },
     )
     task_adapter = FakeTaskAdapter(workflow_tasks={101: []})
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        context=ResourceDefaults(project="etl-prod"),
+        profile=make_profile(),
     )
 
-    result = runner.invoke(app, ["workflow", "delete", "--force"])
+    result = runner.invoke(app, ["workflow", "delete", "daily-sync", "--force"])
 
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
@@ -926,19 +985,16 @@ def test_workflow_delete_command_suggests_instance_inspection_for_running_instan
         },
     )
     task_adapter = FakeTaskAdapter(workflow_tasks={101: []})
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        context=ResourceDefaults(project="etl-prod"),
+        profile=make_profile(),
     )
 
-    result = runner.invoke(app, ["workflow", "delete", "--force"])
+    result = runner.invoke(app, ["workflow", "delete", "daily-sync", "--force"])
 
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
@@ -982,19 +1038,16 @@ def test_workflow_delete_command_suggests_lineage_for_referenced_workflow(
         },
     )
     task_adapter = FakeTaskAdapter(workflow_tasks={101: []})
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        context=ResourceDefaults(project="etl-prod"),
+        profile=make_profile(),
     )
 
-    result = runner.invoke(app, ["workflow", "delete", "--force"])
+    result = runner.invoke(app, ["workflow", "delete", "daily-sync", "--force"])
 
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
@@ -1052,29 +1105,26 @@ def test_workflow_online_command_returns_refreshed_payload(
         },
     )
     task_adapter = FakeTaskAdapter(workflow_tasks={101: tasks})
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        context=ResourceDefaults(project="etl-prod"),
+        profile=make_profile(),
     )
 
-    result = runner.invoke(app, ["workflow", "online"])
+    result = runner.invoke(app, ["workflow", "online", "daily-sync"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.online"
     assert payload["data"]["releaseState"] == "ONLINE"
-    assert payload["warnings"] == [
+    assert [item["message"] for item in payload.get("warnings", [])] == [
         "workflow brought online; any attached schedule remains offline until "
         "`schedule online` is requested"
     ]
-    assert payload["warning_details"] == [
+    assert payload["warnings"] == [
         {
             "code": "workflow_online_leaves_schedule_offline",
             "message": (
@@ -1120,43 +1170,75 @@ def test_workflow_online_command_suggests_bringing_subworkflows_online(
         },
     )
     task_adapter = FakeTaskAdapter(workflow_tasks={101: []})
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        context=ResourceDefaults(project="etl-prod"),
+        profile=make_profile(),
     )
 
-    result = runner.invoke(app, ["workflow", "online"])
+    result = runner.invoke(app, ["workflow", "online", "daily-sync"])
 
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
     assert payload["action"] == "workflow.online"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl workflow lineage dependent-tasks WORKFLOW --project PROJECT` "
+        "Run `dsctl workflow lineage dependent-tasks 101 --project 7` "
         "to inspect sub-workflow references, bring those sub-workflows online, "
-        "then retry `dsctl workflow online`."
+        "then retry the original workflow online command."
     )
 
 
 def test_workflow_offline_command_returns_refreshed_payload_and_warning() -> None:
-    result = runner.invoke(app, ["workflow", "offline"])
+    result = runner.invoke(app, ["workflow", "offline", "daily-sync"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.offline"
     assert payload["data"]["releaseState"] == "OFFLINE"
     assert payload["data"]["scheduleReleaseState"] == "OFFLINE"
-    assert payload["warnings"] == [
+    assert [item["message"] for item in payload.get("warnings", [])] == [
         "workflow brought offline; any attached schedule is also taken offline"
     ]
-    assert payload["warning_details"] == [
+
+
+def test_workflow_offline_column_error_preserves_completed_result() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "workflow",
+            "offline",
+            "daily-sync",
+            "--format",
+            "json-compact",
+            "--columns",
+            "nonexistent_display_field",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    payload = json.loads(result.stderr)
+    assert payload["data"]["code"] == 101
+    assert payload["data"]["releaseState"] == "OFFLINE"
+    assert payload["resolved"]["workflow"] == {
+        "code": 101,
+        "name": "daily-sync",
+        "source": "flag",
+        "version": 1,
+    }
+    details = payload["error"]["details"]
+    assert details["phase"] == "output_render"
+    assert details["result_available"] is True
+    assert details["operation_returned_success"] is True
+    assert "mutation_applied" not in details
+    suggestion = payload["error"]["suggestion"]
+    assert "Do not repeat the command" in suggestion
+    assert "retry" not in suggestion.lower()
+    assert payload["warnings"] == [
         {
             "code": "workflow_offline_also_offlines_schedule",
             "message": (
@@ -1187,14 +1269,28 @@ patch:
 
     result = runner.invoke(
         app,
-        ["workflow", "edit", "--patch", str(patch_path), "--dry-run"],
+        [
+            "workflow",
+            "edit",
+            "daily-sync",
+            "--patch",
+            str(patch_path),
+            "--dry-run",
+            "--columns",
+            "*",
+        ],
     )
 
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["ok"] is False
     assert payload["action"] == "workflow.edit"
+    assert payload["error"]["type"] == "invalid_state"
     assert payload["data"]["dry_run"] is True
-    assert payload["data"]["request"]["path"] == "/projects/7/workflow-definition/101"
+    assert (
+        first_dry_run_request(payload["data"])["path"]
+        == "/projects/7/workflow-definition/101"
+    )
     assert payload["data"]["diff"]["renamed_tasks"] == [
         {
             "from_name": "extract",
@@ -1256,24 +1352,36 @@ patch:
         [
             "workflow",
             "edit",
+            "daily-sync",
             "--patch",
             str(patch_path),
             "--dry-run",
             "--columns",
+            "*",
+            "--columns",
             "diff,no_change,workflow_state_constraints,schedule_impacts",
-            "--compact",
+            "--format",
+            "json-compact",
         ],
     )
 
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
-    assert set(payload["data"]) == {
-        "diff",
-        "no_change",
-        "workflow_state_constraints",
-        "schedule_impacts",
-    }
-    assert "request" not in payload["data"]
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["ok"] is False
+    assert payload["error"]["type"] == "invalid_state"
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["workflow_state_constraint_details"][0]["blocking"] is True
+    assert payload["data"]["diff"]["workflow_changes"] == [
+        {
+            "field": "description",
+            "before": "Daily ETL workflow",
+            "after": "Daily ETL workflow v2",
+        }
+    ]
+    assert payload["data"]["execution_order"] == [
+        {"method": "PUT", "path": "/projects/7/workflow-definition/101"}
+    ]
+    assert "--columns requests" in payload["data"]["request_details"]
 
 
 def test_workflow_edit_command_can_dry_run_full_file_diff(tmp_path: Path) -> None:
@@ -1297,21 +1405,34 @@ tasks:
 
     result = runner.invoke(
         app,
-        ["workflow", "edit", "daily-sync", "--file", str(workflow_path), "--dry-run"],
+        [
+            "workflow",
+            "edit",
+            "daily-sync",
+            "--file",
+            str(workflow_path),
+            "--dry-run",
+            "--columns",
+            "*",
+        ],
     )
 
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["ok"] is False
     assert payload["action"] == "workflow.edit"
+    assert payload["error"]["type"] == "invalid_state"
     assert payload["resolved"]["input_mode"] == "file"
     assert payload["resolved"]["file"] == str(workflow_path.resolve())
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["diff"]["deleted_tasks"] == ["load"]
-    assert payload["data"]["diff"]["updated_tasks"] == []
+    assert payload["data"]["diff"]["task_changes"] == []
 
 
 def test_workflow_edit_command_requires_one_edit_input() -> None:
-    result = runner.invoke(app, ["workflow", "edit", "daily-sync", "--dry-run"])
+    result = runner.invoke(
+        app, ["workflow", "edit", "daily-sync", "--dry-run", "--columns", "*"]
+    )
 
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
@@ -1334,7 +1455,7 @@ patch:
 
     result = runner.invoke(
         app,
-        ["workflow", "edit", "--patch", str(patch_path)],
+        ["workflow", "edit", "daily-sync", "--patch", str(patch_path)],
     )
 
     assert result.exit_code == 1
@@ -1364,7 +1485,7 @@ def test_workflow_edit_command_rejects_invalid_patch_yaml_with_dry_run_suggestio
 
     result = runner.invoke(
         app,
-        ["workflow", "edit", "--patch", str(patch_path)],
+        ["workflow", "edit", "daily-sync", "--patch", str(patch_path)],
     )
 
     assert result.exit_code == 1
@@ -1439,24 +1560,21 @@ def test_workflow_edit_command_suggests_dry_run_for_remote_validation_error(
         },
         update_errors_by_code={
             101: ApiResultError(
-                result_code=workflow_service.CHECK_WORKFLOW_TASK_RELATION_ERROR,
+                result_code=workflow_types.CHECK_WORKFLOW_TASK_RELATION_ERROR,
                 result_message="workflow task relation invalid",
             )
         },
     )
     task_adapter = FakeTaskAdapter(workflow_tasks={101: tasks})
     schedule_adapter = FakeScheduleAdapter(schedules=[])
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-            schedule_adapter=schedule_adapter,
-        ),
+    install_workflow_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        workflow_adapter=workflow_adapter,
+        task_adapter=task_adapter,
+        schedule_adapter=schedule_adapter,
+        context=ResourceDefaults(project="etl-prod"),
+        profile=make_profile(),
     )
     patch_path = tmp_path / "workflow.patch.yaml"
     patch_path.write_text(
@@ -1471,7 +1589,7 @@ patch:
 
     result = runner.invoke(
         app,
-        ["workflow", "edit", "--patch", str(patch_path)],
+        ["workflow", "edit", "daily-sync", "--patch", str(patch_path)],
     )
 
     assert result.exit_code == 1
@@ -1480,8 +1598,8 @@ patch:
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["message"] == "workflow task relation invalid"
     assert payload["error"]["suggestion"] == (
-        "Retry with `dsctl workflow edit --dry-run` to inspect the compiled diff "
-        "and DS-native payload before sending it again."
+        "Retry the original workflow edit command with --dry-run to inspect the "
+        "compiled diff and DS-native payload before sending it again."
     )
 
 
@@ -1504,7 +1622,16 @@ patch:
 
     result = runner.invoke(
         app,
-        ["workflow", "edit", "--patch", str(patch_path), "--dry-run"],
+        [
+            "workflow",
+            "edit",
+            "daily-sync",
+            "--patch",
+            str(patch_path),
+            "--dry-run",
+            "--columns",
+            "*",
+        ],
     )
 
     assert result.exit_code == 1
@@ -1537,7 +1664,16 @@ patch:
 
     result = runner.invoke(
         app,
-        ["workflow", "edit", "--patch", str(patch_path), "--dry-run"],
+        [
+            "workflow",
+            "edit",
+            "daily-sync",
+            "--patch",
+            str(patch_path),
+            "--dry-run",
+            "--columns",
+            "*",
+        ],
     )
 
     assert result.exit_code == 1
@@ -1569,18 +1705,18 @@ patch:
 
     result = runner.invoke(
         app,
-        ["workflow", "edit", "--patch", str(patch_path)],
+        ["workflow", "edit", "daily-sync", "--patch", str(patch_path)],
     )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow.edit"
-    assert payload["warnings"] == [
+    assert [item["message"] for item in payload.get("warnings", [])] == [
         "patch produced no persistent workflow change; no update request was sent",
         "workflow edit does not modify the attached schedule; use "
         "`schedule update|online|offline` separately",
     ]
-    assert payload["warning_details"] == [
+    assert payload["warnings"] == [
         {
             "code": "workflow_edit_no_persistent_change",
             "message": (
@@ -1600,3 +1736,13 @@ patch:
             "current_schedule_release_state": "ONLINE",
         },
     ]
+
+
+@pytest.mark.parametrize("route", [("get",), ("run",), ("lineage", "get")])
+def test_workflow_identity_is_a_required_parser_argument(
+    route: tuple[str, ...],
+) -> None:
+    result = runner.invoke(app, ["workflow", *route])
+
+    assert result.exit_code == 2
+    assert "Missing argument 'WORKFLOW'" in result.stderr

@@ -1,19 +1,30 @@
-from collections.abc import Sequence
-
 import pytest
 from tests.fakes import (
     FakeProject,
     FakeProjectAdapter,
     FakeProjectWorkerGroup,
     FakeProjectWorkerGroupAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
+    fake_project_definitions,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_sequence as _sequence
 
-from dsctl.context import SessionContext
-from dsctl.errors import ApiResultError, ConflictError, NotFoundError, UserInputError
+from dsctl.errors import (
+    ApiResultError,
+    ConflictError,
+    NotFoundError,
+    PermissionDeniedError,
+    UnsupportedFeatureError,
+    UserInputError,
+)
 from dsctl.services import project_worker_group as project_worker_group_service
 from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
+from dsctl.upstream.project_worker_groups import (
+    PROJECT_WORKER_GROUP_DOMAIN,
+    ProjectWorkerGroupDomain,
+)
 
 
 def _install_project_worker_group_service_fakes(
@@ -21,24 +32,30 @@ def _install_project_worker_group_service_fakes(
     *,
     project_adapter: FakeProjectAdapter,
     project_worker_group_adapter: FakeProjectWorkerGroupAdapter,
-    context: SessionContext | None = None,
+    context: ResourceDefaults | None = None,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            project_worker_group_adapter=project_worker_group_adapter,
+    def bound_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is PROJECT_WORKER_GROUP_DOMAIN
+        return fake_bound_domain_service_runtime(
+            ProjectWorkerGroupDomain(
+                definitions=fake_project_definitions(project_adapter),
+                worker_groups=project_worker_group_adapter,
+            ),
             profile=make_profile(),
             context=context,
-        ),
+        )
+
+    monkeypatch.setattr(
+        runtime_service,
+        "open_bound_domain_service_runtime",
+        bound_runtime_factory,
     )
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 @pytest.fixture
@@ -80,7 +97,7 @@ def test_list_project_worker_groups_result_uses_selected_project(
         monkeypatch,
         project_adapter=fake_project_adapter,
         project_worker_group_adapter=fake_project_worker_group_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = project_worker_group_service.list_project_worker_groups_result()
@@ -173,7 +190,10 @@ def test_set_project_worker_groups_result_rejects_empty_assignment_set(
         )
 
     assert exc_info.value.suggestion == (
-        "Use `project-worker-group clear --force` to remove all explicit assignments."
+        "Supply at least one --worker-group. To remove all explicit "
+        "assignments, check `dsctl capabilities --action "
+        "project-worker-group.clear` before using "
+        "`dsctl project-worker-group clear --force`."
     )
 
 
@@ -292,6 +312,56 @@ def test_set_project_worker_groups_result_translates_used_group_conflict(
         )
 
     assert exc_info.value.details["used_worker_groups"] == ["default", "gpu"]
+    assert exc_info.value.suggestion == (
+        "Update the worker-group selections in the project's tasks and "
+        "schedules before removing those assignments."
+    )
+
+
+@pytest.mark.parametrize(
+    ("result_code", "error_type", "message", "suggestion_fragment"),
+    [
+        (30001, PermissionDeniedError, "administrator account", "administrator"),
+        (1402003, UnsupportedFeatureError, "cannot clear all", "nonempty assignment"),
+        (1402002, ConflictError, "rejected", "list --project 7"),
+    ],
+)
+def test_clear_project_worker_groups_result_translates_upstream_constraints(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    result_code: int,
+    error_type: type[Exception],
+    message: str,
+    suggestion_fragment: str,
+) -> None:
+    upstream_error = ApiResultError(
+        result_code=result_code,
+        result_message="upstream assignment rejected",
+    )
+    adapter = FakeProjectWorkerGroupAdapter(
+        project_worker_groups=[],
+        set_errors_by_project={7: upstream_error},
+    )
+    _install_project_worker_group_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        project_worker_group_adapter=adapter,
+    )
+
+    with pytest.raises(error_type, match=message) as exc_info:
+        project_worker_group_service.clear_project_worker_groups_result(
+            project="etl-prod", force=True
+        )
+
+    error = exc_info.value
+    assert isinstance(
+        error, (PermissionDeniedError, UnsupportedFeatureError, ConflictError)
+    )
+    assert error.details["project_code"] == 7
+    assert error.details["worker_groups"] == []
+    assert error.suggestion is not None
+    assert suggestion_fragment in error.suggestion
+    assert error.__cause__ is upstream_error
 
 
 def test_set_project_worker_groups_result_translates_missing_worker_group(

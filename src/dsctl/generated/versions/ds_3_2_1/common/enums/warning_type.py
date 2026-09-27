@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+from enum import Enum, IntEnum, StrEnum
+
+class WarningType(StrEnum):
+    """Types for whether to send warning when process ends;"""
+    code: int
+    descp: str
+
+    def __new__(cls, wire_value: str, code: int, descp: str) -> WarningType:
+        obj = str.__new__(cls, wire_value)
+        obj._value_ = wire_value
+        obj.code = code
+        obj.descp = descp
+        return obj
+    # 0 do not send warning; 1 send if process success; 2 send if process failed; 3 send
+    # if process ends, whatever the result; 4 send global events;
+    NONE = ('NONE', 0, 'none')
+    SUCCESS = ('SUCCESS', 1, 'success')
+    FAILURE = ('FAILURE', 2, 'failure')
+    ALL = ('ALL', 3, 'all')
+    GLOBAL = ('GLOBAL', 4, 'global')
+
+    @classmethod
+    def from_code(cls, code: int) -> "WarningType":
+        for member in cls:
+            if member.code == code:
+                return member
+        raise ValueError(f"Unknown WarningType code: {code}")
+
+__all__ = ["WarningType"]

@@ -4,14 +4,20 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.context import SessionContext
+from dsctl.commands import project_worker_group as project_worker_group_commands
 from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
+from dsctl.upstream.project_worker_groups import (
+    PROJECT_WORKER_GROUP_DOMAIN,
+    ProjectWorkerGroupDomain,
+)
 from tests.fakes import (
     FakeProject,
     FakeProjectAdapter,
     FakeProjectWorkerGroup,
     FakeProjectWorkerGroupAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
+    fake_project_definitions,
 )
 from tests.support import make_profile
 
@@ -42,15 +48,29 @@ def patch_project_worker_group_service(
     fake_project_adapter: FakeProjectAdapter,
     fake_project_worker_group_adapter: FakeProjectWorkerGroupAdapter,
 ) -> None:
+    context = ResourceDefaults(project="etl-prod")
+
+    def bound_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is PROJECT_WORKER_GROUP_DOMAIN
+        return fake_bound_domain_service_runtime(
+            ProjectWorkerGroupDomain(
+                definitions=fake_project_definitions(fake_project_adapter),
+                worker_groups=fake_project_worker_group_adapter,
+            ),
+            profile=make_profile(),
+            context=context,
+        )
+
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            fake_project_adapter,
-            project_worker_group_adapter=fake_project_worker_group_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod"),
-        ),
+        "open_bound_domain_service_runtime",
+        bound_runtime_factory,
     )
 
 
@@ -108,3 +128,35 @@ def test_project_worker_group_clear_command_requires_force() -> None:
     assert payload["action"] == "project-worker-group.clear"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == "Retry the same command with --force."
+
+
+def test_322_clear_is_rejected_by_cli_preflight_before_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DS_VERSION", "3.2.2")
+    service_called = False
+
+    def fail_if_called(**kwargs: object) -> None:
+        del kwargs
+        nonlocal service_called
+        service_called = True
+        message = "limited action service must not run"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(
+        project_worker_group_commands,
+        "clear_project_worker_groups_result",
+        fail_if_called,
+    )
+
+    result = runner.invoke(app, ["project-worker-group", "clear", "--force"])
+
+    assert result.exit_code == 1
+    assert service_called is False
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "project-worker-group.clear"
+    error = payload["error"]
+    assert error["type"] == "unsupported_feature"
+    assert error["details"]["selected_version"] == "3.2.2"
+    assert error["details"]["availability"] == "limited"
+    assert "1402003" in error["details"]["constraint"]

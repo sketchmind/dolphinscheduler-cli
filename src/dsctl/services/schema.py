@@ -1,136 +1,62 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
-from typing import TYPE_CHECKING, NoReturn, TypeAlias
+from typing import TYPE_CHECKING, NoReturn, TypeAlias, cast
 
 from dsctl import __version__
 from dsctl.cli_surface import (
-    ACCESS_TOKEN_RESOURCE,
-    ALERT_GROUP_RESOURCE,
-    ALERT_PLUGIN_RESOURCE,
-    AUDIT_RESOURCE,
-    CLUSTER_RESOURCE,
     COMMAND_GROUPS,
-    DATASOURCE_RESOURCE,
-    ENUM_RESOURCE,
-    ENV_RESOURCE,
-    LINT_RESOURCE,
-    MONITOR_RESOURCE,
-    NAMESPACE_RESOURCE,
-    PROJECT_PARAMETER_RESOURCE,
-    PROJECT_PREFERENCE_RESOURCE,
-    PROJECT_RESOURCE,
-    PROJECT_WORKER_GROUP_RESOURCE,
-    QUEUE_RESOURCE,
-    RESOURCE_RESOURCE,
-    SCHEDULE_RESOURCE,
-    TASK_GROUP_RESOURCE,
-    TASK_INSTANCE_RESOURCE,
-    TASK_RESOURCE,
-    TASK_TYPE_RESOURCE,
     TEMPLATE_RESOURCE,
-    TENANT_RESOURCE,
     TOP_LEVEL_COMMANDS,
-    USE_RESOURCE,
-    USER_RESOURCE,
-    WORKER_GROUP_RESOURCE,
-    WORKFLOW_INSTANCE_RESOURCE,
-    WORKFLOW_RESOURCE,
     stable_leaf_actions,
 )
 from dsctl.command_contract import COMMAND_CATALOG
-from dsctl.config import load_selected_ds_version
+from dsctl.command_references import project_command_references
 from dsctl.data_shapes import (
     data_shape_schema_for_action,
     data_shapes_by_view_schema_for_action,
 )
-from dsctl.errors import UserInputError
+from dsctl.errors import ConfigError, UserInputError
 from dsctl.output import CommandResult, require_json_object, require_json_value
 from dsctl.schema_contract_rows import command_contract_rows
+from dsctl.services._discovery_commands import (
+    render_discovery_command,
+    render_discovery_reference,
+)
 from dsctl.services._schema_constraints import constraints_for_action
-from dsctl.services._schema_groups_context import (
-    project_group as _project_group,
-)
-from dsctl.services._schema_groups_context import (
-    project_parameter_group as _project_parameter_group,
-)
-from dsctl.services._schema_groups_context import (
-    project_preference_group as _project_preference_group,
-)
-from dsctl.services._schema_groups_context import (
-    project_worker_group_group as _project_worker_group_group,
-)
-from dsctl.services._schema_groups_context import use_group as _use_group
-from dsctl.services._schema_groups_design import schedule_group as _schedule_group
-from dsctl.services._schema_groups_design import task_group as _task_group
-from dsctl.services._schema_groups_design import (
-    template_group as _template_group,
-)
-from dsctl.services._schema_groups_design import (
-    workflow_group as _workflow_group,
-)
-from dsctl.services._schema_groups_governance import (
-    access_token_group as _access_token_group,
-)
-from dsctl.services._schema_groups_governance import (
-    alert_group_group as _alert_group_group,
-)
-from dsctl.services._schema_groups_governance import (
-    alert_plugin_group as _alert_plugin_group,
-)
-from dsctl.services._schema_groups_governance import cluster_group as _cluster_group
-from dsctl.services._schema_groups_governance import (
-    datasource_group as _datasource_group,
-)
-from dsctl.services._schema_groups_governance import env_group as _env_group
-from dsctl.services._schema_groups_governance import (
-    namespace_group as _namespace_group,
-)
-from dsctl.services._schema_groups_governance import queue_group as _queue_group
-from dsctl.services._schema_groups_governance import resource_group as _resource_group
-from dsctl.services._schema_groups_governance import (
-    task_group_group as _task_group_group,
-)
-from dsctl.services._schema_groups_governance import tenant_group as _tenant_group
-from dsctl.services._schema_groups_governance import user_group as _user_group
-from dsctl.services._schema_groups_governance import (
-    worker_group_group as _worker_group_group,
-)
-from dsctl.services._schema_groups_meta import enum_group as _enum_group
-from dsctl.services._schema_groups_meta import lint_group as _lint_group
-from dsctl.services._schema_groups_meta import task_type_group as _task_type_group
-from dsctl.services._schema_groups_runtime import (
-    audit_group as _audit_group,
-)
-from dsctl.services._schema_groups_runtime import (
-    monitor_group as _monitor_group,
-)
-from dsctl.services._schema_groups_runtime import (
-    task_instance_group as _task_instance_group,
-)
-from dsctl.services._schema_groups_runtime import (
-    workflow_instance_group as _workflow_instance_group,
+from dsctl.services._schema_groups import (
+    GROUP_SUMMARIES,
+    NESTED_GROUP_SUMMARIES,
+    build_schema_group,
 )
 from dsctl.services._schema_primitives import (
     bounded_global_option_from_contract,
+    catalog_group,
     full_global_option_from_contract,
 )
 from dsctl.services._schema_primitives import command as _command
-from dsctl.services._schema_primitives import option as _option
+from dsctl.services._schema_version_projection import (
+    project_command_for_version,
+    project_data_shape_for_version,
+)
 from dsctl.services._surface_metadata import (
-    TOP_LEVEL_COMMAND_SUMMARIES,
     confirmation_schema_data,
     error_schema_data,
     output_schema_data,
     selection_schema_data,
 )
 from dsctl.services.capabilities import (
-    CAPABILITIES_SECTION_CHOICES,
+    action_capability_metadata,
+    compatible_read_actions,
     schema_capabilities_data,
+    unresolved_action_capability,
+    unresolved_ds_data,
 )
+from dsctl.services.task_authoring_catalog import get_task_authoring_catalog
 from dsctl.services.template import supported_task_template_types
+from dsctl.services.version_resolution import CompatibilityResolution, resolve_target
 from dsctl.upstream import (
     SUPPORTED_VERSIONS,
     get_version_support,
@@ -140,11 +66,11 @@ from dsctl.upstream import (
 if TYPE_CHECKING:
     from dsctl.support.yaml_io import JsonObject
 
-SchemaGroupBuilder = Callable[[list[str]], dict[str, object]]
 SCOPED_SCHEMA_HEADER_KEYS = (
     "schema_version",
     "view",
     "cli",
+    "ds",
     "supported_ds_versions",
     "ds_versions",
     "global_options",
@@ -153,7 +79,7 @@ SCOPED_SCHEMA_HEADER_KEYS = (
     "errors",
     "confirmation",
 )
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,8 +157,25 @@ def get_schema_result(
         list_commands=list_commands,
         full=full,
     )
-    selected_ds_version = load_selected_ds_version(env_file)
-    return _discover_schema(query, ds_version=selected_ds_version)
+    scope = (
+        query.scope.scope if isinstance(query.scope, SchemaFullScope) else query.scope
+    )
+    if isinstance(scope, SchemaGroupScope) and scope.name not in COMMAND_GROUPS:
+        _raise_unknown_schema_group(scope.name, env_file=env_file)
+    if (
+        isinstance(scope, SchemaActionScope)
+        and scope.action not in stable_leaf_actions()
+    ):
+        _raise_unknown_schema_action(scope.action, env_file=env_file)
+    try:
+        resolution = resolve_target(env_file, mode="local")
+    except ConfigError as error:
+        if error.details.get("reason") != "version_not_resolved":
+            raise
+        resolution = None
+    if resolution is None or isinstance(resolution, CompatibilityResolution):
+        return _discover_unresolved_schema(query, resolution, env_file=env_file)
+    return _discover_schema(query, ds_version=resolution.version, env_file=env_file)
 
 
 def _schema_query(
@@ -285,37 +228,45 @@ def _schema_query(
     return SchemaQuery(SchemaFullScope(index_scope) if full else index_scope)
 
 
-def _discover_schema(query: SchemaQuery, *, ds_version: str) -> CommandResult:
+def _discover_schema(
+    query: SchemaQuery, *, ds_version: str, env_file: str | None = None
+) -> CommandResult:
     """Build only the representation required by one validated query."""
     scope = query.scope
     if isinstance(scope, SchemaFullScope):
-        return _full_schema_result(scope.scope, ds_version=ds_version)
+        return _full_schema_result(
+            scope.scope, ds_version=ds_version, env_file=env_file
+        )
     if isinstance(scope, SchemaIndexScope):
         return CommandResult(
-            data=_schema_index_data(ds_version=ds_version),
+            data=_schema_index_data(ds_version=ds_version, env_file=env_file),
             resolved={"schema": {"view": "index"}},
         )
     if isinstance(scope, SchemaGroupScope):
-        data = _schema_group_index_data(scope.name, ds_version=ds_version)
+        data = _schema_group_index_data(
+            scope.name, ds_version=ds_version, env_file=env_file
+        )
         return CommandResult(
             data=data,
             resolved={"schema": {"view": "group", "group": scope.name}},
         )
     if isinstance(scope, SchemaActionScope):
-        data = _schema_action_data(scope.action, ds_version=ds_version)
+        data = _schema_action_data(
+            scope.action, ds_version=ds_version, env_file=env_file
+        )
         return CommandResult(
             data=data,
             resolved={"schema": {"view": "command", "command": scope.action}},
         )
 
-    discovery_data = _schema_discovery_source()
+    discovery_data = _schema_discovery_source(ds_version=ds_version)
     if isinstance(scope, SchemaGroupsScope):
         return CommandResult(
-            data=_schema_group_discovery_rows(discovery_data),
+            data=_schema_group_discovery_rows(discovery_data, env_file=env_file),
             resolved={"schema": {"view": "groups"}},
         )
     return CommandResult(
-        data=_schema_action_discovery_rows(),
+        data=_schema_action_discovery_rows(ds_version=ds_version, env_file=env_file),
         resolved={"schema": {"view": "commands"}},
     )
 
@@ -324,57 +275,82 @@ def _full_schema_result(
     scope: SchemaExpandableScope,
     *,
     ds_version: str,
+    env_file: str | None = None,
 ) -> CommandResult:
     """Return the expanded representation retained behind explicit --full."""
     data = require_json_object(
-        _schema_data(ds_version=ds_version),
+        _schema_data(ds_version=ds_version, env_file=env_file),
         label="schema data",
     )
     resolved: JsonObject = {"view": "full"}
     if isinstance(scope, SchemaGroupScope):
-        data = _schema_group_data(data, scope.name)
+        data = _schema_group_data(data, scope.name, ds_version=ds_version)
         resolved["scope"] = "group"
         resolved["group"] = scope.name
     elif isinstance(scope, SchemaActionScope):
-        data = _schema_command_data(data, scope.action)
+        data = _schema_command_data(data, scope.action, ds_version=ds_version)
         resolved["scope"] = "command"
         resolved["command"] = scope.action
     return CommandResult(data=data, resolved={"schema": resolved})
 
 
-def _schema_index_data(*, ds_version: str) -> JsonObject:
+def _schema_index_data(*, ds_version: str, env_file: str | None = None) -> JsonObject:
     """Return a bounded index containing names, not expanded contracts."""
     groups: list[JsonObject] = []
     grouped_action_count = 0
     for group_name in COMMAND_GROUPS:
-        group = _build_schema_group(group_name)
-        actions = _schema_group_action_index(group, group_name=group_name)
+        group = _build_schema_group(group_name, ds_version=ds_version)
+        actions = _schema_group_action_index(
+            group,
+            group_name=group_name,
+            ds_version=ds_version,
+            env_file=env_file,
+        )
         grouped_action_count += len(actions)
+        available_action_count = sum(
+            item["availability"] != "unsupported" for item in actions
+        )
         groups.append(
             {
                 "name": group_name,
                 "summary": str(group.get("summary", "")),
                 "action_count": len(actions),
+                "available_action_count": available_action_count,
                 "actions": [str(item["action"]) for item in actions],
-                "schema_command": f"dsctl schema --group {group_name}",
+                "schema_command": render_discovery_command(
+                    "schema", values={"group": group_name}, env_file=env_file
+                ),
                 "help_command": f"dsctl {group_name} --help",
             }
         )
 
-    root_actions: list[JsonObject] = [
-        {
-            "action": action,
-            "summary": TOP_LEVEL_COMMAND_SUMMARIES[action],
-            "schema_command": f"dsctl schema --command {action}",
-            "help_command": f"dsctl {action} --help",
-        }
-        for action in TOP_LEVEL_COMMANDS
-    ]
+    root_actions: list[JsonObject] = []
+    support = get_version_support(ds_version)
+    for action in TOP_LEVEL_COMMANDS:
+        capability = support.catalog.entries[action]
+        contract = COMMAND_CATALOG.command(action)
+        root_actions.append(
+            {
+                "action": action,
+                "summary": contract.summary,
+                "effects": {
+                    "remote": contract.effects.remote,
+                    "local": contract.effects.local,
+                },
+                "availability": capability.availability.value,
+                "verification": capability.verification.value,
+                "schema_command": render_discovery_command(
+                    "schema", values={"command": action}, env_file=env_file
+                ),
+                "help_command": f"dsctl {action} --help",
+            }
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "view": "index",
         "cli": _schema_cli_data(),
         "ds": _schema_ds_data(ds_version),
+        "action_inventory_scope": "installed_cli_surface",
         "global_options": _bounded_global_options(),
         "action_count": len(root_actions) + grouped_action_count,
         "groups": groups,
@@ -390,16 +366,23 @@ def _schema_index_data(*, ds_version: str) -> JsonObject:
             },
             {
                 "rel": "capabilities",
-                "command": "dsctl capabilities",
+                "command": render_discovery_command("capabilities", env_file=env_file),
             },
         ],
     }
 
 
-def _schema_group_index_data(group_name: str, *, ds_version: str) -> JsonObject:
+def _schema_group_index_data(
+    group_name: str, *, ds_version: str, env_file: str | None = None
+) -> JsonObject:
     """Return one group's bounded action index."""
-    group = _build_schema_group_or_error(group_name)
-    actions = _schema_group_action_index(group, group_name=group_name)
+    group = _build_schema_group_or_error(group_name, ds_version=ds_version)
+    actions = _schema_group_action_index(
+        group,
+        group_name=group_name,
+        ds_version=ds_version,
+        env_file=env_file,
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "view": "group",
@@ -409,6 +392,9 @@ def _schema_group_index_data(group_name: str, *, ds_version: str) -> JsonObject:
             "name": group_name,
             "summary": str(group.get("summary", "")),
             "action_count": len(actions),
+            "available_action_count": sum(
+                item["availability"] != "unsupported" for item in actions
+            ),
         },
         "actions": actions,
         "links": [
@@ -424,15 +410,23 @@ def _schema_group_index_data(group_name: str, *, ds_version: str) -> JsonObject:
     }
 
 
-def _schema_action_data(command_action: str, *, ds_version: str) -> JsonObject:
+def _schema_action_data(
+    command_action: str, *, ds_version: str, env_file: str | None = None
+) -> JsonObject:
     """Return one complete command contract without shared global repetition."""
-    command, group = _build_schema_action_or_error(command_action)
-    command = _annotate_command_node_data_shape(command)
+    command, group = _build_schema_action_or_error(
+        command_action, ds_version=ds_version
+    )
+    command = _annotate_command_node_data_shape(
+        command, ds_version=ds_version, env_file=env_file
+    )
+    support = get_version_support(ds_version)
     data: JsonObject = {
         "schema_version": SCHEMA_VERSION,
         "view": "command",
         "cli": _schema_cli_data(),
         "ds": _schema_ds_data(ds_version),
+        "capability": action_capability_metadata(support, command_action),
         "global_options": _bounded_global_options(),
         "command": command,
         "links": [
@@ -447,7 +441,9 @@ def _schema_action_data(command_action: str, *, ds_version: str) -> JsonObject:
         data["group"] = {
             "name": group_name,
             "summary": str(group.get("summary", "")),
-            "schema_command": f"dsctl schema --group {group_name}",
+            "schema_command": render_discovery_command(
+                "schema", values={"group": group_name}, env_file=env_file
+            ),
             "help_command": f"dsctl {group_name} --help",
         }
         links = data["links"]
@@ -455,10 +451,15 @@ def _schema_action_data(command_action: str, *, ds_version: str) -> JsonObject:
             links.append(
                 {
                     "rel": "group_schema",
-                    "command": f"dsctl schema --group {group_name}",
+                    "command": render_discovery_command(
+                        "schema", values={"group": group_name}, env_file=env_file
+                    ),
                 }
             )
-    return data
+    return require_json_object(
+        project_command_references(data),
+        label="command schema data",
+    )
 
 
 def _schema_cli_data() -> JsonObject:
@@ -489,29 +490,39 @@ def _bounded_global_options() -> list[JsonObject]:
     ]
 
 
-def _build_schema_group(group_name: str) -> JsonObject:
-    builder = _schema_group_builders()[group_name]
+def _build_schema_group(group_name: str, *, ds_version: str) -> JsonObject:
     task_types = (
-        list(supported_task_template_types()) if group_name == TEMPLATE_RESOURCE else []
+        list(
+            supported_task_template_types(
+                catalog=get_task_authoring_catalog(ds_version)
+            )
+        )
+        if group_name == TEMPLATE_RESOURCE
+        else []
     )
-    return require_json_object(builder(task_types), label="schema command group")
+    return require_json_object(
+        build_schema_group(group_name, task_types=task_types),
+        label="schema command group",
+    )
 
 
-def _build_schema_group_or_error(group_name: str) -> JsonObject:
-    if group_name in _schema_group_builders():
-        return _build_schema_group(group_name)
+def _build_schema_group_or_error(group_name: str, *, ds_version: str) -> JsonObject:
+    if group_name in COMMAND_GROUPS:
+        return _build_schema_group(group_name, ds_version=ds_version)
     return _raise_unknown_schema_group(group_name)
 
 
 def _build_schema_action_or_error(
     command_action: str,
+    *,
+    ds_version: str,
 ) -> tuple[JsonObject, JsonObject | None]:
     if command_action in TOP_LEVEL_COMMANDS:
         return _top_level_command_schema(command_action), None
 
-    group_name, separator, _ = command_action.partition(".")
-    if separator and group_name in _schema_group_builders():
-        group = _build_schema_group(group_name)
+    group_name = command_action.partition(".")[0]
+    if group_name in COMMAND_GROUPS:
+        group = _build_schema_group(group_name, ds_version=ds_version)
         command = _find_action_node(group, command_action)
         if command is not None:
             normalized = dict(command)
@@ -527,44 +538,60 @@ def _schema_group_action_index(
     group: JsonObject,
     *,
     group_name: str,
+    ds_version: str,
+    env_file: str | None = None,
 ) -> list[JsonObject]:
-    rows = _schema_command_discovery_rows_from_node(group, group_name=group_name)
-    return [
-        {
-            "action": str(row["action"]),
-            "name": str(row["name"]),
-            "summary": str(row["summary"]),
-            "schema_command": str(row["schema_command"]),
-            "help_command": _help_command_for_action(str(row["action"])),
-        }
-        for row in rows
-    ]
+    rows = _schema_command_discovery_rows_from_node(
+        group, group_name=group_name, env_file=env_file
+    )
+    support = get_version_support(ds_version)
+    actions: list[JsonObject] = []
+    for row in rows:
+        action = str(row["action"])
+        capability = support.catalog.entries[action]
+        actions.append(
+            {
+                "action": action,
+                "name": str(row["name"]),
+                "summary": str(row["summary"]),
+                "availability": capability.availability.value,
+                "verification": capability.verification.value,
+                "schema_command": str(row["schema_command"]),
+                "help_command": _help_command_for_action(action),
+                "effects": row["effects"],
+            }
+        )
+    return actions
 
 
-def _schema_discovery_source() -> JsonObject:
+def _schema_discovery_source(*, ds_version: str) -> JsonObject:
     return {
         "commands": [_top_level_command_schema(name) for name in TOP_LEVEL_COMMANDS]
-        + [_build_schema_group(name) for name in COMMAND_GROUPS]
+        + [_build_schema_group(name, ds_version=ds_version) for name in COMMAND_GROUPS]
     }
 
 
-def _schema_action_discovery_rows() -> list[JsonObject]:
-    source = _schema_discovery_source()
+def _schema_action_discovery_rows(
+    *, ds_version: str, env_file: str | None = None
+) -> list[JsonObject]:
+    source = _schema_discovery_source(ds_version=ds_version)
     rows: list[JsonObject] = []
     for item in _schema_command_nodes(source):
-        rows.extend(_schema_command_discovery_rows_from_node(item, group_name=None))
+        rows.extend(
+            _schema_command_discovery_rows_from_node(
+                item, group_name=None, env_file=env_file
+            )
+        )
     return rows
 
 
 def _help_command_for_action(action: str) -> str:
-    if action == "use.clear":
-        return "dsctl use --help"
     return f"{_action_command(action)} --help"
 
 
 def _schema_invocation(action: str, command: JsonObject) -> str:
     """Return one exact CLI path plus argument/option placeholders."""
-    base = "dsctl use --clear" if action == "use.clear" else _action_command(action)
+    base = COMMAND_CATALOG.command(action).invocation_prefix
     arguments = command.get("arguments")
     if isinstance(arguments, list):
         for item in arguments:
@@ -586,15 +613,13 @@ def _schema_invocation(action: str, command: JsonObject) -> str:
 
 
 def _action_command(action: str) -> str:
-    try:
-        return COMMAND_CATALOG.command(action).command_path
-    except KeyError:
-        pass
-    return f"dsctl {action.replace('.', ' ')}"
+    return COMMAND_CATALOG.command(action).command_path
 
 
-def _schema_data(*, ds_version: str) -> dict[str, object]:
-    task_types = list(supported_task_template_types())
+def _schema_data(*, ds_version: str, env_file: str | None = None) -> dict[str, object]:
+    task_types = list(
+        supported_task_template_types(catalog=get_task_authoring_catalog(ds_version))
+    )
     command_groups = _command_groups(task_types)
     commands = [
         require_json_object(command_data, label="schema command data")
@@ -603,10 +628,11 @@ def _schema_data(*, ds_version: str) -> dict[str, object]:
             *(command_groups[name] for name in COMMAND_GROUPS),
         )
     ]
-    return {
+    data: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "view": "full",
         "cli": _schema_cli_data(),
+        "ds": _schema_ds_data(ds_version),
         "supported_ds_versions": list(SUPPORTED_VERSIONS),
         "ds_versions": list(supported_version_metadata()),
         "global_options": [
@@ -620,28 +646,65 @@ def _schema_data(*, ds_version: str) -> dict[str, object]:
         "output": output_schema_data(),
         "errors": error_schema_data(),
         "confirmation": confirmation_schema_data(),
-        "capabilities": schema_capabilities_data(ds_version=ds_version),
-        "commands": _annotate_command_data_shapes(commands),
+        "capabilities": schema_capabilities_data(
+            ds_version=ds_version, env_file=env_file
+        ),
+        "commands": _annotate_command_data_shapes(
+            commands, ds_version=ds_version, env_file=env_file
+        ),
     }
+    return cast(
+        "dict[str, object]",
+        require_json_object(
+            project_command_references(data),
+            label="full schema data",
+        ),
+    )
 
 
-def _command_groups(task_types: list[str]) -> dict[str, dict[str, object]]:
+def _command_groups(task_types: list[str]) -> dict[str, JsonObject]:
     return {
-        name: builder(task_types) for name, builder in _schema_group_builders().items()
+        name: build_schema_group(
+            name,
+            task_types=task_types if name == TEMPLATE_RESOURCE else (),
+        )
+        for name in COMMAND_GROUPS
     }
 
 
-def _schema_group_data(schema_data: JsonObject, group_name: str) -> JsonObject:
+def _schema_group_data(
+    schema_data: JsonObject,
+    group_name: str,
+    *,
+    ds_version: str,
+) -> JsonObject:
     group = _find_schema_group(schema_data, group_name)
     scoped = _schema_header(schema_data)
     scoped["commands"] = [group]
-    scoped["rows"] = _schema_group_summary_rows(group)
+    rows = _schema_group_summary_rows(group)
+    support = get_version_support(ds_version)
+    for row in rows:
+        action = row.get("action")
+        if not isinstance(action, str):
+            continue
+        capability = support.catalog.entries[action]
+        row["availability"] = capability.availability.value
+        row["verification"] = capability.verification.value
+    scoped["rows"] = rows
     return scoped
 
 
-def _schema_command_data(schema_data: JsonObject, command_action: str) -> JsonObject:
+def _schema_command_data(
+    schema_data: JsonObject,
+    command_action: str,
+    *,
+    ds_version: str,
+) -> JsonObject:
     command = _find_schema_command(schema_data, command_action)
     scoped = _schema_header(schema_data)
+    scoped["capability"] = action_capability_metadata(
+        get_version_support(ds_version), command_action
+    )
     scoped["commands"] = [command]
     scoped["rows"] = _schema_command_detail_rows(command, action=command_action)
     return scoped
@@ -651,7 +714,9 @@ def _schema_header(schema_data: JsonObject) -> JsonObject:
     return {key: schema_data[key] for key in SCOPED_SCHEMA_HEADER_KEYS}
 
 
-def _schema_group_discovery_rows(schema_data: JsonObject) -> list[JsonObject]:
+def _schema_group_discovery_rows(
+    schema_data: JsonObject, *, env_file: str | None = None
+) -> list[JsonObject]:
     rows: list[JsonObject] = []
     for item in _schema_command_nodes(schema_data):
         if item.get("kind") != "group":
@@ -664,7 +729,9 @@ def _schema_group_discovery_rows(schema_data: JsonObject) -> list[JsonObject]:
                 "name": name,
                 "summary": str(item.get("summary", "")),
                 "action_count": len(_schema_command_actions(item)),
-                "schema_command": f"dsctl schema --group {name}",
+                "schema_command": render_discovery_command(
+                    "schema", values={"group": name}, env_file=env_file
+                ),
             }
         )
     return rows
@@ -674,6 +741,7 @@ def _schema_command_discovery_rows_from_node(
     node: JsonObject,
     *,
     group_name: str | None,
+    env_file: str | None = None,
 ) -> list[JsonObject]:
     if node.get("kind") == "command":
         action = node.get("action")
@@ -685,7 +753,10 @@ def _schema_command_discovery_rows_from_node(
                 "group": group_name,
                 "name": str(node.get("name", "")),
                 "summary": str(node.get("summary", "")),
-                "schema_command": f"dsctl schema --command {action}",
+                "effects": _schema_base_effects(node),
+                "schema_command": render_discovery_command(
+                    "schema", values={"command": action}, env_file=env_file
+                ),
             }
         ]
     if node.get("kind") != "group":
@@ -708,7 +779,10 @@ def _schema_command_discovery_rows_from_node(
                     "group": current_group_name,
                     "name": str(node.get("name", "")),
                     "summary": str(action_data.get("summary", "")),
-                    "schema_command": f"dsctl schema --command {action}",
+                    "effects": _schema_base_effects(action_data),
+                    "schema_command": render_discovery_command(
+                        "schema", values={"command": action}, env_file=env_file
+                    ),
                 }
             )
     for child in _schema_group_commands(node):
@@ -716,6 +790,7 @@ def _schema_command_discovery_rows_from_node(
             _schema_command_discovery_rows_from_node(
                 child,
                 group_name=current_group_name,
+                env_file=env_file,
             )
         )
     return rows
@@ -742,6 +817,7 @@ def _schema_group_summary_rows(group_data: JsonObject) -> list[JsonObject]:
             "action": row["action"],
             "name": row["name"],
             "summary": row["summary"],
+            "effects": row["effects"],
             "schema_command": row["schema_command"],
         }
         for row in discovered
@@ -757,6 +833,20 @@ def _schema_command_detail_rows(
     if command_data is None:
         return []
     return command_contract_rows(command_data, action=action)
+
+
+def _schema_base_effects(command_data: JsonObject) -> JsonObject:
+    """Return the bounded normal-invocation effects used by discovery rows."""
+    effects = command_data.get("effects")
+    if not isinstance(effects, Mapping):
+        message = "schema command is missing its reviewed effects contract"
+        raise TypeError(message)
+    remote = effects.get("remote")
+    local = effects.get("local")
+    if not isinstance(remote, str) or not isinstance(local, str):
+        message = "schema command effects require remote and local values"
+        raise TypeError(message)
+    return {"remote": remote, "local": local}
 
 
 def _find_action_node(node: JsonObject, action: str) -> JsonObject | None:
@@ -789,12 +879,16 @@ def _find_schema_command(schema_data: JsonObject, command_action: str) -> JsonOb
     return _raise_unknown_schema_action(command_action)
 
 
-def _raise_unknown_schema_group(group_name: str) -> NoReturn:
+def _raise_unknown_schema_group(
+    group_name: str, *, env_file: str | None = None
+) -> NoReturn:
     available = list(COMMAND_GROUPS)
     candidates = [
         {
             "name": name,
-            "schema_command": f"dsctl schema --group {name}",
+            "schema_command": render_discovery_command(
+                "schema", values={"group": name}, env_file=env_file
+            ),
         }
         for name in get_close_matches(group_name, available, n=3, cutoff=0.5)
     ]
@@ -802,20 +896,24 @@ def _raise_unknown_schema_group(group_name: str) -> NoReturn:
         "requested": group_name,
         "available_count": len(available),
         "candidates": candidates,
-        "discovery_command": "dsctl schema --list-groups",
+        "discovery_command": render_discovery_command(
+            "schema", values={"list-groups": True}, env_file=env_file
+        ),
     }
     if candidates:
         suggestion = (
             f"Retry with `{candidates[0]['schema_command']}`, or browse "
-            "`dsctl schema --list-groups`."
+            f"`{details['discovery_command']}`."
         )
     else:
-        suggestion = "Run `dsctl schema --list-groups` to choose a group name."
+        suggestion = f"Run `{details['discovery_command']}` to choose a group name."
     message = f"Unknown schema group: {group_name}"
     raise UserInputError(message, details=details, suggestion=suggestion)
 
 
-def _raise_unknown_schema_action(command_action: str) -> NoReturn:
+def _raise_unknown_schema_action(
+    command_action: str, *, env_file: str | None = None
+) -> NoReturn:
     available = sorted(stable_leaf_actions())
     candidates: list[JsonObject] = []
     for action in get_close_matches(command_action, available, n=3, cutoff=0.5):
@@ -824,21 +922,26 @@ def _raise_unknown_schema_action(command_action: str) -> NoReturn:
             {
                 "action": action,
                 "group": group,
-                "schema_command": f"dsctl schema --command {action}",
+                "schema_command": render_discovery_command(
+                    "schema", values={"command": action}, env_file=env_file
+                ),
             }
         )
     details: JsonObject = {
         "requested": command_action,
         "available_count": len(available),
         "candidates": candidates,
-        "discovery_command": "dsctl schema",
+        "discovery_command": render_discovery_command("schema", env_file=env_file),
     }
     if candidates:
         suggestion = (
-            f"Retry with `{candidates[0]['schema_command']}`, or browse `dsctl schema`."
+            f"Retry with `{candidates[0]['schema_command']}`, or browse "
+            f"`{details['discovery_command']}`."
         )
     else:
-        suggestion = "Run `dsctl schema` to browse the bounded action index."
+        suggestion = (
+            f"Run `{details['discovery_command']}` to browse the bounded action index."
+        )
     message = f"Unknown schema action: {command_action}"
     raise UserInputError(message, details=details, suggestion=suggestion)
 
@@ -901,17 +1004,40 @@ def _schema_group_commands(group_data: JsonObject) -> list[JsonObject]:
 
 def _annotate_command_data_shapes(
     commands: list[JsonObject],
+    *,
+    ds_version: str,
+    env_file: str | None = None,
 ) -> list[JsonObject]:
     return [
-        _annotate_command_node_data_shape(command_node) for command_node in commands
+        _annotate_command_node_data_shape(
+            command_node, ds_version=ds_version, env_file=env_file
+        )
+        for command_node in commands
     ]
 
 
-def _annotate_command_node_data_shape(command_node: JsonObject) -> JsonObject:
+def _annotate_command_node_data_shape(
+    command_node: JsonObject,
+    *,
+    ds_version: str,
+    env_file: str | None = None,
+) -> JsonObject:
     annotated = dict(command_node)
     action = annotated.get("action")
     if isinstance(action, str):
-        _annotate_action_contract(annotated, action=action, label="schema command")
+        annotated = project_command_for_version(
+            annotated,
+            action=action,
+            ds_version=ds_version,
+            env_file=env_file,
+        )
+        _target_schema_input_references(annotated, env_file=env_file)
+        _annotate_action_contract(
+            annotated,
+            action=action,
+            label="schema command",
+            ds_version=ds_version,
+        )
     group_action = annotated.get("group_action")
     if isinstance(group_action, dict):
         group_action_data = require_json_object(
@@ -925,13 +1051,16 @@ def _annotate_command_node_data_shape(command_node: JsonObject) -> JsonObject:
                 group_action_copy,
                 action=group_action_name,
                 label="schema group action",
+                ds_version=ds_version,
             )
             annotated["group_action"] = group_action_copy
     commands_value = annotated.get("commands")
     if isinstance(commands_value, list):
         annotated["commands"] = [
             _annotate_command_node_data_shape(
-                require_json_object(item, label="schema nested command")
+                require_json_object(item, label="schema nested command"),
+                ds_version=ds_version,
+                env_file=env_file,
             )
             for item in commands_value
         ]
@@ -943,10 +1072,11 @@ def _annotate_action_contract(
     *,
     action: str,
     label: str,
+    ds_version: str,
 ) -> None:
     """Attach shared invocation, constraint, and output-shape metadata."""
     contract["invocation"] = _schema_invocation(action, contract)
-    constraints = constraints_for_action(action)
+    constraints = constraints_for_action(action, ds_version=ds_version)
     if constraints:
         contract["constraints"] = require_json_value(
             constraints,
@@ -955,7 +1085,11 @@ def _annotate_action_contract(
     shape = data_shape_schema_for_action(action)
     if shape is not None:
         contract["data_shape"] = require_json_object(
-            shape,
+            project_data_shape_for_version(
+                require_json_object(shape, label=f"{label} data shape"),
+                action=action,
+                ds_version=ds_version,
+            ),
             label=f"{label} data shape",
         )
     view_shapes = data_shapes_by_view_schema_for_action(action)
@@ -967,104 +1101,8 @@ def _annotate_action_contract(
 
 
 def _top_level_command_schema(name: str) -> JsonObject:
-    if name == "schema":
-        return require_json_object(
-            _command(
-                name,
-                action=name,
-                summary=TOP_LEVEL_COMMAND_SUMMARIES[name],
-                options=[
-                    _option(
-                        "group",
-                        value_type="string",
-                        description=(
-                            "Return one group's action index. Discover groups "
-                            "with `dsctl schema` or "
-                            "`dsctl schema --list-groups`."
-                        ),
-                        discovery_command="dsctl schema --list-groups",
-                    ),
-                    _option(
-                        "command",
-                        value_type="string",
-                        description=(
-                            "Return one complete action-local contract. Discover "
-                            "actions with `dsctl schema` or "
-                            "`dsctl schema --group GROUP`."
-                        ),
-                        discovery_command="dsctl schema",
-                    ),
-                    _option(
-                        "list-groups",
-                        value_type="boolean",
-                        description="List valid values for --group.",
-                        default=False,
-                    ),
-                    _option(
-                        "list-commands",
-                        value_type="boolean",
-                        description="List valid action names for --command.",
-                        default=False,
-                    ),
-                    _option(
-                        "full",
-                        value_type="boolean",
-                        description=(
-                            "Return the expanded schema representation. May be "
-                            "combined with --group or --command."
-                        ),
-                        default=False,
-                    ),
-                ],
-            ),
-            label="top-level command schema",
-        )
-    if name == "capabilities":
-        return require_json_object(
-            _command(
-                name,
-                action=name,
-                summary=TOP_LEVEL_COMMAND_SUMMARIES[name],
-                options=[
-                    _option(
-                        "summary",
-                        value_type="boolean",
-                        description=(
-                            "Return the bounded default capability summary explicitly."
-                        ),
-                        default=False,
-                    ),
-                    _option(
-                        "section",
-                        value_type="string",
-                        description=(
-                            "Return one top-level capability section. Supported: "
-                            f"{', '.join(CAPABILITIES_SECTION_CHOICES)}. Discover "
-                            "values with `dsctl schema --command capabilities`."
-                        ),
-                        choices=list(CAPABILITIES_SECTION_CHOICES),
-                        discovery_command="dsctl schema --command capabilities",
-                    ),
-                    _option(
-                        "full",
-                        value_type="boolean",
-                        description=(
-                            "Return the complete expanded capability inventory."
-                        ),
-                        default=False,
-                    ),
-                ],
-            ),
-            label="top-level command schema",
-        )
     return require_json_object(
-        _command(
-            name,
-            action=name,
-            summary=TOP_LEVEL_COMMAND_SUMMARIES[name],
-            mutates=False if name == "context" else None,
-            remote_requests=False if name == "context" else None,
-        ),
+        _command(name),
         label="top-level command schema",
     )
 
@@ -1091,46 +1129,268 @@ def _schema_command_actions(node: JsonObject) -> list[str]:
     return actions
 
 
-def _static_group_builder(
-    factory: Callable[[], dict[str, object]],
-) -> SchemaGroupBuilder:
-    def build(_task_types: list[str]) -> dict[str, object]:
-        return factory()
+def _unresolved_schema_group(group_name: str) -> JsonObject:
+    """Use only canonical parser facts; do not select task or payload models."""
+    if group_name not in COMMAND_GROUPS:
+        _raise_unknown_schema_group(group_name)
+    return catalog_group(
+        group_name,
+        summary=GROUP_SUMMARIES[group_name],
+        command_overrides={},
+        nested_group_summaries={
+            path: summary
+            for path, summary in NESTED_GROUP_SUMMARIES.items()
+            if path[0] == group_name
+        },
+    )
 
-    return build
+
+def _target_schema_input_references(
+    command: JsonObject, *, env_file: str | None
+) -> None:
+    for collection in ("arguments", "options"):
+        inputs = command.get(collection)
+        if not isinstance(inputs, list):
+            continue
+        for item in inputs:
+            if not isinstance(item, dict):
+                continue
+            reference = item.get("discovery_command")
+            if isinstance(reference, str):
+                item["discovery_command"] = render_discovery_reference(
+                    reference, env_file=env_file
+                )
 
 
-def _schema_group_builders() -> dict[str, SchemaGroupBuilder]:
-    return {
-        USE_RESOURCE: _static_group_builder(_use_group),
-        ENUM_RESOURCE: _static_group_builder(_enum_group),
-        LINT_RESOURCE: _static_group_builder(_lint_group),
-        TASK_TYPE_RESOURCE: _static_group_builder(_task_type_group),
-        ENV_RESOURCE: _static_group_builder(_env_group),
-        CLUSTER_RESOURCE: _static_group_builder(_cluster_group),
-        DATASOURCE_RESOURCE: _static_group_builder(_datasource_group),
-        NAMESPACE_RESOURCE: _static_group_builder(_namespace_group),
-        RESOURCE_RESOURCE: _static_group_builder(_resource_group),
-        QUEUE_RESOURCE: _static_group_builder(_queue_group),
-        WORKER_GROUP_RESOURCE: _static_group_builder(_worker_group_group),
-        TASK_GROUP_RESOURCE: _static_group_builder(_task_group_group),
-        ALERT_PLUGIN_RESOURCE: _static_group_builder(_alert_plugin_group),
-        ALERT_GROUP_RESOURCE: _static_group_builder(_alert_group_group),
-        TENANT_RESOURCE: _static_group_builder(_tenant_group),
-        USER_RESOURCE: _static_group_builder(_user_group),
-        ACCESS_TOKEN_RESOURCE: _static_group_builder(_access_token_group),
-        MONITOR_RESOURCE: _static_group_builder(_monitor_group),
-        AUDIT_RESOURCE: _static_group_builder(_audit_group),
-        PROJECT_RESOURCE: _static_group_builder(_project_group),
-        PROJECT_PARAMETER_RESOURCE: _static_group_builder(_project_parameter_group),
-        PROJECT_PREFERENCE_RESOURCE: _static_group_builder(_project_preference_group),
-        PROJECT_WORKER_GROUP_RESOURCE: _static_group_builder(
-            _project_worker_group_group
-        ),
-        SCHEDULE_RESOURCE: _static_group_builder(_schedule_group),
-        TEMPLATE_RESOURCE: _template_group,
-        WORKFLOW_RESOURCE: _static_group_builder(_workflow_group),
-        WORKFLOW_INSTANCE_RESOURCE: _static_group_builder(_workflow_instance_group),
-        TASK_RESOURCE: _static_group_builder(_task_group),
-        TASK_INSTANCE_RESOURCE: _static_group_builder(_task_instance_group),
+def _unresolved_schema_command(
+    action: str,
+    reads: frozenset[str],
+    resolution: CompatibilityResolution | None,
+    *,
+    env_file: str | None = None,
+) -> JsonObject:
+    if action not in stable_leaf_actions():
+        _raise_unknown_schema_action(action)
+    command = _command(action)
+    command["invocation"] = _schema_invocation(action, command)
+    command["contract_scope"] = "installed_cli_invocation"
+    command["version_specific_constraints"] = "unknown"
+    command["capability"] = unresolved_action_capability(action, reads, resolution)
+    _target_schema_input_references(command, env_file=env_file)
+    return command
+
+
+def _unresolved_schema_action_rows(
+    group_name: str | None,
+    reads: frozenset[str],
+    resolution: CompatibilityResolution | None,
+    *,
+    env_file: str | None = None,
+) -> list[JsonObject]:
+    contracts = (
+        contract
+        for contract in COMMAND_CATALOG.commands
+        if group_name is None or contract.route[0] == group_name
+    )
+    return [
+        {
+            "action": contract.action,
+            "group": contract.route[0] if len(contract.route) > 1 else None,
+            "name": contract.name,
+            "summary": contract.summary,
+            **unresolved_action_capability(contract.action, reads, resolution),
+            "schema_command": render_discovery_command(
+                "schema", values={"command": contract.action}, env_file=env_file
+            ),
+            "help_command": _help_command_for_action(contract.action),
+        }
+        for contract in contracts
+    ]
+
+
+def _discover_unresolved_schema(
+    query: SchemaQuery,
+    resolution: CompatibilityResolution | None,
+    *,
+    env_file: str | None = None,
+) -> CommandResult:
+    reads = compatible_read_actions(resolution)
+    scope = query.scope
+    expanded = isinstance(scope, SchemaFullScope)
+    if isinstance(scope, SchemaFullScope):
+        scope = scope.scope
+    data: JsonObject = {
+        "schema_version": SCHEMA_VERSION,
+        "cli": _schema_cli_data(),
+        "ds": unresolved_ds_data(resolution),
+        "global_options": _bounded_global_options(),
+        "action_inventory_scope": "installed_cli_surface",
     }
+    if isinstance(scope, SchemaActionScope):
+        command = _unresolved_schema_command(
+            scope.action, reads, resolution, env_file=env_file
+        )
+        data.update(
+            {
+                "view": "full" if expanded else "command",
+                "capability": unresolved_action_capability(
+                    scope.action, reads, resolution
+                ),
+                "links": [
+                    {"rel": "help", "command": _help_command_for_action(scope.action)}
+                ],
+            }
+        )
+        if expanded:
+            data["commands"] = [command]
+            data["rows"] = _schema_command_detail_rows(command, action=scope.action)
+            resolved: JsonObject = {
+                "view": "full",
+                "scope": "command",
+                "command": scope.action,
+            }
+        else:
+            data["command"] = command
+            resolved = {"view": "command", "command": scope.action}
+        return CommandResult(data=data, resolved={"schema": resolved})
+    if isinstance(scope, SchemaGroupScope):
+        group = _unresolved_schema_group(scope.name)
+        actions = _unresolved_schema_action_rows(
+            scope.name, reads, resolution, env_file=env_file
+        )
+        data.update(
+            {
+                "view": "full" if expanded else "group",
+                "group": {
+                    "name": scope.name,
+                    "summary": GROUP_SUMMARIES[scope.name],
+                    "action_count": len(actions),
+                    "available_action_count": sum(
+                        row["availability"]
+                        not in ("requires_exact_version", "requires_discovery")
+                        for row in actions
+                    ),
+                },
+            }
+        )
+        if expanded:
+            data["commands"] = [
+                _annotate_unresolved_group(group, reads, resolution, env_file=env_file)
+            ]
+            data["rows"] = actions
+            resolved = {"view": "full", "scope": "group", "group": scope.name}
+        else:
+            data["actions"] = actions
+            resolved = {"view": "group", "group": scope.name}
+        return CommandResult(data=data, resolved={"schema": resolved})
+    groups: list[JsonObject] = []
+    for name in COMMAND_GROUPS:
+        actions = _unresolved_schema_action_rows(
+            name, reads, resolution, env_file=env_file
+        )
+        groups.append(
+            {
+                "name": name,
+                "summary": GROUP_SUMMARIES[name],
+                "action_count": len(actions),
+                "available_action_count": sum(
+                    row["availability"]
+                    not in ("requires_exact_version", "requires_discovery")
+                    for row in actions
+                ),
+                "actions": [row["action"] for row in actions],
+                "schema_command": render_discovery_command(
+                    "schema", values={"group": name}, env_file=env_file
+                ),
+                "help_command": f"dsctl {name} --help",
+            }
+        )
+    if isinstance(scope, SchemaGroupsScope):
+        return CommandResult(
+            data=groups,
+            resolved={
+                "schema": {"view": "groups", "ds": unresolved_ds_data(resolution)}
+            },
+        )
+    if isinstance(scope, SchemaActionsScope):
+        return CommandResult(
+            data=_unresolved_schema_action_rows(
+                None, reads, resolution, env_file=env_file
+            ),
+            resolved={
+                "schema": {"view": "commands", "ds": unresolved_ds_data(resolution)}
+            },
+        )
+    data.update(
+        {
+            "view": "full" if expanded else "index",
+            "action_count": len(stable_leaf_actions()),
+        }
+    )
+    if expanded:
+        data["commands"] = [
+            *(
+                _unresolved_schema_command(action, reads, resolution, env_file=env_file)
+                for action in TOP_LEVEL_COMMANDS
+            ),
+            *(
+                _annotate_unresolved_group(
+                    _unresolved_schema_group(name),
+                    reads,
+                    resolution,
+                    env_file=env_file,
+                )
+                for name in COMMAND_GROUPS
+            ),
+        ]
+        data["capabilities"] = {
+            "ds": unresolved_ds_data(resolution),
+            "read_compatible_actions": sorted(reads),
+            "authoring": {"requires_exact_version": True},
+        }
+    else:
+        data["groups"] = groups
+        data["root_actions"] = [
+            row
+            for row in _unresolved_schema_action_rows(
+                None, reads, resolution, env_file=env_file
+            )
+            if row["action"] in TOP_LEVEL_COMMANDS
+        ]
+    return CommandResult(
+        data=data, resolved={"schema": {"view": "full" if expanded else "index"}}
+    )
+
+
+def _annotate_unresolved_group(
+    group: JsonObject,
+    reads: frozenset[str],
+    resolution: CompatibilityResolution | None,
+    *,
+    env_file: str | None = None,
+) -> JsonObject:
+    result = dict(group)
+    action = group.get("action")
+    if isinstance(action, str):
+        return _unresolved_schema_command(action, reads, resolution, env_file=env_file)
+    for field in ("group_action",):
+        child = group.get(field)
+        if isinstance(child, dict):
+            result[field] = _annotate_unresolved_group(
+                require_json_object(child, label="catalog group action"),
+                reads,
+                resolution,
+                env_file=env_file,
+            )
+    children = group.get("commands")
+    if isinstance(children, list):
+        result["commands"] = [
+            _annotate_unresolved_group(
+                require_json_object(child, label="catalog command"),
+                reads,
+                resolution,
+                env_file=env_file,
+            )
+            for child in children
+        ]
+    return result

@@ -1,0 +1,5141 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Legacy DolphinScheduler API"
+  },
+  "paths": {
+    "/access-token/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/alert-group/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "groupName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "groupType",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "EMAIL",
+              "SMS"
+            ]
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/alert-group/delete": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/alert-group/grant-user": {
+      "post": {
+        "parameters": [
+          {
+            "name": "alertgroupId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Int"
+            }
+          },
+          {
+            "name": "userIds",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/alert-group/list": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/alert-group/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/alert-group/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "groupName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "groupType",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "EMAIL",
+              "SMS"
+            ]
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/alert-group/verify-group-name": {
+      "get": {
+        "parameters": [
+          {
+            "name": "groupName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/authed-datasource": {
+      "get": {
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/connect": {
+      "post": {
+        "parameters": [
+          {
+            "name": "connectType",
+            "in": "query",
+            "required": false,
+            "type": "ref",
+            "enum": [
+              "ORACLE_SERVICE_NAME",
+              "ORACLE_SID"
+            ]
+          },
+          {
+            "name": "database",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "note",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "other",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "port",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "principal",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "MYSQL",
+              "POSTGRESQL",
+              "HIVE",
+              "SPARK",
+              "CLICKHOUSE",
+              "ORACLE",
+              "SQLSERVER",
+              "DB2"
+            ]
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/connect-by-id": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "connectType",
+            "in": "query",
+            "required": false,
+            "type": "ref",
+            "enum": [
+              "ORACLE_SERVICE_NAME",
+              "ORACLE_SID"
+            ]
+          },
+          {
+            "name": "database",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "note",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "other",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "port",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "principal",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "MYSQL",
+              "POSTGRESQL",
+              "HIVE",
+              "SPARK",
+              "CLICKHOUSE",
+              "ORACLE",
+              "SQLSERVER",
+              "DB2"
+            ]
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/delete": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/kerberos-startup-state": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/list": {
+      "get": {
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "MYSQL",
+              "POSTGRESQL",
+              "HIVE",
+              "SPARK",
+              "CLICKHOUSE",
+              "ORACLE",
+              "SQLSERVER",
+              "DB2"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/unauth-datasource": {
+      "get": {
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "connectType",
+            "in": "query",
+            "required": false,
+            "type": "ref",
+            "enum": [
+              "ORACLE_SERVICE_NAME",
+              "ORACLE_SID"
+            ]
+          },
+          {
+            "name": "database",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "note",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "other",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "port",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "principal",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "MYSQL",
+              "POSTGRESQL",
+              "HIVE",
+              "SPARK",
+              "CLICKHOUSE",
+              "ORACLE",
+              "SQLSERVER",
+              "DB2"
+            ]
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/update-ui": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/datasources/verify-name": {
+      "get": {
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/log/detail": {
+      "get": {
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "skipLineNum",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "taskInstanceId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/log/download-log": {
+      "get": {
+        "parameters": [
+          {
+            "name": "taskInstanceId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/ResponseEntity"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/login": {
+      "post": {
+        "parameters": [
+          {
+            "name": "userName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "userPassword",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/monitor/database": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/monitor/master/list": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/monitor/worker/list": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/monitor/zookeeper/list": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/analysis/command-state-count": {
+      "get": {
+        "parameters": [
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/analysis/define-user-count": {
+      "get": {
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/analysis/process-state-count": {
+      "get": {
+        "parameters": [
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/analysis/queue-count": {
+      "get": {
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/analysis/task-state-count": {
+      "get": {
+        "parameters": [
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/authed-project": {
+      "get": {
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/delete": {
+      "get": {
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/import-definition": {
+      "post": {
+        "parameters": [
+          {
+            "name": "file",
+            "in": "formData",
+            "required": true,
+            "type": "ref"
+          },
+          {
+            "name": "projectName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Int"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Int"
+            }
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/query-by-id": {
+      "get": {
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/query-project-list": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/unauth-project": {
+      "get": {
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/executors/execute": {
+      "post": {
+        "parameters": [
+          {
+            "name": "executeType",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "NONE",
+              "REPEAT_RUNNING",
+              "RECOVER_SUSPENDED_PROCESS",
+              "START_FAILURE_TASK_PROCESS",
+              "STOP",
+              "PAUSE"
+            ]
+          },
+          {
+            "name": "processInstanceId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/executors/start-check": {
+      "post": {
+        "parameters": [
+          {
+            "name": "processDefinitionId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/executors/start-process-instance": {
+      "post": {
+        "parameters": [
+          {
+            "name": "execType",
+            "in": "query",
+            "required": false,
+            "type": "ref",
+            "enum": [
+              "START_PROCESS",
+              "START_CURRENT_TASK_PROCESS",
+              "RECOVER_TOLERANCE_FAULT_PROCESS",
+              "RECOVER_SUSPENDED_PROCESS",
+              "START_FAILURE_TASK_PROCESS",
+              "COMPLEMENT_DATA",
+              "SCHEDULER",
+              "REPEAT_RUNNING",
+              "PAUSE",
+              "STOP",
+              "RECOVER_WAITTING_THREAD"
+            ]
+          },
+          {
+            "name": "failureStrategy",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "END",
+              "CONTINUE"
+            ]
+          },
+          {
+            "name": "processDefinitionId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "processInstancePriority",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "HIGHEST",
+              "HIGH",
+              "MEDIUM",
+              "LOW",
+              "LOWEST"
+            ]
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "receivers",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "receiversCc",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "runMode",
+            "in": "query",
+            "required": false,
+            "type": "ref",
+            "enum": [
+              "RUN_MODE_SERIAL",
+              "RUN_MODE_PARALLEL"
+            ]
+          },
+          {
+            "name": "scheduleTime",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "startNodeList",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "taskDependType",
+            "in": "query",
+            "required": false,
+            "type": "ref",
+            "enum": [
+              "TASK_ONLY",
+              "TASK_PRE",
+              "TASK_POST"
+            ]
+          },
+          {
+            "name": "timeout",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "warningGroupId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "warningType",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "NONE",
+              "SUCCESS",
+              "FAILURE",
+              "ALL"
+            ]
+          },
+          {
+            "name": "workerGroup",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/batch-delete": {
+      "get": {
+        "parameters": [
+          {
+            "name": "alertGroup",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "createTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "phone",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "processInstanceIds",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "queue",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "queueName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "tenantCode",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "tenantName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "updateTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userPassword",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userType",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "ADMIN_USER",
+              "GENERAL_USER"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/delete": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processInstanceId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "executorName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "processDefinitionId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "stateType",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "SUBMITTED_SUCCESS",
+              "RUNNING_EXECUTION",
+              "READY_PAUSE",
+              "PAUSE",
+              "READY_STOP",
+              "STOP",
+              "FAILURE",
+              "SUCCESS",
+              "NEED_FAULT_TOLERANCE",
+              "KILL",
+              "WAITTING_THREAD",
+              "WAITTING_DEPEND"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/select-by-id": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processInstanceId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/select-parent-process": {
+      "get": {
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "subId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/select-sub-process": {
+      "get": {
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/task-list-by-process-id": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processInstanceId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "connects",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "flag",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "NO",
+              "YES"
+            ]
+          },
+          {
+            "name": "locations",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "processInstanceId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "processInstanceJson",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "scheduleTime",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "syncDefine",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/view-gantt": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processInstanceId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/instance/view-variables": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processInstanceId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/batch-delete": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processDefinitionIds",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/copy": {
+      "post": {
+        "parameters": [
+          {
+            "name": "processId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/delete": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processDefinitionId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/export": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processDefinitionIds",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/gen-task-list": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processDefinitionId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/get-task-list": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processDefinitionIdList",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/list": {
+      "get": {
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/queryProcessDefinitionAllByProjectId": {
+      "get": {
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/release": {
+      "post": {
+        "parameters": [
+          {
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "processId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "releaseState",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/save": {
+      "post": {
+        "parameters": [
+          {
+            "name": "connects",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "locations",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "processDefinitionJson",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/select-by-id": {
+      "get": {
+        "parameters": [
+          {
+            "name": "processId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "connects",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "locations",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "processDefinitionJson",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/verify-name": {
+      "get": {
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/process/view-tree": {
+      "get": {
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "processId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/schedule/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "failureStrategy",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "END",
+              "CONTINUE"
+            ]
+          },
+          {
+            "name": "processDefinitionId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "processInstancePriority",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "HIGHEST",
+              "HIGH",
+              "MEDIUM",
+              "LOW",
+              "LOWEST"
+            ]
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "receivers",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "receiversCc",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "schedule",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "warningGroupId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "warningType",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "NONE",
+              "SUCCESS",
+              "FAILURE",
+              "ALL"
+            ]
+          },
+          {
+            "name": "workerGroup",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "default": "default"
+          },
+          {
+            "name": "workerGroupId",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Int"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/schedule/delete": {
+      "get": {
+        "parameters": [
+          {
+            "name": "alertGroup",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "createTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "phone",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "queue",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "queueName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "scheduleId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "tenantCode",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "tenantName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "updateTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userPassword",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userType",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "ADMIN_USER",
+              "GENERAL_USER"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/schedule/list": {
+      "post": {
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/schedule/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "processDefinitionId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/schedule/offline": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/schedule/online": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/schedule/preview": {
+      "post": {
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "schedule",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/schedule/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "failureStrategy",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "END",
+              "CONTINUE"
+            ]
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "processInstancePriority",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "HIGHEST",
+              "HIGH",
+              "MEDIUM",
+              "LOW",
+              "LOWEST"
+            ]
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "receivers",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "receiversCc",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "schedule",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "warningGroupId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "warningType",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "NONE",
+              "SUCCESS",
+              "FAILURE",
+              "ALL"
+            ]
+          },
+          {
+            "name": "workerGroup",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "default": "default"
+          },
+          {
+            "name": "workerGroupId",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Int"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/projects/{projectName}/task-instance/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "executorName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "processInstanceId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "stateType",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "SUBMITTED_SUCCESS",
+              "RUNNING_EXECUTION",
+              "READY_PAUSE",
+              "PAUSE",
+              "READY_STOP",
+              "STOP",
+              "FAILURE",
+              "SUCCESS",
+              "NEED_FAULT_TOLERANCE",
+              "KILL",
+              "WAITTING_THREAD",
+              "WAITTING_DEPEND"
+            ]
+          },
+          {
+            "name": "taskName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/queue/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "queue",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "queueName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/queue/list": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/queue/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/queue/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "queue",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "queueName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/queue/verify-queue": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Int"
+            }
+          },
+          {
+            "name": "queue",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "queueName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/authed-file": {
+      "get": {
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {},
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/authed-udf-func": {
+      "get": {
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {},
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/authorize-resource-tree": {
+      "get": {
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {},
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "currentDir",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "file",
+            "in": "formData",
+            "required": true,
+            "type": "ref"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "FILE",
+              "UDF"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/delete": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/directory/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "currentDir",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "file",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/MultipartFile"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "FILE",
+              "UDF"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/download": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/ResponseEntity"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/list": {
+      "get": {
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "FILE",
+              "UDF"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "FILE",
+              "UDF"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/list/jar": {
+      "get": {
+        "parameters": [
+          {
+            "name": "programType",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "JAVA",
+              "SCALA",
+              "PYTHON"
+            ]
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "FILE",
+              "UDF"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/online-create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "content",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "currentDir",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "fileName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "suffix",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "FILE",
+              "UDF"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/queryResource": {
+      "get": {
+        "parameters": [
+          {
+            "name": "fullName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "FILE",
+              "UDF"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/udf-func/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "argTypes",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "className",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "database",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "funcName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "resourceId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "suffix",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/String"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "HIVE",
+              "SPARK"
+            ]
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/udf-func/delete": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/udf-func/list": {
+      "get": {
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "HIVE",
+              "SPARK"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result«object»"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/udf-func/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result«object»"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/udf-func/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "argTypes",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "className",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "database",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "funcName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "resourceId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "suffix",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/String"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "HIVE",
+              "SPARK"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/udf-func/update-ui": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Int"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/udf-func/verify-name": {
+      "get": {
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/unauth-udf-func": {
+      "get": {
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {},
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "file",
+            "in": "formData",
+            "required": true,
+            "type": "ref"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "FILE",
+              "UDF"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/update-content": {
+      "post": {
+        "parameters": [
+          {
+            "name": "content",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/verify-name": {
+      "get": {
+        "parameters": [
+          {
+            "name": "fullName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "type": "ref",
+            "enum": [
+              "FILE",
+              "UDF"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/resources/view": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "skipLineNum",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/signOut": {
+      "post": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/tenant/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "queueId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "tenantCode",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "tenantName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/tenant/delete": {
+      "post": {
+        "parameters": [
+          {
+            "name": "ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Int"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/tenant/list": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/tenant/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/tenant/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Int"
+            }
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "queueId",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "tenantCode",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "tenantName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/tenant/verify-tenant-code": {
+      "get": {
+        "parameters": [
+          {
+            "name": "tenantCode",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/authed-user": {
+      "get": {
+        "parameters": [
+          {
+            "name": "alertgroupId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/create": {
+      "post": {
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "phone",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "queue",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userPassword",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/delete": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/get-user-info": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/grant-datasource": {
+      "post": {
+        "parameters": [
+          {
+            "name": "datasourceIds",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/grant-file": {
+      "post": {
+        "parameters": [
+          {
+            "name": "resourceIds",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/grant-project": {
+      "post": {
+        "parameters": [
+          {
+            "name": "projectIds",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/grant-udf-func": {
+      "post": {
+        "parameters": [
+          {
+            "name": "udfIds",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/list": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/list-all": {
+      "get": {
+        "parameters": [
+          {
+            "name": "alertGroup",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "createTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "phone",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "queue",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "queueName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "tenantCode",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "tenantName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "updateTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userPassword",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userType",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "ADMIN_USER",
+              "GENERAL_USER"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/unauth-user": {
+      "get": {
+        "parameters": [
+          {
+            "name": "alertgroupId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/update": {
+      "post": {
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "phone",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "queue",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userPassword",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/users/verify-user-name": {
+      "get": {
+        "parameters": [
+          {
+            "name": "userName",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/worker-group/all-groups": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/worker-group/delete-by-id": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/worker-group/list-paging": {
+      "get": {
+        "parameters": [
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchVal",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/worker-group/save": {
+      "post": {
+        "parameters": [
+          {
+            "name": "addrList",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "default": 0,
+            "format": "int32"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "201": {},
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    },
+    "/worker-group/worker-address-list": {
+      "get": {
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/Result"
+            }
+          },
+          "401": {},
+          "403": {},
+          "404": {}
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ResponseEntity": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object"
+        },
+        "statusCode": {
+          "type": "string",
+          "enum": [
+            "100 CONTINUE",
+            "101 SWITCHING_PROTOCOLS",
+            "102 PROCESSING",
+            "103 CHECKPOINT",
+            "200 OK",
+            "201 CREATED",
+            "202 ACCEPTED",
+            "203 NON_AUTHORITATIVE_INFORMATION",
+            "204 NO_CONTENT",
+            "205 RESET_CONTENT",
+            "206 PARTIAL_CONTENT",
+            "207 MULTI_STATUS",
+            "208 ALREADY_REPORTED",
+            "226 IM_USED",
+            "300 MULTIPLE_CHOICES",
+            "301 MOVED_PERMANENTLY",
+            "302 FOUND",
+            "302 MOVED_TEMPORARILY",
+            "303 SEE_OTHER",
+            "304 NOT_MODIFIED",
+            "305 USE_PROXY",
+            "307 TEMPORARY_REDIRECT",
+            "308 PERMANENT_REDIRECT",
+            "400 BAD_REQUEST",
+            "401 UNAUTHORIZED",
+            "402 PAYMENT_REQUIRED",
+            "403 FORBIDDEN",
+            "404 NOT_FOUND",
+            "405 METHOD_NOT_ALLOWED",
+            "406 NOT_ACCEPTABLE",
+            "407 PROXY_AUTHENTICATION_REQUIRED",
+            "408 REQUEST_TIMEOUT",
+            "409 CONFLICT",
+            "410 GONE",
+            "411 LENGTH_REQUIRED",
+            "412 PRECONDITION_FAILED",
+            "413 PAYLOAD_TOO_LARGE",
+            "413 REQUEST_ENTITY_TOO_LARGE",
+            "414 URI_TOO_LONG",
+            "414 REQUEST_URI_TOO_LONG",
+            "415 UNSUPPORTED_MEDIA_TYPE",
+            "416 REQUESTED_RANGE_NOT_SATISFIABLE",
+            "417 EXPECTATION_FAILED",
+            "418 I_AM_A_TEAPOT",
+            "419 INSUFFICIENT_SPACE_ON_RESOURCE",
+            "420 METHOD_FAILURE",
+            "421 DESTINATION_LOCKED",
+            "422 UNPROCESSABLE_ENTITY",
+            "423 LOCKED",
+            "424 FAILED_DEPENDENCY",
+            "426 UPGRADE_REQUIRED",
+            "428 PRECONDITION_REQUIRED",
+            "429 TOO_MANY_REQUESTS",
+            "431 REQUEST_HEADER_FIELDS_TOO_LARGE",
+            "451 UNAVAILABLE_FOR_LEGAL_REASONS",
+            "500 INTERNAL_SERVER_ERROR",
+            "501 NOT_IMPLEMENTED",
+            "502 BAD_GATEWAY",
+            "503 SERVICE_UNAVAILABLE",
+            "504 GATEWAY_TIMEOUT",
+            "505 HTTP_VERSION_NOT_SUPPORTED",
+            "506 VARIANT_ALSO_NEGOTIATES",
+            "507 INSUFFICIENT_STORAGE",
+            "508 LOOP_DETECTED",
+            "509 BANDWIDTH_LIMIT_EXCEEDED",
+            "510 NOT_EXTENDED",
+            "511 NETWORK_AUTHENTICATION_REQUIRED"
+          ]
+        },
+        "statusCodeValue": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "title": "ResponseEntity"
+    },
+    "Result": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "data": {
+          "type": "object"
+        },
+        "msg": {
+          "type": "string"
+        }
+      },
+      "title": "Result"
+    },
+    "Result«object»": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "data": {
+          "type": "object"
+        },
+        "msg": {
+          "type": "string"
+        }
+      },
+      "title": "Result«object»"
+    }
+  }
+}

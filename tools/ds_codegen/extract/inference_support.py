@@ -2,9 +2,38 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import javalang
 
 from ds_codegen.extract.type_lookup import _render_type
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+
+def _has_nested_callable_scope(
+    path: tuple[object, ...],
+    scope: javalang.tree.MethodDeclaration | javalang.tree.LambdaExpression,
+) -> bool:
+    nested_scopes = (
+        javalang.tree.LambdaExpression,
+        javalang.tree.TypeDeclaration,
+        javalang.tree.ClassCreator,
+        javalang.tree.MethodDeclaration,
+        javalang.tree.ConstructorDeclaration,
+    )
+    return any(node is not scope and isinstance(node, nested_scopes) for node in path)
+
+
+def _iter_callable_return_statements(
+    scope: javalang.tree.MethodDeclaration | javalang.tree.LambdaExpression,
+) -> Iterator[javalang.tree.ReturnStatement]:
+    """Yield this callable's returns, retaining ordinary block branches."""
+    for path, statement in scope.filter(javalang.tree.ReturnStatement):
+        if _has_nested_callable_scope(path, scope):
+            continue
+        yield statement
 
 
 def _collect_method_variable_types(
@@ -76,12 +105,15 @@ def _resolve_inferred_return_type(
 def _is_weak_inferred_type(java_type: str) -> bool:
     return java_type in {
         "Any",
+        "ArrayNode",
         "Object",
         "List<Object>",
         "Map<String, Object>",
         "Set<Object>",
         "Collection<Object>",
         "Optional<Object>",
+        "Result",
+        "Result<Object>",
     }
 
 

@@ -11,19 +11,24 @@ from tests.fakes import (
     FakeWorkflowTaskRelation,
 )
 
-from dsctl.errors import ApiTransportError, ConflictError, UserInputError
+from dsctl.errors import (
+    ApiTransportError,
+    ConflictError,
+    UnsupportedFeatureError,
+    UserInputError,
+)
 from dsctl.models import WorkflowSpec
-from dsctl.services._workflow_mutation import (
-    compile_workflow_mutation_plan,
+from dsctl.services._workflow.mutation import (
     load_workflow_patch_or_error,
     prepare_workflow_file_edit,
+    prepare_workflow_mutation_plan,
 )
-from dsctl.services.resolver import ResolvedProject
-
-
-def _unexpected_task_code_allocation(_count: int) -> list[int]:
-    message = "existing-task mutation must not allocate task codes"
-    raise AssertionError(message)
+from dsctl.services.task_authoring_catalog import get_task_authoring_catalog
+from dsctl.services.workflow.edit import _prepare_workflow_edit_mutation
+from dsctl.services.workflow_instance.edit import (
+    _prepare_workflow_instance_edit_mutation,
+)
+from dsctl.upstream.resolver import ResolvedProject
 
 
 @pytest.fixture
@@ -216,7 +221,7 @@ def test_prepare_workflow_file_edit_rejects_weakened_schedule_snapshot(
     }
 
 
-def test_compile_workflow_mutation_plan_preserves_existing_task_identity(
+def test_prepare_workflow_mutation_plan_preserves_existing_task_identity(
     tmp_path: Path,
     workflow_dag: FakeDag,
     resolved_project: ResolvedProject,
@@ -237,14 +242,14 @@ patch:
     )
     patch = load_workflow_patch_or_error(patch_file)
 
-    plan = compile_workflow_mutation_plan(
+    plan = prepare_workflow_mutation_plan(
         workflow_dag,
-        allocate_task_codes=_unexpected_task_code_allocation,
         project=resolved_project,
         patch=patch,
         release_state="OFFLINE",
     )
-    task_definition_payload = json.loads(plan.payload["taskDefinitionJson"])
+    preview_payload = plan.compilation.preview()
+    task_definition_payload = json.loads(preview_payload["taskDefinitionJson"])
 
     assert plan.has_changes is True
     assert plan.merged_spec.workflow.timeout == 45
@@ -254,10 +259,11 @@ patch:
         "extract-v2",
         "load",
     ]
-    assert plan.payload["releaseState"] == "OFFLINE"
+    assert plan.compilation.required_task_code_count == 0
+    assert preview_payload["releaseState"] == "OFFLINE"
 
 
-def test_compile_workflow_mutation_plan_marks_noop_patch(
+def test_prepare_workflow_mutation_plan_marks_noop_patch(
     tmp_path: Path,
     workflow_dag: FakeDag,
     resolved_project: ResolvedProject,
@@ -274,9 +280,8 @@ patch:
     )
     patch = load_workflow_patch_or_error(patch_file)
 
-    plan = compile_workflow_mutation_plan(
+    plan = prepare_workflow_mutation_plan(
         workflow_dag,
-        allocate_task_codes=_unexpected_task_code_allocation,
         project=resolved_project,
         patch=patch,
         release_state=None,
@@ -320,7 +325,7 @@ patch:
         ),
     ],
 )
-def test_compile_workflow_mutation_rejects_codes_colliding_with_any_live_task(
+def test_prepared_workflow_mutation_rejects_codes_colliding_with_any_live_task(
     tmp_path: Path,
     workflow_dag: FakeDag,
     resolved_project: ResolvedProject,
@@ -331,14 +336,96 @@ def test_compile_workflow_mutation_rejects_codes_colliding_with_any_live_task(
     patch_file.write_text(patch_text, encoding="utf-8")
     patch = load_workflow_patch_or_error(patch_file)
 
+    plan = prepare_workflow_mutation_plan(
+        workflow_dag,
+        project=resolved_project,
+        patch=patch,
+        release_state="OFFLINE",
+    )
+
     with pytest.raises(
         ApiTransportError,
         match="collided with an existing task code",
     ):
-        compile_workflow_mutation_plan(
-            workflow_dag,
-            allocate_task_codes=lambda _count: [allocated_code],
+        plan.compilation.materialize([allocated_code])
+
+
+@pytest.mark.parametrize("input_mode", ["patch", "file"])
+def test_203_definition_edit_rejects_same_size_dependency_rewire(
+    tmp_path: Path,
+    workflow_dag: FakeDag,
+    resolved_project: ResolvedProject,
+    input_mode: str,
+) -> None:
+    catalog = get_task_authoring_catalog("2.0.3")
+    patch_file = tmp_path / "rewire.yaml"
+    patch_file.write_text(
+        "patch:\n  tasks:\n    update:\n"
+        "      - match: {name: extract}\n        set:\n          depends_on: [load]\n"
+        "      - match: {name: load}\n        set:\n          depends_on: []\n"
+    )
+    patch = load_workflow_patch_or_error(patch_file, catalog=catalog)
+    # The instance service uses a different native save path and accepts the graph.
+    instance_plan = _prepare_workflow_instance_edit_mutation(
+        dag=workflow_dag,
+        project=resolved_project,
+        patch=patch,
+        spec=None,
+        catalog=catalog,
+    )
+    assert instance_plan.compilation.edges == (("load", "extract"),)
+
+    with pytest.raises(UnsupportedFeatureError, match="dependency edits") as exc:
+        _prepare_workflow_edit_mutation(
+            dag=workflow_dag,
             project=resolved_project,
-            patch=patch,
-            release_state="OFFLINE",
+            patch=patch if input_mode == "patch" else None,
+            spec=instance_plan.merged_spec if input_mode == "file" else None,
+            catalog=catalog,
         )
+    assert exc.value.details == {
+        "resource": "workflow",
+        "ds_version": "2.0.3",
+        "reason": "upstream_relation_update_defect",
+        "mutation_applied": False,
+    }
+
+    repaired_plan = _prepare_workflow_edit_mutation(
+        dag=workflow_dag,
+        project=resolved_project,
+        patch=patch if input_mode == "patch" else None,
+        spec=instance_plan.merged_spec if input_mode == "file" else None,
+        catalog=get_task_authoring_catalog("2.0.4"),
+    )
+    assert repaired_plan.compilation.edges == (("load", "extract"),)
+
+
+def test_203_definition_edit_preserves_rename_and_ordinary_field_updates(
+    tmp_path: Path,
+    workflow_dag: FakeDag,
+    resolved_project: ResolvedProject,
+) -> None:
+    catalog = get_task_authoring_catalog("2.0.3")
+    patch_file = tmp_path / "rename.yaml"
+    patch_file.write_text(
+        "patch:\n  workflow:\n    set:\n      timeout: 45\n"
+        "  tasks:\n    rename:\n      - from: extract\n        to: extract-v2\n"
+        "    update:\n      - match: {name: load}\n        set:\n"
+        "          command: echo changed\n"
+    )
+    plan = _prepare_workflow_edit_mutation(
+        dag=workflow_dag,
+        project=resolved_project,
+        patch=load_workflow_patch_or_error(patch_file, catalog=catalog),
+        spec=None,
+        catalog=catalog,
+    )
+    assert plan.has_changes
+    assert plan.compilation.required_task_code_count == 0
+    payload = plan.compilation.preview()
+    tasks = json.loads(payload["taskDefinitionJson"])
+    assert [(task["code"], task["name"]) for task in tasks] == [
+        (201, "extract-v2"),
+        (202, "load"),
+    ]
+    assert plan.compilation.edges == (("extract-v2", "load"),)

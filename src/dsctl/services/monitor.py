@@ -1,17 +1,23 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final, TypedDict
+from typing import TYPE_CHECKING, Final, TypeAlias, TypedDict
 
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
+)
+from dsctl.upstream.observability import MONITOR_DOMAIN, MonitorDomain
+from dsctl.upstream.serialization import (
     serialize_monitor_database,
     serialize_monitor_server,
 )
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
 
 if TYPE_CHECKING:
-    from dsctl.services._serialization import MonitorDatabaseData
+    from dsctl.upstream.serialization import MonitorDatabaseData
+
+MonitorServiceRuntime: TypeAlias = BoundDomainServiceRuntime[MonitorDomain]
 
 MONITOR_SERVER_TYPE_ALIASES: Final[dict[str, str]] = {
     "master": "MASTER",
@@ -45,7 +51,11 @@ def get_health_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Return the API server actuator health payload."""
-    return run_with_service_runtime(env_file, _get_health_result)
+    return run_with_bound_domain_service_runtime(
+        env_file,
+        MONITOR_DOMAIN,
+        _get_health_result,
+    )
 
 
 def list_servers_result(
@@ -55,8 +65,9 @@ def list_servers_result(
 ) -> CommandResult:
     """Return the registry-backed server list for one node type."""
     normalized_node_type = _normalize_server_type(node_type)
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        MONITOR_DOMAIN,
         _list_servers_result,
         node_type=normalized_node_type,
     )
@@ -67,10 +78,14 @@ def get_database_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Return the database health metrics payload."""
-    return run_with_service_runtime(env_file, _get_database_result)
+    return run_with_bound_domain_service_runtime(
+        env_file,
+        MONITOR_DOMAIN,
+        _get_database_result,
+    )
 
 
-def _get_health_result(runtime: ServiceRuntime) -> CommandResult:
+def _get_health_result(runtime: MonitorServiceRuntime) -> CommandResult:
     return CommandResult(
         data=require_json_object(
             runtime.http_client.healthcheck(),
@@ -83,8 +98,8 @@ def _get_health_result(runtime: ServiceRuntime) -> CommandResult:
     )
 
 
-def _get_database_result(runtime: ServiceRuntime) -> CommandResult:
-    payload = runtime.upstream.monitor.list_databases()
+def _get_database_result(runtime: MonitorServiceRuntime) -> CommandResult:
+    payload = runtime.domain.monitor.list_databases()
     items = [serialize_monitor_database(item) for item in payload]
     warnings, warning_details = _database_warning_payloads(items)
     return CommandResult(
@@ -104,11 +119,11 @@ def _get_database_result(runtime: ServiceRuntime) -> CommandResult:
 
 
 def _list_servers_result(
-    runtime: ServiceRuntime,
+    runtime: MonitorServiceRuntime,
     *,
     node_type: str,
 ) -> CommandResult:
-    payload = runtime.upstream.monitor.list_servers(node_type=node_type)
+    payload = runtime.domain.monitor.list_servers(node_type=node_type)
     return CommandResult(
         data=[
             require_json_object(

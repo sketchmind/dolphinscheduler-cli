@@ -12,6 +12,7 @@ from ds_codegen.extract.inference_support import (
     _collect_method_variable_types,
     _extract_method_invocation_with_qualifier,
     _is_weak_inferred_type,
+    _iter_callable_return_statements,
     _method_signature_key,
     _resolve_inferred_return_type,
 )
@@ -29,6 +30,7 @@ class OperationInferenceDeps:
     infer_local_variable_payload_type: Callable[..., str | None]
     infer_return_statement_type: Callable[..., str | None]
     infer_local_return_statement_payload_type: Callable[..., str | None]
+    unwrap_generated_view_data_list_type: Callable[[str | None], str | None]
 
 
 def infer_operation_return_type(
@@ -52,7 +54,7 @@ def infer_operation_return_type(
     if method_key not in expression_active_methods:
         expression_active_methods = (*expression_active_methods, method_key)
 
-    for _, return_statement in method.filter(javalang.tree.ReturnStatement):
+    for return_statement in _iter_callable_return_statements(method):
         structured_inferred = infer_structured_return_statement_type(
             repo_root=repo_root,
             controller_path=controller_path,
@@ -85,8 +87,8 @@ def infer_operation_return_type(
             owner_methods=owner_methods,
             active_same_class_methods=expression_active_methods,
         )
-        if inferred is None:
-            inferred = deps.infer_local_return_statement_payload_type(
+        if inferred is None or _is_weak_inferred_type(inferred):
+            deepened_inferred = deps.infer_local_return_statement_payload_type(
                 repo_root=repo_root,
                 controller_path=controller_path,
                 method=method,
@@ -99,6 +101,8 @@ def infer_operation_return_type(
                 owner_methods=owner_methods,
                 active_same_class_methods=active_same_class_methods,
             )
+            if deepened_inferred is not None:
+                inferred = deepened_inferred
         if inferred is None:
             continue
         if inferred == "Void":
@@ -133,7 +137,12 @@ def infer_structured_return_statement_type(
     if extracted_invocation is None:
         return None
     invocation, qualifier = extracted_invocation
-    if invocation.member not in {"success", "getResult", "returnDataList"}:
+    if invocation.member not in {
+        "success",
+        "getResult",
+        "returnDataList",
+        "returnDataListPaging",
+    }:
         return None
     if qualifier not in {"", "Result", "this"}:
         return None
@@ -159,6 +168,10 @@ def infer_structured_return_statement_type(
         owner_methods=owner_methods,
         active_same_class_methods=active_same_class_methods,
     )
+    if invocation.member == "returnDataList":
+        payload_type = (
+            deps.unwrap_generated_view_data_list_type(payload_type) or payload_type
+        )
     if (
         payload_type is not None
         and payload_type != "Void"
@@ -182,6 +195,11 @@ def infer_structured_return_statement_type(
         active_same_class_methods=active_same_class_methods,
     )
     if structured_type is not None:
+        if invocation.member == "returnDataList":
+            return (
+                deps.unwrap_generated_view_data_list_type(structured_type)
+                or structured_type
+            )
         return structured_type
     if payload_type is not None and not _is_weak_inferred_type(payload_type):
         return payload_type

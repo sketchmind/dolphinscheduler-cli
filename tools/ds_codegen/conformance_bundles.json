@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "kind": "dsctl-conformance-bundle-catalog",
+  "bundles": [
+    {
+      "name": "legacy_core/v1",
+      "extends": [],
+      "actions": [
+        "doctor",
+        "project.create",
+        "project.delete",
+        "project.get",
+        "project.list",
+        "project.update",
+        "schedule.list",
+        "workflow.get",
+        "workflow.list"
+      ]
+    },
+    {
+      "name": "full_core/v1",
+      "extends": [
+        "legacy_core/v1"
+      ],
+      "actions": [
+        "doctor",
+        "project.create",
+        "project.delete",
+        "project.get",
+        "project.list",
+        "project.update",
+        "schedule.list",
+        "workflow.get",
+        "workflow.list",
+        "workflow.create",
+        "workflow.delete",
+        "workflow.describe",
+        "workflow.digest",
+        "workflow.edit",
+        "workflow.export",
+        "task.get",
+        "task.list",
+        "task.update"
+      ]
+    }
+  ]
+}

@@ -1,46 +1,43 @@
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeDataSource,
     FakeDataSourceAdapter,
     FakeEnumValue,
-    FakeProjectAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
-from dsctl.errors import ConflictError, UserInputError
+from dsctl.errors import (
+    ApiResultError,
+    ConflictError,
+    PermissionDeniedError,
+    UserInputError,
+)
 from dsctl.services import datasource as datasource_service
-from dsctl.services import runtime as runtime_service
+from dsctl.upstream.datasources import DATASOURCE_DOMAIN, DataSourceDomain
 
 
 def _install_datasource_service_fakes(
     monkeypatch: pytest.MonkeyPatch,
     adapter: FakeDataSourceAdapter,
+    *,
+    ds_version: str = "3.4.1",
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            datasource_adapter=adapter,
-            profile=make_profile(),
-        ),
+    domain = DataSourceDomain(datasources=adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        datasource_service,
+        expected_domain=DATASOURCE_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=lambda: make_profile(ds_version=ds_version),
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 def _write_json(path: Path, payload: Mapping[str, object]) -> Path:
@@ -129,6 +126,64 @@ def test_get_datasource_result_resolves_name_then_fetches_detail(
     assert data["type"] == "MYSQL"
 
 
+def test_get_datasource_result_translates_resolution_permission_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeDataSourceAdapter(
+        datasources=[],
+        list_error=ApiResultError(
+            result_code=30001,
+            result_message="no operation permission",
+        ),
+    )
+    _install_datasource_service_fakes(monkeypatch, adapter)
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        datasource_service.get_datasource_result("warehouse")
+
+    assert exc_info.value.details == {
+        "operation": "get",
+        "name": "warehouse",
+    }
+
+
+def test_get_datasource_result_recursively_redacts_all_supported_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeDataSourceAdapter(
+        datasources=[
+            FakeDataSource(
+                id=7,
+                name="governance",
+                type_value=FakeEnumValue("K8S"),
+                detail_payload_value={
+                    "password": "database-secret",
+                    "accessKeySecret": "cloud-secret",
+                    "kubeConfig": "kube-secret",
+                    "privateKey": "ssh-secret",
+                    "nested": {
+                        "password": "nested-secret",
+                        "items": [{"accessKeySecret": "nested-cloud-secret"}],
+                    },
+                },
+            )
+        ]
+    )
+    _install_datasource_service_fakes(monkeypatch, adapter)
+
+    result = datasource_service.get_datasource_result("governance")
+    data = _mapping(result.data)
+
+    assert data["password"] == "******"
+    assert data["accessKeySecret"] == "******"
+    assert data["kubeConfig"] == "******"
+    assert data["privateKey"] == "******"
+    nested = _mapping(data["nested"])
+    assert nested["password"] == "******"
+    items = _sequence(nested["items"])
+    assert _mapping(items[0])["accessKeySecret"] == "******"
+
+
 def test_create_datasource_result_returns_created_detail(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -159,7 +214,7 @@ def test_create_datasource_result_returns_created_detail(
     }
     assert data["id"] == 1
     assert data["name"] == "warehouse"
-    assert data["password"] == payload["password"]
+    assert data["password"] == "******"
 
 
 def test_create_datasource_result_normalizes_datasource_type(
@@ -204,9 +259,74 @@ def test_create_datasource_result_rejects_unknown_datasource_type(
         datasource_service.create_datasource_result(file=file)
 
     assert exc_info.value.suggestion == (
-        "Run `dsctl template datasource` to choose a supported datasource type, "
-        "then `dsctl template datasource --type TYPE`."
+        "Run `dsctl template datasource --ds-version 3.4.1` to choose a "
+        "supported datasource type, then add `--type TYPE`."
     )
+
+
+def test_create_datasource_result_rejects_masked_non_password_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    adapter = FakeDataSourceAdapter(datasources=[])
+    _install_datasource_service_fakes(monkeypatch, adapter)
+    file = _write_json(
+        tmp_path / "masked-key.json",
+        {
+            "name": "ssh-prod",
+            "type": "SSH",
+            "host": "ssh.example",
+            "port": 22,
+            "privateKey": "******",
+        },
+    )
+
+    with pytest.raises(
+        UserInputError,
+        match="must include real secret values",
+    ) as exc_info:
+        datasource_service.create_datasource_result(file=file)
+
+    assert exc_info.value.details["masked_fields"] == ["privateKey"]
+
+
+def test_create_datasource_result_rejects_fields_from_another_plugin(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    adapter = FakeDataSourceAdapter(datasources=[])
+    _install_datasource_service_fakes(monkeypatch, adapter)
+    file = _write_json(
+        tmp_path / "wrong-plugin-field.json",
+        {
+            "name": "warehouse",
+            "type": "MYSQL",
+            "accessKeySecret": "secret",
+        },
+    )
+
+    with pytest.raises(UserInputError, match="fields not accepted") as exc_info:
+        datasource_service.create_datasource_result(file=file)
+
+    assert exc_info.value.details["unexpected_fields"] == ["accessKeySecret"]
+
+
+def test_create_datasource_result_uses_configured_exact_version_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    adapter = FakeDataSourceAdapter(datasources=[])
+    _install_datasource_service_fakes(monkeypatch, adapter, ds_version="1.3.9")
+    file = _write_json(
+        tmp_path / "presto.json",
+        {
+            "name": "presto",
+            "type": "PRESTO",
+        },
+    )
+
+    with pytest.raises(UserInputError, match="Unsupported datasource type"):
+        datasource_service.create_datasource_result(file=file)
 
 
 def test_create_datasource_result_maps_duplicate_name_to_conflict(
@@ -305,8 +425,150 @@ def test_update_datasource_result_preserves_existing_password_when_masked(
             "preserved_existing": True,
         }
     ]
-    assert data["password"] == ""
+    assert data["password"] == "******"
     assert adapter.get(datasource_id=7)["password"] == ""
+
+
+def test_update_datasource_result_fails_closed_without_blank_password_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    adapter = FakeDataSourceAdapter(
+        datasources=[
+            FakeDataSource(
+                id=7,
+                name="warehouse",
+                type_value=FakeEnumValue("MYSQL"),
+                detail_payload_value={"password": "******"},
+            )
+        ],
+        blank_password_preserves_existing=False,
+    )
+    _install_datasource_service_fakes(
+        monkeypatch,
+        adapter,
+        ds_version="1.3.9",
+    )
+    file = _write_json(
+        tmp_path / "update.json",
+        {
+            "name": "warehouse",
+            "type": "MYSQL",
+            "password": "******",
+        },
+    )
+
+    with pytest.raises(
+        UserInputError,
+        match="cannot safely recover masked 'password'",
+    ) as exc_info:
+        datasource_service.update_datasource_result("warehouse", file=file)
+
+    assert exc_info.value.suggestion == (
+        "Set 'password' to its real value in the update payload, then retry."
+    )
+
+
+def test_update_datasource_result_preserves_masked_plugin_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    adapter = FakeDataSourceAdapter(
+        datasources=[
+            FakeDataSource(
+                id=7,
+                name="ssh-prod",
+                type_value=FakeEnumValue("SSH"),
+                detail_payload_value={
+                    "host": "ssh.example",
+                    "port": 22,
+                    "privateKey": "actual-private-key",
+                },
+            )
+        ]
+    )
+    _install_datasource_service_fakes(monkeypatch, adapter)
+    file = _write_json(
+        tmp_path / "update-ssh.json",
+        {
+            "name": "ssh-prod",
+            "type": "SSH",
+            "host": "ssh.example",
+            "port": 22,
+            "privateKey": "******",
+        },
+    )
+
+    result = datasource_service.update_datasource_result("ssh-prod", file=file)
+
+    assert result.warning_details[0]["field"] == "privateKey"
+    assert result.warning_details[0]["code"] == (
+        "datasource_update_preserved_existing_private_key"
+    )
+    assert result.warning_details[0]["preserved_existing"] is True
+    assert adapter.get(datasource_id=7)["privateKey"] == "actual-private-key"
+    assert _mapping(result.data)["privateKey"] == "******"
+
+
+def test_update_datasource_result_preserves_omitted_plugin_secret_silently(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    adapter = FakeDataSourceAdapter(
+        datasources=[
+            FakeDataSource(
+                id=7,
+                name="ssh-prod",
+                type_value=FakeEnumValue("SSH"),
+                detail_payload_value={
+                    "host": "ssh.example",
+                    "port": 22,
+                    "privateKey": "actual-private-key",
+                },
+            )
+        ]
+    )
+    _install_datasource_service_fakes(monkeypatch, adapter)
+    file = _write_json(
+        tmp_path / "update-ssh.json",
+        {
+            "name": "ssh-prod",
+            "type": "SSH",
+            "host": "ssh.example",
+            "port": 22,
+        },
+    )
+
+    result = datasource_service.update_datasource_result("ssh-prod", file=file)
+
+    assert result.warnings == []
+    assert adapter.get(datasource_id=7)["privateKey"] == "actual-private-key"
+
+
+def test_update_datasource_result_rejects_type_change(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    adapter = FakeDataSourceAdapter(
+        datasources=[
+            FakeDataSource(
+                id=7,
+                name="warehouse",
+                type_value=FakeEnumValue("MYSQL"),
+            )
+        ]
+    )
+    _install_datasource_service_fakes(monkeypatch, adapter)
+    file = _write_json(
+        tmp_path / "change-type.json",
+        {
+            "name": "warehouse",
+            "type": "POSTGRESQL",
+        },
+    )
+
+    with pytest.raises(UserInputError, match="cannot change"):
+        datasource_service.update_datasource_result("warehouse", file=file)
 
 
 def test_update_datasource_result_rejects_mismatched_payload_id(
@@ -350,9 +612,9 @@ def test_create_datasource_result_rejects_invalid_json_payload(
         datasource_service.create_datasource_result(file=file)
 
     assert exc_info.value.suggestion == (
-        "Fix the JSON syntax, or run `dsctl template datasource` to choose a "
-        "type and `dsctl template datasource --type TYPE` to regenerate a "
-        "payload skeleton."
+        "Fix the JSON syntax, or run `dsctl template datasource --ds-version "
+        "VERSION` to choose a type and add `--type TYPE` to generate a "
+        "skeleton for the target cluster version."
     )
 
 

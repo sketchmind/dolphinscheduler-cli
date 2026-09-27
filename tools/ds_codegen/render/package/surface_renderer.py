@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ds_codegen.render.requests_example import _snake_case
+from ds_codegen.render.package.render_support import snake_case
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -12,14 +12,17 @@ if TYPE_CHECKING:
     from ds_codegen.render.package.planner import PackageRenderContext
 
 
-def write_init_files(package_root: Path) -> None:
+def write_init_files(package_root: Path, *, export_client: bool = True) -> None:
     client_name = client_class_name_from_package_root(package_root)
+    package_init = (
+        f'from .client import {client_name}\n\n__all__ = ["{client_name}"]\n'
+        if export_client
+        else ""
+    )
     init_paths = {
         package_root.parent.parent / "__init__.py": "",
         package_root.parent / "__init__.py": "",
-        package_root / "__init__.py": (
-            f'from .client import {client_name}\n\n__all__ = ["{client_name}"]\n'
-        ),
+        package_root / "__init__.py": package_init,
     }
     for path, content in init_paths.items():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -133,7 +136,7 @@ def client_class_name_from_package_root(package_root: Path) -> str:
 
 def controller_module_name(controller_name: str) -> str:
     name = controller_name.removesuffix("Controller")
-    return _snake_case(name)
+    return snake_case(name)
 
 
 def controller_operations_class_name(controller_name: str) -> str:

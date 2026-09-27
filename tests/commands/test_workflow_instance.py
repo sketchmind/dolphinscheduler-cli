@@ -5,14 +5,14 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
+from dsctl.commands import workflow_instance as workflow_instance_commands
 from dsctl.errors import ApiResultError
-from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
 from tests.fakes import (
     FakeDag,
     FakeEnumValue,
     FakeProject,
     FakeProjectAdapter,
-    FakeTaskAdapter,
     FakeTaskDefinition,
     FakeTaskInstance,
     FakeTaskInstanceAdapter,
@@ -20,8 +20,9 @@ from tests.fakes import (
     FakeWorkflowInstance,
     FakeWorkflowInstanceAdapter,
     FakeWorkflowTaskRelation,
-    fake_service_runtime,
 )
+from tests.request_assertions import first_dry_run_request
+from tests.runtime_instance_domain_fakes import install_runtime_instance_domain_runtime
 from tests.support import make_profile
 
 runner = CliRunner()
@@ -107,39 +108,36 @@ def patch_workflow_instance_service(monkeypatch: pytest.MonkeyPatch) -> None:
         ],
         parent_workflow_instance_ids_by_sub_id={903: 901},
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-            task_instance_adapter=FakeTaskInstanceAdapter(
-                task_instances=[
-                    FakeTaskInstance(
-                        id=3001,
-                        name="extract",
-                        task_type_value="SHELL",
-                        workflow_instance_id_value=901,
-                        workflow_instance_name_value="daily-sync-901",
-                        project_code_value=7,
-                        task_code_value=201,
-                        state_value=FakeEnumValue("RUNNING_EXECUTION"),
-                        host="worker-1",
-                    ),
-                    FakeTaskInstance(
-                        id=3002,
-                        name="load",
-                        task_type_value="SQL",
-                        workflow_instance_id_value=901,
-                        workflow_instance_name_value="daily-sync-901",
-                        project_code_value=7,
-                        task_code_value=202,
-                        state_value=FakeEnumValue("FAILURE"),
-                        retry_times_value=1,
-                    ),
-                ]
-            ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
+        task_instance_adapter=FakeTaskInstanceAdapter(
+            task_instances=[
+                FakeTaskInstance(
+                    id=3001,
+                    name="extract",
+                    task_type_value="SHELL",
+                    workflow_instance_id_value=901,
+                    workflow_instance_name_value="daily-sync-901",
+                    project_code_value=7,
+                    task_code_value=201,
+                    state_value=FakeEnumValue("RUNNING_EXECUTION"),
+                    host="worker-1",
+                ),
+                FakeTaskInstance(
+                    id=3002,
+                    name="load",
+                    task_type_value="SQL",
+                    workflow_instance_id_value=901,
+                    workflow_instance_name_value="daily-sync-901",
+                    project_code_value=7,
+                    task_code_value=202,
+                    state_value=FakeEnumValue("FAILURE"),
+                    retry_times_value=1,
+                ),
+            ]
         ),
     )
 
@@ -152,6 +150,27 @@ def test_workflow_instance_list_command_returns_page_payload() -> None:
     assert payload["action"] == "workflow-instance.list"
     assert payload["data"]["total"] == 2
     assert payload["data"]["totalList"][0]["id"] == 901
+
+
+def test_workflow_instance_list_command_requires_project_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=FakeProjectAdapter(
+            projects=[FakeProject(code=7, name="etl-prod")]
+        ),
+        context=ResourceDefaults(),
+    )
+
+    result = runner.invoke(app, ["workflow-instance", "list"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["action"] == "workflow-instance.list"
+    assert payload["error"]["suggestion"] == (
+        "Pass --project NAME, or configure a project in the selected context."
+    )
 
 
 def test_workflow_instance_get_command_preserves_ambiguous_v2_lookup_error(
@@ -170,14 +189,11 @@ def test_workflow_instance_get_command_preserves_ambiguous_v2_lookup_error(
         )
 
     monkeypatch.setattr(workflow_instance_adapter, "get", fail_get)
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
     )
 
     result = runner.invoke(app, ["workflow-instance", "get", "999999"])
@@ -268,7 +284,7 @@ def test_workflow_instance_get_help_points_to_instance_discovery() -> None:
     assert "workflow-instance" in result.stdout
     assert "list" in result.stdout
     assert "--raw" not in result.stdout
-    assert "--format" not in result.stdout
+    assert "--format" in result.stdout
 
 
 def test_workflow_instance_export_help_points_to_instance_discovery() -> None:
@@ -281,12 +297,16 @@ def test_workflow_instance_export_help_points_to_instance_discovery() -> None:
 
 
 def test_workflow_instance_get_command_returns_one_instance() -> None:
-    result = runner.invoke(app, ["workflow-instance", "get", "901"])
+    result = runner.invoke(
+        app,
+        ["workflow-instance", "get", "901", "--project", "etl-prod"],
+    )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow-instance.get"
     assert payload["data"]["state"] == "RUNNING_EXECUTION"
+    assert payload["resolved"]["project"]["source"] == "flag"
 
 
 def test_workflow_instance_export_command_exports_yaml() -> None:
@@ -305,7 +325,8 @@ def test_workflow_instance_parent_command_returns_parent_relation() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow-instance.parent"
     assert payload["data"] == {"parentWorkflowInstance": 901}
-    assert payload["resolved"] == {"subWorkflowInstance": {"id": 903}}
+    assert payload["resolved"]["subWorkflowInstance"] == {"id": 903}
+    assert payload["resolved"]["project"]["source"] == "context"
 
 
 def test_workflow_instance_parent_command_rejects_regular_instance(
@@ -357,14 +378,11 @@ def test_workflow_instance_parent_command_rejects_regular_instance(
         "parent_instance_by_sub_workflow",
         not_subworkflow,
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
     )
 
     result = runner.invoke(app, ["workflow-instance", "parent", "901"])
@@ -374,7 +392,8 @@ def test_workflow_instance_parent_command_rejects_regular_instance(
     assert payload["action"] == "workflow-instance.parent"
     assert payload["error"]["type"] == "invalid_state"
     assert payload["error"]["suggestion"] == (
-        "Use `dsctl workflow-instance get ID` for regular workflow instances; "
+        "Use `dsctl workflow-instance get 901 --project etl-prod` for regular "
+        "workflow instances; "
         "`parent` only applies to sub-workflow instances."
     )
 
@@ -440,6 +459,8 @@ patch:
             "--patch",
             str(patch_file),
             "--dry-run",
+            "--columns",
+            "*",
         ],
     )
 
@@ -447,7 +468,10 @@ patch:
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow-instance.edit"
     assert payload["data"]["dry_run"] is True
-    assert payload["data"]["request"]["path"] == "/projects/7/workflow-instances/903"
+    assert (
+        first_dry_run_request(payload["data"])["path"]
+        == "/projects/7/workflow-instances/903"
+    )
     assert payload["resolved"]["syncDefine"] is False
 
 
@@ -523,6 +547,8 @@ tasks:
             "--file",
             str(workflow_file),
             "--dry-run",
+            "--columns",
+            "*",
         ],
     )
 
@@ -532,7 +558,18 @@ tasks:
     assert payload["data"]["dry_run"] is True
     assert payload["resolved"]["input_mode"] == "file"
     assert payload["resolved"]["file"] == str(workflow_file.resolve())
-    assert payload["data"]["diff"]["updated_tasks"] == ["extract"]
+    assert payload["data"]["diff"]["task_changes"] == [
+        {
+            "task": "extract",
+            "changes": [
+                {
+                    "field": "task_params",
+                    "before": {"rawScript": "echo extract"},
+                    "after": {"rawScript": "echo extract-v2"},
+                }
+            ],
+        }
+    ]
 
 
 def test_workflow_instance_edit_command_requires_one_input(
@@ -611,10 +648,10 @@ def test_workflow_instance_stop_command_returns_refreshed_instance() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "workflow-instance.stop"
     assert payload["data"]["state"] == "READY_STOP"
-    assert payload["warnings"] == [
+    assert [item["message"] for item in payload.get("warnings", [])] == [
         "stop requested; current workflow instance state is READY_STOP"
     ]
-    assert payload["warning_details"] == [
+    assert payload["warnings"] == [
         {
             "code": "workflow_instance_action_state_after_request",
             "action": "stop",
@@ -670,16 +707,15 @@ def test_workflow_instance_watch_command_waits_for_final_state(
             ]
         },
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
     )
-    monkeypatch.setattr("dsctl.services.workflow_instance.time.sleep", lambda _: None)
+    monkeypatch.setattr(
+        "dsctl.services.workflow_instance.watch.time.sleep", lambda _: None
+    )
 
     result = runner.invoke(
         app,
@@ -691,6 +727,7 @@ def test_workflow_instance_watch_command_waits_for_final_state(
             "1",
             "--timeout-seconds",
             "5",
+            "--exit-status",
         ],
     )
 
@@ -720,21 +757,20 @@ def test_workflow_instance_watch_command_reports_timeout_suggestion(
             )
         ]
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
     )
     monotonic_values = iter((0.0, 5.1))
     monkeypatch.setattr(
-        "dsctl.services.workflow_instance.time.monotonic",
+        "dsctl.services.workflow_instance.watch.time.monotonic",
         lambda: next(monotonic_values),
     )
-    monkeypatch.setattr("dsctl.services.workflow_instance.time.sleep", lambda _: None)
+    monkeypatch.setattr(
+        "dsctl.services.workflow_instance.watch.time.sleep", lambda _: None
+    )
 
     result = runner.invoke(
         app,
@@ -779,14 +815,11 @@ def test_workflow_instance_rerun_command_returns_refreshed_instance(
             )
         ]
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
     )
 
     result = runner.invoke(app, ["workflow-instance", "rerun", "902"])
@@ -817,14 +850,11 @@ def test_workflow_instance_recover_failed_command_returns_refreshed_instance(
             )
         ]
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(),
+        workflow_instance_adapter=workflow_instance_adapter,
     )
 
     result = runner.invoke(app, ["workflow-instance", "recover-failed", "903"])
@@ -846,15 +876,16 @@ def test_workflow_instance_recover_failed_command_reports_failure_requirement() 
         "This workflow instance must be in FAILURE state before recover-failed."
     )
     assert payload["error"]["suggestion"] == (
-        "Use `dsctl workflow-instance get ID` or "
-        "`dsctl workflow-instance watch ID` to confirm the instance is in "
-        "FAILURE before retrying `recover-failed`."
+        "Use `dsctl workflow-instance get 903 --project etl-prod` or "
+        "`dsctl workflow-instance watch 903 --project etl-prod` to confirm the "
+        "instance is in FAILURE before retrying `recover-failed`."
     )
 
 
 def test_workflow_instance_execute_task_command_returns_resolved_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("DS_VERSION", "3.4.2")
     project_adapter = FakeProjectAdapter(
         projects=[FakeProject(code=7, name="etl-prod")]
     )
@@ -869,29 +900,25 @@ def test_workflow_instance_execute_task_command_returns_resolved_task(
                 run_times_value=1,
                 name="daily-sync-902",
                 executor_id_value=11,
+                dag_data_value=FakeDag(
+                    workflow_definition_value=None,
+                    task_definition_list_value=[
+                        FakeTaskDefinition(
+                            code=201,
+                            name="extract",
+                            project_code_value=7,
+                        )
+                    ],
+                    workflow_task_relation_list_value=[],
+                ),
             )
         ]
     )
-    task_adapter = FakeTaskAdapter(
-        workflow_tasks={
-            101: [
-                FakeTaskDefinition(
-                    code=201,
-                    name="extract",
-                    project_code_value=7,
-                )
-            ]
-        }
-    )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            workflow_instance_adapter=workflow_instance_adapter,
-            task_adapter=task_adapter,
-        ),
+    install_runtime_instance_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile(ds_version="3.4.2"),
+        workflow_instance_adapter=workflow_instance_adapter,
     )
 
     result = runner.invoke(
@@ -915,7 +942,10 @@ def test_workflow_instance_execute_task_command_returns_resolved_task(
     assert payload["resolved"]["task"]["code"] == 201
 
 
-def test_workflow_instance_execute_task_command_reports_scope_choices() -> None:
+def test_workflow_instance_execute_task_command_reports_scope_choices(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DS_VERSION", "3.4.2")
     result = runner.invoke(
         app,
         [
@@ -948,3 +978,35 @@ def test_workflow_instance_execute_task_help_points_to_task_discovery() -> None:
     assert "task-instance" in result.stdout
     assert "workflow-instance" in result.stdout
     assert "list" in result.stdout
+
+
+@pytest.mark.parametrize("version", ["3.3.1", "3.3.2", "3.4.0", "3.4.1"])
+def test_execute_task_missing_master_handler_is_blocked_before_service(
+    monkeypatch: pytest.MonkeyPatch, version: str
+) -> None:
+    monkeypatch.setenv("DS_VERSION", version)
+    service_called = False
+
+    def fail_if_called(*args: object, **kwargs: object) -> None:
+        nonlocal service_called
+        service_called = True
+        message = "limited runtime action must not reach its service"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(
+        workflow_instance_commands,
+        "execute_task_in_workflow_instance_result",
+        fail_if_called,
+    )
+    result = runner.invoke(
+        app, ["workflow-instance", "execute-task", "902", "--task", "extract"]
+    )
+
+    assert result.exit_code == 1
+    assert service_called is False
+    error = json.loads(result.stderr)["error"]
+    assert error["type"] == "unsupported_feature"
+    assert error["details"]["selected_version"] == version
+    assert error["details"]["availability"] == "limited"
+    assert "EXECUTE_TASK" in error["details"]["constraint"]
+    assert "capabilities --action workflow-instance.execute-task" in error["suggestion"]

@@ -1,19 +1,18 @@
 from pathlib import Path
-from typing import Annotated
 
 import typer
 
 from dsctl.cli_runtime import emit_raw_result, emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.output import CommandResult
 from dsctl.services.workflow_instance import (
-    DEFAULT_WATCH_INTERVAL_SECONDS,
-    DEFAULT_WATCH_TIMEOUT_SECONDS,
     digest_workflow_instance_result,
     edit_workflow_instance_result,
     execute_task_in_workflow_instance_result,
     export_workflow_instance_yaml_result,
     get_parent_workflow_instance_result,
     get_workflow_instance_result,
+    list_workflow_instances_by_trigger_result,
     list_workflow_instances_result,
     recover_failed_workflow_instance_result,
     rerun_workflow_instance_result,
@@ -26,32 +25,6 @@ workflow_instance_app = typer.Typer(
     no_args_is_help=True,
 )
 
-PROJECT_FILTER_HELP = (
-    "Project name or code for project-scoped filters. Run `dsctl project list` "
-    "to discover values."
-)
-WORKFLOW_FILTER_HELP = (
-    "Workflow name or code filter. With --project, resolved inside that project; "
-    "run `dsctl workflow list` to discover values."
-)
-WORKFLOW_INSTANCE_HELP = (
-    "Workflow instance id. Run `dsctl workflow-instance list` to discover ids."
-)
-SUB_WORKFLOW_INSTANCE_HELP = (
-    "Sub-workflow instance id. Run `dsctl workflow-instance list` to discover ids."
-)
-FINISHED_WORKFLOW_INSTANCE_HELP = (
-    "Finished workflow instance id. Run `dsctl workflow-instance list` to discover ids."
-)
-WORKFLOW_STATE_HELP = (
-    "Filter by DS workflow execution status name. Run `dsctl enum list "
-    "workflow-execution-status` to discover values."
-)
-INSTANCE_TASK_HELP = (
-    "Task name or task code within the workflow instance. Run `dsctl "
-    "task-instance list --workflow-instance WORKFLOW_INSTANCE` to discover values."
-)
-
 
 def register_workflow_instance_commands(app: typer.Typer) -> None:
     """Register the `workflow-instance` command group."""
@@ -59,84 +32,45 @@ def register_workflow_instance_commands(app: typer.Typer) -> None:
 
 
 @workflow_instance_app.command("list")
+@bind_command("workflow-instance.list")
 def list_command(
     ctx: typer.Context,
     *,
-    page_no: Annotated[
-        int,
-        typer.Option("--page-no", help="Remote page number."),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option("--page-size", help="Remote page size."),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_FILTER_HELP,
-        ),
-    ] = None,
-    workflow: Annotated[
-        str | None,
-        typer.Option(
-            "--workflow",
-            help=WORKFLOW_FILTER_HELP,
-        ),
-    ] = None,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter workflow instances by upstream searchVal; requires --project.",
-        ),
-    ] = None,
-    executor: Annotated[
-        str | None,
-        typer.Option(
-            "--executor",
-            help="Filter by executor user name; requires --project.",
-        ),
-    ] = None,
-    host: Annotated[
-        str | None,
-        typer.Option(
-            "--host",
-            help="Filter by workflow instance host.",
-        ),
-    ] = None,
-    start: Annotated[
-        str | None,
-        typer.Option(
-            "--start",
-            help="Filter by start time lower bound, e.g. '2026-04-11 10:00:00'.",
-        ),
-    ] = None,
-    end: Annotated[
-        str | None,
-        typer.Option(
-            "--end",
-            help="Filter by start time upper bound, e.g. '2026-04-11 11:00:00'.",
-        ),
-    ] = None,
-    state: Annotated[
-        str | None,
-        typer.Option(
-            "--state",
-            help=WORKFLOW_STATE_HELP,
-        ),
-    ] = None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
+    project: str | None,
+    workflow: str | None,
+    search: str | None,
+    executor: str | None,
+    host: str | None,
+    start: str | None,
+    end: str | None,
+    state: str | None,
+    trigger_code: int | None,
 ) -> None:
-    """List workflow instances using explicit runtime filters."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
+    if trigger_code is not None:
+        emit_result(
+            "workflow-instance.list",
+            lambda: list_workflow_instances_by_trigger_result(
+                trigger_code,
+                page_no=page_no,
+                page_size=page_size,
+                all_pages=all_pages,
+                project=project,
+                workflow=workflow,
+                search=search,
+                executor=executor,
+                host=host,
+                start=start,
+                end=end,
+                state=state,
+                env_file=env_file,
+            ),
+        )
+        return
     emit_result(
         "workflow-instance.list",
         lambda: list_workflow_instances_result(
@@ -157,40 +91,40 @@ def list_command(
 
 
 @workflow_instance_app.command("get")
+@bind_command("workflow-instance.get")
 def get_command(
     ctx: typer.Context,
-    workflow_instance: Annotated[
-        int,
-        typer.Argument(help=WORKFLOW_INSTANCE_HELP),
-    ],
+    workflow_instance: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Get one workflow instance by id."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "workflow-instance.get",
         lambda: get_workflow_instance_result(
             workflow_instance,
+            project=project,
             env_file=env_file,
         ),
     )
 
 
 @workflow_instance_app.command("export")
+@bind_command("workflow-instance.export")
 def export_command(
     ctx: typer.Context,
-    workflow_instance: Annotated[
-        int,
-        typer.Argument(help=WORKFLOW_INSTANCE_HELP),
-    ],
+    workflow_instance: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Export one workflow instance DAG as an editable YAML document."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_raw_result(
         "workflow-instance.export",
         lambda: export_workflow_instance_yaml_result(
             workflow_instance,
+            project=project,
             env_file=env_file,
         ),
         _workflow_instance_yaml,
@@ -198,127 +132,65 @@ def export_command(
 
 
 @workflow_instance_app.command("parent")
+@bind_command("workflow-instance.parent")
 def parent_command(
     ctx: typer.Context,
-    sub_workflow_instance: Annotated[
-        int,
-        typer.Argument(help=SUB_WORKFLOW_INSTANCE_HELP),
-    ],
+    sub_workflow_instance: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Return the parent workflow instance for one sub-workflow instance."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "workflow-instance.parent",
         lambda: get_parent_workflow_instance_result(
             sub_workflow_instance,
+            project=project,
             env_file=env_file,
         ),
     )
 
 
 @workflow_instance_app.command("digest")
+@bind_command("workflow-instance.digest")
 def digest_command(
     ctx: typer.Context,
-    workflow_instance: Annotated[
-        int,
-        typer.Argument(help=WORKFLOW_INSTANCE_HELP),
-    ],
+    workflow_instance: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Return one compact workflow-instance runtime digest."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "workflow-instance.digest",
         lambda: digest_workflow_instance_result(
             workflow_instance,
+            project=project,
             env_file=env_file,
         ),
     )
 
 
 @workflow_instance_app.command("edit")
+@bind_command("workflow-instance.edit")
 def edit_command(
     ctx: typer.Context,
-    workflow_instance: Annotated[
-        int,
-        typer.Argument(help=FINISHED_WORKFLOW_INSTANCE_HELP),
-    ],
+    workflow_instance: int,
     *,
-    patch: Annotated[
-        Path | None,
-        typer.Option(
-            "--patch",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to one workflow-instance patch YAML file. Use exactly "
-                "one of --patch or --file. Inspect the current instance DAG "
-                "with `dsctl workflow-instance export ID`, then "
-                "write only the intended delta. Start from `dsctl template "
-                "workflow-instance-patch --raw`; `tasks.create[]` uses full "
-                "task fragments from `dsctl template task`; "
-                "`tasks.update[].set` uses partial task fields discovered "
-                "with `dsctl task-type schema TYPE`."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ] = None,
-    file: Annotated[
-        Path | None,
-        typer.Option(
-            "--file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to one full workflow-instance YAML file describing the "
-                "desired repaired DAG state. Use exactly one of --patch or "
-                "--file. Start from `dsctl workflow-instance export ID`; "
-                "use --dry-run to inspect the compiled diff. Full-file "
-                "edits match task identity by exact task name and do not infer "
-                "renames."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ] = None,
-    sync_definition: Annotated[
-        bool,
-        typer.Option(
-            "--sync-definition/--no-sync-definition",
-            help="Also write the edited DAG back to the current workflow definition.",
-        ),
-    ] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help=(
-                "Compile the merged workflow-instance edit payload without sending it."
-            ),
-        ),
-    ] = False,
-    confirm_risk: Annotated[
-        str | None,
-        typer.Option(
-            "--confirm-risk",
-            help=(
-                "Explicit confirmation token returned by a previous high-risk "
-                "full-file instance edit validation failure."
-            ),
-        ),
-    ] = None,
+    project: str | None,
+    patch: Path | None,
+    file: Path | None,
+    sync_definition: bool,
+    dry_run: bool,
+    confirm_risk: str | None,
 ) -> None:
-    """Edit one finished workflow instance from a YAML patch or full YAML file."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "workflow-instance.edit",
         lambda: edit_workflow_instance_result(
             workflow_instance,
+            project=project,
             patch=patch,
             file=file,
             sync_definition=sync_definition,
@@ -330,130 +202,110 @@ def edit_command(
 
 
 @workflow_instance_app.command("watch")
+@bind_command("workflow-instance.watch")
 def watch_command(
     ctx: typer.Context,
-    workflow_instance: Annotated[
-        int,
-        typer.Argument(help=WORKFLOW_INSTANCE_HELP),
-    ],
-    interval_seconds: Annotated[
-        int,
-        typer.Option(
-            "--interval-seconds",
-            help="Polling interval in seconds.",
-        ),
-    ] = DEFAULT_WATCH_INTERVAL_SECONDS,
-    timeout_seconds: Annotated[
-        int,
-        typer.Option(
-            "--timeout-seconds",
-            help="Maximum seconds to wait. Use 0 to wait indefinitely.",
-        ),
-    ] = DEFAULT_WATCH_TIMEOUT_SECONDS,
+    workflow_instance: int,
+    *,
+    project: str | None,
+    interval_seconds: int,
+    timeout_seconds: int,
+    exit_status: bool,
+    after_run_times: int | None,
 ) -> None:
-    """Poll one workflow instance until it reaches a final state."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "workflow-instance.watch",
         lambda: watch_workflow_instance_result(
             workflow_instance,
+            project=project,
             interval_seconds=interval_seconds,
             timeout_seconds=timeout_seconds,
+            after_run_times=after_run_times,
+            exit_status=exit_status,
             env_file=env_file,
         ),
     )
 
 
 @workflow_instance_app.command("stop")
+@bind_command("workflow-instance.stop")
 def stop_command(
     ctx: typer.Context,
-    workflow_instance: Annotated[
-        int,
-        typer.Argument(help=WORKFLOW_INSTANCE_HELP),
-    ],
+    workflow_instance: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Request stop for one workflow instance."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "workflow-instance.stop",
         lambda: stop_workflow_instance_result(
             workflow_instance,
+            project=project,
             env_file=env_file,
         ),
     )
 
 
 @workflow_instance_app.command("rerun")
+@bind_command("workflow-instance.rerun")
 def rerun_command(
     ctx: typer.Context,
-    workflow_instance: Annotated[
-        int,
-        typer.Argument(help=WORKFLOW_INSTANCE_HELP),
-    ],
+    workflow_instance: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Request rerun for one finished workflow instance."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "workflow-instance.rerun",
         lambda: rerun_workflow_instance_result(
             workflow_instance,
+            project=project,
             env_file=env_file,
         ),
     )
 
 
 @workflow_instance_app.command("recover-failed")
+@bind_command("workflow-instance.recover-failed")
 def recover_failed_command(
     ctx: typer.Context,
-    workflow_instance: Annotated[
-        int,
-        typer.Argument(help=WORKFLOW_INSTANCE_HELP),
-    ],
+    workflow_instance: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Recover one failed workflow instance from failed tasks."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "workflow-instance.recover-failed",
         lambda: recover_failed_workflow_instance_result(
             workflow_instance,
+            project=project,
             env_file=env_file,
         ),
     )
 
 
 @workflow_instance_app.command("execute-task")
+@bind_command("workflow-instance.execute-task")
 def execute_task_command(
     ctx: typer.Context,
-    workflow_instance: Annotated[
-        int,
-        typer.Argument(help=WORKFLOW_INSTANCE_HELP),
-    ],
-    task: Annotated[
-        str,
-        typer.Option(
-            "--task",
-            help=INSTANCE_TASK_HELP,
-        ),
-    ],
-    scope: Annotated[
-        str,
-        typer.Option(
-            "--scope",
-            help="Task execution scope: self, pre, or post.",
-        ),
-    ] = "self",
+    workflow_instance: int,
+    *,
+    project: str | None,
+    task: str,
+    scope: str,
 ) -> None:
-    """Execute one task inside one finished workflow instance."""
     state_obj = get_app_state(ctx)
     env_file = None if state_obj.env_file is None else str(state_obj.env_file)
     emit_result(
         "workflow-instance.execute-task",
         lambda: execute_task_in_workflow_instance_result(
             workflow_instance,
+            project=project,
             task=task,
             scope=scope,
             env_file=env_file,

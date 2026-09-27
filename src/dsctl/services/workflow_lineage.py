@@ -1,34 +1,37 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict, cast
 
-from dsctl.errors import ApiResultError, InvalidStateError
+from dsctl.errors import ApiResultError, ApiTransportError, InvalidStateError
 from dsctl.output import CommandResult, require_json_object, require_json_value
-from dsctl.services._serialization import (
-    serialize_dependent_lineage_task,
-    serialize_workflow_lineage,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.resolver import ResolvedProject, ResolvedTask, ResolvedWorkflow
-from dsctl.services.resolver import project as resolve_project
-from dsctl.services.resolver import task as resolve_task
-from dsctl.services.resolver import workflow as resolve_workflow
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
 from dsctl.services.selection import (
     SelectedValue,
     require_project_selection,
     require_workflow_selection,
     with_selection_source,
 )
+from dsctl.upstream.definition_models import (
+    NativeCode,
+    NativeIdentity,
+    ProjectRef,
+    WorkflowRef,
+)
+from dsctl.upstream.serialization import (
+    serialize_dependent_lineage_task,
+    serialize_workflow_lineage,
+)
+from dsctl.upstream.workflows import WORKFLOW_DOMAIN, WorkflowDomain
 
 if TYPE_CHECKING:
     from dsctl.services.selection import SelectionData
-    from dsctl.upstream.protocol import (
-        DependentLineageTaskRecord,
-        WorkflowLineageRecord,
-    )
+    from dsctl.upstream.protocol import TaskPayloadRecord
 
 QUERY_WORKFLOW_LINEAGE_ERROR = 10161
+WORKFLOW_LINEAGE_RESOURCE = "workflow-lineage"
 
 
 class WorkflowLineageErrorDetails(TypedDict, total=False):
@@ -41,24 +44,15 @@ class WorkflowLineageErrorDetails(TypedDict, total=False):
     result_code: int
 
 
-@dataclass(frozen=True)
-class _ResolvedWorkflowLineageTarget:
-    """One fully resolved project/workflow target for lineage read operations."""
-
-    selected_project: SelectedValue
-    resolved_project: ResolvedProject
-    selected_workflow: SelectedValue
-    resolved_workflow: ResolvedWorkflow
-
-
 def list_workflow_lineage_result(
     *,
     project: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
     """Return the workflow-lineage graph for one selected project."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        WORKFLOW_DOMAIN,
         _list_workflow_lineage_result,
         project=project,
     )
@@ -71,8 +65,9 @@ def get_workflow_lineage_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Return the workflow-lineage graph for one selected workflow."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        WORKFLOW_DOMAIN,
         _get_workflow_lineage_result,
         workflow=workflow,
         project=project,
@@ -87,8 +82,9 @@ def list_workflow_dependent_tasks_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Return dependent workflows/tasks for one workflow or task."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        WORKFLOW_DOMAIN,
         _list_workflow_dependent_tasks_result,
         workflow=workflow,
         task=task,
@@ -97,19 +93,22 @@ def list_workflow_dependent_tasks_result(
 
 
 def _list_workflow_lineage_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[WorkflowDomain],
     *,
     project: str | None,
 ) -> CommandResult:
     selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
-    )
-    lineage = _load_project_lineage(
-        runtime,
-        project=resolved_project,
-    )
+    operations = runtime.domain.workflows
+    operations.require_action("workflow.lineage.list")
+    resolved_project = operations.resolve_project(selected_project.value)
+    try:
+        lineage = operations.lineage_list_resolved(resolved_project)
+    except ApiResultError as exc:
+        raise _translate_lineage_error(
+            exc,
+            project=resolved_project,
+            workflow=None,
+        ) from exc
     return CommandResult(
         data=require_json_object(
             serialize_workflow_lineage(lineage),
@@ -125,17 +124,30 @@ def _list_workflow_lineage_result(
 
 
 def _get_workflow_lineage_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[WorkflowDomain],
     *,
     workflow: str | None,
     project: str | None,
 ) -> CommandResult:
-    target = _resolve_workflow_lineage_target(
+    selected_project, selected_workflow = _selected_workflow_target(
         runtime,
         workflow=workflow,
         project=project,
     )
-    lineage = _load_workflow_lineage(runtime, target=target)
+    operations = runtime.domain.workflows
+    operations.require_action("workflow.lineage.get")
+    scope = operations.resolve_workflow(
+        selected_project.value,
+        selected_workflow.value,
+    )
+    try:
+        lineage = operations.lineage_get_resolved(scope)
+    except ApiResultError as exc:
+        raise _translate_lineage_error(
+            exc,
+            project=scope.project,
+            workflow=scope.workflow,
+        ) from exc
     return CommandResult(
         data=require_json_object(
             serialize_workflow_lineage(lineage),
@@ -143,45 +155,48 @@ def _get_workflow_lineage_result(
         ),
         resolved={
             "project": _resolved_project_selection(
-                target.resolved_project,
-                target.selected_project,
+                scope.project,
+                selected_project,
             ),
             "workflow": _resolved_workflow_selection(
-                target.resolved_workflow,
-                target.selected_workflow,
+                scope.workflow,
+                selected_workflow,
             ),
         },
     )
 
 
 def _list_workflow_dependent_tasks_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[WorkflowDomain],
     *,
     workflow: str | None,
     task: str | None,
     project: str | None,
 ) -> CommandResult:
-    target = _resolve_workflow_lineage_target(
+    selected_project, selected_workflow = _selected_workflow_target(
         runtime,
         workflow=workflow,
         project=project,
     )
     selected_task = None if task is None else SelectedValue(value=task, source="flag")
-    resolved_task = (
-        None
-        if selected_task is None
-        else resolve_task(
-            selected_task.value,
-            adapter=runtime.upstream.tasks,
-            project_code=target.resolved_project.code,
-            workflow_code=target.resolved_workflow.code,
+    operations = runtime.domain.workflows
+    action = "workflow.lineage.dependent-tasks"
+    operations.require_action(action)
+    scope = operations.resolve_workflow(
+        selected_project.value,
+        selected_workflow.value,
+    )
+    try:
+        resolved_task, dependent_tasks = operations.dependent_tasks_resolved(
+            scope,
+            task_selector=(None if selected_task is None else selected_task.value),
         )
-    )
-    dependent_tasks = _load_dependent_tasks(
-        runtime,
-        target=target,
-        task=resolved_task,
-    )
+    except ApiResultError as exc:
+        raise _translate_lineage_error(
+            exc,
+            project=scope.project,
+            workflow=scope.workflow,
+        ) from exc
     return CommandResult(
         data=require_json_value(
             [
@@ -192,7 +207,10 @@ def _list_workflow_dependent_tasks_result(
         ),
         resolved=require_json_object(
             _dependent_tasks_resolved_payload(
-                target=target,
+                project=scope.project,
+                workflow=scope.workflow,
+                selected_project=selected_project,
+                selected_workflow=selected_workflow,
                 selected_task=selected_task,
                 resolved_task=resolved_task,
             ),
@@ -201,102 +219,38 @@ def _list_workflow_dependent_tasks_result(
     )
 
 
-def _resolve_workflow_lineage_target(
-    runtime: ServiceRuntime,
+def _selected_workflow_target(
+    runtime: BoundDomainServiceRuntime[WorkflowDomain],
     *,
     workflow: str | None,
     project: str | None,
-) -> _ResolvedWorkflowLineageTarget:
+) -> tuple[SelectedValue, SelectedValue]:
     selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
-    )
     selected_workflow = require_workflow_selection(
         workflow,
-        runtime=runtime,
-        project_selection=selected_project,
         input_form="argument",
     )
-    resolved_workflow = resolve_workflow(
-        selected_workflow.value,
-        adapter=runtime.upstream.workflows,
-        project_code=resolved_project.code,
-    )
-    return _ResolvedWorkflowLineageTarget(
-        selected_project=selected_project,
-        resolved_project=resolved_project,
-        selected_workflow=selected_workflow,
-        resolved_workflow=resolved_workflow,
-    )
-
-
-def _load_project_lineage(
-    runtime: ServiceRuntime,
-    *,
-    project: ResolvedProject,
-) -> WorkflowLineageRecord | None:
-    try:
-        return runtime.upstream.workflow_lineages.list(project_code=project.code)
-    except ApiResultError as exc:
-        raise _translate_lineage_error(exc, project=project, workflow=None) from exc
-
-
-def _load_workflow_lineage(
-    runtime: ServiceRuntime,
-    *,
-    target: _ResolvedWorkflowLineageTarget,
-) -> WorkflowLineageRecord | None:
-    try:
-        return runtime.upstream.workflow_lineages.get(
-            project_code=target.resolved_project.code,
-            workflow_code=target.resolved_workflow.code,
-        )
-    except ApiResultError as exc:
-        raise _translate_lineage_error(
-            exc,
-            project=target.resolved_project,
-            workflow=target.resolved_workflow,
-        ) from exc
-
-
-def _load_dependent_tasks(
-    runtime: ServiceRuntime,
-    *,
-    target: _ResolvedWorkflowLineageTarget,
-    task: ResolvedTask | None,
-) -> list[DependentLineageTaskRecord]:
-    try:
-        return list(
-            runtime.upstream.workflow_lineages.query_dependent_tasks(
-                project_code=target.resolved_project.code,
-                workflow_code=target.resolved_workflow.code,
-                task_code=None if task is None else task.code,
-            )
-        )
-    except ApiResultError as exc:
-        raise _translate_lineage_error(
-            exc,
-            project=target.resolved_project,
-            workflow=target.resolved_workflow,
-        ) from exc
+    return selected_project, selected_workflow
 
 
 def _translate_lineage_error(
     error: ApiResultError,
     *,
-    project: ResolvedProject,
-    workflow: ResolvedWorkflow | None,
+    project: ProjectRef,
+    workflow: WorkflowRef | None,
 ) -> ApiResultError | InvalidStateError:
     if error.result_code != QUERY_WORKFLOW_LINEAGE_ERROR:
         return error
     details: WorkflowLineageErrorDetails = {
-        "project_code": project.code,
+        "project_code": _required_native_code(project.native, label="project"),
         "project_name": project.name,
         "result_code": error.result_code,
     }
     if workflow is not None:
-        details["workflow_code"] = workflow.code
+        details["workflow_code"] = _required_native_code(
+            workflow.native,
+            label="workflow",
+        )
         details["workflow_name"] = workflow.name
         message = f"Workflow lineage query failed for workflow '{workflow.name}'."
     else:
@@ -313,42 +267,61 @@ def _translate_lineage_error(
 
 
 def _resolved_project_selection(
-    project: ResolvedProject,
+    project: ProjectRef,
     selection: SelectedValue,
 ) -> SelectionData:
     return with_selection_source(cast("SelectionData", project.to_data()), selection)
 
 
 def _resolved_workflow_selection(
-    workflow: ResolvedWorkflow,
+    workflow: WorkflowRef,
     selection: SelectedValue,
 ) -> SelectionData:
     return with_selection_source(cast("SelectionData", workflow.to_data()), selection)
 
 
 def _resolved_task_selection(
-    task: ResolvedTask,
+    task: TaskPayloadRecord,
     selection: SelectedValue,
 ) -> SelectionData:
-    return with_selection_source(cast("SelectionData", task.to_data()), selection)
+    return with_selection_source(
+        cast(
+            "SelectionData",
+            {"code": task.code, "name": task.name, "version": task.version},
+        ),
+        selection,
+    )
 
 
 def _dependent_tasks_resolved_payload(
     *,
-    target: _ResolvedWorkflowLineageTarget,
+    project: ProjectRef,
+    workflow: WorkflowRef,
+    selected_project: SelectedValue,
+    selected_workflow: SelectedValue,
     selected_task: SelectedValue | None,
-    resolved_task: ResolvedTask | None,
+    resolved_task: TaskPayloadRecord | None,
 ) -> dict[str, SelectionData]:
     resolved: dict[str, SelectionData] = {
         "project": _resolved_project_selection(
-            target.resolved_project,
-            target.selected_project,
+            project,
+            selected_project,
         ),
         "workflow": _resolved_workflow_selection(
-            target.resolved_workflow,
-            target.selected_workflow,
+            workflow,
+            selected_workflow,
         ),
     }
     if selected_task is not None and resolved_task is not None:
         resolved["task"] = _resolved_task_selection(resolved_task, selected_task)
     return resolved
+
+
+def _required_native_code(native: NativeIdentity, *, label: str) -> int:
+    if isinstance(native, NativeCode):
+        return native.value
+    message = f"Workflow lineage returned a non-code-native {label}"
+    raise ApiTransportError(
+        message,
+        details={"resource": WORKFLOW_LINEAGE_RESOURCE},
+    )

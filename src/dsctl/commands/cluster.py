@@ -1,9 +1,10 @@
 from pathlib import Path
-from typing import Annotated, cast
+from typing import cast
 
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult
 from dsctl.services.cluster import (
@@ -21,10 +22,6 @@ cluster_app = typer.Typer(
     no_args_is_help=True,
 )
 
-CLUSTER_HELP = (
-    "Cluster name or numeric code. Run `dsctl cluster list` to discover values."
-)
-
 
 def register_cluster_commands(app: typer.Typer) -> None:
     """Register the `cluster` command group."""
@@ -32,41 +29,15 @@ def register_cluster_commands(app: typer.Typer) -> None:
 
 
 @cluster_app.command("list")
+@bind_command("cluster.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter clusters by name using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List clusters with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -82,14 +53,11 @@ def list_command(
 
 
 @cluster_app.command("get")
+@bind_command("cluster.get")
 def get_command(
     ctx: typer.Context,
-    cluster: Annotated[
-        str,
-        typer.Argument(help=CLUSTER_HELP),
-    ],
+    cluster: str,
 ) -> None:
-    """Get one cluster by name or code."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -99,51 +67,15 @@ def get_command(
 
 
 @cluster_app.command("create")
+@bind_command("cluster.create")
 def create_command(
     ctx: typer.Context,
     *,
-    name: Annotated[
-        str,
-        typer.Option(
-            "--name",
-            help="Cluster name.",
-        ),
-    ],
-    config: Annotated[
-        str | None,
-        typer.Option(
-            "--config",
-            help=(
-                "Inline DS cluster config JSON. Prefer --config-file for "
-                "multiline Kubernetes configs; run `dsctl template cluster` "
-                "for an example."
-            ),
-        ),
-    ] = None,
-    config_file: Annotated[
-        Path | None,
-        typer.Option(
-            "--config-file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to one DS cluster config JSON file. Run "
-                "`dsctl template cluster` for an example."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ] = None,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Optional cluster description.",
-        ),
-    ] = None,
+    name: str,
+    config: str | None,
+    config_file: Path | None,
+    description: str | None,
 ) -> None:
-    """Create one cluster; pass --config or --config-file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -165,61 +97,17 @@ def create_command(
 
 
 @cluster_app.command("update")
+@bind_command("cluster.update")
 def update_command(
     ctx: typer.Context,
-    cluster: Annotated[
-        str,
-        typer.Argument(help=CLUSTER_HELP),
-    ],
+    cluster: str,
     *,
-    name: Annotated[
-        str | None,
-        typer.Option(
-            "--name",
-            help="Updated cluster name. Omit to keep the current name.",
-        ),
-    ] = None,
-    config: Annotated[
-        str | None,
-        typer.Option(
-            "--config",
-            help=(
-                "Updated inline DS cluster config JSON. Omit to keep the current "
-                "config; prefer --config-file for multiline Kubernetes configs."
-            ),
-        ),
-    ] = None,
-    config_file: Annotated[
-        Path | None,
-        typer.Option(
-            "--config-file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to an updated DS cluster config JSON file. Omit both "
-                "config options to keep the current config."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ] = None,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Updated cluster description.",
-        ),
-    ] = None,
-    clear_description: Annotated[
-        bool,
-        typer.Option(
-            "--clear-description",
-            help="Clear the stored cluster description.",
-        ),
-    ] = False,
+    name: str | None,
+    config: str | None,
+    config_file: Path | None,
+    description: str | None,
+    clear_description: bool,
 ) -> None:
-    """Update one cluster; config may come from --config-file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
@@ -250,22 +138,13 @@ def update_command(
 
 
 @cluster_app.command("delete")
+@bind_command("cluster.delete")
 def delete_command(
     ctx: typer.Context,
-    cluster: Annotated[
-        str,
-        typer.Argument(help=CLUSTER_HELP),
-    ],
+    cluster: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm cluster deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one cluster."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -301,7 +180,7 @@ def _cluster_config_from_options(
         raise UserInputError(
             message,
             suggestion=(
-                "Pass --config TEXT or --config-file PATH. Run "
+                "Pass --config CONFIG or --config-file CONFIG_FILE. Run "
                 "`dsctl template cluster` for an example JSON config."
             ),
         )

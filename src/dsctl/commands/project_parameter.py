@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.output import CommandResult
 from dsctl.services.project_parameter import (
     UNSET,
@@ -19,11 +18,6 @@ project_parameter_app = typer.Typer(
     no_args_is_help=True,
 )
 
-PROJECT_PARAMETER_HELP = (
-    "Project parameter name or numeric code. Run `dsctl project-parameter list` "
-    "in the selected project to discover values."
-)
-
 
 def register_project_parameter_commands(app: typer.Typer) -> None:
     """Register the `project-parameter` command group."""
@@ -31,61 +25,17 @@ def register_project_parameter_commands(app: typer.Typer) -> None:
 
 
 @project_parameter_app.command("list")
+@bind_command("project-parameter.list")
 def list_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter project parameters by name using the upstream search value.",
-        ),
-    ] = None,
-    data_type: Annotated[
-        str | None,
-        typer.Option(
-            "--data-type",
-            help=(
-                "Filter by DS projectParameterDataType. Run `dsctl enum list "
-                "data-type` to discover values."
-            ),
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    project: str | None,
+    search: str | None,
+    data_type: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List project parameters inside one selected project."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -103,25 +53,13 @@ def list_command(
 
 
 @project_parameter_app.command("get")
+@bind_command("project-parameter.get")
 def get_command(
     ctx: typer.Context,
-    project_parameter: Annotated[
-        str,
-        typer.Argument(help=PROJECT_PARAMETER_HELP),
-    ],
+    project_parameter: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Get one project parameter by name or code."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -135,45 +73,15 @@ def get_command(
 
 
 @project_parameter_app.command("create")
+@bind_command("project-parameter.create")
 def create_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
-    name: Annotated[
-        str,
-        typer.Option(
-            "--name",
-            help="Project parameter name.",
-        ),
-    ],
-    value: Annotated[
-        str,
-        typer.Option(
-            "--value",
-            help="Project parameter value.",
-        ),
-    ],
-    data_type: Annotated[
-        str,
-        typer.Option(
-            "--data-type",
-            help=(
-                "DS projectParameterDataType value. Run `dsctl enum list "
-                "data-type` to discover values."
-            ),
-        ),
-    ] = "VARCHAR",
+    project: str | None,
+    name: str,
+    value: str,
+    data_type: str,
 ) -> None:
-    """Create one project parameter."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -189,49 +97,16 @@ def create_command(
 
 
 @project_parameter_app.command("update")
+@bind_command("project-parameter.update")
 def update_command(
     ctx: typer.Context,
-    project_parameter: Annotated[
-        str,
-        typer.Argument(help=PROJECT_PARAMETER_HELP),
-    ],
+    project_parameter: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
-    name: Annotated[
-        str | None,
-        typer.Option(
-            "--name",
-            help="Updated parameter name. Omit to keep the current name.",
-        ),
-    ] = None,
-    value: Annotated[
-        str | None,
-        typer.Option(
-            "--value",
-            help="Updated parameter value. Omit to keep the current value.",
-        ),
-    ] = None,
-    data_type: Annotated[
-        str | None,
-        typer.Option(
-            "--data-type",
-            help=(
-                "Updated DS projectParameterDataType value. Run `dsctl enum "
-                "list data-type` to discover values."
-            ),
-        ),
-    ] = None,
+    project: str | None,
+    name: str | None,
+    value: str | None,
+    data_type: str | None,
 ) -> None:
-    """Update one project parameter."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
@@ -250,32 +125,14 @@ def update_command(
 
 
 @project_parameter_app.command("delete")
+@bind_command("project-parameter.delete")
 def delete_command(
     ctx: typer.Context,
-    project_parameter: Annotated[
-        str,
-        typer.Argument(help=PROJECT_PARAMETER_HELP),
-    ],
+    project_parameter: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm project parameter deletion without prompting.",
-        ),
-    ] = False,
+    project: str | None,
+    force: bool,
 ) -> None:
-    """Delete one project parameter."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

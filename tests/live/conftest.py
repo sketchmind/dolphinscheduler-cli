@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from itertools import count
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -89,6 +89,20 @@ def live_existing_etl_profile(
 
 
 @pytest.fixture(scope="session")
+def live_etl_ds_version(
+    request: pytest.FixtureRequest,
+    live_settings: LiveSettings,
+) -> str | None:
+    if live_settings.etl is not None:
+        return live_settings.etl.ds_version
+    admin_profile = cast(
+        "LiveProfileConfig",
+        request.getfixturevalue("live_admin_profile"),
+    )
+    return admin_profile.ds_version
+
+
+@pytest.fixture(scope="session")
 def live_existing_etl_env_file(
     live_workspace: Path,
     live_existing_etl_profile: LiveProfileConfig | None,
@@ -103,12 +117,11 @@ def live_existing_etl_env_file(
 
 @pytest.fixture(scope="session")
 def live_bootstrap_state(
+    request: pytest.FixtureRequest,
     live_repo_root: Path,
     live_workspace: Path,
     live_run_prefix: str,
     live_settings: LiveSettings,
-    live_admin_env_file: Path,
-    live_admin_profile: LiveProfileConfig,
     live_existing_etl_env_file: Path | None,
     live_existing_etl_profile: LiveProfileConfig | None,
 ) -> Iterator[LiveBootstrapState]:
@@ -124,6 +137,11 @@ def live_bootstrap_state(
             used_existing_etl_profile=True,
         )
         return
+
+    live_admin_profile = cast(
+        "LiveProfileConfig", request.getfixturevalue("live_admin_profile")
+    )
+    live_admin_env_file = cast("Path", request.getfixturevalue("live_admin_env_file"))
 
     safe_suffix = live_run_prefix.removeprefix("dsctl-live-").replace("-", "")[-12:]
     tenant_code = f"dslvt{safe_suffix}"
@@ -215,8 +233,7 @@ def live_bootstrap_state(
 
         etl_env_file = write_profile_env(
             live_workspace / "etl-generated.env",
-            LiveProfileConfig(
-                api_url=live_admin_profile.api_url,
+            live_admin_profile.with_credentials(
                 api_token=token,
                 tenant_code=tenant_code,
             ),

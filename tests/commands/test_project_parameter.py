@@ -4,16 +4,21 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.context import SessionContext
 from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
+from dsctl.upstream.project_parameters import (
+    PROJECT_PARAMETER_DOMAIN,
+    ProjectParameterDomain,
+)
 from tests.fakes import (
     FakeProject,
     FakeProjectAdapter,
     FakeProjectParameter,
     FakeProjectParameterAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
+    fake_project_definitions,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -51,15 +56,29 @@ def patch_project_parameter_service(
     fake_project_adapter: FakeProjectAdapter,
     fake_project_parameter_adapter: FakeProjectParameterAdapter,
 ) -> None:
+    context = ResourceDefaults(project="etl-prod")
+
+    def bound_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is PROJECT_PARAMETER_DOMAIN
+        return fake_bound_domain_service_runtime(
+            ProjectParameterDomain(
+                definitions=fake_project_definitions(fake_project_adapter),
+                parameters=fake_project_parameter_adapter,
+            ),
+            profile=make_profile(),
+            context=context,
+        )
+
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            fake_project_adapter,
-            project_parameter_adapter=fake_project_parameter_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod"),
-        ),
+        "open_bound_domain_service_runtime",
+        bound_runtime_factory,
     )
 
 
@@ -81,7 +100,7 @@ def test_project_parameter_list_help_points_to_project_and_data_type_discovery()
     result = runner.invoke(app, ["project-parameter", "list", "--help"])
 
     assert result.exit_code == 0
-    assert "project list" in result.stdout
+    assert "project list" in normalize_cli_help(result.stdout)
     assert "enum list" in result.stdout
     assert "data-type" in result.stdout
 
@@ -105,7 +124,8 @@ def test_project_parameter_get_help_points_to_selected_project_list() -> None:
     assert result.exit_code == 0
     assert "project-parameter" in result.stdout
     assert "list" in result.stdout
-    assert "selected project" in result.stdout
+    help_text = " ".join(result.stdout.replace("│", " ").split())
+    assert "selected project" in help_text
 
 
 def test_project_parameter_create_command_returns_created_parameter() -> None:

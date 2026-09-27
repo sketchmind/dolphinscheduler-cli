@@ -1,0 +1,422 @@
+{
+  "cleanup": {
+    "external_fixture": {
+      "mutated_by_gate": false,
+      "scope": "externally-managed-read-only"
+    },
+    "gate_created_projects": {
+      "confirmed": true,
+      "leftovers": 0
+    }
+  },
+  "contract": {
+    "ds_version": "3.4.2",
+    "operation_count": 10,
+    "rendered_contract_digest": "sha256:7ba69529bc62ac114b60801232bb21273847edace3a5c92d07b07bdf17f66c5e",
+    "selection": "runtime-slice",
+    "semantic_operations": [
+      "identity.current",
+      "project.create",
+      "project.delete",
+      "project.get",
+      "project.page",
+      "project.update",
+      "schedule.page",
+      "workflow.get",
+      "workflow.inspect",
+      "workflow.page"
+    ],
+    "source_commit": "71eb6412f940afa1f171f1097dc0e99ed61d16e2",
+    "source_contract_digest": "sha256:d74091bba4d2a1006d7c27981c7a2b1d729a966a173aa148a399d20498ab945e",
+    "source_tag": "3.4.2",
+    "source_tree": "7e797deff8662d9bf918feb32b551ca865055df4"
+  },
+  "contract_operation_test": "tests/upstream/test_ds_3_4_2.py",
+  "dolphinscheduler": {
+    "api_target_hmac_sha256": "hmac-sha256:c34ecfbd110e4e7216c501ca63347e278d6759897bd78b7e5fbe27c44455e4bd",
+    "image_digest": "apache/dolphinscheduler-api@sha256:e2b1ab0ef322c26c5fff6418d98d475d477233f5503fbf73109837c87c696ae7",
+    "image_observed_at": "2026-08-04T01:55:11Z",
+    "image_source": "ml1 Swarm service inspect plus container image RepoDigests",
+    "image_tag": "apache/dolphinscheduler-api:3.4.2",
+    "persona": "etl-developer",
+    "principal_hmac_sha256": "hmac-sha256:0db1d1b9bf31b9cf5f885355ab1879f24d73800aa6882affc145f38fb4fd8fc8",
+    "release": "3.4.2"
+  },
+  "fixture": {
+    "manifest_sha256": "sha256:179605f420217c22bf53cd017ab4a4edb77201cfe3859a2a021db32c8596b31d",
+    "provisioner": "dsctl-3.4.1-compatible-authoring-bootstrap",
+    "scheduled_workflow": true
+  },
+  "gate": "exact-profile-3.4.2",
+  "operation_trace": [
+    {
+      "action": "version",
+      "argv_shape": "version",
+      "assertions": [
+        "selected-contract-and-family-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 1
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "doctor-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 2
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "project.create-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 3
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "project.delete-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 4
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "project.get-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 5
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "project.list-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 6
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "project.update-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 7
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "schedule.list-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 8
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "workflow.describe-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 9
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "workflow.digest-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 10
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "workflow.export-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 11
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "workflow.get-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 12
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action <action>",
+      "assertions": [
+        "workflow.list-supported-live-smoke"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 13
+    },
+    {
+      "action": "doctor",
+      "argv_shape": "doctor",
+      "assertions": [
+        "api-health-ok",
+        "current-user-ok",
+        "general-user-confirmed",
+        "principal-hmac-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 14
+    },
+    {
+      "action": "workflow.list",
+      "argv_shape": "workflow list --project <project-name> --search <workflow-name>",
+      "assertions": [
+        "native-workflow-code-matched",
+        "pagination-search-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "project-name+workflow-search",
+      "sequence": 15
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get <workflow> --project <project-name>",
+      "assertions": [
+        "native-workflow-code-matched",
+        "schedule-hydrated"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "workflow-name",
+      "sequence": 16
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get <workflow> --project <project-name>",
+      "assertions": [
+        "native-workflow-code-matched",
+        "schedule-hydrated"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "workflow-code",
+      "sequence": 17
+    },
+    {
+      "action": "workflow.describe",
+      "argv_shape": "workflow describe <workflow-code> --project <project-name>",
+      "assertions": [
+        "dag-task-set-nonempty",
+        "dag-relations-valid",
+        "schedule-hydrated"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "workflow-code",
+      "sequence": 18
+    },
+    {
+      "action": "workflow.digest",
+      "argv_shape": "workflow digest <workflow-code> --project <project-name>",
+      "assertions": [
+        "digest-counts-match-describe",
+        "digest-topology-match-describe"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "workflow-code",
+      "sequence": 19
+    },
+    {
+      "action": "workflow.export",
+      "argv_shape": "workflow export <workflow-code> --project <project-name>",
+      "assertions": [
+        "yaml-dag-matches-describe",
+        "yaml-schedule-matches-live"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "workflow-code",
+      "sequence": 20
+    },
+    {
+      "action": "schedule.list",
+      "argv_shape": "schedule list --project <project-name> --workflow <workflow-code>",
+      "assertions": [
+        "fixture-schedule-id-matched",
+        "workflow-filter-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "project-name+workflow-code",
+      "sequence": 21
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get <missing-workflow-code> --project <project-name>",
+      "assertions": [
+        "stable-not-found"
+      ],
+      "error_type": "not_found",
+      "exit_code": 1,
+      "ok": false,
+      "selector_kind": "workflow-code",
+      "sequence": 22
+    },
+    {
+      "action": "project.create",
+      "argv_shape": "project create --name <project-name>",
+      "assertions": [
+        "native-project-code-returned"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 23
+    },
+    {
+      "action": "project.create",
+      "argv_shape": "project create --name <duplicate-project-name>",
+      "assertions": [
+        "stable-conflict",
+        "actionable-suggestion"
+      ],
+      "error_type": "conflict",
+      "exit_code": 1,
+      "ok": false,
+      "sequence": 24
+    },
+    {
+      "action": "project.list",
+      "argv_shape": "project list --search <project-name>",
+      "assertions": [
+        "native-project-code-matched",
+        "pagination-search-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "search",
+      "sequence": 25
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get <project>",
+      "assertions": [
+        "native-project-code-matched",
+        "project-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "project-name",
+      "sequence": 26
+    },
+    {
+      "action": "project.update",
+      "argv_shape": "project update <project-name> --name <new-project-name>",
+      "assertions": [
+        "name-and-description-updated",
+        "native-code-preserved"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "project-name",
+      "sequence": 27
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get <project>",
+      "assertions": [
+        "native-project-code-matched",
+        "project-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "project-code",
+      "sequence": 28
+    },
+    {
+      "action": "project.delete",
+      "argv_shape": "project delete <project-code> --force",
+      "assertions": [
+        "deleted-true",
+        "cleanup-applied"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "project-code",
+      "sequence": 29
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get <deleted-project-code>",
+      "assertions": [
+        "stable-not-found-after-delete"
+      ],
+      "error_type": "not_found",
+      "exit_code": 1,
+      "ok": false,
+      "selector_kind": "project-code",
+      "sequence": 30
+    },
+    {
+      "action": "project.list",
+      "argv_shape": "project list --search <deleted-project-name>",
+      "assertions": [
+        "cleanup-leftovers-zero"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "search",
+      "sequence": 31
+    }
+  ],
+  "profile": {
+    "contract_version": "3.4.2",
+    "ds": "3.4.2",
+    "family": "workflow-3.3-plus",
+    "full_adapter": false,
+    "identity_adapter": "DS342Adapter",
+    "inspection_adapter": "DS342Adapter",
+    "project_adapter": "DS342Adapter",
+    "read_adapter": "DS342Adapter",
+    "selected_ds_version": "3.4.2",
+    "support_level": "experimental",
+    "tested": false
+  },
+  "recorded_at": "2026-08-04T01:56:19.608367Z",
+  "runner": {
+    "artifact": "installed-wheel-console-script",
+    "cli_version": "0.4.0",
+    "wheel_filename": "dolphinscheduler_cli-0.4.0-py3-none-any.whl",
+    "wheel_sha256": "sha256:48c6477c09bb61e927d4408fe53db6cfeed3765e6ccddb711d85e16cdb8cd28b"
+  },
+  "sanitization_schema_version": 1,
+  "schema_version": 3,
+  "secrets_recorded": false,
+  "status": "passed"
+}

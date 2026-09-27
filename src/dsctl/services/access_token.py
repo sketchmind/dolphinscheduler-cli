@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
 
 from dsctl.cli_surface import ACCESS_TOKEN_RESOURCE
 from dsctl.errors import (
@@ -11,31 +11,26 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._resolver_kernel import collect_resolution_page_items
-from dsctl.services._serialization import (
-    AccessTokenData,
-    optional_text,
-    require_resource_int,
-    require_resource_text,
-    serialize_access_token,
-)
+from dsctl.services._page_result import paged_command_result
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_positive_int,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.resolver import (
-    DEFAULT_RESOLUTION_PAGE_SIZE,
-    MAX_RESOLUTION_PAGES,
+from dsctl.upstream.access_tokens import (
+    ACCESS_TOKEN_DOMAIN,
+    AccessTokenDomain,
 )
-from dsctl.services.resolver import user as resolve_user
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.serialization import (
+    optional_text,
+    require_resource_int,
+    serialize_access_token,
+)
 
 if TYPE_CHECKING:
     from dsctl.upstream.protocol import AccessTokenRecord
@@ -47,7 +42,7 @@ GENERATE_TOKEN_ERROR = 70011
 UPDATE_ACCESS_TOKEN_ERROR = 70013
 ACCESS_TOKEN_NOT_EXIST = 70015
 
-AccessTokenPageData: TypeAlias = PageData[AccessTokenData]
+AccessTokenServiceRuntime: TypeAlias = BoundDomainServiceRuntime[AccessTokenDomain]
 
 
 class AccessTokenSelectionData(TypedDict):
@@ -85,8 +80,9 @@ def list_access_tokens_result(
     normalized_search = optional_text(search)
     normalized_page_no = require_positive_int(page_no, label="page_no")
     normalized_page_size = require_positive_int(page_size, label="page_size")
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ACCESS_TOKEN_DOMAIN,
         _list_access_tokens_result,
         search=normalized_search,
         page_no=normalized_page_no,
@@ -105,8 +101,9 @@ def get_access_token_result(
         access_token_id,
         label="access_token_id",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ACCESS_TOKEN_DOMAIN,
         _get_access_token_result,
         access_token_id=normalized_access_token_id,
     )
@@ -128,8 +125,9 @@ def create_access_token_result(
     normalized_token = (
         None if token is None else require_non_empty_text(token, label="token")
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ACCESS_TOKEN_DOMAIN,
         _create_access_token_result,
         user=normalized_user,
         expire_time=normalized_expire_time,
@@ -181,8 +179,9 @@ def update_access_token_result(
     normalized_token = (
         None if token is None else require_non_empty_text(token, label="token")
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ACCESS_TOKEN_DOMAIN,
         _update_access_token_result,
         access_token_id=normalized_access_token_id,
         user=normalized_user,
@@ -204,8 +203,9 @@ def delete_access_token_result(
         access_token_id,
         label="access_token_id",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ACCESS_TOKEN_DOMAIN,
         _delete_access_token_result,
         access_token_id=normalized_access_token_id,
     )
@@ -223,8 +223,9 @@ def generate_access_token_result(
         expire_time,
         label="expire time",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        ACCESS_TOKEN_DOMAIN,
         _generate_access_token_result,
         user=normalized_user,
         expire_time=normalized_expire_time,
@@ -232,15 +233,15 @@ def generate_access_token_result(
 
 
 def _list_access_tokens_result(
-    runtime: ServiceRuntime,
+    runtime: AccessTokenServiceRuntime,
     *,
     search: str | None,
     page_no: int,
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.access_tokens
-    data: AccessTokenPageData = requested_page_data(
+    adapter = runtime.domain
+    return paged_command_result(
         lambda current_page_no, current_page_size: adapter.list(
             page_no=current_page_no,
             page_size=current_page_size,
@@ -251,7 +252,7 @@ def _list_access_tokens_result(
         all_pages=all_pages,
         serialize_item=serialize_access_token,
         resource=ACCESS_TOKEN_RESOURCE,
-        max_pages=MAX_AUTO_EXHAUST_PAGES,
+        resolved={"search": search},
         translate_error=lambda error: _translate_access_token_api_error(
             error,
             operation="list",
@@ -259,31 +260,22 @@ def _list_access_tokens_result(
             user_id=None,
         ),
     )
-    return CommandResult(
-        data=require_json_object(data, label="access-token list data"),
-        resolved={
-            "search": search,
-            "page_no": page_no,
-            "page_size": page_size,
-            "all": all_pages,
-        },
-    )
 
 
 def _get_access_token_result(
-    runtime: ServiceRuntime,
+    runtime: AccessTokenServiceRuntime,
     *,
     access_token_id: int,
 ) -> CommandResult:
-    access_token = _get_access_token_record(runtime, access_token_id=access_token_id)
+    selection = runtime.domain.get(access_token_id)
     return CommandResult(
         data=require_json_object(
-            serialize_access_token(access_token),
+            serialize_access_token(selection.record),
             label="access-token data",
         ),
         resolved={
             "accessToken": require_json_object(
-                _access_token_selection_data(access_token),
+                _access_token_selection_data(selection.record),
                 label="resolved access token",
             )
         },
@@ -291,16 +283,15 @@ def _get_access_token_result(
 
 
 def _create_access_token_result(
-    runtime: ServiceRuntime,
+    runtime: AccessTokenServiceRuntime,
     *,
     user: str,
     expire_time: str,
     token: str | None,
 ) -> CommandResult:
-    resolved_user = resolve_user(user, adapter=runtime.upstream.users)
     try:
-        access_token = runtime.upstream.access_tokens.create(
-            user_id=resolved_user.id,
+        mutation = runtime.domain.create(
+            user=user,
             expire_time=expire_time,
             token=token,
         )
@@ -309,16 +300,16 @@ def _create_access_token_result(
             error,
             operation="create",
             token_id=None,
-            user_id=resolved_user.id,
+            user_id=None,
         ) from error
     return CommandResult(
         data=require_json_object(
-            serialize_access_token(access_token),
+            serialize_access_token(mutation.record),
             label="access-token data",
         ),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                mutation.user.to_data(),
                 label="resolved user",
             )
         },
@@ -326,7 +317,7 @@ def _create_access_token_result(
 
 
 def _update_access_token_result(
-    runtime: ServiceRuntime,
+    runtime: AccessTokenServiceRuntime,
     *,
     access_token_id: int,
     user: str | None,
@@ -334,61 +325,34 @@ def _update_access_token_result(
     token: str | None,
     regenerate_token: bool,
 ) -> CommandResult:
-    current_access_token = _get_access_token_record(
-        runtime,
-        access_token_id=access_token_id,
-    )
-    current_user_id = require_resource_int(
-        current_access_token.userId,
-        resource=ACCESS_TOKEN_RESOURCE,
-        field_name="access_token.userId",
-    )
-    resolved_user = resolve_user(
-        user if user is not None else str(current_user_id),
-        adapter=runtime.upstream.users,
-    )
-    updated_expire_time = (
-        expire_time
-        if expire_time is not None
-        else require_resource_text(
-            current_access_token.expireTime,
-            resource=ACCESS_TOKEN_RESOURCE,
-            field_name="access_token.expireTime",
-        )
-    )
-    updated_token = token
-    if updated_token is None and not regenerate_token:
-        updated_token = require_resource_text(
-            current_access_token.token,
-            resource=ACCESS_TOKEN_RESOURCE,
-            field_name="access_token.token",
-        )
     try:
-        access_token = runtime.upstream.access_tokens.update(
-            token_id=access_token_id,
-            user_id=resolved_user.id,
-            expire_time=updated_expire_time,
-            token=updated_token,
+        mutation = runtime.domain.update(
+            access_token_id,
+            user=user,
+            expire_time=expire_time,
+            token=token,
+            regenerate_token=regenerate_token,
         )
     except ApiResultError as error:
         raise _translate_access_token_api_error(
             error,
             operation="update",
             token_id=access_token_id,
-            user_id=resolved_user.id,
+            user_id=None,
         ) from error
+    previous = cast("AccessTokenRecord", mutation.previous)
     return CommandResult(
         data=require_json_object(
-            serialize_access_token(access_token),
+            serialize_access_token(mutation.record),
             label="access-token data",
         ),
         resolved={
             "accessToken": require_json_object(
-                _access_token_selection_data(current_access_token),
+                _access_token_selection_data(previous),
                 label="resolved access token",
             ),
             "user": require_json_object(
-                resolved_user.to_data(),
+                mutation.user.to_data(),
                 label="resolved user",
             ),
         },
@@ -396,13 +360,12 @@ def _update_access_token_result(
 
 
 def _delete_access_token_result(
-    runtime: ServiceRuntime,
+    runtime: AccessTokenServiceRuntime,
     *,
     access_token_id: int,
 ) -> CommandResult:
-    access_token = _get_access_token_record(runtime, access_token_id=access_token_id)
     try:
-        runtime.upstream.access_tokens.delete(token_id=access_token_id)
+        deletion = runtime.domain.delete(access_token_id)
     except ApiResultError as error:
         raise _translate_access_token_api_error(
             error,
@@ -413,14 +376,14 @@ def _delete_access_token_result(
     return CommandResult(
         data=require_json_object(
             DeleteAccessTokenData(
-                deleted=True,
-                accessToken=_access_token_selection_data(access_token),
+                deleted=deletion.deleted,
+                accessToken=_access_token_selection_data(deletion.record),
             ),
             label="access-token delete data",
         ),
         resolved={
             "accessToken": require_json_object(
-                _access_token_selection_data(access_token),
+                _access_token_selection_data(deletion.record),
                 label="resolved access token",
             )
         },
@@ -428,15 +391,14 @@ def _delete_access_token_result(
 
 
 def _generate_access_token_result(
-    runtime: ServiceRuntime,
+    runtime: AccessTokenServiceRuntime,
     *,
     user: str,
     expire_time: str,
 ) -> CommandResult:
-    resolved_user = resolve_user(user, adapter=runtime.upstream.users)
     try:
-        token = runtime.upstream.access_tokens.generate(
-            user_id=resolved_user.id,
+        generated = runtime.domain.generate(
+            user=user,
             expire_time=expire_time,
         )
     except ApiResultError as error:
@@ -444,55 +406,23 @@ def _generate_access_token_result(
             error,
             operation="generate",
             token_id=None,
-            user_id=resolved_user.id,
+            user_id=None,
         ) from error
     return CommandResult(
         data=require_json_object(
             GeneratedAccessTokenData(
-                token=token,
-                userId=resolved_user.id,
-                expireTime=expire_time,
+                token=generated.token,
+                userId=generated.user.id,
+                expireTime=generated.expire_time,
             ),
             label="generated access-token data",
         ),
         resolved={
             "user": require_json_object(
-                resolved_user.to_data(),
+                generated.user.to_data(),
                 label="resolved user",
             )
         },
-    )
-
-
-def _get_access_token_record(
-    runtime: ServiceRuntime,
-    *,
-    access_token_id: int,
-) -> AccessTokenRecord:
-    access_tokens = collect_resolution_page_items(
-        fetch_page=lambda page_no, page_size: runtime.upstream.access_tokens.list(
-            page_no=page_no,
-            page_size=page_size,
-            search=None,
-        ),
-        page_size=DEFAULT_RESOLUTION_PAGE_SIZE,
-        max_pages=MAX_RESOLUTION_PAGES,
-        safety_message=(
-            f"Access-token scan for id {access_token_id} exceeded the resolver "
-            "safety limit"
-        ),
-        safety_details={
-            "resource": ACCESS_TOKEN_RESOURCE,
-            "id": access_token_id,
-        },
-    )
-    for access_token in access_tokens:
-        if access_token.id == access_token_id:
-            return access_token
-    message = f"Access-token id {access_token_id} was not found"
-    raise NotFoundError(
-        message,
-        details={"resource": ACCESS_TOKEN_RESOURCE, "id": access_token_id},
     )
 
 

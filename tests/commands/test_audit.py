@@ -5,15 +5,15 @@ from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.services import runtime as runtime_service
+from dsctl.upstream.observability import AuditDomain
 from tests.fakes import (
     FakeAudit,
     FakeAuditAdapter,
     FakeAuditModelType,
     FakeAuditOperationType,
-    FakeProjectAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -22,26 +22,27 @@ runner = CliRunner()
 def patch_audit_service(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            audit_adapter=FakeAuditAdapter(
-                audit_logs=[
-                    FakeAudit(
-                        user_name_value="alice",
-                        model_type_value="Workflow",
-                        model_name_value="daily-etl",
-                        operation_value="Create",
-                        create_time_value="2026-04-11 10:00:00",
-                    )
-                ],
-                model_types=[
-                    FakeAuditModelType(
-                        name="Project",
-                        child=[FakeAuditModelType(name="Workflow")],
-                    )
-                ],
-                operation_types=[FakeAuditOperationType(name="Create")],
+        "open_bound_domain_service_runtime",
+        lambda domain, env_file=None: fake_bound_domain_service_runtime(
+            AuditDomain(
+                audits=FakeAuditAdapter(
+                    audit_logs=[
+                        FakeAudit(
+                            user_name_value="alice",
+                            model_type_value="Workflow",
+                            model_name_value="daily-etl",
+                            operation_value="Create",
+                            create_time_value="2026-04-11 10:00:00",
+                        )
+                    ],
+                    model_types=[
+                        FakeAuditModelType(
+                            name="Project",
+                            child=[FakeAuditModelType(name="Workflow")],
+                        )
+                    ],
+                    operation_types=[FakeAuditOperationType(name="Create")],
+                )
             ),
             profile=make_profile(),
         ),
@@ -62,7 +63,7 @@ def test_audit_list_command_uses_projected_fields_for_default_table() -> None:
     result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             "table",
             "audit",
             "list",
@@ -81,10 +82,11 @@ def test_audit_list_command_uses_projected_fields_for_default_table() -> None:
 
 def test_audit_list_help_points_to_filter_discovery_commands() -> None:
     result = runner.invoke(app, ["audit", "list", "--help"])
+    help_text = normalize_cli_help(result.stdout)
 
     assert result.exit_code == 0
-    assert "audit model-types" in result.stdout
-    assert "audit operation-types" in result.stdout
+    assert "audit model-types" in help_text
+    assert "audit operation-types" in help_text
 
 
 def test_audit_model_types_command_returns_tree() -> None:

@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 import javalang
 
+from ds_codegen.java_source import SourceResolutionScope
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
@@ -80,11 +82,18 @@ def infer_class_creator_return_type(
                 active_same_class_methods=active_same_class_methods,
             )
         return None
+    source_owner_import_path = _source_owner_import_path(
+        controller_path,
+        package_name,
+    )
     import_path = deps.resolve_referenced_import_path(
         repo_root,
         created_type_name,
-        import_map,
-        package_name,
+        SourceResolutionScope(
+            import_map,
+            package_name,
+            source_owner_import_path,
+        ),
     )
     if import_path is None or not deps.type_extends_result(repo_root, import_path):
         return None
@@ -131,9 +140,24 @@ def infer_class_creator_structured_type(
         "Result",
     }:
         return None
+    source_owner_import_path = _source_owner_import_path(
+        controller_path,
+        package_name,
+    )
+    created_import_path = deps.resolve_referenced_import_path(
+        repo_root,
+        created_type_name,
+        SourceResolutionScope(
+            import_map,
+            package_name,
+            source_owner_import_path,
+        ),
+    )
+    if created_import_path is None:
+        return None
     loaded_type = deps.load_java_type_context(
         repo_root=repo_root,
-        java_type=created_type_name,
+        java_type=created_import_path,
         import_map=import_map,
         package_name=package_name,
     )
@@ -169,6 +193,7 @@ def infer_class_creator_structured_type(
             type_declaration=type_declaration,
             import_map=type_import_map,
             package_name=type_package_name,
+            owner_import_path=created_import_path,
             field_name=parameter.name,
         )
         if field_type is None:
@@ -191,9 +216,25 @@ def infer_class_creator_structured_type(
     if not fields:
         return None
     return deps.register_generated_view_model(
+        repo_root=repo_root,
         base_name=view_name_hint,
         fields=fields,
+        source_import_map=import_map,
+        source_package_name=package_name,
+        source_owner_import_path=_source_owner_import_path(
+            controller_path,
+            package_name,
+        ),
     )
+
+
+def _source_owner_import_path(
+    source_path: Path,
+    package_name: str | None,
+) -> str | None:
+    if package_name is None:
+        return None
+    return f"{package_name}.{source_path.stem}"
 
 
 def find_constructor_declaration(

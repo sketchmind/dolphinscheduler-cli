@@ -4,9 +4,9 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.context import SessionContext
 from dsctl.errors import ApiResultError
 from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
 from tests.fakes import (
     FakeDag,
     FakeEnumValue,
@@ -17,15 +17,19 @@ from tests.fakes import (
     FakeWorkflow,
     FakeWorkflowAdapter,
     FakeWorkflowTaskRelation,
-    fake_service_runtime,
+    fake_task_definition_service_runtime,
 )
+from tests.request_assertions import first_dry_run_request
 from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
 
-@pytest.fixture(autouse=True)
-def patch_task_service(monkeypatch: pytest.MonkeyPatch) -> None:
+def _install_task_scenario(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    update_errors_by_code: dict[int, ApiResultError] | None = None,
+) -> None:
     project_adapter = FakeProjectAdapter(
         projects=[FakeProject(code=7, name="etl-prod")]
     )
@@ -70,6 +74,8 @@ def patch_task_service(monkeypatch: pytest.MonkeyPatch) -> None:
                     FakeWorkflowTaskRelation(
                         pre_task_code_value=201,
                         post_task_code_value=202,
+                        pre_task_version_value=1,
+                        post_task_version_value=1,
                     )
                 ],
             )
@@ -97,28 +103,38 @@ def patch_task_service(monkeypatch: pytest.MonkeyPatch) -> None:
                     flag_value=FakeEnumValue("YES"),
                 ),
             ]
-        }
+        },
+        update_errors_by_code=(
+            {} if update_errors_by_code is None else dict(update_errors_by_code)
+        ),
     )
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
+        "open_task_definition_service_runtime",
+        lambda env_file=None: fake_task_definition_service_runtime(
             project_adapter,
             profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
+            context=ResourceDefaults(project="etl-prod"),
             workflow_adapter=workflow_adapter,
             task_adapter=task_adapter,
         ),
     )
 
 
+@pytest.fixture(autouse=True)
+def patch_task_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_task_scenario(monkeypatch)
+
+
 def test_task_list_command_returns_filtered_tasks() -> None:
-    result = runner.invoke(app, ["task", "list", "--search", "extract"])
+    result = runner.invoke(
+        app, ["task", "list", "--workflow", "daily-sync", "--search", "extract"]
+    )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "task.list"
-    assert payload["resolved"]["workflow"]["source"] == "context"
+    assert payload["resolved"]["workflow"]["source"] == "flag"
     assert payload["data"] == [{"code": 201, "name": "extract", "version": 1}]
 
 
@@ -129,12 +145,11 @@ def test_task_list_help_points_to_project_and_workflow_discovery() -> None:
     help_text = normalize_cli_help(result.stdout)
     assert "project list" in help_text
     assert "workflow list" in help_text
-    assert "uses workflow context only when project" in help_text
-    assert "also comes from context" in help_text
+    assert "Pass --workflow explicitly" in help_text
 
 
 def test_task_get_command_returns_task_payload() -> None:
-    result = runner.invoke(app, ["task", "get", "extract"])
+    result = runner.invoke(app, ["task", "get", "--workflow", "daily-sync", "extract"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -167,10 +182,14 @@ def test_task_update_command_can_dry_run_native_update() -> None:
         [
             "task",
             "update",
+            "--workflow",
+            "daily-sync",
             "load",
             "--set",
             "command=echo load v2",
             "--dry-run",
+            "--columns",
+            "*",
         ],
     )
 
@@ -178,18 +197,29 @@ def test_task_update_command_can_dry_run_native_update() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "task.update"
     assert payload["data"]["dry_run"] is True
-    assert payload["data"]["request"]["method"] == "PUT"
+    assert first_dry_run_request(payload["data"])["method"] == "PUT"
     assert (
-        payload["data"]["request"]["path"]
+        first_dry_run_request(payload["data"])["path"]
         == "/projects/7/task-definition/202/with-upstream"
     )
-    assert payload["data"]["updated_fields"] == ["command"]
-    assert payload["warnings"] == ["dry run: no request was sent"]
-    assert payload["warning_details"] == [
+    assert payload["data"]["changes"] == [
         {
-            "code": "dry_run_no_request_sent",
-            "message": "dry run: no request was sent",
-            "request_sent": False,
+            "field": "command",
+            "before": "echo load",
+            "after": "echo load v2",
+        }
+    ]
+    dry_run_warning = (
+        "dry run: no mutation was sent; lookup and verification reads may occur"
+    )
+    assert [item["message"] for item in payload.get("warnings", [])] == [
+        dry_run_warning
+    ]
+    assert payload["warnings"] == [
+        {
+            "code": "dry_run_no_mutation_sent",
+            "message": dry_run_warning,
+            "mutation_sent": False,
         }
     ]
 
@@ -200,6 +230,8 @@ def test_task_update_command_can_dry_run_extended_execution_fields() -> None:
         [
             "task",
             "update",
+            "--workflow",
+            "daily-sync",
             "load",
             "--set",
             "flag=NO",
@@ -214,16 +246,19 @@ def test_task_update_command_can_dry_run_extended_execution_fields() -> None:
             "--set",
             "memory_max=1024",
             "--dry-run",
+            "--columns",
+            "*",
         ],
     )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    request = payload["data"]["request"]
+    request = first_dry_run_request(payload["data"])
     form = request["form"]
+    assert isinstance(form, dict)
     task_definition = json.loads(form["taskDefinitionJsonObj"])
 
-    assert payload["data"]["updated_fields"] == [
+    assert [item["field"] for item in payload["data"]["changes"]] == [
         "flag",
         "environment_code",
         "timeout",
@@ -248,6 +283,8 @@ def test_task_update_command_reports_schema_suggestion_for_unsupported_set_key()
         [
             "task",
             "update",
+            "--workflow",
+            "daily-sync",
             "load",
             "--set",
             "unknown=1",
@@ -273,6 +310,8 @@ def test_task_update_command_suggests_schema_for_invalid_timeout_notify_strategy
         [
             "task",
             "update",
+            "--workflow",
+            "daily-sync",
             "load",
             "--set",
             "timeout_notify_strategy=FAILED",
@@ -294,78 +333,8 @@ def test_task_update_command_suggests_schema_for_invalid_timeout_notify_strategy
 def test_task_update_command_reports_schema_suggestion_for_remote_no_change_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    project_adapter = FakeProjectAdapter(
-        projects=[FakeProject(code=7, name="etl-prod")]
-    )
-    workflow_adapter = FakeWorkflowAdapter(
-        workflows=[
-            FakeWorkflow(
-                code=101,
-                name="daily-sync",
-                project_code_value=7,
-                user_id_value=11,
-            )
-        ],
-        dags={
-            101: FakeDag(
-                workflow_definition_value=FakeWorkflow(
-                    code=101,
-                    name="daily-sync",
-                    project_code_value=7,
-                    user_id_value=11,
-                ),
-                task_definition_list_value=[
-                    FakeTaskDefinition(
-                        code=201,
-                        name="extract",
-                        project_code_value=7,
-                        task_type_value="SHELL",
-                        task_params_value='{"rawScript":"echo extract"}',
-                        project_name_value="etl-prod",
-                        flag_value=FakeEnumValue("YES"),
-                    ),
-                    FakeTaskDefinition(
-                        code=202,
-                        name="load",
-                        project_code_value=7,
-                        task_type_value="SHELL",
-                        task_params_value='{"rawScript":"echo load"}',
-                        project_name_value="etl-prod",
-                        flag_value=FakeEnumValue("YES"),
-                    ),
-                ],
-                workflow_task_relation_list_value=[
-                    FakeWorkflowTaskRelation(
-                        pre_task_code_value=201,
-                        post_task_code_value=202,
-                    )
-                ],
-            )
-        },
-    )
-    task_adapter = FakeTaskAdapter(
-        workflow_tasks={
-            101: [
-                FakeTaskDefinition(
-                    code=201,
-                    name="extract",
-                    project_code_value=7,
-                    task_type_value="SHELL",
-                    project_name_value="etl-prod",
-                    task_params_value='{"rawScript":"echo extract"}',
-                    flag_value=FakeEnumValue("YES"),
-                ),
-                FakeTaskDefinition(
-                    code=202,
-                    name="load",
-                    project_code_value=7,
-                    task_type_value="SHELL",
-                    project_name_value="etl-prod",
-                    task_params_value='{"rawScript":"echo load"}',
-                    flag_value=FakeEnumValue("YES"),
-                ),
-            ]
-        },
+    _install_task_scenario(
+        monkeypatch,
         update_errors_by_code={
             202: ApiResultError(
                 result_code=50057,
@@ -373,23 +342,14 @@ def test_task_update_command_reports_schema_suggestion_for_remote_no_change_erro
             )
         },
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-        ),
-    )
 
     result = runner.invoke(
         app,
         [
             "task",
             "update",
+            "--workflow",
+            "daily-sync",
             "load",
             "--set",
             "command=echo load v2",
@@ -413,78 +373,8 @@ def test_task_update_command_reports_schema_suggestion_for_remote_no_change_erro
 def test_task_update_command_reports_invalid_state_suggestion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    project_adapter = FakeProjectAdapter(
-        projects=[FakeProject(code=7, name="etl-prod")]
-    )
-    workflow_adapter = FakeWorkflowAdapter(
-        workflows=[
-            FakeWorkflow(
-                code=101,
-                name="daily-sync",
-                project_code_value=7,
-                user_id_value=11,
-            )
-        ],
-        dags={
-            101: FakeDag(
-                workflow_definition_value=FakeWorkflow(
-                    code=101,
-                    name="daily-sync",
-                    project_code_value=7,
-                    user_id_value=11,
-                ),
-                task_definition_list_value=[
-                    FakeTaskDefinition(
-                        code=201,
-                        name="extract",
-                        project_code_value=7,
-                        task_type_value="SHELL",
-                        task_params_value='{"rawScript":"echo extract"}',
-                        project_name_value="etl-prod",
-                        flag_value=FakeEnumValue("YES"),
-                    ),
-                    FakeTaskDefinition(
-                        code=202,
-                        name="load",
-                        project_code_value=7,
-                        task_type_value="SHELL",
-                        task_params_value='{"rawScript":"echo load"}',
-                        project_name_value="etl-prod",
-                        flag_value=FakeEnumValue("YES"),
-                    ),
-                ],
-                workflow_task_relation_list_value=[
-                    FakeWorkflowTaskRelation(
-                        pre_task_code_value=201,
-                        post_task_code_value=202,
-                    )
-                ],
-            )
-        },
-    )
-    task_adapter = FakeTaskAdapter(
-        workflow_tasks={
-            101: [
-                FakeTaskDefinition(
-                    code=201,
-                    name="extract",
-                    project_code_value=7,
-                    task_type_value="SHELL",
-                    project_name_value="etl-prod",
-                    task_params_value='{"rawScript":"echo extract"}',
-                    flag_value=FakeEnumValue("YES"),
-                ),
-                FakeTaskDefinition(
-                    code=202,
-                    name="load",
-                    project_code_value=7,
-                    task_type_value="SHELL",
-                    project_name_value="etl-prod",
-                    task_params_value='{"rawScript":"echo load"}',
-                    flag_value=FakeEnumValue("YES"),
-                ),
-            ]
-        },
+    _install_task_scenario(
+        monkeypatch,
         update_errors_by_code={
             202: ApiResultError(
                 result_code=50056,
@@ -492,23 +382,14 @@ def test_task_update_command_reports_invalid_state_suggestion(
             )
         },
     )
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod", workflow="daily-sync"),
-            workflow_adapter=workflow_adapter,
-            task_adapter=task_adapter,
-        ),
-    )
 
     result = runner.invoke(
         app,
         [
             "task",
             "update",
+            "--workflow",
+            "daily-sync",
             "load",
             "--set",
             "command=echo load v2",
@@ -531,6 +412,8 @@ def test_task_update_command_emits_warning_details_for_no_op_update() -> None:
         [
             "task",
             "update",
+            "--workflow",
+            "daily-sync",
             "load",
             "--set",
             "command=echo load",
@@ -540,8 +423,10 @@ def test_task_update_command_emits_warning_details_for_no_op_update() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "task.update"
-    assert payload["warnings"] == ["task update: no persistent changes detected"]
-    assert payload["warning_details"] == [
+    assert [item["message"] for item in payload.get("warnings", [])] == [
+        "task update: no persistent changes detected"
+    ]
+    assert payload["warnings"] == [
         {
             "code": "task_update_no_persistent_change",
             "message": "task update: no persistent changes detected",
@@ -549,3 +434,10 @@ def test_task_update_command_emits_warning_details_for_no_op_update() -> None:
             "request_sent": False,
         }
     ]
+
+
+def test_task_list_requires_explicit_workflow() -> None:
+    result = runner.invoke(app, ["task", "list"])
+
+    assert result.exit_code == 2
+    assert "Missing option '--workflow'" in result.stderr

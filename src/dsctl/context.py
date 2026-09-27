@@ -1,119 +1,427 @@
 from __future__ import annotations
 
 import os
+import shlex
+import sys
 import tempfile
-from contextlib import suppress
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Literal, cast
+from typing import TYPE_CHECKING, cast
+from urllib.parse import urlsplit, urlunsplit
 
 import yaml
 
 from dsctl.errors import ConfigError
-from dsctl.support.json_types import JsonObject, JsonValue, is_json_value
 
-ContextScope = Literal["project", "user"]
-PROJECT_CONTEXT_FILENAME = ".dsctl-context.yaml"
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Mapping
+    from typing import BinaryIO
 
-
-class _UnsetContextValue:
-    """Sentinel for fields that should keep their current stored value."""
-
-
-_UNSET = _UnsetContextValue()
-ContextUpdateValue = str | None | _UnsetContextValue
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import fcntl
 
 
 @dataclass(frozen=True)
-class SessionContext:
-    """Persisted session context used by `dsctl use` and command defaults."""
+class NamedContext:
+    """A named connection-file reference bound to one target URL."""
 
+    name: str
+    env_file: Path
+    api_url: str
     project: str | None = None
-    workflow: str | None = None
-    set_at: str | None = None
-
-    def __post_init__(self) -> None:
-        """Keep project and workflow selection as one valid scope tuple."""
-        for field_name, value in (
-            ("project", self.project),
-            ("workflow", self.workflow),
-        ):
-            if value is not None and not value.strip():
-                message = f"{field_name} context must not be blank"
-                raise ValueError(message)
-        if self.workflow is not None and self.project is None:
-            message = "workflow context requires project context"
-            raise ValueError(message)
-
-    def to_data(self) -> dict[str, str]:
-        """Serialize the context for YAML storage."""
-        return {
-            key: value
-            for key, value in {
-                "project": self.project,
-                "workflow": self.workflow,
-                "set_at": self.set_at,
-            }.items()
-            if value is not None
-        }
 
 
 @dataclass(frozen=True)
-class EffectiveContext:
-    """Resolved session context and the persisted scope that supplied it."""
+class ContextRegistry:
+    """User-wide context references and an optional explicit default."""
 
-    session: SessionContext
-    scope: ContextScope | None
+    contexts: dict[str, NamedContext] = field(default_factory=dict)
+    default_context: str | None = None
 
-
-def resolve_context(*, cwd: Path | None = None) -> EffectiveContext:
-    """Resolve the highest-priority context tuple and its source scope."""
-    context_layers: tuple[tuple[ContextScope, Path], ...] = (
-        ("project", project_context_path(cwd=cwd)),
-        ("user", user_context_path()),
-    )
-    for scope, path in context_layers:
-        layer = _read_context_file(path, scope=scope)
-        if "project" in layer:
-            return EffectiveContext(
-                session=SessionContext(
-                    project=layer["project"],
-                    workflow=layer.get("workflow"),
-                    set_at=layer.get("set_at"),
-                ),
-                scope=scope,
-            )
-    return EffectiveContext(session=SessionContext(), scope=None)
+    def context(self, name: str) -> NamedContext:
+        """Resolve one named entry within this registry snapshot."""
+        return _get_context(self, name)
 
 
-def load_context(*, cwd: Path | None = None) -> SessionContext:
-    """Load the highest-priority context tuple that selects a project."""
-    return resolve_context(cwd=cwd).session
+def registry_path(*, environment: Mapping[str, str] | None = None) -> Path:
+    """Return the sole registry path without searching working directories."""
+    env = os.environ if environment is None else environment
+    config_home = env.get("XDG_CONFIG_HOME")
+    if config_home:
+        base = absolute_config_path(config_home, label="configuration directory")
+    else:
+        try:
+            home = Path(env["HOME"]) if env.get("HOME") else Path.home()
+        except (OSError, RuntimeError) as exc:
+            message = "Could not resolve the user configuration directory"
+            raise ConfigError(
+                message,
+                details={"operation": "resolve", "key": "HOME"},
+                suggestion="Set XDG_CONFIG_HOME to an accessible absolute directory.",
+            ) from exc
+        base = absolute_config_path(home / ".config", label="configuration directory")
+    return base / "dsctl" / "config.yaml"
 
 
-def write_context(
-    context: SessionContext,
-    *,
-    scope: ContextScope = "project",
-    cwd: Path | None = None,
-) -> Path:
-    """Persist a context layer to disk."""
-    path = _context_path(scope=scope, cwd=cwd)
-    payload = context.to_data()
-    document = yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
-    temporary_path: Path | None = None
-    write_path = path
+def absolute_config_path(value: str | Path, *, label: str) -> Path:
+    """Normalize a local configuration path with stable expansion failures."""
+    if "\0" in str(value):
+        raise _configuration_path_error(value, label=label)
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.is_symlink():
-            write_path = path.resolve(strict=False)
-        write_path.parent.mkdir(parents=True, exist_ok=True)
+        return Path(value).expanduser().absolute()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise _configuration_path_error(value, label=label) from exc
+
+
+def _configuration_path_error(value: str | Path, *, label: str) -> ConfigError:
+    return ConfigError(
+        f"Could not resolve {label} path {value}",
+        details={"operation": "resolve", "path": str(value)},
+        suggestion="Use an absolute path or a home-directory reference that exists.",
+    )
+
+
+def normalize_api_url(value: str) -> str:
+    """Validate an HTTP API base URL and normalize its target identity."""
+    try:
+        parsed = urlsplit(value.strip())
+        port = parsed.port
+        hostname = parsed.hostname
+    except ValueError as exc:
+        raise _invalid_api_url() from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or any(character.isspace() for character in value.strip())
+    ):
+        raise _invalid_api_url()
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    if port is not None and (parsed.scheme, port) not in {("http", 80), ("https", 443)}:
+        host = f"{host}:{port}"
+    return urlunsplit((parsed.scheme, host, parsed.path.rstrip("/"), "", ""))
+
+
+def _invalid_api_url() -> ConfigError:
+    return ConfigError(
+        "DS_API_URL must be an absolute HTTP or HTTPS API URL",
+        details={"key": "DS_API_URL"},
+        suggestion=(
+            "Set DS_API_URL to the API base URL without credentials, query parameters, "
+            "or a fragment, for example https://example.test/dolphinscheduler."
+        ),
+    )
+
+
+def load_registry(*, path: Path | None = None) -> ContextRegistry:
+    """Read the registry atomically; a missing file represents no configuration."""
+    selected = registry_path() if path is None else path
+    try:
+        document = selected.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ContextRegistry()
+    except (OSError, UnicodeError) as exc:
+        raise _file_error(selected, "read") from exc
+    try:
+        loaded: object = yaml.load(document, Loader=_RegistryLoader)  # noqa: S506
+    except yaml.YAMLError as exc:
+        raise _invalid_registry(selected, "must contain valid YAML") from exc
+    return _parse_registry(loaded, selected)
+
+
+def list_contexts() -> tuple[NamedContext, ...]:
+    """List stored references without opening their connection files."""
+    return tuple(sorted(load_registry().contexts.values(), key=lambda item: item.name))
+
+
+def get_context(name: str, *, path: Path | None = None) -> NamedContext:
+    """Read a named context; a missing name never falls back to the default."""
+    return load_registry(path=path).context(name)
+
+
+def get_default_context() -> str | None:
+    """Return the saved default name without resolving its connection file."""
+    return load_registry().default_context
+
+
+def create_context(
+    name: str,
+    *,
+    env_file: str | Path,
+    api_url: str,
+    project: str | None = None,
+) -> NamedContext:
+    """Store a validated connection-file reference without copying its token."""
+    context = _validated_context(name, env_file, api_url, project)
+    path = registry_path()
+    with _registry_lock(path):
+        current = load_registry(path=path)
+        if name in current.contexts:
+            message = f"Context {name!r} already exists"
+            raise ConfigError(
+                message,
+                details={"context_name": name},
+                suggestion=(
+                    f"Use `dsctl context update {shlex.quote(name)}` to edit it."
+                ),
+            )
+        _write_registry(
+            replace(current, contexts={**current.contexts, name: context}), path
+        )
+    return context
+
+
+def update_context(
+    name: str,
+    *,
+    env_file: str | Path | None = None,
+    api_url: str | None = None,
+    project: str | None = None,
+    clear_project: bool = False,
+) -> NamedContext:
+    """Update a reference, clearing its previous project whenever a file is supplied."""
+    if clear_project and project is not None:
+        message = "project and clear_project are mutually exclusive"
+        raise ConfigError(
+            message, suggestion="Use either --project or --clear-project."
+        )
+    if (env_file is None) != (api_url is None):
+        message = "Updating a context file requires its validated API URL"
+        raise ConfigError(message)
+    path = registry_path()
+    with _registry_lock(path):
+        current = load_registry(path=path)
+        previous = _get_context(current, name)
+        selected_project = previous.project
+        if env_file is not None or clear_project:
+            selected_project = None
+        if project is not None:
+            selected_project = project
+        context = _validated_context(
+            name,
+            previous.env_file if env_file is None else env_file,
+            previous.api_url if api_url is None else api_url,
+            selected_project,
+        )
+        _write_registry(
+            replace(current, contexts={**current.contexts, name: context}), path
+        )
+    return context
+
+
+def delete_context(name: str) -> NamedContext:
+    """Delete one reference after its default selection has been removed."""
+    path = registry_path()
+    with _registry_lock(path):
+        current = load_registry(path=path)
+        context = _get_context(current, name)
+        if current.default_context == name:
+            message = f"Context {name!r} is the saved default"
+            raise ConfigError(
+                message,
+                details={"context_name": name, "reason": "default_context_in_use"},
+                suggestion=(
+                    "Run `dsctl config unset default-context` before deleting "
+                    "this context."
+                ),
+            )
+        contexts = dict(current.contexts)
+        del contexts[name]
+        _write_registry(replace(current, contexts=contexts), path)
+    return context
+
+
+def set_default_context(name: str) -> ContextRegistry:
+    """Select an existing reference as the user-wide default."""
+    path = registry_path()
+    with _registry_lock(path):
+        current = load_registry(path=path)
+        _get_context(current, name)
+        updated = replace(current, default_context=name)
+        _write_registry(updated, path)
+    return updated
+
+
+def unset_default_context() -> ContextRegistry:
+    """Remove the saved default while retaining all named references."""
+    path = registry_path()
+    with _registry_lock(path):
+        updated = replace(load_registry(path=path), default_context=None)
+        _write_registry(updated, path)
+    return updated
+
+
+def _validated_context(
+    name: str, env_file: str | Path, api_url: str, project: str | None
+) -> NamedContext:
+    _required_string(name, "context name")
+    if project is not None:
+        _required_string(project, "project")
+    _required_string(str(env_file), "env_file")
+    return NamedContext(
+        name=name,
+        env_file=absolute_config_path(env_file, label="connection file"),
+        api_url=normalize_api_url(api_url),
+        project=project,
+    )
+
+
+def _get_context(registry: ContextRegistry, name: str) -> NamedContext:
+    _required_string(name, "context name")
+    try:
+        return registry.contexts[name]
+    except KeyError as exc:
+        message = f"Context {name!r} was not found"
+        raise ConfigError(
+            message,
+            details={"context_name": name},
+            suggestion="Run `dsctl context list` to inspect registered names.",
+        ) from exc
+
+
+def _parse_registry(loaded: object, path: Path) -> ContextRegistry:
+    if loaded is None:
+        return ContextRegistry()
+    data = _mapping(loaded, path, "registry")
+    _check_keys(data, {"contexts", "default_context"}, path)
+    context_data = _mapping(data.get("contexts", {}), path, "contexts")
+    contexts: dict[str, NamedContext] = {}
+    for name, raw in context_data.items():
+        _required_string(name, "context name")
+        entry = _mapping(raw, path, f"context {name!r}")
+        _check_keys(entry, {"env_file", "api_url", "project"}, path)
+        env_file = _required_string(entry.get("env_file"), "env_file")
+        api_url = _required_string(entry.get("api_url"), "api_url")
+        raw_project = entry.get("project")
+        project = (
+            None if raw_project is None else _required_string(raw_project, "project")
+        )
+        if not Path(env_file).is_absolute():
+            raise _invalid_registry(path, "context env_file must be an absolute path")
+        contexts[name] = _validated_context(name, env_file, api_url, project)
+    raw_default = data.get("default_context")
+    default = (
+        None
+        if raw_default is None
+        else _required_string(raw_default, "default_context")
+    )
+    if default is not None and default not in contexts:
+        raise _invalid_registry(path, "default_context must name an existing context")
+    return ContextRegistry(contexts=contexts, default_context=default)
+
+
+def _mapping(value: object, path: Path, label: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise _invalid_registry(path, f"{label} must be a mapping")
+    mapping = cast("dict[object, object]", value)
+    if any(not isinstance(key, str) for key in mapping):
+        raise _invalid_registry(path, f"{label} keys must be strings")
+    return cast("dict[str, object]", mapping)
+
+
+def _check_keys(data: dict[str, object], allowed: set[str], path: Path) -> None:
+    if set(data) - allowed:
+        raise _invalid_registry(path, "contains unsupported keys")
+
+
+def _required_string(value: object, key: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        message = f"{key} must be a nonblank string"
+        raise ConfigError(message, details={"key": key})
+    return value
+
+
+def _invalid_registry(path: Path, reason: str) -> ConfigError:
+    return ConfigError(
+        f"Context registry {path} {reason}",
+        details={"path": str(path)},
+        suggestion=f"Repair the named context registry at {path}, then retry.",
+    )
+
+
+class _RegistryLoader(yaml.SafeLoader):
+    """Reject duplicate keys instead of silently discarding registry data."""
+
+    def construct_mapping(
+        self,
+        node: yaml.MappingNode,
+        deep: bool = False,  # noqa: FBT001, FBT002
+    ) -> dict[object, object]:
+        """Validate mapping keys before SafeLoader constructs their values."""
+        keys: set[str] = set()
+        for key_node, _ in node.value:
+            key: object = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, str) or key in keys:
+                message = "Registry mapping keys must be unique strings"
+                raise yaml.YAMLError(message)
+            keys.add(key)
+        return cast("dict[object, object]", super().construct_mapping(node, deep=deep))
+
+
+@contextmanager
+def _registry_lock(path: Path) -> Iterator[None]:
+    """Serialize the entire read/modify/write operation across processes."""
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path.parent.chmod(0o700)
+        lock_path = path.with_suffix(".lock")
+        with lock_path.open("a+b") as lock_file:
+            lock_path.chmod(0o600)
+            _lock_file(lock_file)
+            try:
+                yield
+            finally:
+                _unlock_file(lock_file)
+    except OSError as exc:
+        raise _file_error(path, "write") from exc
+
+
+def _lock_file(lock_file: BinaryIO) -> None:
+    if sys.platform == "win32":
+        lock_file.seek(0, os.SEEK_END)
+        if lock_file.tell() == 0:
+            lock_file.write(b"\0")
+            lock_file.flush()
+        lock_file.seek(0)
+        msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+
+
+def _unlock_file(lock_file: BinaryIO) -> None:
+    if sys.platform == "win32":
+        lock_file.seek(0)
+        msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _write_registry(registry: ContextRegistry, path: Path) -> None:
+    payload = {
+        "contexts": {
+            name: {
+                "env_file": str(context.env_file),
+                "api_url": context.api_url,
+                **({"project": context.project} if context.project is not None else {}),
+            }
+            for name, context in registry.contexts.items()
+        },
+        "default_context": registry.default_context,
+    }
+    document = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)
+    temporary_path: Path | None = None
+    try:
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
-            dir=write_path.parent,
-            prefix=f".{write_path.name}.",
+            dir=path.parent,
+            prefix=f".{path.name}.",
             suffix=".tmp",
             delete=False,
         ) as temporary_file:
@@ -121,305 +429,17 @@ def write_context(
             temporary_file.write(document)
             temporary_file.flush()
             os.fsync(temporary_file.fileno())
-        os.replace(temporary_path, write_path)  # noqa: PTH105
-    except (OSError, RuntimeError) as exc:
+        temporary_path.replace(path)
+    except OSError as exc:
         if temporary_path is not None:
             with suppress(OSError):
                 temporary_path.unlink(missing_ok=True)
-        message = f"Could not write context file {path}"
-        raise ConfigError(
-            message,
-            details={"operation": "write", "path": str(path)},
-            suggestion=(
-                f"Make sure {write_path.parent} is a writable directory, then retry "
-                "the command."
-            ),
-        ) from exc
-    return path
+        raise _file_error(path, "write") from exc
 
 
-def update_context(
-    *,
-    project: ContextUpdateValue = _UNSET,
-    workflow: ContextUpdateValue = _UNSET,
-    scope: ContextScope = "project",
-    cwd: Path | None = None,
-) -> SessionContext:
-    """Update a context layer.
-
-    Omitted fields preserve the current stored value. Passing ``None`` clears
-    that field from the selected context scope. Updating project clears an
-    omitted workflow so the two values cannot cross project boundaries.
-    """
-    can_discard_unbound_workflow = (
-        not isinstance(project, _UnsetContextValue) or workflow is None
+def _file_error(path: Path, operation: str) -> ConfigError:
+    return ConfigError(
+        f"Could not {operation} context registry {path}",
+        details={"operation": operation, "path": str(path)},
+        suggestion=f"Make sure {path} and its directory are accessible, then retry.",
     )
-    if not can_discard_unbound_workflow:
-        current = read_context_layer(scope=scope, cwd=cwd)
-    else:
-        current_data = _read_context_file(
-            _context_path(scope=scope, cwd=cwd),
-            scope=scope,
-            discard_unbound_workflow=True,
-        )
-        current = SessionContext(
-            project=current_data.get("project"),
-            workflow=current_data.get("workflow"),
-            set_at=current_data.get("set_at"),
-        )
-    updated_project = _resolve_context_update(current.project, project)
-    updated_workflow = (
-        None
-        if not isinstance(project, _UnsetContextValue)
-        and isinstance(workflow, _UnsetContextValue)
-        else _resolve_context_update(current.workflow, workflow)
-    )
-    updated = SessionContext(
-        project=updated_project,
-        workflow=updated_workflow,
-        set_at=_utc_now(),
-    )
-    if updated.project is None:
-        clear_context(scope=scope, cwd=cwd)
-        return SessionContext()
-    write_context(updated, scope=scope, cwd=cwd)
-    return updated
-
-
-def clear_context(
-    *,
-    scope: ContextScope = "project",
-    cwd: Path | None = None,
-) -> None:
-    """Remove a stored context layer if it exists."""
-    path = _context_path(scope=scope, cwd=cwd)
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        return
-    except OSError as exc:
-        message = f"Could not clear context file {path}"
-        raise ConfigError(
-            message,
-            details={"operation": "clear", "path": str(path)},
-            suggestion=(
-                f"Make sure {path} is a removable regular file, then retry the command."
-            ),
-        ) from exc
-
-
-def read_context_layer(
-    *, scope: ContextScope = "project", cwd: Path | None = None
-) -> SessionContext:
-    """Read a single context layer without merging it with other scopes."""
-    data = _read_context_file(
-        _context_path(scope=scope, cwd=cwd),
-        scope=scope,
-    )
-    return SessionContext(
-        project=data.get("project"),
-        workflow=data.get("workflow"),
-        set_at=data.get("set_at"),
-    )
-
-
-def user_context_path() -> Path:
-    """Return the user-level context file path."""
-    config_home = os.environ.get("XDG_CONFIG_HOME")
-    base_dir = Path(config_home) if config_home else Path.home() / ".config"
-    return base_dir / "dsctl" / "context.yaml"
-
-
-def project_context_path(*, cwd: Path | None = None) -> Path:
-    """Return the project-level context file path."""
-    return (cwd or Path.cwd()) / PROJECT_CONTEXT_FILENAME
-
-
-def _context_path(*, scope: ContextScope, cwd: Path | None = None) -> Path:
-    if scope == "user":
-        return user_context_path()
-    return project_context_path(cwd=cwd)
-
-
-def _read_context_file(
-    path: Path,
-    *,
-    scope: ContextScope,
-    discard_unbound_workflow: bool = False,
-) -> dict[str, str]:
-    data = _validated_context_data(
-        _load_context_mapping(path),
-        path=path,
-        scope=scope,
-    )
-    if "workflow" not in data or "project" in data:
-        return data
-    if discard_unbound_workflow:
-        data.pop("workflow")
-        return data
-
-    message = f"Context file {path} workflow requires project in the same layer"
-    raise ConfigError(
-        message,
-        details={
-            "path": str(path),
-            "scope": scope,
-            "key": "workflow",
-            "required_key": "project",
-        },
-        suggestion=(
-            f"Run `dsctl use project NAME --scope {scope}` to bind a project "
-            "and discard the unbound workflow, or run `dsctl use --clear "
-            f"--scope {scope}` to clear that context layer."
-        ),
-    )
-
-
-def _load_context_mapping(path: Path) -> JsonObject:
-    """Load one context YAML mapping without applying context invariants."""
-    try:
-        document = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return {}
-    except UnicodeError as exc:
-        message = f"Context file {path} must be UTF-8"
-        raise ConfigError(
-            message,
-            details={
-                "operation": "read",
-                "path": str(path),
-                "encoding": "utf-8",
-            },
-            suggestion=f"Rewrite {path} as UTF-8 YAML, then retry the command.",
-        ) from exc
-    except OSError as exc:
-        message = f"Could not read context file {path}"
-        raise ConfigError(
-            message,
-            details={"operation": "read", "path": str(path)},
-            suggestion=(
-                f"Make sure {path} is a readable regular file, then retry the command."
-            ),
-        ) from exc
-
-    try:
-        loaded = yaml.safe_load(document)
-    except yaml.YAMLError as exc:
-        message = f"Invalid YAML in context file {path}"
-        raise ConfigError(
-            message,
-            details={"path": str(path)},
-        ) from exc
-
-    if loaded is None:
-        return {}
-    if not isinstance(loaded, dict):
-        message = f"Context file {path} must contain a mapping"
-        raise ConfigError(
-            message,
-            details={"path": str(path)},
-        )
-    invalid_keys = sorted(str(key) for key in loaded if not isinstance(key, str))
-    if invalid_keys:
-        message = f"Context file {path} contains unsupported keys"
-        raise ConfigError(
-            message,
-            details={"path": str(path), "keys": invalid_keys},
-        )
-
-    data: JsonObject = {}
-    for raw_key, raw_value in loaded.items():
-        key = cast("str", raw_key)
-        if not is_json_value(raw_value):
-            message = f"Context value {key!r} in {path} must be a string"
-            raise ConfigError(
-                message,
-                details={
-                    "path": str(path),
-                    "key": key,
-                    "expected_type": "string",
-                    "actual_type": type(raw_value).__name__,
-                },
-            )
-        data[key] = raw_value
-    return data
-
-
-def _validated_context_data(
-    loaded: JsonObject,
-    *,
-    path: Path,
-    scope: ContextScope,
-) -> dict[str, str]:
-    """Validate supported context keys and their scalar values."""
-    allowed_keys = {"project", "workflow", "set_at"}
-    unexpected = sorted(key for key in loaded if key not in allowed_keys)
-    if unexpected:
-        message = f"Context file {path} contains unsupported keys"
-        raise ConfigError(
-            message,
-            details={"path": str(path), "keys": unexpected},
-        )
-
-    data: dict[str, str] = {}
-    for key, value in loaded.items():
-        validated_value = _validated_context_value(
-            value,
-            key=key,
-            path=path,
-            scope=scope,
-        )
-        if validated_value is not None:
-            data[key] = validated_value
-    return data
-
-
-def _validated_context_value(
-    value: JsonValue,
-    *,
-    key: str,
-    path: Path,
-    scope: ContextScope,
-) -> str | None:
-    """Validate one optional scalar context value."""
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        message = f"Context value {key!r} in {path} must be a string"
-        raise ConfigError(
-            message,
-            details={
-                "path": str(path),
-                "key": key,
-                "expected_type": "string",
-                "actual_type": type(value).__name__,
-            },
-        )
-    if key in {"project", "workflow"} and not value.strip():
-        message = f"Context value {key!r} in {path} must not be blank"
-        raise ConfigError(
-            message,
-            details={
-                "path": str(path),
-                "scope": scope,
-                "key": key,
-            },
-            suggestion=(
-                f"Run `dsctl use --clear --scope {scope}` to clear the "
-                "invalid context layer, then set project context again."
-            ),
-        )
-    return value
-
-
-def _utc_now() -> str:
-    return datetime.now(UTC).isoformat()
-
-
-def _resolve_context_update(
-    current_value: str | None,
-    update: ContextUpdateValue,
-) -> str | None:
-    if isinstance(update, _UnsetContextValue):
-        return current_value
-    return update

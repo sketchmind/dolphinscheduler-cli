@@ -11,6 +11,8 @@ from dsctl.cli_surface import (
     AUDIT_RESOURCE,
     CLUSTER_RESOURCE,
     COMMAND_GROUPS,
+    CONFIG_RESOURCE,
+    CONTEXT_RESOURCE,
     DATASOURCE_RESOURCE,
     ENUM_RESOURCE,
     ENV_RESOURCE,
@@ -30,7 +32,6 @@ from dsctl.cli_surface import (
     TASK_TYPE_RESOURCE,
     TEMPLATE_RESOURCE,
     TENANT_RESOURCE,
-    USE_RESOURCE,
     USER_RESOURCE,
     WORKER_GROUP_RESOURCE,
     WORKFLOW_INSTANCE_RESOURCE,
@@ -42,6 +43,8 @@ from dsctl.commands.alert_plugin import register_alert_plugin_commands
 from dsctl.commands.audit import register_audit_commands
 from dsctl.commands.capabilities import register_capabilities_commands
 from dsctl.commands.cluster import register_cluster_commands
+from dsctl.commands.config import register_config_commands
+from dsctl.commands.context import register_context_commands
 from dsctl.commands.datasource import register_datasource_commands
 from dsctl.commands.doctor import register_doctor_commands
 from dsctl.commands.enums import register_enum_commands
@@ -66,7 +69,6 @@ from dsctl.commands.task_instance import register_task_instance_commands
 from dsctl.commands.task_type import register_task_type_commands
 from dsctl.commands.template import register_template_commands
 from dsctl.commands.tenant import register_tenant_commands
-from dsctl.commands.use import register_use_commands
 from dsctl.commands.user import register_user_commands
 from dsctl.commands.worker_group import register_worker_group_commands
 from dsctl.commands.workflow import register_workflow_commands
@@ -81,7 +83,8 @@ ROOT_COMMAND_REGISTRARS: tuple[CommandRegistrar, ...] = (
     register_capabilities_commands,
 )
 GROUP_COMMAND_REGISTRARS: dict[str, CommandRegistrar] = {
-    USE_RESOURCE: register_use_commands,
+    CONTEXT_RESOURCE: register_context_commands,
+    CONFIG_RESOURCE: register_config_commands,
     ENUM_RESOURCE: register_enum_commands,
     LINT_RESOURCE: register_lint_commands,
     ENV_RESOURCE: register_env_commands,
@@ -115,6 +118,43 @@ ORDERED_GROUP_COMMAND_REGISTRARS: tuple[CommandRegistrar, ...] = tuple(
     GROUP_COMMAND_REGISTRARS[name] for name in COMMAND_GROUPS
 )
 
+_ROOT_HELP_PANELS = {
+    "version": "Getting started",
+    "doctor": "Getting started",
+    "schema": "Getting started",
+    "capabilities": "Getting started",
+    CONTEXT_RESOURCE: "Getting started",
+    CONFIG_RESOURCE: "Getting started",
+    LINT_RESOURCE: "Authoring",
+    TEMPLATE_RESOURCE: "Authoring",
+    TASK_TYPE_RESOURCE: "Authoring",
+    WORKFLOW_RESOURCE: "Authoring",
+    TASK_RESOURCE: "Authoring",
+    SCHEDULE_RESOURCE: "Authoring",
+    WORKFLOW_INSTANCE_RESOURCE: "Runtime",
+    TASK_INSTANCE_RESOURCE: "Runtime",
+    MONITOR_RESOURCE: "Runtime",
+    AUDIT_RESOURCE: "Runtime",
+    PROJECT_RESOURCE: "Resources",
+    PROJECT_PARAMETER_RESOURCE: "Resources",
+    PROJECT_PREFERENCE_RESOURCE: "Resources",
+    PROJECT_WORKER_GROUP_RESOURCE: "Resources",
+    ENV_RESOURCE: "Resources",
+    CLUSTER_RESOURCE: "Resources",
+    DATASOURCE_RESOURCE: "Resources",
+    NAMESPACE_RESOURCE: "Resources",
+    RESOURCE_RESOURCE: "Resources",
+    QUEUE_RESOURCE: "Resources",
+    WORKER_GROUP_RESOURCE: "Resources",
+    TASK_GROUP_RESOURCE: "Resources",
+    ALERT_PLUGIN_RESOURCE: "Access and administration",
+    ALERT_GROUP_RESOURCE: "Access and administration",
+    TENANT_RESOURCE: "Access and administration",
+    USER_RESOURCE: "Access and administration",
+    ACCESS_TOKEN_RESOURCE: "Access and administration",
+    ENUM_RESOURCE: "Reference",
+}
+
 
 def register_all_commands(app: typer.Typer) -> None:
     """Register the full stable command surface on the root app."""
@@ -123,3 +163,9 @@ def register_all_commands(app: typer.Typer) -> None:
         *ORDERED_GROUP_COMMAND_REGISTRARS,
     ):
         register_commands(app)
+    for command in app.registered_commands:
+        if command.name in _ROOT_HELP_PANELS:
+            command.rich_help_panel = _ROOT_HELP_PANELS[command.name]
+    for group in app.registered_groups:
+        if group.name in _ROOT_HELP_PANELS:
+            group.rich_help_panel = _ROOT_HELP_PANELS[group.name]

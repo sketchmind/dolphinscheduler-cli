@@ -9,21 +9,26 @@ from dsctl.errors import (
     ConflictError,
     NotFoundError,
     PermissionDeniedError,
+    UnsupportedFeatureError,
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object, require_json_value
-from dsctl.services._serialization import (
-    ProjectWorkerGroupData,
-    serialize_project_worker_group,
+from dsctl.services._project_scope import (
+    resolve_code_project,
+    selected_project_data,
 )
 from dsctl.services._validation import require_delete_force, require_non_empty_text
-from dsctl.services.resolver import ResolvedProjectData
-from dsctl.services.resolver import project as resolve_project
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
-from dsctl.services.selection import (
-    SelectedValue,
-    require_project_selection,
-    with_selection_source,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
+)
+from dsctl.upstream.project_worker_groups import (
+    PROJECT_WORKER_GROUP_DOMAIN,
+    ProjectWorkerGroupDomain,
+)
+from dsctl.upstream.serialization import (
+    ProjectWorkerGroupData,
+    serialize_project_worker_group,
 )
 
 if TYPE_CHECKING:
@@ -47,8 +52,9 @@ def list_project_worker_groups_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """List the worker groups currently reported for one selected project."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_WORKER_GROUP_DOMAIN,
         _list_project_worker_groups_result,
         project=project,
     )
@@ -67,12 +73,15 @@ def set_project_worker_groups_result(
         raise UserInputError(
             message,
             suggestion=(
-                "Use `project-worker-group clear --force` to remove all explicit "
-                "assignments."
+                "Supply at least one --worker-group. To remove all explicit "
+                "assignments, check `dsctl capabilities --action "
+                "project-worker-group.clear` before using "
+                "`dsctl project-worker-group clear --force`."
             ),
         )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_WORKER_GROUP_DOMAIN,
         _set_project_worker_groups_result,
         project=project,
         worker_groups=normalized_worker_groups,
@@ -87,8 +96,9 @@ def clear_project_worker_groups_result(
 ) -> CommandResult:
     """Clear the explicit worker-group assignment set for one selected project."""
     require_delete_force(force=force, resource_label="Project worker-group")
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_WORKER_GROUP_DOMAIN,
         _set_project_worker_groups_result,
         project=project,
         worker_groups=[],
@@ -96,18 +106,18 @@ def clear_project_worker_groups_result(
 
 
 def _list_project_worker_groups_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectWorkerGroupDomain],
     *,
     project: str | None,
 ) -> CommandResult:
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
     )
     current_worker_groups = _current_project_worker_groups(
         runtime,
-        project_code=resolved_project.code,
+        project_code=project_code,
     )
     return CommandResult(
         data=require_json_value(
@@ -116,7 +126,7 @@ def _list_project_worker_groups_result(
         ),
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             )
         },
@@ -124,30 +134,30 @@ def _list_project_worker_groups_result(
 
 
 def _set_project_worker_groups_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectWorkerGroupDomain],
     *,
     project: str | None,
     worker_groups: Sequence[str],
 ) -> CommandResult:
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
     )
     try:
-        runtime.upstream.project_worker_groups.set(
-            project_code=resolved_project.code,
+        runtime.domain.worker_groups.set(
+            project_code=project_code,
             worker_groups=worker_groups,
         )
     except ApiResultError as error:
         raise _translate_project_worker_group_api_error(
             error,
-            project_code=resolved_project.code,
+            project_code=project_code,
             worker_groups=worker_groups,
         ) from error
     current_worker_groups = _current_project_worker_groups(
         runtime,
-        project_code=resolved_project.code,
+        project_code=project_code,
     )
     current_worker_group_names = _current_worker_group_names(current_worker_groups)
     unexpected_worker_groups = [
@@ -169,7 +179,7 @@ def _set_project_worker_groups_result(
         ),
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             ),
             "requested_worker_groups": list(worker_groups),
@@ -180,11 +190,11 @@ def _set_project_worker_groups_result(
 
 
 def _current_project_worker_groups(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectWorkerGroupDomain],
     *,
     project_code: int,
 ) -> Sequence[ProjectWorkerGroupRecord]:
-    return runtime.upstream.project_worker_groups.list(project_code=project_code)
+    return runtime.domain.worker_groups.list(project_code=project_code)
 
 
 def _project_worker_group_data(
@@ -193,20 +203,6 @@ def _project_worker_group_data(
     return [
         serialize_project_worker_group(worker_group) for worker_group in worker_groups
     ]
-
-
-def _selected_project_data(
-    project: ResolvedProjectData,
-    selected_project: SelectedValue,
-) -> dict[str, int | str | None]:
-    return with_selection_source(
-        {
-            "code": project["code"],
-            "name": project["name"],
-            "description": project["description"],
-        },
-        selected_project,
-    )
 
 
 def _normalize_worker_group_names(worker_groups: Sequence[str]) -> list[str]:
@@ -268,8 +264,9 @@ def _translate_project_worker_group_api_error(
     }
     if error.result_code == USER_NO_OPERATION_PERM:
         return PermissionDeniedError(
-            "Project worker-group mutation requires additional permissions",
+            "Project worker-group mutation requires an administrator account",
             details=details,
+            suggestion="Select a context with an administrator account and retry.",
         )
     if error.result_code == USED_WORKER_GROUP_EXISTS:
         return ConflictError(
@@ -278,6 +275,10 @@ def _translate_project_worker_group_api_error(
                 **details,
                 "used_worker_groups": _bracketed_worker_group_names(error.message),
             },
+            suggestion=(
+                "Update the worker-group selections in the project's tasks and "
+                "schedules before removing those assignments."
+            ),
         )
     if error.result_code == WORKER_GROUP_NOT_EXIST:
         missing_worker_groups = _bracketed_worker_group_names(error.message)
@@ -296,13 +297,25 @@ def _translate_project_worker_group_api_error(
                 "worker_groups": missing_worker_groups,
             },
         )
-    if error.result_code in (
-        ASSIGN_WORKER_GROUP_TO_PROJECT_ERROR,
-        WORKER_GROUP_TO_PROJECT_IS_EMPTY,
-    ):
+    if error.result_code == WORKER_GROUP_TO_PROJECT_IS_EMPTY:
+        return UnsupportedFeatureError(
+            "The server requires at least one project worker group and cannot "
+            "clear all assignments",
+            details=details,
+            suggestion=(
+                "Keep a nonempty assignment on this server. Clearing all "
+                "assignments requires a server release that supports "
+                "`project-worker-group.clear`."
+            ),
+        )
+    if error.result_code == ASSIGN_WORKER_GROUP_TO_PROJECT_ERROR:
         return ConflictError(
             "Project worker-group assignment was rejected by the upstream API",
             details=details,
+            suggestion=(
+                f"Inspect `dsctl project-worker-group list --project {project_code}` "
+                "and the server error before deciding whether to retry."
+            ),
         )
     return error
 

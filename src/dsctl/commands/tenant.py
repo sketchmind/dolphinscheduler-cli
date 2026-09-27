@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult
 from dsctl.services.tenant import (
@@ -20,8 +19,6 @@ tenant_app = typer.Typer(
     no_args_is_help=True,
 )
 
-TENANT_HELP = "Tenant code or numeric id. Run `dsctl tenant list` to discover values."
-
 
 def register_tenant_commands(app: typer.Typer) -> None:
     """Register the `tenant` command group."""
@@ -29,41 +26,15 @@ def register_tenant_commands(app: typer.Typer) -> None:
 
 
 @tenant_app.command("list")
+@bind_command("tenant.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter tenants by tenant code using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List tenants with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -79,14 +50,11 @@ def list_command(
 
 
 @tenant_app.command("get")
+@bind_command("tenant.get")
 def get_command(
     ctx: typer.Context,
-    tenant: Annotated[
-        str,
-        typer.Argument(help=TENANT_HELP),
-    ],
+    tenant: str,
 ) -> None:
-    """Get one tenant by code or id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -96,35 +64,14 @@ def get_command(
 
 
 @tenant_app.command("create")
+@bind_command("tenant.create")
 def create_command(
     ctx: typer.Context,
     *,
-    tenant_code: Annotated[
-        str,
-        typer.Option(
-            "--tenant-code",
-            help="Tenant code.",
-        ),
-    ],
-    queue: Annotated[
-        str,
-        typer.Option(
-            "--queue",
-            help=(
-                "Queue name or numeric id to bind to this tenant. Run "
-                "`dsctl queue list` to discover values."
-            ),
-        ),
-    ],
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Optional tenant description.",
-        ),
-    ] = None,
+    tenant_code: str,
+    queue: str,
+    description: str | None,
 ) -> None:
-    """Create one tenant."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -139,46 +86,16 @@ def create_command(
 
 
 @tenant_app.command("update")
+@bind_command("tenant.update")
 def update_command(
     ctx: typer.Context,
-    tenant: Annotated[
-        str,
-        typer.Argument(help=TENANT_HELP),
-    ],
+    tenant: str,
     *,
-    tenant_code: Annotated[
-        str | None,
-        typer.Option(
-            "--tenant-code",
-            help="Updated tenant code. Omit to keep the current tenant code.",
-        ),
-    ] = None,
-    queue: Annotated[
-        str | None,
-        typer.Option(
-            "--queue",
-            help=(
-                "Updated queue name or numeric id. Run `dsctl queue list` to "
-                "discover values; omit to keep the current queue."
-            ),
-        ),
-    ] = None,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Updated tenant description.",
-        ),
-    ] = None,
-    clear_description: Annotated[
-        bool,
-        typer.Option(
-            "--clear-description",
-            help="Clear the stored tenant description.",
-        ),
-    ] = False,
+    tenant_code: str | None,
+    queue: str | None,
+    description: str | None,
+    clear_description: bool,
 ) -> None:
-    """Update one tenant."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
@@ -207,22 +124,13 @@ def update_command(
 
 
 @tenant_app.command("delete")
+@bind_command("tenant.delete")
 def delete_command(
     ctx: typer.Context,
-    tenant: Annotated[
-        str,
-        typer.Argument(help=TENANT_HELP),
-    ],
+    tenant: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm tenant deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one tenant."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

@@ -1,19 +1,24 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
 from tests.fakes import (
     FakeProject,
     FakeProjectAdapter,
     FakeProjectParameter,
     FakeProjectParameterAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
+    fake_project_definitions,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
-from dsctl.context import SessionContext
 from dsctl.errors import ConflictError, UserInputError
 from dsctl.services import project_parameter as project_parameter_service
 from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
+from dsctl.upstream.project_parameters import (
+    PROJECT_PARAMETER_DOMAIN,
+    ProjectParameterDomain,
+)
 
 
 def _install_project_parameter_service_fakes(
@@ -21,29 +26,30 @@ def _install_project_parameter_service_fakes(
     *,
     project_adapter: FakeProjectAdapter,
     project_parameter_adapter: FakeProjectParameterAdapter,
-    context: SessionContext | None = None,
+    context: ResourceDefaults | None = None,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            project_parameter_adapter=project_parameter_adapter,
+    def bound_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is PROJECT_PARAMETER_DOMAIN
+        return fake_bound_domain_service_runtime(
+            ProjectParameterDomain(
+                definitions=fake_project_definitions(project_adapter),
+                parameters=project_parameter_adapter,
+            ),
             profile=make_profile(),
             context=context,
-        ),
+        )
+
+    monkeypatch.setattr(
+        runtime_service,
+        "open_bound_domain_service_runtime",
+        bound_runtime_factory,
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 @pytest.fixture
@@ -94,7 +100,7 @@ def test_list_project_parameters_result_uses_selected_project(
         monkeypatch,
         project_adapter=fake_project_adapter,
         project_parameter_adapter=fake_project_parameter_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = project_parameter_service.list_project_parameters_result(page_size=1)

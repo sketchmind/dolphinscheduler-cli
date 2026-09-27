@@ -18,6 +18,8 @@ class DataShapeSchema(TypedDict, total=False):
     column_discovery: str
     supported_output_formats: list[str]
     column_projection: bool
+    line_source_path: str
+    compact_rows: bool
 
 
 @dataclass(frozen=True)
@@ -29,8 +31,10 @@ class DataShape:
     value_path: str | None = None
     default_columns: tuple[str, ...] = ()
     column_discovery: str = "runtime_row_keys"
-    supported_output_formats: tuple[str, ...] = ("json", "table", "tsv")
+    supported_output_formats: tuple[str, ...] = ("json", "json-compact", "table", "tsv")
     column_projection: bool = True
+    line_source_path: str | None = None
+    compact_rows: bool = False
 
     def to_schema(self) -> DataShapeSchema:
         """Return the JSON-safe schema representation for this shape."""
@@ -39,10 +43,14 @@ class DataShape:
             payload["row_path"] = self.row_path
         if self.value_path is not None:
             payload["value_path"] = self.value_path
+        if self.line_source_path is not None:
+            payload["line_source_path"] = self.line_source_path
+        if self.compact_rows:
+            payload["compact_rows"] = True
         if self.default_columns:
             payload["default_columns"] = list(self.default_columns)
         payload["column_discovery"] = self.column_discovery
-        if self.supported_output_formats != ("json", "table", "tsv"):
+        if self.supported_output_formats != ("json", "json-compact", "table", "tsv"):
             payload["supported_output_formats"] = list(self.supported_output_formats)
         if not self.column_projection:
             payload["column_projection"] = False
@@ -105,6 +113,7 @@ PAGE_LIST_DEFAULTS: dict[str, tuple[str, ...]] = {
 }
 
 COLLECTION_DEFAULTS: dict[str, tuple[str, ...]] = {
+    "context.list": ("name", "env_file", "api_url", "project", "default"),
     "audit.model-types": ("name",),
     "audit.operation-types": ("name",),
     "enum.names": ("name", "list_command"),
@@ -139,12 +148,15 @@ def _stable_get_defaults(
 OBJECT_DEFAULTS: dict[str, tuple[str, ...]] = {
     **_stable_get_defaults(PAGE_LIST_DEFAULTS),
     **_stable_get_defaults(COLLECTION_DEFAULTS),
-    "context": ("api_url", "ds_version", "project", "workflow", "set_at"),
+    "context": ("context", "api_url", "ds_version", "project"),
+    "context.create": ("name", "env_file", "api_url", "project"),
+    "context.update": ("name", "env_file", "api_url", "project"),
+    "context.delete": ("name", "env_file", "api_url", "project", "deleted"),
+    "config.get": ("key", "value"),
+    "config.set": ("key", "value"),
+    "config.unset": ("key", "value"),
     "datasource.get": ("id", "name", "type", "host", "port", "database"),
     "project-preference.get": (),
-    "use.clear": ("project", "workflow", "set_at"),
-    "use.project": ("project", "workflow", "set_at"),
-    "use.workflow": ("project", "workflow", "set_at"),
     "workflow.get": ("code", "name", "version"),
     "workflow.lineage.get": (),
     "workflow.describe": ("workflow", "tasks", "relations"),
@@ -193,9 +205,25 @@ _TASK_TYPE_LEGACY_FIELDS_SHAPE = DataShape(
 
 
 NESTED_ROW_SHAPES: dict[str, DataShape] = {
+    "lint.workflow": DataShape(
+        kind="summary",
+        row_path="data.diagnostics",
+        default_columns=("severity", "code", "path", "message"),
+    ),
+    "lint.workflow-patch": DataShape(
+        kind="summary",
+        row_path="data.diagnostics",
+        default_columns=("severity", "code", "path", "message"),
+    ),
+    "lint.workflow-instance-patch": DataShape(
+        kind="summary",
+        row_path="data.diagnostics",
+        default_columns=("severity", "code", "path", "message"),
+    ),
     "alert-plugin.definition.list": DataShape(
         kind="summary",
         row_path="data.definitions",
+        compact_rows=True,
         default_columns=("id", "pluginName", "pluginType"),
     ),
     "doctor": DataShape(
@@ -211,6 +239,7 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
     "task-type.list": DataShape(
         kind="summary",
         row_path="data.taskTypes",
+        compact_rows=True,
         default_columns=("taskType", "taskCategory", "isCollection"),
     ),
     "task-type.get": DataShape(
@@ -239,28 +268,34 @@ NESTED_ROW_SHAPES: dict[str, DataShape] = {
             "task_type",
             "kind",
             "category",
-            "default_variant",
             "next_command",
         ),
     ),
     "template.workflow": DataShape(
-        kind="summary",
+        kind="document",
         row_path="data.lines",
+        value_path="data.yaml",
+        line_source_path="data.yaml",
         default_columns=("line_no", "line"),
     ),
     "template.workflow-patch": DataShape(
-        kind="summary",
+        kind="document",
         row_path="data.lines",
+        value_path="data.yaml",
+        line_source_path="data.yaml",
         default_columns=("line_no", "line"),
     ),
     "template.workflow-instance-patch": DataShape(
-        kind="summary",
+        kind="document",
         row_path="data.lines",
+        value_path="data.yaml",
+        line_source_path="data.yaml",
         default_columns=("line_no", "line"),
     ),
     "workflow.lineage.list": DataShape(
         kind="summary",
         row_path="data.workFlowRelationDetailList",
+        compact_rows=True,
         default_columns=("workFlowCode", "workFlowName", "workFlowPublishStatus"),
     ),
 }
@@ -269,7 +304,13 @@ SCHEMA_VIEW_SHAPES: dict[str, DataShape] = {
     "index": DataShape(
         kind="summary",
         row_path="data.groups",
-        default_columns=("name", "summary", "action_count", "schema_command"),
+        default_columns=(
+            "name",
+            "summary",
+            "action_count",
+            "available_action_count",
+            "schema_command",
+        ),
     ),
     "groups": DataShape(
         kind="summary",
@@ -284,7 +325,14 @@ SCHEMA_VIEW_SHAPES: dict[str, DataShape] = {
     "group": DataShape(
         kind="summary",
         row_path="data.actions",
-        default_columns=("action", "name", "summary", "schema_command"),
+        default_columns=(
+            "action",
+            "name",
+            "summary",
+            "availability",
+            "verification",
+            "schema_command",
+        ),
     ),
     "command": DataShape(
         kind="summary",
@@ -308,7 +356,15 @@ SCHEMA_VIEW_SHAPES: dict[str, DataShape] = {
     "full_group": DataShape(
         kind="summary",
         row_path="data.rows",
-        default_columns=("kind", "action", "name", "summary", "schema_command"),
+        default_columns=(
+            "kind",
+            "action",
+            "name",
+            "summary",
+            "availability",
+            "verification",
+            "schema_command",
+        ),
     ),
     "full_command": DataShape(
         kind="summary",
@@ -323,7 +379,7 @@ TASK_TYPE_SCHEMA_VIEW_SHAPES: dict[str, DataShape] = {
         kind="document",
         value_path="data.schema",
         column_discovery="not_applicable",
-        supported_output_formats=("json",),
+        supported_output_formats=("json", "json-compact"),
         column_projection=False,
     ),
     "compile_mappings": DataShape(
@@ -337,11 +393,22 @@ TASK_TYPE_SCHEMA_VIEW_SHAPES: dict[str, DataShape] = {
 _VIEW_SHAPES_BY_ACTION: dict[str, dict[str, DataShape]] = {
     "schema": SCHEMA_VIEW_SHAPES,
     "task-type.schema": TASK_TYPE_SCHEMA_VIEW_SHAPES,
+    "template.task": {
+        "index": NESTED_ROW_SHAPES["template.task"],
+        "template": DataShape(
+            kind="document",
+            row_path="data.rows",
+            value_path="data.yaml",
+            line_source_path="data.yaml",
+            default_columns=("line_no", "line"),
+        ),
+    },
 }
 
 _DEFAULT_VIEW_BY_ACTION = {
     "schema": "index",
     "task-type.schema": "fields",
+    "template.task": "index",
 }
 
 DATA_SHAPES: dict[str, DataShape] = {
@@ -350,6 +417,7 @@ DATA_SHAPES: dict[str, DataShape] = {
             kind="page",
             row_path="data.totalList",
             default_columns=columns,
+            compact_rows=True,
         )
         for action, columns in PAGE_LIST_DEFAULTS.items()
     },
@@ -358,6 +426,7 @@ DATA_SHAPES: dict[str, DataShape] = {
             kind="collection",
             row_path="data",
             default_columns=columns,
+            compact_rows=True,
         )
         for action, columns in COLLECTION_DEFAULTS.items()
     },

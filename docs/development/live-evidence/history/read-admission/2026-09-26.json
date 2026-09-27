@@ -1,0 +1,1780 @@
+{
+  "schema_version": 1,
+  "kind": "preliminary-read-admission-review",
+  "reviewed_at": "2026-09-26",
+  "wheel_sha256": "sha256:df85f978c850f2b826143728efb49ddd87d7d575dac696a338506b8e36726005",
+  "bundle": "full_core/v1",
+  "version_count": 22,
+  "verification_change": {
+    "from": "contract_tested",
+    "to": "live_smoke"
+  },
+  "support_level_changes": false,
+  "tested_changes": false,
+  "final_release_evidence": false,
+  "original_receipts_validated": true,
+  "read_source_closures_unchanged": true,
+  "source_contract_drift": "3.1.0 through 3.1.7: only alert-plugin paging return shape; no read-operation changes.",
+  "versions": [
+    {
+      "version": "2.0.1",
+      "receipt_sha256": "sha256:67b9f146374c86307bc1264183d430a599b88a28351245780429139021f243da",
+      "receipt_digest": "sha256:42fe85e924f0b1be4b10ca3bee4269fec6ec506db99e5df26dbef582dd1a58dc",
+      "source": {
+        "tag": "2.0.1",
+        "commit": "bf2197995ac835c66b44874b8658579a3da916b0",
+        "tree": "7ddc02688bbd1cfca3e5865225c2deb27fbc658b"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            103,
+            104
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            101,
+            102
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:4176ba4f104ab8f5a707fbda7ded469596578b2fcebdfad21be7770c6dc14286",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:1774b9601c35db7f43de176a97895ec00fb8040ca82454088fe8edd464903b9d"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            106,
+            107
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:40764e8762158106ffe505fe5a26a2f9cfff4625c8a18ffed64b7bf023e5c1c0",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:29998e76d84be6259ff2decd25c006a3fcf9ad9c04016272584523a9f202fd15"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            97,
+            105
+          ]
+        }
+      }
+    },
+    {
+      "version": "2.0.2",
+      "receipt_sha256": "sha256:45da13c0d67597d176e7aceec59f24969432e63add1fdb0feed1908eba4c4cec",
+      "receipt_digest": "sha256:da68b600948d80a689092f3a620ee91b8fce1b096fb599c10ed5a9966992e021",
+      "source": {
+        "tag": "2.0.2",
+        "commit": "24ddd07493c6260a877db8a5c73e654263d356ad",
+        "tree": "0b680c1d8b07e4ec17b2d5a87ea52d6e532f82bd"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            104,
+            105
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            102,
+            103
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:4176ba4f104ab8f5a707fbda7ded469596578b2fcebdfad21be7770c6dc14286",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:1774b9601c35db7f43de176a97895ec00fb8040ca82454088fe8edd464903b9d"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            107,
+            108
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:40764e8762158106ffe505fe5a26a2f9cfff4625c8a18ffed64b7bf023e5c1c0",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:29998e76d84be6259ff2decd25c006a3fcf9ad9c04016272584523a9f202fd15"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            98,
+            106
+          ]
+        }
+      }
+    },
+    {
+      "version": "2.0.3",
+      "receipt_sha256": "sha256:8efec9f5df6c22b342970309d9c72ca1bc3b8d3929b5cab8edf36e8a253a7f48",
+      "receipt_digest": "sha256:0e8976b6195b08ffe4ecb4802d089f387de9deee608774434705dd67beb5cd6d",
+      "source": {
+        "tag": "2.0.3",
+        "commit": "f1a3c52a66eb8dec1f853b9c9a02b88cdebbd0dc",
+        "tree": "74e785a2682e8b5dffa1b390c569e4bfb1a2174c"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:4176ba4f104ab8f5a707fbda7ded469596578b2fcebdfad21be7770c6dc14286",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:1774b9601c35db7f43de176a97895ec00fb8040ca82454088fe8edd464903b9d"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:40764e8762158106ffe505fe5a26a2f9cfff4625c8a18ffed64b7bf023e5c1c0",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:29998e76d84be6259ff2decd25c006a3fcf9ad9c04016272584523a9f202fd15"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "2.0.4",
+      "receipt_sha256": "sha256:3b3ee89deec463ddae89e846ac2c31ea6b80307d8db581f5c3da4c37514c4d96",
+      "receipt_digest": "sha256:13b49aee8e1e021df543abb2ebb489ed9def6b8c596d2ab16e5f305c4ddae684",
+      "source": {
+        "tag": "2.0.4",
+        "commit": "0ff01e3c68da6a174836216f87c05f707233f7f9",
+        "tree": "6b737bb42173e798d3b12e92f9b3d28a484224c2"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:4176ba4f104ab8f5a707fbda7ded469596578b2fcebdfad21be7770c6dc14286",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:1774b9601c35db7f43de176a97895ec00fb8040ca82454088fe8edd464903b9d"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:40764e8762158106ffe505fe5a26a2f9cfff4625c8a18ffed64b7bf023e5c1c0",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:29998e76d84be6259ff2decd25c006a3fcf9ad9c04016272584523a9f202fd15"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "2.0.5",
+      "receipt_sha256": "sha256:4e4581d2606c1888996abb136553cc2fff699e0e63131ade4aa181eab9307a27",
+      "receipt_digest": "sha256:b6346d9de0bca383d38b57de7dba2026879468161f1fcd5ba5dbbf8e7978fcba",
+      "source": {
+        "tag": "2.0.5",
+        "commit": "f31328276c12821c21d1ce07e824bc74146c19b2",
+        "tree": "a1b4b125b4dbbd5cc6139165d2835c8d3710554b"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:4176ba4f104ab8f5a707fbda7ded469596578b2fcebdfad21be7770c6dc14286",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:1774b9601c35db7f43de176a97895ec00fb8040ca82454088fe8edd464903b9d"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:40764e8762158106ffe505fe5a26a2f9cfff4625c8a18ffed64b7bf023e5c1c0",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:29998e76d84be6259ff2decd25c006a3fcf9ad9c04016272584523a9f202fd15"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "2.0.6",
+      "receipt_sha256": "sha256:1fcb2c46098261c6aa608ef31676e584131035d5ff60188ee18dcad435886d34",
+      "receipt_digest": "sha256:323647c26f672b0574e16b79f3cb61f95d4c40cb614e0f9c2c3b293a7b8c3f5a",
+      "source": {
+        "tag": "2.0.6",
+        "commit": "6aaf6e39ed87fae47fbaf276e86c65f7e1f75c65",
+        "tree": "39513599daa7936c79841106327e0b31cad46964"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:4176ba4f104ab8f5a707fbda7ded469596578b2fcebdfad21be7770c6dc14286",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:1774b9601c35db7f43de176a97895ec00fb8040ca82454088fe8edd464903b9d"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:40764e8762158106ffe505fe5a26a2f9cfff4625c8a18ffed64b7bf023e5c1c0",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:29998e76d84be6259ff2decd25c006a3fcf9ad9c04016272584523a9f202fd15"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "2.0.7",
+      "receipt_sha256": "sha256:f22308d6105f5000c371a44b81fb881c85bf524e9c621ba8f78cf096b08bc446",
+      "receipt_digest": "sha256:f6b1afc28a65d05eeb182110b27820b26032493f04135a8c8d4b8599ef7e63b9",
+      "source": {
+        "tag": "2.0.7",
+        "commit": "bf5a0f228b7858c8a3e682a0caa225e3569db15e",
+        "tree": "630fb83a9ac473e40919c6062b63599c518efef5"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:4176ba4f104ab8f5a707fbda7ded469596578b2fcebdfad21be7770c6dc14286",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:1774b9601c35db7f43de176a97895ec00fb8040ca82454088fe8edd464903b9d"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:40764e8762158106ffe505fe5a26a2f9cfff4625c8a18ffed64b7bf023e5c1c0",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:29998e76d84be6259ff2decd25c006a3fcf9ad9c04016272584523a9f202fd15"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "2.0.8",
+      "receipt_sha256": "sha256:dbb1abe62533be34f607f2a4e1c93818b0f286d28b26a1cc758bf89fde4e410b",
+      "receipt_digest": "sha256:1100d733d1b9d1aabb21b440c95be29ce240882b30f9ad3d9ead171b16ca11f4",
+      "source": {
+        "tag": "2.0.8",
+        "commit": "2a22b960580c907f67128a294df2b10b4380312a",
+        "tree": "7323fe0bba7e0a2808e6fa853f12b44e633461be"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:4176ba4f104ab8f5a707fbda7ded469596578b2fcebdfad21be7770c6dc14286",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:1774b9601c35db7f43de176a97895ec00fb8040ca82454088fe8edd464903b9d"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:40764e8762158106ffe505fe5a26a2f9cfff4625c8a18ffed64b7bf023e5c1c0",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:29998e76d84be6259ff2decd25c006a3fcf9ad9c04016272584523a9f202fd15"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.0.1",
+      "receipt_sha256": "sha256:39efe556df6fa9a3e60dfe8e403ef43e2f76aad649320456285982f1c064bf70",
+      "receipt_digest": "sha256:2c92ccd17fb44906ee916504b3a6ebfad01fd1ec8b03f631c61d0be8ef0d0ba0",
+      "source": {
+        "tag": "3.0.1",
+        "commit": "cb03ca8166cb9d6d8e63db43664b4a2126ea43b4",
+        "tree": "d64ff1169ef3de7a6f5be42780cdc0585f292978"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:9f88fda87803cb9e8ba5e69a4a40e893044f0f7db58621509878e808e9289912",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:145fedcc58183a8663dd51240e363f2e224d8967c3a18111a399c48f5f5f61d9"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.0.2",
+      "receipt_sha256": "sha256:e1d61745e2c0691dbda92d93b00dd8582cd7ea5e11a8d187e3a13dacfab49b82",
+      "receipt_digest": "sha256:97a547a3d941f38d45d69d49d85a87391a691aa3857ac41fb9b3284268a85c49",
+      "source": {
+        "tag": "3.0.2",
+        "commit": "d2ba3d4cfb3ab9f252340aa603ea036baa52f88c",
+        "tree": "14d98a50d3acef6109f77993e76341aa5036503a"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:9f88fda87803cb9e8ba5e69a4a40e893044f0f7db58621509878e808e9289912",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:145fedcc58183a8663dd51240e363f2e224d8967c3a18111a399c48f5f5f61d9"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.0.3",
+      "receipt_sha256": "sha256:2e027264223804083a64c14e5852153e9d91f4da65f7f78a736755eaf658b012",
+      "receipt_digest": "sha256:943e5a21bc41f165935dc8b4b0fe3a65d6ad6ed83b0f39cb348e7cd77a09d3e5",
+      "source": {
+        "tag": "3.0.3",
+        "commit": "a3b882a80a91d2b8d1335e42b5d19a8ef144fe3b",
+        "tree": "4f2ca0d740ecc3b35dd65353c4097de3a7ad9d01"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:9f88fda87803cb9e8ba5e69a4a40e893044f0f7db58621509878e808e9289912",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:145fedcc58183a8663dd51240e363f2e224d8967c3a18111a399c48f5f5f61d9"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.0.4",
+      "receipt_sha256": "sha256:0a41556c3fdaa90c8a93725d19239c5c13a6edc182dca9c89ead3d4411b18c2c",
+      "receipt_digest": "sha256:56e148919b1a877000bf223f92dd34ec6a8ec10cc123472983662ae088ea939f",
+      "source": {
+        "tag": "3.0.4",
+        "commit": "0a4175261e93ebfe5557fec023ac4b1c2ec950ee",
+        "tree": "0d65b6bd85f5c31f7660238eefbc0ce3c5ae0cf3"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:9f88fda87803cb9e8ba5e69a4a40e893044f0f7db58621509878e808e9289912",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:145fedcc58183a8663dd51240e363f2e224d8967c3a18111a399c48f5f5f61d9"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.0.5",
+      "receipt_sha256": "sha256:d50eb19341c9b9dfde88d3570379fc95d26741be2417aa0a31006b1cbceb7df3",
+      "receipt_digest": "sha256:71fcaf7a98af75788af1d2816ec35850e3c23179906dc4deeafee202cebcddca",
+      "source": {
+        "tag": "3.0.5",
+        "commit": "dc3c9651342529fcfde47dd0949a0ced18ce9e4a",
+        "tree": "1723ed11710fd8939b8748b54f04a4d76e6e351e"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:9f88fda87803cb9e8ba5e69a4a40e893044f0f7db58621509878e808e9289912",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:145fedcc58183a8663dd51240e363f2e224d8967c3a18111a399c48f5f5f61d9"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.1.1",
+      "receipt_sha256": "sha256:6c73b7f04a23d12353c5dc24e18dfdcb5cbb25fb0e90ea67669cb64bbfa72d0f",
+      "receipt_digest": "sha256:0c40e3b1e02a3e7c6fe3b9fc53f97a0bb8d78790c4921215eabbe961a6117297",
+      "source": {
+        "tag": "3.1.1",
+        "commit": "efc03679994a7522a0adc1e6662285ab8f617f61",
+        "tree": "09b903bb229e41e664122f381b6d2f59b805f795"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:b33fb8d41402fe8e5976953fd66c518e38313c585f0f9fa756c19c2ea4c632e4",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:92ae2f2e8765b2a75e3002e0cf18cb8b8aeae89cb6602e639c6ab5407bbbc343"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.1.2",
+      "receipt_sha256": "sha256:ea0b2af9db775b0c25406c2f382b1ce8d1a7775e8eb34492aaae0a3c6fe5ba9f",
+      "receipt_digest": "sha256:9c638a6b87fad5114c850e5b6d0782926a819a9f0ce0e12613eb438a8baa553a",
+      "source": {
+        "tag": "3.1.2",
+        "commit": "f1aefae5e25daa5beef08accd8fbd26c32fb6b47",
+        "tree": "6ad3cbb6a776c2312631f043e2d2b5d6866efa89"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            113,
+            114
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            111,
+            112
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:b33fb8d41402fe8e5976953fd66c518e38313c585f0f9fa756c19c2ea4c632e4",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:92ae2f2e8765b2a75e3002e0cf18cb8b8aeae89cb6602e639c6ab5407bbbc343"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            116,
+            117
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            115
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.1.3",
+      "receipt_sha256": "sha256:fd32d474855bf52a17b78c2d37c89cb8affc129686c5e28194af104c75f74b42",
+      "receipt_digest": "sha256:1ff56d329bb91be7f65be303606c7bba820dcc2277d7cf60485b085a7370fb49",
+      "source": {
+        "tag": "3.1.3",
+        "commit": "4a3299ac8cba79c8e40ce082b0f2594c369b4073",
+        "tree": "28c4a45ebca040966570a4cb20546fe2349c1485"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            114,
+            115
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            112,
+            113
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:b33fb8d41402fe8e5976953fd66c518e38313c585f0f9fa756c19c2ea4c632e4",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:92ae2f2e8765b2a75e3002e0cf18cb8b8aeae89cb6602e639c6ab5407bbbc343"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            117,
+            118
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            116
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.1.4",
+      "receipt_sha256": "sha256:a9d8724da866e18d69cb0cb6effc11f3a5cbe4184f8f3cac9366773ce8a380c0",
+      "receipt_digest": "sha256:881f86c325d0276f7ca0988faffe1a0135a147e69651f464ec38cd10ce4b7342",
+      "source": {
+        "tag": "3.1.4",
+        "commit": "2d6393d722f8288dfb7ab5eddbbb8319b491824e",
+        "tree": "3b9bb618d598d8032c5f4b3c0489109c6e2ecb52"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            114,
+            115
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            112,
+            113
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:b33fb8d41402fe8e5976953fd66c518e38313c585f0f9fa756c19c2ea4c632e4",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:92ae2f2e8765b2a75e3002e0cf18cb8b8aeae89cb6602e639c6ab5407bbbc343"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            117,
+            118
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            116
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.1.5",
+      "receipt_sha256": "sha256:0d9e7779e74e7970c297230089f4f1a1cb1b50fdc2d530b823c39a60cb6f923e",
+      "receipt_digest": "sha256:cdbf32f90635369a9f5928f5db0548b09cc4b1085a1fcc1e6e311e1406dc4a5f",
+      "source": {
+        "tag": "3.1.5",
+        "commit": "9e5b0a1cc3469cd7f56f15966f8fe2ebcc1f40b0",
+        "tree": "655d40a64afbb81d9eb74f74ecb7ce0387568528"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            114,
+            115
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            112,
+            113
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:b33fb8d41402fe8e5976953fd66c518e38313c585f0f9fa756c19c2ea4c632e4",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:92ae2f2e8765b2a75e3002e0cf18cb8b8aeae89cb6602e639c6ab5407bbbc343"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            117,
+            118
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            116
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.1.6",
+      "receipt_sha256": "sha256:977351388448d1fc175c809e2cfa345b08984a551d493ef6142669455eb8df42",
+      "receipt_digest": "sha256:bdf4b470a3fd9d267a457b86819f3b2edb96931d5f28785070e9070fbc1e2f1d",
+      "source": {
+        "tag": "3.1.6",
+        "commit": "7780fdc2f537aa6978d76ee62f2088f730b5969d",
+        "tree": "b008ef6530483e144c41b69ac4a04bc9cff84202"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            114,
+            115
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            112,
+            113
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:b33fb8d41402fe8e5976953fd66c518e38313c585f0f9fa756c19c2ea4c632e4",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:92ae2f2e8765b2a75e3002e0cf18cb8b8aeae89cb6602e639c6ab5407bbbc343"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            117,
+            118
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            116
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.1.7",
+      "receipt_sha256": "sha256:ac688cad254810493ef0c7181a9b90ece4236b3f5549d239f1e77e49e5c99e7b",
+      "receipt_digest": "sha256:d9acd660a204163cee603c9245b8fc7e3295edc18cbda8ae1f629651fed6966b",
+      "source": {
+        "tag": "3.1.7",
+        "commit": "b570a187f6eb92b20d6daacae01eeca17c774007",
+        "tree": "65c7a7933713d8b098c41cf9963a0030f7a56224"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            114,
+            115
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            112,
+            113
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:b33fb8d41402fe8e5976953fd66c518e38313c585f0f9fa756c19c2ea4c632e4",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:92ae2f2e8765b2a75e3002e0cf18cb8b8aeae89cb6602e639c6ab5407bbbc343"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            117,
+            118
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            116
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.1.8",
+      "receipt_sha256": "sha256:b51cdb1b535e2359c991ce73c5f6b55e43999991553b0adc330187b768a0fd54",
+      "receipt_digest": "sha256:31f3dc67dffb63daca8103b1b56fdeaa430ef5c89273a1046dfd0353892aa6ea",
+      "source": {
+        "tag": "3.1.8",
+        "commit": "df9becb770455d9d8aae661a54ce1a2a1b131964",
+        "tree": "e508c6a238b97eb9a21a481d99bff142dd380da2"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            114,
+            115
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            112,
+            113
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:b33fb8d41402fe8e5976953fd66c518e38313c585f0f9fa756c19c2ea4c632e4",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:92ae2f2e8765b2a75e3002e0cf18cb8b8aeae89cb6602e639c6ab5407bbbc343"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            117,
+            118
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            107,
+            116
+          ]
+        }
+      }
+    },
+    {
+      "version": "3.4.3",
+      "receipt_sha256": "sha256:ccde9af819b5c4a724ce2adc22d9536be3c1cd7bef5f46e365823ca2c70b797a",
+      "receipt_digest": "sha256:7b70588a57812b9d59cc91d6bd6cb64e02755d024b9610f995ba699a723b2873",
+      "source": {
+        "tag": "3.4.3",
+        "commit": "a190201acffa03d199d4ca216288734a6513de3d",
+        "tree": "cec73c3d19d6cb132cb612c220e193e19194646d"
+      },
+      "cleanup_confirmed": true,
+      "reads": {
+        "project.get": {
+          "semantic_operation": "project.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+            "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+          },
+          "successful_trace_sequences": [
+            22,
+            23,
+            31,
+            32,
+            34,
+            103,
+            104
+          ]
+        },
+        "project.list": {
+          "semantic_operation": "project.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+            "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+          },
+          "successful_trace_sequences": [
+            21,
+            30,
+            101,
+            102
+          ]
+        },
+        "workflow.get": {
+          "semantic_operation": "workflow.get",
+          "fingerprints": {
+            "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+            "effective_wire": "sha256:cabb9ce8122199164ff2c2d544f1cb7a74499571686a6ace7809092c87797a22",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:1e754f8143bb7f44e07a7a6d157b243be6c3cd5d329babc970152e1f9844ead7"
+          },
+          "successful_trace_sequences": [
+            25,
+            26,
+            40,
+            41,
+            106,
+            107
+          ]
+        },
+        "workflow.list": {
+          "semantic_operation": "workflow.page",
+          "fingerprints": {
+            "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+            "effective_wire": "sha256:40e85a48b0575875830808176ddde9d84f9e7854ee737303f36b92758a418bd9",
+            "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+            "source": "sha256:57a473b3a0008e4c04f03984c49ed1801dc2c504965fcc1ab0de05d998439c3d"
+          },
+          "successful_trace_sequences": [
+            24,
+            35,
+            37,
+            39,
+            97,
+            105
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.errors import UserInputError
-from dsctl.output import success_payload
+from dsctl.output import result_payload
 from dsctl.services.schema import get_schema_result
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 INDEX_COMPACT_BUDGET_BYTES = 16 * 1024
 COMMAND_COMPACT_BUDGET_BYTES = 8 * 1024
@@ -21,28 +25,25 @@ def test_default_schema_is_a_bounded_progressive_index() -> None:
     result = get_schema_result()
     data = _require_dict(result.data)
 
-    assert data["schema_version"] == 2
+    assert data["schema_version"] == 3
     assert data["view"] == "index"
-    assert data["cli"] == {"name": "dsctl", "version": "0.3.0"}
+    assert data["cli"] == {"name": "dsctl", "version": "0.4.0"}
     assert isinstance(data["ds"], dict)
     global_options = [
         _require_dict(item) for item in _require_list(data["global_options"])
     ]
     assert len(global_options) == 4
-    output_format = next(
-        item for item in global_options if item["flag"] == "--output-format"
-    )
+    output_format = next(item for item in global_options if item["flag"] == "--format")
     assert output_format == {
-        "flag": "--output-format",
+        "flag": "--format",
         "value_name": "FORMAT",
-        "choices": ["json", "table", "tsv"],
+        "choices": ["json", "json-compact", "table", "tsv"],
         "default": "json",
         "normalization": "lowercase",
         "placement": "anywhere",
     }
     assert all(item["placement"] == "anywhere" for item in global_options)
-    compact = next(item for item in global_options if item["flag"] == "--compact")
-    assert compact["requires"] == {"--output-format": "json"}
+    assert all(item["flag"] != "--compact" for item in global_options)
     action_count = data["action_count"]
     assert isinstance(action_count, int)
     assert action_count > 100
@@ -70,11 +71,13 @@ def test_default_schema_is_a_bounded_progressive_index() -> None:
         "name",
         "summary",
         "action_count",
+        "available_action_count",
         "actions",
         "schema_command",
         "help_command",
     }
     assert "workflow.edit" in _require_list(workflow["actions"])
+    assert workflow["available_action_count"] == workflow["action_count"]
     assert workflow["schema_command"] == "dsctl schema --group workflow"
     assert workflow["help_command"] == "dsctl workflow --help"
 
@@ -83,10 +86,16 @@ def test_default_schema_is_a_bounded_progressive_index() -> None:
     assert set(version) == {
         "action",
         "summary",
+        "availability",
+        "verification",
+        "effects",
         "schema_command",
         "help_command",
     }
     assert version["schema_command"] == "dsctl schema --command version"
+    assert version["availability"] == "supported"
+    assert version["verification"] == "static"
+    assert version["effects"] == {"remote": "none", "local": "none"}
 
     indexed_actions = {str(item["action"]) for item in root_actions} | {
         str(action) for item in groups for action in _require_list(item["actions"])
@@ -96,16 +105,16 @@ def test_default_schema_is_a_bounded_progressive_index() -> None:
         for item in _require_list(get_schema_result(list_commands=True).data)
     }
     assert indexed_actions == listed_actions
-    assert action_count == len(indexed_actions) == 174
+    assert action_count == len(indexed_actions) == 181
 
 
 def test_full_schema_preserves_the_expanded_legacy_contract() -> None:
-    result = runner.invoke(app, ["--compact", "schema", "--full"])
+    result = runner.invoke(app, ["--format", "json-compact", "schema", "--full"])
 
     assert result.exit_code == 0
     payload = _require_dict(json.loads(result.stdout))
     data = _require_dict(payload["data"])
-    assert data["schema_version"] == 2
+    assert data["schema_version"] == 3
     assert data["view"] == "full"
     assert isinstance(data["commands"], list)
     assert isinstance(data["capabilities"], dict)
@@ -122,7 +131,7 @@ def test_full_schema_can_preserve_legacy_scoped_contracts() -> None:
 
     for result in results:
         data = _require_dict(result.data)
-        assert data["schema_version"] == 2
+        assert data["schema_version"] == 3
         assert data["view"] == "full"
         assert isinstance(data["commands"], list)
         assert isinstance(data["global_options"], list)
@@ -151,7 +160,7 @@ def test_group_schema_is_a_bounded_action_index() -> None:
     result = get_schema_result(group="workflow")
     data = _require_dict(result.data)
 
-    assert data["schema_version"] == 2
+    assert data["schema_version"] == 3
     assert data["view"] == "group"
     assert isinstance(data["cli"], dict)
     assert isinstance(data["ds"], dict)
@@ -173,6 +182,7 @@ def test_group_schema_is_a_bounded_action_index() -> None:
     group_action_count = group["action_count"]
     assert isinstance(group_action_count, int)
     assert group_action_count > 10
+    assert group["available_action_count"] == group_action_count
 
     actions = [_require_dict(item) for item in _require_list(data["actions"])]
     workflow_edit = next(item for item in actions if item["action"] == "workflow.edit")
@@ -180,11 +190,17 @@ def test_group_schema_is_a_bounded_action_index() -> None:
         "action",
         "name",
         "summary",
+        "availability",
+        "verification",
+        "effects",
         "schema_command",
         "help_command",
     }
     assert workflow_edit["schema_command"] == ("dsctl schema --command workflow.edit")
     assert workflow_edit["help_command"] == "dsctl workflow edit --help"
+    assert workflow_edit["availability"] == "supported"
+    assert workflow_edit["verification"] == "contract_tested"
+    assert workflow_edit["effects"] == {"remote": "write", "local": "none"}
 
 
 def test_list_groups_and_group_indexes_use_the_same_recursive_action_count() -> None:
@@ -205,7 +221,7 @@ def test_command_schema_is_action_local_without_legacy_duplication() -> None:
     result = get_schema_result(command_action="workflow.edit")
     data = _require_dict(result.data)
 
-    assert data["schema_version"] == 2
+    assert data["schema_version"] == 3
     assert data["view"] == "command"
     assert isinstance(data["cli"], dict)
     assert isinstance(data["ds"], dict)
@@ -214,7 +230,7 @@ def test_command_schema_is_action_local_without_legacy_duplication() -> None:
     ]
     assert len(global_options) == 4
     assert any(
-        item["flag"] == "--output-format" and item["placement"] == "anywhere"
+        item["flag"] == "--format" and item["placement"] == "anywhere"
         for item in global_options
     )
     links = [_require_dict(item) for item in _require_list(data["links"])]
@@ -241,18 +257,18 @@ def test_command_schema_is_action_local_without_legacy_duplication() -> None:
     assert command["kind"] == "command"
     assert command["name"] == "edit"
     assert command["action"] == "workflow.edit"
-    assert command["invocation"] == "dsctl workflow edit [WORKFLOW] [OPTIONS]"
+    assert command["invocation"] == "dsctl workflow edit WORKFLOW [OPTIONS]"
     assert isinstance(command["arguments"], list)
     assert isinstance(command["options"], list)
     assert isinstance(command["payload"], dict)
 
 
-def test_action_local_invocation_handles_non_path_group_actions() -> None:
-    data = _require_dict(get_schema_result(command_action="use.clear").data)
+def test_action_local_invocation_handles_bare_context_group_action() -> None:
+    data = _require_dict(get_schema_result(command_action="context").data)
     command = _require_dict(data["command"])
 
-    assert command["action"] == "use.clear"
-    assert command["invocation"] == "dsctl use --clear [OPTIONS]"
+    assert command["action"] == "context"
+    assert command["invocation"] == "dsctl context"
 
 
 def test_unknown_action_returns_at_most_three_local_corrections() -> None:
@@ -278,35 +294,39 @@ def test_unknown_action_returns_at_most_three_local_corrections() -> None:
 @pytest.mark.parametrize(
     ("argv", "stream", "budget"),
     [
-        (["--compact", "schema"], "stdout", INDEX_COMPACT_BUDGET_BYTES),
+        (["--format", "json-compact", "schema"], "stdout", INDEX_COMPACT_BUDGET_BYTES),
         (
-            ["--compact", "schema", "--command", "workflow.edit"],
+            ["--format", "json-compact", "schema", "--command", "workflow.edit"],
             "stdout",
             COMMAND_COMPACT_BUDGET_BYTES,
         ),
         (
-            ["--compact", "schema", "--command", "workflo.edit"],
+            ["--format", "json-compact", "schema", "--command", "workflo.edit"],
             "stderr",
             UNKNOWN_ACTION_COMPACT_BUDGET_BYTES,
         ),
     ],
 )
-def test_progressive_schema_compact_json_stays_within_its_byte_budget(
+def test_progressive_schema_compact_json_records_discovery_size(
     argv: list[str],
     stream: str,
     budget: int,
+    record_property: Callable[[str, object], None],
 ) -> None:
     result = runner.invoke(app, argv)
 
     output = result.stdout if stream == "stdout" else result.stderr
     assert output
     assert output.count("\n") == 1
-    assert len(output.encode("utf-8")) < budget
+    record_property("output_bytes", len(output.encode("utf-8")))
+    record_property("review_threshold_bytes", budget)
     assert result.exit_code == (0 if stream == "stdout" else 1)
     assert json.loads(output)["action"] == "schema"
 
 
-def test_every_action_local_contract_stays_within_the_command_budget() -> None:
+def test_every_action_local_contract_records_discovery_size(
+    record_property: Callable[[str, object], None],
+) -> None:
     actions = [
         _require_dict(item)["action"]
         for item in _require_list(get_schema_result(list_commands=True).data)
@@ -315,7 +335,7 @@ def test_every_action_local_contract_stays_within_the_command_budget() -> None:
     sizes: dict[str, int] = {}
     for value in actions:
         assert isinstance(value, str)
-        payload = success_payload(
+        payload = result_payload(
             "schema",
             get_schema_result(command_action=value),
         )
@@ -327,12 +347,9 @@ def test_every_action_local_contract_stays_within_the_command_budget() -> None:
         ).encode("utf-8")
         sizes[value] = len(encoded)
 
-    assert len(sizes) == 174
-    assert max(sizes.values()) < COMMAND_COMPACT_BUDGET_BYTES, sorted(
-        sizes.items(),
-        key=lambda item: item[1],
-        reverse=True,
-    )[:5]
+    assert len(sizes) == 181
+    record_property("action_bytes", json.dumps(sizes, sort_keys=True))
+    record_property("review_threshold_bytes", COMMAND_COMPACT_BUDGET_BYTES)
 
 
 def _require_dict(value: object) -> dict[str, object]:

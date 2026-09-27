@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import date, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, TypeAlias, TypeGuard
 
@@ -42,18 +44,132 @@ def is_yaml_object(value: object) -> TypeGuard[YamlObject]:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class ModelValidationIssue:
+    """One preserved Pydantic validation issue with a stable YAML-style path."""
+
+    code: str
+    path: str | None
+    message: str
+
+
+def yaml_value_validation_issue(
+    value: object,
+    *,
+    path: str | None = None,
+) -> ModelValidationIssue | None:
+    """Locate the first value outside the external YAML model boundary."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return None
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                return ModelValidationIssue(
+                    code="yaml_mapping_key_not_string",
+                    path=path or "$",
+                    message=(
+                        "YAML mapping keys must be strings; quote this "
+                        f"{type(key).__name__} key."
+                    ),
+                )
+            issue = yaml_value_validation_issue(
+                item,
+                path=key if path is None else f"{path}.{key}",
+            )
+            if issue is not None:
+                return issue
+        return None
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        for index, item in enumerate(value):
+            issue = yaml_value_validation_issue(
+                item,
+                path=f"[{index}]" if path is None else f"{path}[{index}]",
+            )
+            if issue is not None:
+                return issue
+        return None
+    if isinstance(value, (date, datetime)):
+        return ModelValidationIssue(
+            code="yaml_date_time_not_string",
+            path=path,
+            message=("YAML date/time values must be quoted when a string is intended."),
+        )
+    return ModelValidationIssue(
+        code="yaml_value_type_unsupported",
+        path=path,
+        message=f"YAML value type '{type(value).__name__}' is not supported.",
+    )
+
+
+class ModelValidationError(ValueError):
+    """Keep every issue from one Pydantic validation stage for diagnostic callers."""
+
+    def __init__(self, issues: Sequence[ModelValidationIssue]) -> None:
+        """Store every issue while keeping the first issue as concise text."""
+        preserved = tuple(issues)
+        if not preserved:
+            message = "Model validation failed without diagnostic details"
+            raise ValueError(message)
+        self.issues = preserved
+        super().__init__(_validation_issue_message(preserved[0]))
+
+
+def model_validation_issues(error: ValidationError) -> tuple[ModelValidationIssue, ...]:
+    """Preserve all Pydantic errors from one model-validation call."""
+    issues: list[ModelValidationIssue] = []
+    for detail in error.errors(include_url=False):
+        message = str(detail["msg"])
+        if message.startswith("Value error, "):
+            message = message.removeprefix("Value error, ")
+        issues.append(
+            ModelValidationIssue(
+                code=str(detail["type"]),
+                path=_validation_location_path(detail["loc"]),
+                message=message,
+            )
+        )
+    return tuple(issues)
+
+
+def prefixed_model_validation_issues(
+    issues: Sequence[ModelValidationIssue],
+    *,
+    prefix: str,
+) -> tuple[ModelValidationIssue, ...]:
+    """Prefix preserved model issues without flattening them into one message."""
+    return tuple(
+        ModelValidationIssue(
+            code=issue.code,
+            path=(prefix if issue.path is None else f"{prefix}.{issue.path}"),
+            message=issue.message,
+        )
+        for issue in issues
+    )
+
+
 def first_validation_error_message(error: ValidationError) -> str:
     """Format the first Pydantic validation error as one stable dotted path."""
-    first = error.errors(include_url=False)[0]
-    location = ".".join(str(part) for part in first["loc"])
-    message = str(first["msg"])
-    if message.startswith("Value error, "):
-        message = message.removeprefix("Value error, ")
-    if not location:
-        return message
-    if message.startswith((f"{location} ", f"{location}:")):
-        return message
-    return f"{location}: {message}"
+    return _validation_issue_message(model_validation_issues(error)[0])
+
+
+def _validation_issue_message(issue: ModelValidationIssue) -> str:
+    if issue.path is None:
+        return issue.message
+    if issue.message.startswith((f"{issue.path} ", f"{issue.path}:")):
+        return issue.message
+    return f"{issue.path}: {issue.message}"
+
+
+def _validation_location_path(location: Sequence[str | int]) -> str | None:
+    path = ""
+    for part in location:
+        if isinstance(part, int):
+            path = f"{path}[{part}]"
+        elif path:
+            path = f"{path}.{part}"
+        else:
+            path = part
+    return path or None
 
 
 class _LabeledStrEnum(StrEnum):

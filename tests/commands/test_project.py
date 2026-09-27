@@ -5,7 +5,15 @@ from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.services import runtime as runtime_service
-from tests.fakes import FakeProject, FakeProjectAdapter, fake_service_runtime
+from dsctl.upstream.projects import PROJECT_DOMAIN, ProjectDomain
+from tests.fakes import (
+    FakeNativeProjectMutations,
+    FakeProject,
+    FakeProjectAdapter,
+    fake_bound_domain_service_runtime,
+    fake_project_definitions,
+    fake_read_service_runtime,
+)
 from tests.support import make_profile
 
 runner = CliRunner()
@@ -26,13 +34,43 @@ def patch_project_service(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
+    def read_runtime_factory(
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        return fake_read_service_runtime(
             fake_project_adapter,
             profile=make_profile(),
-        ),
+        )
+
+    monkeypatch.setattr(
+        runtime_service,
+        "open_read_service_runtime",
+        read_runtime_factory,
+    )
+
+    def project_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is PROJECT_DOMAIN
+        return fake_bound_domain_service_runtime(
+            ProjectDomain(
+                definitions=fake_project_definitions(fake_project_adapter),
+                mutations=FakeNativeProjectMutations(fake_project_adapter),
+            ),
+            profile=make_profile(),
+        )
+
+    monkeypatch.setattr(
+        runtime_service,
+        "open_bound_domain_service_runtime",
+        project_runtime_factory,
     )
 
 

@@ -1,43 +1,31 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
-    FakeProjectAdapter,
     FakeQueue,
     FakeQueueAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
 from dsctl.errors import ConflictError, UserInputError
 from dsctl.services import queue as queue_service
-from dsctl.services import runtime as runtime_service
+from dsctl.upstream.queues import QUEUE_DOMAIN, QueueDomain
 
 
 def _install_queue_service_fakes(
     monkeypatch: pytest.MonkeyPatch,
     adapter: FakeQueueAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            queue_adapter=adapter,
-            profile=make_profile(),
-        ),
+    domain = QueueDomain(queues=adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        queue_service,
+        expected_domain=QUEUE_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 def test_list_queues_result_returns_first_page_by_default(

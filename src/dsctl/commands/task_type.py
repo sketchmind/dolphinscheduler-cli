@@ -1,21 +1,11 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.task_type import (
     list_task_types_result,
     task_type_schema_result,
     task_type_summary_result,
-)
-
-TASK_TYPE_LIST_HELP = (
-    "List live DS task types, categories, favourite flags, and CLI authoring coverage."
-)
-TASK_TYPE_GET_HELP = "Summarize the local authoring contract for one task type."
-TASK_TYPE_SCHEMA_HELP = (
-    "Print a bounded field contract for one task type; select detailed views "
-    "explicitly."
 )
 
 task_type_app = typer.Typer(
@@ -29,9 +19,9 @@ def register_task_type_commands(app: typer.Typer) -> None:
     app.add_typer(task_type_app, name="task-type")
 
 
-@task_type_app.command("list", help=TASK_TYPE_LIST_HELP)
+@task_type_app.command("list")
+@bind_command("task-type.list")
 def list_command(ctx: typer.Context) -> None:
-    """List the live DS task-type catalog."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -40,71 +30,33 @@ def list_command(ctx: typer.Context) -> None:
     )
 
 
-@task_type_app.command("get", help=TASK_TYPE_GET_HELP)
+@task_type_app.command("get")
+@bind_command("task-type.get")
 def get_command(
-    task_type: Annotated[
-        str,
-        typer.Argument(
-            help=(
-                "Task type to inspect. Discover values with `dsctl template task` "
-                "or the live catalog with `dsctl task-type list`."
-            ),
-        ),
-    ],
+    ctx: typer.Context,
+    task_type: str,
 ) -> None:
-    """Summarize one local task authoring contract."""
+    state = get_app_state(ctx)
+    env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "task-type.get",
-        lambda: task_type_summary_result(task_type),
+        lambda: task_type_summary_result(task_type, env_file=env_file),
     )
 
 
-@task_type_app.command("schema", help=TASK_TYPE_SCHEMA_HELP)
+@task_type_app.command("schema")
+@bind_command("task-type.schema")
 def schema_command(
-    task_type: Annotated[
-        str,
-        typer.Argument(
-            help=(
-                "Task type whose local authoring schema should be printed. "
-                "Discover values with `dsctl template task`."
-            ),
-        ),
-    ],
+    ctx: typer.Context,
+    task_type: str,
     *,
-    field: Annotated[
-        str | None,
-        typer.Option(
-            "--field",
-            help=(
-                "Return one exact authoring field and its related state rules. "
-                "Discover paths with the default bounded field view; quote paths "
-                "containing []."
-            ),
-        ),
-    ] = None,
-    json_schema: Annotated[
-        bool,
-        typer.Option(
-            "--json-schema",
-            help="Return the nested JSON Schema without repeated authoring metadata.",
-        ),
-    ] = False,
-    compile_mappings: Annotated[
-        bool,
-        typer.Option(
-            "--compile-mappings",
-            help="Return authoring-path to DS REST payload mappings.",
-        ),
-    ] = False,
-    full: Annotated[
-        bool,
-        typer.Option(
-            "--full",
-            help="Return the former expanded authoring contract for compatibility.",
-        ),
-    ] = False,
+    field: str | None,
+    json_schema: bool,
+    compile_mappings: bool,
+    full: bool,
 ) -> None:
-    """Print one progressive local task authoring view."""
+    state = get_app_state(ctx)
+    env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "task-type.schema",
         lambda: task_type_schema_result(
@@ -113,6 +65,7 @@ def schema_command(
             json_schema=json_schema,
             compile_mappings=compile_mappings,
             full=full,
+            env_file=env_file,
         ),
     )
 

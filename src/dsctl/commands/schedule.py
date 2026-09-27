@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.schedule import (
     create_schedule_result,
     delete_schedule_result,
@@ -20,17 +19,6 @@ schedule_app = typer.Typer(
     no_args_is_help=True,
 )
 
-PROJECT_HELP = (
-    "Project name or code. Run `dsctl project list` to discover values; falls "
-    "back to stored project context."
-)
-SCHEDULE_ID_HELP = "Schedule id. Use `dsctl schedule list` to discover values."
-WORKFLOW_HELP = (
-    "Workflow name or code. Run `dsctl workflow list` in the selected project "
-    "to discover values. When omitted, uses workflow context only when project "
-    "also comes from context; otherwise pass --workflow."
-)
-
 
 def register_schedule_commands(app: typer.Typer) -> None:
     """Register the `schedule` command group."""
@@ -38,62 +26,17 @@ def register_schedule_commands(app: typer.Typer) -> None:
 
 
 @schedule_app.command("list")
+@bind_command("schedule.list")
 def list_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    workflow: Annotated[
-        str | None,
-        typer.Option(
-            "--workflow",
-            help=(
-                "Exact workflow name or code to narrow the project schedule "
-                "list. Run `dsctl workflow list` in the selected project to "
-                "discover values."
-            ),
-        ),
-    ] = None,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help=(
-                "Filter schedules by workflow name substring within the"
-                " selected project."
-            ),
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    project: str | None,
+    workflow: str | None,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List schedules inside one project."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -111,79 +54,37 @@ def list_command(
 
 
 @schedule_app.command("get")
+@bind_command("schedule.get")
 def get_command(
     ctx: typer.Context,
-    schedule_id: Annotated[
-        int,
-        typer.Argument(help=SCHEDULE_ID_HELP),
-    ],
+    schedule_id: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Get one schedule by id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "schedule.get",
-        lambda: get_schedule_result(schedule_id, env_file=env_file),
+        lambda: get_schedule_result(
+            schedule_id,
+            project=project,
+            env_file=env_file,
+        ),
     )
 
 
 @schedule_app.command("preview")
+@bind_command("schedule.preview")
 def preview_command(
     ctx: typer.Context,
-    schedule_id: Annotated[
-        int | None,
-        typer.Argument(
-            help=(
-                "Existing schedule id to preview. Use `dsctl schedule list` to "
-                "discover values."
-            )
-        ),
-    ] = None,
+    schedule_id: int | None,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code for ad hoc preview only. When schedule_id "
-                "is omitted, falls back to stored project context; do not pass "
-                "--project with schedule_id."
-            ),
-        ),
-    ] = None,
-    cron: Annotated[
-        str | None,
-        typer.Option(
-            "--cron",
-            help=(
-                "Quartz cron expression for an ad hoc preview "
-                "(6 or 7 fields, seconds first)."
-            ),
-        ),
-    ] = None,
-    start: Annotated[
-        str | None,
-        typer.Option(
-            "--start",
-            help="Schedule start time in DS datetime string format.",
-        ),
-    ] = None,
-    end: Annotated[
-        str | None,
-        typer.Option(
-            "--end",
-            help="Schedule end time in DS datetime string format.",
-        ),
-    ] = None,
-    timezone: Annotated[
-        str | None,
-        typer.Option(
-            "--timezone",
-            help="Timezone id, for example Asia/Shanghai.",
-        ),
-    ] = None,
+    project: str | None,
+    cron: str | None,
+    start: str | None,
+    end: str | None,
+    timezone: str | None,
 ) -> None:
-    """Preview the next fire times for a schedule."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -201,144 +102,26 @@ def preview_command(
 
 
 @schedule_app.command("explain")
+@bind_command("schedule.explain")
 def explain_command(
     ctx: typer.Context,
-    schedule_id: Annotated[
-        int | None,
-        typer.Argument(
-            help=(
-                "Existing schedule id to explain as an update. Use `dsctl "
-                "schedule list` to discover values."
-            )
-        ),
-    ] = None,
+    schedule_id: int | None,
     *,
-    workflow: Annotated[
-        str | None,
-        typer.Option(
-            "--workflow",
-            help=(
-                "Workflow name or code for create explain only. Run `dsctl "
-                "workflow list` in the selected project to discover values. "
-                "When SCHEDULE_ID is omitted, uses workflow context only when "
-                "project also comes from context; do not pass --workflow with "
-                "SCHEDULE_ID."
-            ),
-        ),
-    ] = None,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code for create explain only. Run `dsctl "
-                "project list` to discover values. When SCHEDULE_ID is omitted, "
-                "falls back to stored project context; do not pass --project "
-                "with SCHEDULE_ID."
-            ),
-        ),
-    ] = None,
-    cron: Annotated[
-        str | None,
-        typer.Option(
-            "--cron",
-            help="Quartz cron expression (6 or 7 fields, seconds first).",
-        ),
-    ] = None,
-    start: Annotated[
-        str | None,
-        typer.Option(
-            "--start",
-            help="Schedule start time in DS datetime string format.",
-        ),
-    ] = None,
-    end: Annotated[
-        str | None,
-        typer.Option(
-            "--end",
-            help="Schedule end time in DS datetime string format.",
-        ),
-    ] = None,
-    timezone: Annotated[
-        str | None,
-        typer.Option(
-            "--timezone",
-            help="Timezone id, for example Asia/Shanghai.",
-        ),
-    ] = None,
-    failure_strategy: Annotated[
-        str | None,
-        typer.Option(
-            "--failure-strategy",
-            help="Failure strategy: CONTINUE or END.",
-        ),
-    ] = None,
-    warning_type: Annotated[
-        str | None,
-        typer.Option(
-            "--warning-type",
-            help="Warning type: NONE, SUCCESS, FAILURE, or ALL.",
-        ),
-    ] = None,
-    warning_group_id: Annotated[
-        int | None,
-        typer.Option(
-            "--warning-group-id",
-            min=0,
-            help=(
-                "Warning group id for create explain or updated value for "
-                "update explain. Create explain can also inherit enabled "
-                "project preference when omitted; run `dsctl alert-group list` "
-                "to discover ids."
-            ),
-        ),
-    ] = None,
-    priority: Annotated[
-        str | None,
-        typer.Option(
-            "--priority",
-            help="Workflow instance priority: HIGHEST, HIGH, MEDIUM, LOW, or LOWEST.",
-        ),
-    ] = None,
-    worker_group: Annotated[
-        str | None,
-        typer.Option(
-            "--worker-group",
-            help=(
-                "Worker group for create explain or updated value for update "
-                "explain. Create explain can also inherit enabled project "
-                "preference when omitted; run `dsctl worker-group list` to "
-                "discover values."
-            ),
-        ),
-    ] = None,
-    tenant_code: Annotated[
-        str | None,
-        typer.Option(
-            "--tenant-code",
-            help=(
-                "Tenant code for create explain. Create explain can also "
-                "inherit enabled project preference when omitted; run `dsctl "
-                "tenant list` to discover values."
-            ),
-        ),
-    ] = None,
-    environment_code: Annotated[
-        int | None,
-        typer.Option(
-            "--environment-code",
-            min=0,
-            help=(
-                "Environment selection for create or update explain. For create, "
-                "omit to allow enabled project preference and pass 0 to "
-                "explicitly use no environment. For update, omit to preserve the "
-                "current value and pass 0 to clear it. Run `dsctl environment "
-                "list` to discover positive codes."
-            ),
-        ),
-    ] = None,
+    workflow: str | None,
+    project: str | None,
+    cron: str | None,
+    start: str | None,
+    end: str | None,
+    timezone: str | None,
+    missed_fire_policy: str | None,
+    failure_strategy: str | None,
+    warning_type: str | None,
+    warning_group_id: int | None,
+    priority: str | None,
+    worker_group: str | None,
+    tenant_code: str | None,
+    environment_code: int | None,
 ) -> None:
-    """Explain one schedule create or update mutation."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -358,132 +141,33 @@ def explain_command(
             worker_group=worker_group,
             tenant_code=tenant_code,
             environment_code=environment_code,
+            missed_fire_policy=missed_fire_policy,
             env_file=env_file,
         ),
     )
 
 
 @schedule_app.command("create")
+@bind_command("schedule.create")
 def create_command(
     ctx: typer.Context,
     *,
-    workflow: Annotated[
-        str | None,
-        typer.Option(
-            "--workflow",
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    cron: Annotated[
-        str,
-        typer.Option(
-            "--cron",
-            help="Quartz cron expression (6 or 7 fields, seconds first).",
-        ),
-    ],
-    start: Annotated[
-        str,
-        typer.Option(
-            "--start",
-            help="Schedule start time in DS datetime string format.",
-        ),
-    ],
-    end: Annotated[
-        str,
-        typer.Option(
-            "--end",
-            help="Schedule end time in DS datetime string format.",
-        ),
-    ],
-    timezone: Annotated[
-        str,
-        typer.Option(
-            "--timezone",
-            help="Timezone id, for example Asia/Shanghai.",
-        ),
-    ],
-    failure_strategy: Annotated[
-        str | None,
-        typer.Option(
-            "--failure-strategy",
-            help="Failure strategy: CONTINUE or END.",
-        ),
-    ] = None,
-    warning_type: Annotated[
-        str | None,
-        typer.Option(
-            "--warning-type",
-            help="Warning type: NONE, SUCCESS, FAILURE, or ALL.",
-        ),
-    ] = None,
-    warning_group_id: Annotated[
-        int | None,
-        typer.Option(
-            "--warning-group-id",
-            min=0,
-            help=(
-                "Warning group id. Omit to keep the CLI fallback chain, "
-                "including enabled project preference; run `dsctl alert-group "
-                "list` to discover ids."
-            ),
-        ),
-    ] = None,
-    priority: Annotated[
-        str | None,
-        typer.Option(
-            "--priority",
-            help="Workflow instance priority: HIGHEST, HIGH, MEDIUM, LOW, or LOWEST.",
-        ),
-    ] = None,
-    worker_group: Annotated[
-        str | None,
-        typer.Option(
-            "--worker-group",
-            help=(
-                "Worker group. Omit to allow enabled project preference; run "
-                "`dsctl worker-group list` to discover values."
-            ),
-        ),
-    ] = None,
-    tenant_code: Annotated[
-        str | None,
-        typer.Option(
-            "--tenant-code",
-            help=(
-                "Tenant code. Omit to allow enabled project preference; run "
-                "`dsctl tenant list` to discover values."
-            ),
-        ),
-    ] = None,
-    environment_code: Annotated[
-        int | None,
-        typer.Option(
-            "--environment-code",
-            min=0,
-            help=(
-                "Environment selection. Omit to allow enabled project preference "
-                "and otherwise create without an environment; pass 0 to "
-                "explicitly use no environment and bypass project preference. "
-                "Run `dsctl environment list` to discover positive codes."
-            ),
-        ),
-    ] = None,
-    confirm_risk: Annotated[
-        str | None,
-        typer.Option(
-            "--confirm-risk",
-            help="Confirm one high-risk schedule mutation token returned earlier.",
-        ),
-    ] = None,
+    workflow: str,
+    project: str | None,
+    cron: str,
+    start: str,
+    end: str,
+    timezone: str | None,
+    missed_fire_policy: str | None,
+    failure_strategy: str | None,
+    warning_type: str | None,
+    warning_group_id: int | None,
+    priority: str | None,
+    worker_group: str | None,
+    tenant_code: str | None,
+    environment_code: int | None,
+    confirm_risk: str | None,
 ) -> None:
-    """Create one schedule."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -502,6 +186,7 @@ def create_command(
             worker_group=worker_group,
             tenant_code=tenant_code,
             environment_code=environment_code,
+            missed_fire_policy=missed_fire_policy,
             confirm_risk=confirm_risk,
             env_file=env_file,
         ),
@@ -509,113 +194,32 @@ def create_command(
 
 
 @schedule_app.command("update")
+@bind_command("schedule.update")
 def update_command(
     ctx: typer.Context,
-    schedule_id: Annotated[
-        int,
-        typer.Argument(help=SCHEDULE_ID_HELP),
-    ],
+    schedule_id: int,
     *,
-    cron: Annotated[
-        str | None,
-        typer.Option(
-            "--cron",
-            help=(
-                "Updated Quartz cron expression (6 or 7 fields, seconds first). "
-                "Omit to keep the current value."
-            ),
-        ),
-    ] = None,
-    start: Annotated[
-        str | None,
-        typer.Option(
-            "--start",
-            help="Updated schedule start time. Omit to keep the current value.",
-        ),
-    ] = None,
-    end: Annotated[
-        str | None,
-        typer.Option(
-            "--end",
-            help="Updated schedule end time. Omit to keep the current value.",
-        ),
-    ] = None,
-    timezone: Annotated[
-        str | None,
-        typer.Option(
-            "--timezone",
-            help="Updated timezone id. Omit to keep the current value.",
-        ),
-    ] = None,
-    failure_strategy: Annotated[
-        str | None,
-        typer.Option(
-            "--failure-strategy",
-            help="Failure strategy: CONTINUE or END.",
-        ),
-    ] = None,
-    warning_type: Annotated[
-        str | None,
-        typer.Option(
-            "--warning-type",
-            help="Warning type: NONE, SUCCESS, FAILURE, or ALL.",
-        ),
-    ] = None,
-    warning_group_id: Annotated[
-        int | None,
-        typer.Option(
-            "--warning-group-id",
-            min=0,
-            help=(
-                "Updated warning group id. Run `dsctl alert-group list` to "
-                "discover ids; omit to keep the current value."
-            ),
-        ),
-    ] = None,
-    priority: Annotated[
-        str | None,
-        typer.Option(
-            "--priority",
-            help="Workflow instance priority: HIGHEST, HIGH, MEDIUM, LOW, or LOWEST.",
-        ),
-    ] = None,
-    worker_group: Annotated[
-        str | None,
-        typer.Option(
-            "--worker-group",
-            help=(
-                "Updated worker group. Run `dsctl worker-group list` to "
-                "discover values; omit to keep the current value."
-            ),
-        ),
-    ] = None,
-    environment_code: Annotated[
-        int | None,
-        typer.Option(
-            "--environment-code",
-            min=0,
-            help=(
-                "Updated environment selection. Omit to keep the current value; "
-                "pass 0 to clear the environment. Run `dsctl environment list` "
-                "to discover positive codes."
-            ),
-        ),
-    ] = None,
-    confirm_risk: Annotated[
-        str | None,
-        typer.Option(
-            "--confirm-risk",
-            help="Confirm one high-risk schedule mutation token returned earlier.",
-        ),
-    ] = None,
+    project: str | None,
+    cron: str | None,
+    start: str | None,
+    end: str | None,
+    timezone: str | None,
+    missed_fire_policy: str | None,
+    failure_strategy: str | None,
+    warning_type: str | None,
+    warning_group_id: int | None,
+    priority: str | None,
+    worker_group: str | None,
+    environment_code: int | None,
+    confirm_risk: str | None,
 ) -> None:
-    """Update one schedule."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "schedule.update",
         lambda: update_schedule_result(
             schedule_id,
+            project=project,
             cron=cron,
             start=start,
             end=end,
@@ -626,6 +230,7 @@ def update_command(
             priority=priority,
             worker_group=worker_group,
             environment_code=environment_code,
+            missed_fire_policy=missed_fire_policy,
             confirm_risk=confirm_risk,
             env_file=env_file,
         ),
@@ -633,28 +238,21 @@ def update_command(
 
 
 @schedule_app.command("delete")
+@bind_command("schedule.delete")
 def delete_command(
     ctx: typer.Context,
-    schedule_id: Annotated[
-        int,
-        typer.Argument(help=SCHEDULE_ID_HELP),
-    ],
+    schedule_id: int,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm schedule deletion without prompting.",
-        ),
-    ] = False,
+    project: str | None,
+    force: bool,
 ) -> None:
-    """Delete one schedule."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "schedule.delete",
         lambda: delete_schedule_result(
             schedule_id,
+            project=project,
             force=force,
             env_file=env_file,
         ),
@@ -662,34 +260,40 @@ def delete_command(
 
 
 @schedule_app.command("online")
+@bind_command("schedule.online")
 def online_command(
     ctx: typer.Context,
-    schedule_id: Annotated[
-        int,
-        typer.Argument(help=SCHEDULE_ID_HELP),
-    ],
+    schedule_id: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Bring one schedule online."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "schedule.online",
-        lambda: online_schedule_result(schedule_id, env_file=env_file),
+        lambda: online_schedule_result(
+            schedule_id,
+            project=project,
+            env_file=env_file,
+        ),
     )
 
 
 @schedule_app.command("offline")
+@bind_command("schedule.offline")
 def offline_command(
     ctx: typer.Context,
-    schedule_id: Annotated[
-        int,
-        typer.Argument(help=SCHEDULE_ID_HELP),
-    ],
+    schedule_id: int,
+    *,
+    project: str | None,
 ) -> None:
-    """Bring one schedule offline."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "schedule.offline",
-        lambda: offline_schedule_result(schedule_id, env_file=env_file),
+        lambda: offline_schedule_result(
+            schedule_id,
+            project=project,
+            env_file=env_file,
+        ),
     )

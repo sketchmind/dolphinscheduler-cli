@@ -9,6 +9,7 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 import dsctl.models.workflow_spec as workflow_spec_module
 from dsctl.models.common import (
     GlobalParamSpec,
+    ModelValidationError,
     Priority,
     ReleaseState,
     RetrySpec,
@@ -16,18 +17,23 @@ from dsctl.models.common import (
     YamlObject,
     YamlSpecModel,
     YamlValue,
-    first_validation_error_message,
+    is_yaml_object,
+    model_validation_issues,
+    yaml_value_validation_issue,
 )
 from dsctl.models.task_spec import (
     TaskRunFlag,
     TaskTimeoutNotifyStrategy,
     normalize_task_run_flag,
 )
+from dsctl.models.workflow_spec import (
+    WorkflowAuthoringContext,
+    WorkflowTaskSpec,
+    _workflow_authoring_validation_context,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from dsctl.models.workflow_spec import WorkflowTaskSpec
 
 
 class WorkflowPatchWorkflowSetSpec(YamlSpecModel):
@@ -36,7 +42,7 @@ class WorkflowPatchWorkflowSetSpec(YamlSpecModel):
     name: str | None = None
     description: str | None = None
     timeout: int | None = Field(default=None, ge=0)
-    global_params: dict[str, str] | list[GlobalParamSpec] | None = None
+    global_params: dict[str, str | None] | list[GlobalParamSpec] | None = None
     execution_type: WorkflowExecutionType | None = None
     release_state: ReleaseState | None = None
 
@@ -274,7 +280,23 @@ class WorkflowPatchDocument(YamlSpecModel):
     patch: WorkflowPatchSpec
 
 
-def load_workflow_patch(path: Path) -> WorkflowPatchSpec:
+def validate_workflow_patch_document(
+    document: YamlValue,
+    *,
+    authoring_context: WorkflowAuthoringContext | None = None,
+) -> WorkflowPatchDocument:
+    """Validate one patch document under an explicit authoring authority."""
+    return WorkflowPatchDocument.model_validate(
+        document,
+        context=_workflow_authoring_validation_context(authoring_context),
+    )
+
+
+def load_workflow_patch(
+    path: Path,
+    *,
+    authoring_context: WorkflowAuthoringContext | None = None,
+) -> WorkflowPatchSpec:
     """Load one workflow patch YAML file into the validated patch model."""
     try:
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -288,10 +310,19 @@ def load_workflow_patch(path: Path) -> WorkflowPatchSpec:
     if not isinstance(document, Mapping):
         message = "Workflow patch YAML root must be a mapping"
         raise TypeError(message)
+    if not is_yaml_object(document):
+        issue = yaml_value_validation_issue(document)
+        if issue is None:
+            message = "Workflow patch YAML boundary failed without a validation issue"
+            raise RuntimeError(message)
+        raise ModelValidationError((issue,))
     try:
-        return WorkflowPatchDocument.model_validate(document).patch
+        return validate_workflow_patch_document(
+            document,
+            authoring_context=authoring_context,
+        ).patch
     except ValidationError as exc:
-        raise ValueError(first_validation_error_message(exc)) from exc
+        raise ModelValidationError(model_validation_issues(exc)) from exc
 
 
 def _workflow_patch_types_namespace() -> dict[str, object]:

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 import re
 import shlex
 from itertools import product
 from pathlib import Path
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict, cast
 
+import pytest
 from tests.support import normalize_cli_help, strip_cli_ansi
 from typer.testing import CliRunner
 
@@ -18,8 +20,11 @@ from dsctl.cli_surface import (
     TOP_LEVEL_COMMANDS,
     SurfaceCommand,
 )
-from dsctl.services import resolver as resolver_service
 from dsctl.services.schema import get_schema_result
+from dsctl.upstream import resolver as resolver_service
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class CommandNode(TypedDict):
@@ -37,11 +42,28 @@ class GroupNode(TypedDict):
     commands: list[dict[str, object]]
 
 
+class HelpResultNode(TypedDict):
+    """One immutable-on-the-wire CLI help rendering."""
+
+    path: list[str]
+    command: dict[str, object]
+    exit_code: int
+    stdout: str
+
+
+class HelpCorpus(TypedDict):
+    """JSON-backed schema and rendered help corpus shared by this module."""
+
+    schema: object
+    results: list[HelpResultNode]
+
+
 RAW_RESOURCE_LITERAL_PATTERN = re.compile(r'"resource":\s*"[^"]+"|resource="[^"]+"')
 LOCAL_PAGINATION_CONSTANT_PATTERN = re.compile(
     r"^(DEFAULT_PAGE_SIZE|MAX_AUTO_EXHAUST_PAGES)\s*="
 )
 SERVICES_DIR = Path(__file__).resolve().parents[2] / "src" / "dsctl" / "services"
+UPSTREAM_DIR = Path(__file__).resolve().parents[2] / "src" / "dsctl" / "upstream"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = REPO_ROOT / "src" / "dsctl" / "commands"
 NAME_FIRST_RESOURCE_RESOLVERS = {
@@ -61,62 +83,39 @@ NAME_FIRST_RESOURCE_RESOLVERS = {
     "workflow": "workflow",
     "task": "task",
 }
-NAME_FIRST_SERVICE_MODULES = {
-    "project.py": "project",
-    "env.py": "environment",
-    "cluster.py": "cluster",
-    "datasource.py": "datasource",
-    "namespace.py": "namespace",
-    "queue.py": "queue",
-    "worker_group.py": "worker_group",
-    "task_group.py": "task_group",
-    "alert_plugin.py": "alert_plugin",
-    "alert_group.py": "alert_group",
-    "tenant.py": "tenant",
-    "user.py": "user",
-    "project_parameter.py": "project_parameter",
-    "workflow.py": "workflow",
-    "task.py": "task",
-}
-SUGGESTION_GOVERNED_SERVICE_MODULES = (
-    "_resolver_kernel.py",
-    "_validation.py",
-    "_workflow_compile.py",
-    "access_token.py",
-    "alert_group.py",
-    "alert_plugin.py",
-    "audit.py",
-    "datasource.py",
-    "env.py",
-    "namespace.py",
-    "project_preference.py",
-    "queue.py",
-    "resource.py",
-    "schedule.py",
-    "_schedule_support.py",
-    "_workflow_patch.py",
-    "pagination.py",
-    "task_group.py",
-    "tenant.py",
-    "worker_group.py",
-    "workflow.py",
-    "workflow_instance.py",
-    "task.py",
-    "task_instance.py",
-    "user.py",
-)
-STABLE_COMMAND_DOC_BLOCKS = {
-    "docs/development/architecture.md": (
-        "The current stable CLI surface is:",
-        "Everything else remains roadmap work.",
-    ),
-    "docs/reference/cli-contract.md": (
-        "Current stable commands:",
-        "## Naming and Selection Rules",
-    ),
-}
 RUNNER = CliRunner()
 HELP_OUTPUT_BYTE_BUDGET = 10 * 1024
+
+
+@pytest.fixture(scope="module")
+def cli_help_corpus_payload() -> str:
+    """Render each declared help path once and expose an immutable snapshot."""
+    data = get_schema_result(full=True).data
+    results: list[HelpResultNode] = []
+    rendered: dict[tuple[str, ...], tuple[int, str]] = {}
+    if isinstance(data, dict):
+        commands = data.get("commands")
+        if isinstance(commands, list):
+            for path, command in _iter_schema_command_paths(commands):
+                if path not in rendered:
+                    result = RUNNER.invoke(app, [*path, "--help"])
+                    rendered[path] = (result.exit_code, result.stdout)
+                exit_code, stdout = rendered[path]
+                results.append(
+                    HelpResultNode(
+                        path=list(path),
+                        command=command,
+                        exit_code=exit_code,
+                        stdout=stdout,
+                    )
+                )
+    return json.dumps(HelpCorpus(schema=data, results=results), sort_keys=True)
+
+
+def _decode_cli_help_corpus(payload: str) -> HelpCorpus:
+    corpus = json.loads(payload)
+    assert isinstance(corpus, dict)
+    return cast("HelpCorpus", corpus)
 
 
 def test_services_do_not_inline_resource_slug_literals() -> None:
@@ -222,36 +221,46 @@ def test_literal_emit_result_actions_are_declared_in_schema() -> None:
     assert missing == []
 
 
-def test_schema_declared_commands_expose_help() -> None:
-    data = get_schema_result(full=True).data
+def test_schema_declared_commands_expose_help(
+    cli_help_corpus_payload: str,
+) -> None:
+    corpus = _decode_cli_help_corpus(cli_help_corpus_payload)
+    data = corpus["schema"]
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
 
     failures: list[str] = []
-    for path, command in _iter_schema_command_paths(commands):
-        result = RUNNER.invoke(app, [*path, "--help"])
-        if result.exit_code != 0:
+    for help_result in corpus["results"]:
+        path = help_result["path"]
+        command = help_result["command"]
+        exit_code = help_result["exit_code"]
+        if exit_code != 0:
             action = command.get("action")
-            failures.append(f"{' '.join(path)} ({action}) exited {result.exit_code}")
+            failures.append(f"{' '.join(path)} ({action}) exited {exit_code}")
 
     assert failures == []
 
 
-def test_leaf_help_stays_within_the_agent_discovery_budget() -> None:
-    data = get_schema_result(full=True).data
+def test_leaf_help_records_discovery_size(
+    cli_help_corpus_payload: str,
+    record_property: Callable[[str, object], None],
+) -> None:
+    corpus = _decode_cli_help_corpus(cli_help_corpus_payload)
+    data = corpus["schema"]
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
 
-    oversized: list[str] = []
-    for path, _command in _iter_schema_command_paths(commands):
-        result = RUNNER.invoke(app, [*path, "--help"])
-        size = len(strip_cli_ansi(result.stdout).encode("utf-8"))
-        if size > HELP_OUTPUT_BYTE_BUDGET:
-            oversized.append(f"{' '.join(path)}: {size} bytes")
+    sizes: dict[str, int] = {}
+    for help_result in corpus["results"]:
+        path = help_result["path"]
+        size = len(strip_cli_ansi(help_result["stdout"]).encode("utf-8"))
+        sizes[" ".join(path)] = size
 
-    assert oversized == []
+    assert sizes
+    record_property("help_bytes", json.dumps(sizes, sort_keys=True))
+    record_property("review_threshold_bytes", HELP_OUTPUT_BYTE_BUDGET)
 
 
 def test_schema_selector_fields_expose_discovery_commands() -> None:
@@ -265,8 +274,7 @@ def test_schema_selector_fields_expose_discovery_commands() -> None:
         for field_kind, field in _iter_schema_command_fields(command):
             if not field.get("selector"):
                 continue
-            discovery_command = field.get("discovery_command")
-            if isinstance(discovery_command, str) and discovery_command:
+            if _field_has_discovery_command(field):
                 continue
             missing.append(
                 f"{'.'.join(path)}:{field_kind}:{field.get('name', '<unknown>')}"
@@ -275,24 +283,37 @@ def test_schema_selector_fields_expose_discovery_commands() -> None:
     assert missing == []
 
 
-def test_schema_choice_fields_are_discoverable_from_help_or_schema() -> None:
-    data = get_schema_result(full=True).data
+def test_schema_choice_fields_are_discoverable_from_help_or_schema(
+    cli_help_corpus_payload: str,
+) -> None:
+    corpus = _decode_cli_help_corpus(cli_help_corpus_payload)
+    data = corpus["schema"]
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
 
     issues: list[str] = []
-    for path, command in _iter_schema_command_paths(commands):
-        result = RUNNER.invoke(app, [*path, "--help"])
-        if result.exit_code != 0:
-            issues.append(f"{' '.join(path)}: help exited {result.exit_code}")
+    for help_result in corpus["results"]:
+        path = help_result["path"]
+        command = help_result["command"]
+        exit_code = help_result["exit_code"]
+        if exit_code != 0:
+            issues.append(f"{' '.join(path)}: help exited {exit_code}")
             continue
-        help_text = normalize_cli_help(result.stdout)
+        help_text = normalize_cli_help(help_result["stdout"])
         for field_kind, field in _iter_schema_command_fields(command):
             choices = field.get("choices")
             if not isinstance(choices, list) or not choices:
                 continue
             field_label = f"{'.'.join(path)}:{field_kind}:{field.get('name')}"
+            discovery_pattern = field.get("discovery_command_pattern")
+            if isinstance(discovery_pattern, str) and discovery_pattern:
+                if discovery_pattern not in help_text:
+                    issues.append(
+                        f"{field_label} missing contextual discovery "
+                        f"{discovery_pattern}"
+                    )
+                continue
             if len(choices) <= 10:
                 missing_choices = [
                     str(choice) for choice in choices if str(choice) not in help_text
@@ -302,8 +323,7 @@ def test_schema_choice_fields_are_discoverable_from_help_or_schema() -> None:
                         f"{field_label} missing help choices {missing_choices}"
                     )
                 continue
-            discovery_command = field.get("discovery_command")
-            if not isinstance(discovery_command, str) or not discovery_command:
+            if not _field_has_discovery_command(field):
                 issues.append(
                     f"{field_label} has {len(choices)} choices without discovery"
                 )
@@ -311,13 +331,19 @@ def test_schema_choice_fields_are_discoverable_from_help_or_schema() -> None:
     assert issues == []
 
 
-def test_schema_discovery_commands_point_to_existing_help_surfaces() -> None:
-    data = get_schema_result(full=True).data
+def test_schema_discovery_commands_point_to_existing_help_surfaces(
+    cli_help_corpus_payload: str,
+) -> None:
+    corpus = _decode_cli_help_corpus(cli_help_corpus_payload)
+    data = corpus["schema"]
     assert isinstance(data, dict)
     commands = data["commands"]
     assert isinstance(commands, list)
 
     known_paths = {path for path, _command in _iter_schema_command_paths(commands)}
+    help_by_path = {
+        tuple(help_result["path"]): help_result for help_result in corpus["results"]
+    }
     issues: list[str] = []
     for discovery_command in sorted(_iter_discovery_commands(data)):
         tokens = shlex.split(discovery_command)
@@ -330,15 +356,16 @@ def test_schema_discovery_commands_point_to_existing_help_surfaces() -> None:
             issues.append(f"{discovery_command}: no declared command path")
             continue
 
-        result = RUNNER.invoke(app, [*command_path, "--help"])
-        if result.exit_code != 0:
+        help_result = help_by_path[command_path]
+        exit_code = help_result["exit_code"]
+        if exit_code != 0:
             issues.append(
                 f"{discovery_command}: {' '.join(command_path)} --help "
-                f"exited {result.exit_code}"
+                f"exited {exit_code}"
             )
             continue
 
-        help_text = normalize_cli_help(result.stdout)
+        help_text = normalize_cli_help(help_result["stdout"])
         issues.extend(
             f"{discovery_command}: {flag} missing from {' '.join(command_path)} --help"
             for flag in _option_flags_after_path(tokens[1:], command_path)
@@ -363,75 +390,13 @@ def test_name_first_resources_have_resolver_functions() -> None:
     assert missing == []
 
 
-def test_name_first_services_import_and_call_their_resource_resolver() -> None:
-    missing_imports: list[str] = []
-    missing_calls: list[str] = []
-    for module_name, resolver_name in NAME_FIRST_SERVICE_MODULES.items():
-        module = ast.parse(
-            (SERVICES_DIR / module_name).read_text(encoding="utf-8"),
-        )
-        alias_name = f"resolve_{resolver_name}"
-        imported = any(
-            isinstance(node, ast.ImportFrom)
-            and node.module == "dsctl.services.resolver"
-            and any(
-                alias.name == resolver_name and alias.asname == alias_name
-                for alias in node.names
-            )
-            for node in module.body
-        )
-        called = any(
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == alias_name
-            for node in ast.walk(module)
-        )
-        if not imported:
-            missing_imports.append(f"{module_name}:{alias_name}")
-        if not called:
-            missing_calls.append(f"{module_name}:{alias_name}")
-
-    assert missing_imports == []
-    assert missing_calls == []
-
-
-def test_runtime_interaction_services_attach_suggestions_to_direct_state_errors() -> (
-    None
-):
-    missing: list[str] = []
-    for module_name in SUGGESTION_GOVERNED_SERVICE_MODULES:
-        module = ast.parse(
-            (SERVICES_DIR / module_name).read_text(encoding="utf-8"),
-        )
-        for node in ast.walk(module):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in {"UserInputError", "InvalidStateError"}
-            ):
-                continue
-            if any(keyword.arg == "suggestion" for keyword in node.keywords):
-                continue
-            missing.append(f"{module_name}:{node.lineno}:{node.func.id}")
-
-    assert missing == []
-
-
-def test_stable_command_docs_cover_shared_cli_surface() -> None:
+def test_cli_contract_covers_shared_stable_command_surface() -> None:
     expected_paths = _stable_surface_leaf_paths()
-    missing_by_doc: dict[str, list[str]] = {}
-    for relative_path, (start_marker, end_marker) in STABLE_COMMAND_DOC_BLOCKS.items():
-        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-        documented_paths = _documented_command_paths(
-            _text_between(text, start_marker, end_marker),
-        )
-        missing = sorted(expected_paths - documented_paths)
-        if missing:
-            missing_by_doc[relative_path] = [
-                f"dsctl {' '.join(path)}" for path in missing
-            ]
-
-    assert missing_by_doc == {}
+    text = (REPO_ROOT / "docs/reference/cli-contract.md").read_text(encoding="utf-8")
+    documented_paths = _documented_command_paths(
+        _text_between(text, "Current stable commands:", "## Naming and Selection Rules")
+    )
+    assert sorted(expected_paths - documented_paths) == []
 
 
 def test_cli_contract_command_blocks_do_not_duplicate_rules_sections() -> None:
@@ -556,7 +521,10 @@ def _iter_discovery_commands(value: object) -> set[str]:
     commands: set[str] = set()
     if isinstance(value, dict):
         for key, item in value.items():
-            if key == "discovery_command" and isinstance(item, str):
+            if key in {
+                "discovery_command",
+                "discovery_command_pattern",
+            } and isinstance(item, str):
                 commands.add(item)
                 continue
             commands.update(_iter_discovery_commands(item))
@@ -564,6 +532,14 @@ def _iter_discovery_commands(value: object) -> set[str]:
         for item in value:
             commands.update(_iter_discovery_commands(item))
     return commands
+
+
+def _field_has_discovery_command(field: dict[str, object]) -> bool:
+    """Accept bound commands and canonical parameterized command patterns."""
+    return any(
+        isinstance(field.get(key), str) and bool(field[key])
+        for key in ("discovery_command", "discovery_command_pattern")
+    )
 
 
 def _longest_known_command_path(

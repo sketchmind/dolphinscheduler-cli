@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, TypedDict, TypeVar
+from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict, TypeVar
 
 from dsctl.cli_surface import SCHEDULE_RESOURCE
 from dsctl.errors import (
@@ -11,7 +11,7 @@ from dsctl.errors import (
     PermissionDeniedError,
     UserInputError,
 )
-from dsctl.services._serialization import optional_text
+from dsctl.output import require_json_object
 from dsctl.services._surface_metadata import CONFIRMATION_RETRY_OPTION
 from dsctl.services._validation import (
     require_non_empty_text,
@@ -23,13 +23,15 @@ from dsctl.services.confirmation import build_confirmation_token, require_confir
 from dsctl.services.schedule_analysis import (
     RiskLevel,
     SchedulePreviewData,
-    build_schedule_preview_data,
     confirmed_high_frequency_warning,
 )
 from dsctl.upstream.protocol import ScheduleCreateSpec
+from dsctl.upstream.serialization import optional_text
 
 if TYPE_CHECKING:
-    from dsctl.services.runtime import ServiceRuntime
+    from collections.abc import Mapping
+
+    from dsctl.output import JsonObject, JsonValue
     from dsctl.upstream.protocol import SchedulePayloadRecord
 
 FailureStrategyValue = str
@@ -51,6 +53,7 @@ WORKFLOW_DEFINITION_NOT_EXIST = 50003
 WORKFLOW_DEFINITION_NOT_RELEASE = 50004
 SCHEDULE_STATE_ONLINE = 50023
 START_TIME_BIGGER_THAN_END_TIME_ERROR = 80003
+START_TIME_BEFORE_CURRENT_TIME_ERROR = 80004
 USER_NO_OPERATION_PERM = 30001
 QUERY_ENVIRONMENT_BY_CODE_ERROR = 1200009
 
@@ -61,7 +64,7 @@ class ScheduleCreateInput(TypedDict):
     crontab: str
     start_time: str
     end_time: str
-    timezone_id: str
+    timezone_id: str | None
     failure_strategy: str | None
     warning_type: str | None
     warning_group_id: int
@@ -69,6 +72,7 @@ class ScheduleCreateInput(TypedDict):
     worker_group: str | None
     tenant_code: str | None
     environment_code: int | None
+    missed_fire_policy: NotRequired[str | None]
 
 
 class ScheduleCreateDraft(TypedDict):
@@ -77,7 +81,7 @@ class ScheduleCreateDraft(TypedDict):
     crontab: str
     start_time: str
     end_time: str
-    timezone_id: str
+    timezone_id: str | None
     failure_strategy: str | None
     warning_type: str | None
     warning_group_id: int | None
@@ -85,6 +89,7 @@ class ScheduleCreateDraft(TypedDict):
     worker_group: str | None
     tenant_code: str | None
     environment_code: int | None
+    missed_fire_policy: NotRequired[str | None]
 
 
 class SchedulePreviewInput(TypedDict):
@@ -93,7 +98,7 @@ class SchedulePreviewInput(TypedDict):
     crontab: str
     start_time: str
     end_time: str
-    timezone_id: str
+    timezone_id: str | None
 
 
 class ScheduleMutationData(TypedDict):
@@ -102,7 +107,7 @@ class ScheduleMutationData(TypedDict):
     crontab: str
     startTime: str
     endTime: str
-    timezoneId: str
+    timezoneId: str | None
     failureStrategy: str | None
     warningType: str | None
     warningGroupId: int
@@ -146,20 +151,24 @@ def validated_schedule_preview_input(
     timezone: str | None,
 ) -> SchedulePreviewInput:
     """Validate one schedule preview input set."""
-    if cron is None or start is None or end is None or timezone is None:
-        message = "schedule preview requires --cron, --start, --end, and --timezone"
+    if cron is None or start is None or end is None:
+        message = "schedule preview requires --cron, --start, and --end"
         raise UserInputError(
             message,
             suggestion=(
-                "Pass all four schedule fields for an ad hoc preview, or provide "
-                "an existing schedule id to preview its current fire times."
+                "Pass the three required schedule fields (plus --timezone on "
+                "timezone-aware DS versions), or provide an existing schedule id."
             ),
         )
     return SchedulePreviewInput(
         crontab=require_quartz_cron_text(cron, label="cron"),
         start_time=require_non_empty_text(start, label="start"),
         end_time=require_non_empty_text(end, label="end"),
-        timezone_id=require_non_empty_text(timezone, label="timezone"),
+        timezone_id=(
+            None
+            if timezone is None
+            else require_non_empty_text(timezone, label="timezone")
+        ),
     )
 
 
@@ -196,7 +205,7 @@ def validated_schedule_create_input(
     cron: str,
     start: str,
     end: str,
-    timezone: str,
+    timezone: str | None,
     failure_strategy: str | None,
     warning_type: str | None,
     warning_group_id: int,
@@ -204,13 +213,18 @@ def validated_schedule_create_input(
     worker_group: str | None,
     tenant_code: str | None,
     environment_code: int | None,
+    missed_fire_policy: str | None = None,
 ) -> ScheduleCreateInput:
     """Validate one schedule create/update payload."""
     return {
         "crontab": require_quartz_cron_text(cron, label="cron"),
         "start_time": require_non_empty_text(start, label="start"),
         "end_time": require_non_empty_text(end, label="end"),
-        "timezone_id": require_non_empty_text(timezone, label="timezone"),
+        "timezone_id": (
+            None
+            if timezone is None
+            else require_non_empty_text(timezone, label="timezone")
+        ),
         "failure_strategy": validated_optional_enum(
             failure_strategy,
             allowed=FAILURE_STRATEGIES,
@@ -230,6 +244,13 @@ def validated_schedule_create_input(
             allowed=PRIORITIES,
             label="priority",
         ),
+        "missed_fire_policy": (
+            None
+            if missed_fire_policy is None
+            else require_non_empty_text(
+                missed_fire_policy, label="missed_fire_policy"
+            ).upper()
+        ),
         "worker_group": optional_text(worker_group),
         "tenant_code": optional_text(tenant_code),
         "environment_code": normalize_environment_code(environment_code),
@@ -241,7 +262,7 @@ def validated_schedule_create_draft(
     cron: str,
     start: str,
     end: str,
-    timezone: str,
+    timezone: str | None,
     failure_strategy: str | None,
     warning_type: str | None,
     warning_group_id: int | None,
@@ -249,13 +270,18 @@ def validated_schedule_create_draft(
     worker_group: str | None,
     tenant_code: str | None,
     environment_code: int | None,
+    missed_fire_policy: str | None = None,
 ) -> ScheduleCreateDraft:
     """Validate one schedule create payload before runtime defaults apply."""
     return {
         "crontab": require_quartz_cron_text(cron, label="cron"),
         "start_time": require_non_empty_text(start, label="start"),
         "end_time": require_non_empty_text(end, label="end"),
-        "timezone_id": require_non_empty_text(timezone, label="timezone"),
+        "timezone_id": (
+            None
+            if timezone is None
+            else require_non_empty_text(timezone, label="timezone")
+        ),
         "failure_strategy": validated_optional_enum(
             failure_strategy,
             allowed=FAILURE_STRATEGIES,
@@ -278,6 +304,13 @@ def validated_schedule_create_draft(
             priority,
             allowed=PRIORITIES,
             label="priority",
+        ),
+        "missed_fire_policy": (
+            None
+            if missed_fire_policy is None
+            else require_non_empty_text(
+                missed_fire_policy, label="missed_fire_policy"
+            ).upper()
         ),
         "worker_group": optional_text(worker_group),
         "tenant_code": optional_text(tenant_code),
@@ -302,6 +335,7 @@ def normalize_environment_code(value: int | None) -> int | None:
 def build_schedule_create_spec(
     *,
     project_code: int,
+    project_name: str | None = None,
     workflow_code: WorkflowCodeT,
     schedule_input: ScheduleCreateInput,
 ) -> ScheduleCreateSpec[WorkflowCodeT]:
@@ -320,30 +354,9 @@ def build_schedule_create_spec(
         worker_group=schedule_input["worker_group"],
         tenant_code=schedule_input["tenant_code"],
         environment_code=schedule_input["environment_code"],
+        project_name=project_name,
+        missed_fire_policy=schedule_input.get("missed_fire_policy"),
     )
-
-
-def preview_schedule(
-    runtime: ServiceRuntime,
-    *,
-    project_code: int,
-    schedule_input: SchedulePreviewInput,
-) -> SchedulePreviewData:
-    """Preview schedule fire times and return one structured analysis payload."""
-    try:
-        preview_times = runtime.upstream.schedules.preview(
-            project_code=project_code,
-            crontab=schedule_input["crontab"],
-            start_time=schedule_input["start_time"],
-            end_time=schedule_input["end_time"],
-            timezone_id=schedule_input["timezone_id"],
-        )
-    except ApiResultError as error:
-        raise translate_schedule_api_error(
-            error,
-            operation="preview",
-        ) from error
-    return build_schedule_preview_data(list(preview_times))
 
 
 def schedule_mutation_data(
@@ -351,7 +364,7 @@ def schedule_mutation_data(
     crontab: str,
     start_time: str,
     end_time: str,
-    timezone_id: str,
+    timezone_id: str | None,
     failure_strategy: str | None,
     warning_type: str | None,
     warning_group_id: int,
@@ -380,7 +393,7 @@ def schedule_confirmation_data(
     *,
     action: str,
     preview: SchedulePreviewData,
-    schedule_payload: dict[str, object],
+    schedule_payload: Mapping[str, JsonValue],
 ) -> ScheduleConfirmationData:
     """Build stable confirmation metadata for one schedule mutation."""
     analysis = preview["analysis"]
@@ -414,7 +427,7 @@ def require_high_frequency_confirmation(
     action: str,
     confirmation: str | None,
     preview: SchedulePreviewData,
-    schedule_payload: dict[str, object],
+    schedule_payload: Mapping[str, JsonValue],
 ) -> None:
     """Require explicit confirmation for one high-frequency schedule mutation."""
     confirmation_data = schedule_confirmation_data(
@@ -560,6 +573,16 @@ def _translated_schedule_input_or_state_error(
     *,
     details: dict[str, int | str],
 ) -> Exception | None:
+    if error.result_code == START_TIME_BEFORE_CURRENT_TIME_ERROR:
+        return UserInputError(
+            "The schedule start time must be later than the server's current time.",
+            details=details,
+            suggestion=(
+                "Set `--start` to a future time and keep `--end` later than "
+                "`--start`. For an existing schedule, update it before retrying "
+                "`schedule online`."
+            ),
+        )
     if error.result_code in {
         TENANT_NOT_EXIST,
         SCHEDULE_CRON_CHECK_FAILED,
@@ -679,9 +702,17 @@ def updated_optional_enum(
 def _schedule_confirmation_payload(
     *,
     preview: SchedulePreviewData,
-    schedule_payload: dict[str, object],
-) -> dict[str, object]:
-    return {
-        "preview": preview,
-        "schedule": schedule_payload,
-    }
+    schedule_payload: Mapping[str, JsonValue],
+) -> JsonObject:
+    # Fire times are a moving sample. Bind consent to the effective mutation
+    # and risk policy, so refreshing that sample cannot revoke the same consent.
+    return require_json_object(
+        {
+            "risk": {
+                "type": preview["analysis"]["risk_type"],
+                "threshold_seconds": preview["analysis"]["threshold_seconds"],
+            },
+            "schedule": schedule_payload,
+        },
+        label="schedule confirmation payload",
+    )

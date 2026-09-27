@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from tests.live.support import (
     require_mapping,
     require_ok_payload,
+    require_text_value,
     result_error_code,
     run_dsctl,
     wait_for_result,
@@ -256,12 +257,21 @@ def write_sub_workflow_parent_spec(
     *,
     project_name: str,
     workflow_name: str,
-    child_workflow_code: int,
+    child_workflow_name: str | None = None,
+    child_workflow_code: int | None = None,
     sub_workflow_task_name: str = "run-child",
     trailing_task_name: str = "after-child",
     trailing_marker: str,
 ) -> Path:
     """Write one parent workflow YAML that executes one child workflow task."""
+    if (child_workflow_name is None) == (child_workflow_code is None):
+        message = "exactly one child workflow name or code is required"
+        raise ValueError(message)
+    child_reference = (
+        f"      childWorkflowName: {child_workflow_name}"
+        if child_workflow_name is not None
+        else f"      workflowDefinitionCode: {child_workflow_code}"
+    )
     trailing_command = _yaml_block(f'echo "{trailing_marker}"')
     path.write_text(
         "\n".join(
@@ -277,7 +287,7 @@ def write_sub_workflow_parent_spec(
                 f"  - name: {sub_workflow_task_name}",
                 "    type: SUB_WORKFLOW",
                 "    task_params:",
-                f"      workflowDefinitionCode: {child_workflow_code}",
+                child_reference,
                 "    worker_group: default",
                 "    priority: MEDIUM",
                 "    retry:",
@@ -358,6 +368,40 @@ def near_future_schedule_window(
         start.strftime("%Y-%m-%d %H:%M:%S"),
         end.strftime("%Y-%m-%d %H:%M:%S"),
     )
+
+
+def refresh_schedule_window(
+    repo_root: Path,
+    env_file: Path,
+    *,
+    schedule_id: int,
+    project: str,
+) -> dict[str, object]:
+    """Reconfirm a fresh window immediately before bringing a test schedule online."""
+    # Rounding to the minute leaves at least two minutes for these commands.
+    start, end = near_future_schedule_window(
+        start_offset_minutes=3, end_offset_minutes=18
+    )
+    fields = [str(schedule_id), "--project", project, "--start", start, "--end", end]
+    explained = require_ok_payload(
+        run_dsctl(repo_root, ["schedule", "explain", *fields], env_file=env_file),
+        expected_action="schedule.explain",
+        label="schedule activation window explain",
+    )
+    data = require_mapping(explained["data"], label="activation window explain data")
+    confirmation = require_mapping(data["confirmation"], label="window confirmation")
+    assert confirmation["required"] is True
+    token = require_text_value(confirmation.get("token"), label="window risk token")
+    updated = require_ok_payload(
+        run_dsctl(
+            repo_root,
+            ["schedule", "update", *fields, "--confirm-risk", token],
+            env_file=env_file,
+        ),
+        expected_action="schedule.update",
+        label="schedule activation window update",
+    )
+    return require_mapping(updated["data"], label="activation window update data")
 
 
 def delete_project_eventually(

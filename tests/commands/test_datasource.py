@@ -5,13 +5,13 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.services import runtime as runtime_service
+from dsctl.services import datasource as datasource_service
+from dsctl.upstream.datasources import DATASOURCE_DOMAIN, DataSourceDomain
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeDataSource,
     FakeDataSourceAdapter,
     FakeEnumValue,
-    FakeProjectAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
 
@@ -48,14 +48,14 @@ def patch_datasource_service(
     monkeypatch: pytest.MonkeyPatch,
     fake_datasource_adapter: FakeDataSourceAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            datasource_adapter=fake_datasource_adapter,
-            profile=make_profile(),
-        ),
+    domain = DataSourceDomain(datasources=fake_datasource_adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        datasource_service,
+        expected_domain=DATASOURCE_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 
@@ -139,8 +139,8 @@ def test_datasource_create_command_rejects_unknown_type(tmp_path: Path) -> None:
     assert payload["action"] == "datasource.create"
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
-        "Run `dsctl template datasource` to choose a supported datasource type, "
-        "then `dsctl template datasource --type TYPE`."
+        "Run `dsctl template datasource --ds-version 3.4.1` to choose a "
+        "supported datasource type, then add `--type TYPE`."
     )
 
 
@@ -187,11 +187,11 @@ def test_datasource_update_command_emits_password_preservation_warning(
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "datasource.update"
-    assert payload["warnings"] == [
+    assert [item["message"] for item in payload.get("warnings", [])] == [
         "datasource update: masked password placeholder detected; "
         "preserving the existing password"
     ]
-    assert payload["warning_details"] == [
+    assert payload["warnings"] == [
         {
             "code": "datasource_update_preserved_existing_password",
             "message": (

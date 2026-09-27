@@ -1,43 +1,38 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeNamespace,
     FakeNamespaceAdapter,
-    FakeProjectAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
-from dsctl.errors import ApiResultError, ConflictError, UserInputError
+from dsctl.errors import (
+    ApiResultError,
+    ConflictError,
+    PermissionDeniedError,
+    UserInputError,
+)
 from dsctl.services import namespace as namespace_service
-from dsctl.services import runtime as runtime_service
+from dsctl.upstream.namespaces import NAMESPACE_DOMAIN, NamespaceDomain
 
 
 def _install_namespace_service_fakes(
     monkeypatch: pytest.MonkeyPatch,
     adapter: FakeNamespaceAdapter,
+    *,
+    ds_version: str = "3.4.1",
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            namespace_adapter=adapter,
-            profile=make_profile(),
-        ),
+    domain = NamespaceDomain(namespaces=adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        namespace_service,
+        expected_domain=NAMESPACE_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=lambda: make_profile(ds_version=ds_version),
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 def _namespaces() -> list[FakeNamespace]:
@@ -129,6 +124,45 @@ def test_get_namespace_result_resolves_name_then_fetches_payload(
         "createTime": None,
         "updateTime": None,
     }
+
+
+def test_get_namespace_result_translates_resolution_permission_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeNamespaceAdapter(
+        namespaces=[],
+        list_error=ApiResultError(
+            result_code=30001,
+            result_message="no operation permission",
+        ),
+    )
+    _install_namespace_service_fakes(monkeypatch, adapter)
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        namespace_service.get_namespace_result("etl-prod")
+
+    assert exc_info.value.details == {
+        "operation": "get",
+        "namespace": "etl-prod",
+    }
+
+
+def test_available_namespace_result_translates_permission_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeNamespaceAdapter(
+        namespaces=[],
+        available_error=ApiResultError(
+            result_code=30001,
+            result_message="no operation permission",
+        ),
+    )
+    _install_namespace_service_fakes(monkeypatch, adapter)
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        namespace_service.list_available_namespaces_result()
+
+    assert exc_info.value.details == {"operation": "available"}
 
 
 def test_list_available_namespaces_result_returns_current_user_visible_set(
@@ -223,6 +257,36 @@ def test_create_namespace_result_maps_upstream_input_rejection_with_suggestion(
     )
 
 
+@pytest.mark.parametrize(
+    "ds_version", ["3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5", "3.0.6"]
+)
+def test_create_namespace_result_uses_legacy_k8s_input_suggestion(
+    monkeypatch: pytest.MonkeyPatch,
+    ds_version: str,
+) -> None:
+    adapter = FakeNamespaceAdapter(
+        namespaces=[],
+        create_error=ApiResultError(
+            result_code=10001,
+            result_message="request params invalid",
+        ),
+    )
+    _install_namespace_service_fakes(
+        monkeypatch,
+        adapter,
+        ds_version=ds_version,
+    )
+
+    with pytest.raises(UserInputError) as exc_info:
+        namespace_service.create_namespace_result(
+            namespace="etl-new",
+            k8s="legacy-cluster",
+        )
+
+    assert exc_info.value.suggestion == "Verify --namespace and --k8s, then retry."
+    assert exc_info.value.details["k8s"] == "legacy-cluster"
+
+
 def test_delete_namespace_result_requires_force() -> None:
     with pytest.raises(UserInputError, match="requires --force"):
         namespace_service.delete_namespace_result("etl-prod", force=False)
@@ -238,15 +302,17 @@ def test_delete_namespace_result_returns_deleted_confirmation(
     data = _mapping(result.data)
 
     assert result.resolved == {
+        "deletes_kubernetes_namespace": False,
         "namespace": {
             "id": 21,
             "namespace": "etl-prod",
             "clusterCode": 9001,
             "clusterName": "prod-cluster",
-        }
+        },
     }
     assert data == {
         "deleted": True,
+        "deletesKubernetesNamespace": False,
         "namespace": {
             "id": 21,
             "namespace": "etl-prod",

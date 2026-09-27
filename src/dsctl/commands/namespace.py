@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.namespace import (
     create_namespace_result,
     delete_namespace_result,
@@ -16,10 +15,6 @@ namespace_app = typer.Typer(
     no_args_is_help=True,
 )
 
-NAMESPACE_HELP = (
-    "Namespace name or numeric id. Run `dsctl namespace list` to discover values."
-)
-
 
 def register_namespace_commands(app: typer.Typer) -> None:
     """Register the `namespace` command group."""
@@ -27,41 +22,15 @@ def register_namespace_commands(app: typer.Typer) -> None:
 
 
 @namespace_app.command("list")
+@bind_command("namespace.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter namespaces by namespace name using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List namespaces with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -77,14 +46,11 @@ def list_command(
 
 
 @namespace_app.command("get")
+@bind_command("namespace.get")
 def get_command(
     ctx: typer.Context,
-    namespace: Annotated[
-        str,
-        typer.Argument(help=NAMESPACE_HELP),
-    ],
+    namespace: str,
 ) -> None:
-    """Get one namespace by name or id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -94,8 +60,8 @@ def get_command(
 
 
 @namespace_app.command("available")
+@bind_command("namespace.available")
 def available_command(ctx: typer.Context) -> None:
-    """List namespaces available to the current login user."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -105,26 +71,16 @@ def available_command(ctx: typer.Context) -> None:
 
 
 @namespace_app.command("create")
+@bind_command("namespace.create")
 def create_command(
     ctx: typer.Context,
     *,
-    namespace: Annotated[
-        str,
-        typer.Option(
-            "--namespace",
-            help="Namespace name.",
-        ),
-    ],
-    cluster_code: Annotated[
-        int,
-        typer.Option(
-            "--cluster-code",
-            min=1,
-            help="Owning cluster code. Run `dsctl cluster list` to discover codes.",
-        ),
-    ],
+    namespace: str,
+    cluster_code: int | None,
+    k8s: str | None,
+    limits_cpu: float | None,
+    limits_memory: int | None,
 ) -> None:
-    """Create one namespace."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -132,28 +88,22 @@ def create_command(
         lambda: create_namespace_result(
             namespace=namespace,
             cluster_code=cluster_code,
+            k8s=k8s,
+            limits_cpu=limits_cpu,
+            limits_memory=limits_memory,
             env_file=env_file,
         ),
     )
 
 
 @namespace_app.command("delete")
+@bind_command("namespace.delete")
 def delete_command(
     ctx: typer.Context,
-    namespace: Annotated[
-        str,
-        typer.Argument(help=NAMESPACE_HELP),
-    ],
+    namespace: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm namespace deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one namespace."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

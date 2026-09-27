@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 from dsctl.errors import DsctlError
-from dsctl.result_navigation import navigation_for
-from dsctl.support.json_types import is_json_value
+from dsctl.result_navigation import error_navigation_for, navigation_for
+from dsctl.support import json_types as _json_types
+
+JsonObject: TypeAlias = _json_types.JsonObject
+JsonValue: TypeAlias = _json_types.JsonValue
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from dsctl.support.json_types import JsonObject, JsonValue
+    from collections.abc import Collection, Sequence
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class CommandResult:
     resolved: JsonObject = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     warning_details: Sequence[Mapping[str, object]] = field(default_factory=list)
+    failure: DsctlError | None = None
 
     def __post_init__(self) -> None:
         """Validate that result payloads stay inside the JSON boundary."""
@@ -51,27 +53,35 @@ class DryRunWarningDetail(TypedDict):
 
     code: str
     message: str
-    request_sent: bool
+    mutation_sent: bool
 
 
-def success_payload(
+def result_payload(
     action: str,
     result: CommandResult,
     *,
     env_file: str | None = None,
+    available_actions: Collection[str] | None = None,
 ) -> JsonObject:
-    """Build the standard success envelope for a completed command."""
+    """Build a completed command report, including any failed outcome."""
     payload: JsonObject = {
-        "ok": True,
+        "ok": result.failure is None,
         "action": action,
         "resolved": result.resolved,
         "data": result.data,
-        "warnings": result.warnings,
-        "warning_details": [
-            require_json_object(item, label="success payload warning detail")
-            for item in result.warning_details
-        ],
     }
+    if result.warnings:
+        payload["warnings"] = [
+            {
+                **require_json_object(detail, label="result payload warning"),
+                "message": message,
+            }
+            for message, detail in zip(
+                result.warnings, result.warning_details, strict=True
+            )
+        ]
+    if result.failure is not None:
+        payload["error"] = result.failure.to_payload()
     try:
         navigation = require_json_object(
             navigation_for(
@@ -79,8 +89,9 @@ def success_payload(
                 resolved=result.resolved,
                 data=result.data,
                 env_file=env_file,
+                available_actions=available_actions,
             ),
-            label="success payload navigation",
+            label="result payload navigation",
         )
     except Exception:
         navigation = {}
@@ -108,18 +119,54 @@ def error_payload(
             "exception": error.__class__.__name__,
         }
 
+    resolved_data = resolved
+    if resolved_data is None and error_data.get("type") == "mutation_outcome_unknown":
+        details = error_data.get("details")
+        known_resources = (
+            details.get("known_resources") if isinstance(details, dict) else None
+        )
+        if isinstance(known_resources, dict):
+            resolved_data = known_resources
+
     return {
         "ok": False,
         "action": action,
         "resolved": require_json_object(
-            resolved or {},
+            resolved_data or {},
             label="error payload resolved",
         ),
         "data": {},
-        "warnings": [],
-        "warning_details": [],
         "error": error_data,
     }
+
+
+def annotate_error_navigation(
+    payload: JsonObject,
+    *,
+    env_file: str | None = None,
+) -> JsonObject:
+    """Attach bounded recovery reads after target selection is available."""
+    action = payload.get("action")
+    error = payload.get("error")
+    resolved = payload.get("resolved")
+    if not isinstance(action, str) or not isinstance(error, dict):
+        return payload
+    error_type = error.get("type")
+    if not isinstance(error_type, str) or not isinstance(resolved, dict):
+        return payload
+    try:
+        navigation = require_json_object(
+            error_navigation_for(
+                action,
+                error_type=error_type,
+                resolved=resolved,
+                env_file=env_file,
+            ),
+            label="error payload navigation",
+        )
+    except Exception:
+        return payload
+    return {**payload, **navigation}
 
 
 def dry_run_result(
@@ -136,7 +183,7 @@ def dry_run_result(
     warning_details: Sequence[Mapping[str, object]] | None = None,
     extra_data: Mapping[str, JsonValue] | None = None,
 ) -> CommandResult:
-    """Build a dry-run result that describes the request without sending it."""
+    """Describe prepared mutations; lookup and verification reads may occur."""
     request = build_dry_run_request(
         method=method,
         path=path,
@@ -145,25 +192,18 @@ def dry_run_result(
         form_data=form_data,
         files=files,
     )
-    data: JsonObject = {
-        "dry_run": True,
-        "request": request,
-    }
+    request_plan = [request]
     if requests is not None:
         request_plan = [
             require_json_object(item, label="dry-run request item") for item in requests
         ]
-        if not request_plan:
-            message = "dry-run request plan cannot be empty"
-            raise ValueError(message)
-        if request_plan[0] != request:
+        if request_plan and request_plan[0] != request:
             message = "dry-run request plan must begin with the primary request"
             raise ValueError(message)
-        if len(request_plan) > 1:
-            data["requests"] = request_plan
+    data: JsonObject = {"dry_run": True, "requests": request_plan}
     if extra_data is not None:
         for key, value in extra_data.items():
-            if key in data:
+            if key in {*data, "request"}:
                 message = f"dry-run extra data cannot overwrite reserved key '{key}'"
                 raise ValueError(message)
             data[key] = require_json_value(
@@ -176,7 +216,9 @@ def dry_run_result(
         require_json_object(item, label="dry-run warning detail")
         for item in warning_details or []
     ]
-    dry_run_warning = "dry run: no request was sent"
+    dry_run_warning = (
+        "dry run: no mutation was sent; lookup and verification reads may occur"
+    )
     return CommandResult(
         data=data,
         resolved=require_json_object(resolved or {}, label="dry-run resolved"),
@@ -187,9 +229,9 @@ def dry_run_result(
         warning_details=[
             require_json_object(
                 DryRunWarningDetail(
-                    code="dry_run_no_request_sent",
+                    code="dry_run_no_mutation_sent",
                     message=dry_run_warning,
-                    request_sent=False,
+                    mutation_sent=False,
                 ),
                 label="dry-run warning detail",
             ),
@@ -225,7 +267,7 @@ def build_dry_run_request(
 
 def require_json_value(value: object, *, label: str) -> JsonValue:
     """Validate one internal boundary value as JSON-safe data."""
-    if not is_json_value(value):
+    if not _json_types.is_json_value(value):
         message = f"{label} must contain only JSON-compatible values"
         raise TypeError(message)
     return value

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import keyword
 import re
 import textwrap
@@ -48,7 +49,7 @@ def render_docstring_lines(docstring: str, *, indent: str) -> list[str]:
     if len(doc_lines) == 1:
         return [f'{indent}"""{doc_lines[0]}"""']
     lines = [f'{indent}"""']
-    lines.extend(f"{indent}{line}" if line else indent for line in doc_lines)
+    lines.extend(f"{indent}{line}" if line else "" for line in doc_lines)
     lines.append(f'{indent}"""')
     return lines
 
@@ -57,6 +58,18 @@ def display_doc_text(text: str) -> str:
     if not text:
         return text
     return text[0].upper() + text[1:]
+
+
+def snake_case(name: str) -> str:
+    """Map a Java-style identifier to the stable generated Python spelling."""
+
+    sanitized_name = re.sub(r"[^0-9A-Za-z]+", "_", name)
+    parts: list[str] = []
+    for index, char in enumerate(sanitized_name):
+        if char.isupper() and index > 0 and not sanitized_name[index - 1].isupper():
+            parts.append("_")
+        parts.append(char.lower())
+    return "".join(parts)
 
 
 def wrap_comment_lines(text: str, *, indent: str) -> list[str]:
@@ -180,10 +193,16 @@ def render_parameter_field_config(
     *,
     required: bool,
     attribute_name: str,
+    honor_default_value: bool = False,
 ) -> str | None:
     args: list[str] = []
     if not required:
-        args.append("default=None")
+        default_expression = (
+            render_example_literal(parameter.java_type, parameter.default_value)
+            if honor_default_value and parameter.default_value is not None
+            else "None"
+        )
+        args.append(f"default={default_expression}")
     wire_name = parameter.wire_name or parameter.name
     if attribute_name != wire_name:
         args.append(f"alias={wire_name!r}")
@@ -204,6 +223,31 @@ def render_parameter_field_config(
             f"json_schema_extra={{'allowable_values': {rendered_allowable_values}}}"
         )
     return ", ".join(args) if args else None
+
+
+def render_parameter_default_annotation(
+    parameter: ParameterSpec, annotation: str
+) -> str:
+    """Describe an unvalidated native default without widening accepted input.
+
+    RequestParam defaults are source strings, including unresolved upstream
+    constants. Pydantic preserves them verbatim on omission but validates an
+    explicit value against the native type. The literal records that additional
+    stored value; the schema hook keeps validation and JSON schema native.
+    """
+    if parameter.default_value is None:
+        return annotation
+    default = ast.literal_eval(
+        render_example_literal(parameter.java_type, parameter.default_value)
+    )
+    if not isinstance(default, str) or {"str", "JsonValue"} & set(
+        annotation.split(" | ")
+    ):
+        return annotation
+    return (
+        f"Annotated[{annotation} | Literal[{default!r}], "
+        f"GetPydanticSchema(lambda _type, handler: handler({annotation}))]"
+    )
 
 
 def pydantic_field_name(wire_name: str) -> str:

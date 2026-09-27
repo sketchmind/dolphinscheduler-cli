@@ -42,7 +42,7 @@ def test_healthcheck_uses_token_header() -> None:
     assert payload == {"status": "UP"}
 
 
-def test_get_result_unwraps_success_payload() -> None:
+def test_get_result_unwraps_result_payload() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "http://example.test/dolphinscheduler/projects/123"
         return httpx.Response(
@@ -107,10 +107,16 @@ def test_get_result_raises_api_result_error() -> None:
     assert _detail_string(exc_info.value, "request_id").startswith("dsctl-")
     assert exc_info.value.details["method"] == "GET"
     assert exc_info.value.details["path"] == "projects/123"
+    assert exc_info.value.details["request_replay_safe"] is True
+    assert exc_info.value.details["retryable"] is False
 
 
 def test_get_result_raises_http_error_for_non_2xx() -> None:
+    attempts = 0
+
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
         return httpx.Response(
             401,
             json={"message": "unauthorized"},
@@ -123,7 +129,35 @@ def test_get_result_raises_http_error_for_non_2xx() -> None:
         client.get_result("projects")
 
     assert exc_info.value.status_code == 401
+    assert attempts == 1
     assert _detail_string(exc_info.value, "request_id").startswith("dsctl-")
+    assert exc_info.value.details["request_replay_safe"] is True
+    assert exc_info.value.details["retryable"] is False
+
+
+def test_profile_timeout_configures_each_rest_request() -> None:
+    profile = ClusterProfile(
+        api_url="http://example.test/dolphinscheduler",
+        api_token=TEST_API_TOKEN,
+        api_timeout_seconds=1.25,
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.extensions["timeout"] == {
+            "connect": 1.25,
+            "read": 1.25,
+            "write": 1.25,
+            "pool": 1.25,
+        }
+        return httpx.Response(
+            200,
+            json={"code": 0, "msg": "success", "data": []},
+        )
+
+    with DolphinSchedulerClient(
+        profile, transport=httpx.MockTransport(handler)
+    ) as client:
+        assert client.get_result("projects") == []
 
 
 @pytest.mark.parametrize("status_code", [403, 404])
@@ -294,7 +328,8 @@ def test_post_result_does_not_retry_by_default_and_reports_request_context() -> 
     assert exc_info.value.details["path"] == "v2/projects"
     assert exc_info.value.details["attempts"] == 1
     assert exc_info.value.details["max_attempts"] == 1
-    assert exc_info.value.details["retryable"] is False
+    assert exc_info.value.details["request_replay_safe"] is False
+    assert exc_info.value.details["retryable"] is True
 
 
 def test_request_result_encodes_repeated_form_fields() -> None:
@@ -385,7 +420,7 @@ def test_get_binary_returns_bytes_and_headers() -> None:
     assert response.headers["content-disposition"] == 'attachment; filename="24.log"'
 
 
-def test_delete_result_unwraps_success_payload() -> None:
+def test_delete_result_unwraps_result_payload() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "DELETE"
         assert (

@@ -1,0 +1,38 @@
+{
+  "origin": "Current source owner contract after template convergence: default retrieval has no public alias; only distinct coupled/operation scenarios are advertised; ordinary input examples are short consumed field facts; canonical task resource FILE names remain root-relative and exact native identities are verified; source-derived 3.4.3 resource and DATAX epochs do not open opaque or resource fallback authoring. Canonical script resource items now have one required string resourceName and reject native ID/extra keys before reference-name deferral.",
+  "profiles": {
+    "1.3.9": "9f69808a3f398f16ef83d8a5031415f608b4b4e25eaa88f05eb876fc39a1c684",
+    "2.0.0": "96f4f410fdf6394c459cb74da3ce01da4370400b74463b0def406aac6b808e2e",
+    "2.0.9": "6ebeeb2659da16d28604b168417576259d06810c22823b286b21b9f8f6f7bef3",
+    "3.0.0": "f4a47822c6548ebe6f6ae36db32e70db3d8201ad88996c5d3a6371dbeb6fa405",
+    "3.0.6": "381e22c8c7b36cdb2feac8cc2be531f884066e14c278650d65cc32b05328661b",
+    "3.1.0": "2ab64ef69e3e894b9be74bc756d47c6f39147257f214f84c743a2900b79536ed",
+    "3.1.9": "e09155f9bbfac899e2b9de7ca34c4d44e6f542ead6db4dc472c2fa6361fb4c68",
+    "3.2.0": "ea22e78b67d29a2e0ae32702a1759599a78d79e5884198f668209f512a6d7e7a",
+    "3.2.1": "adf4b37c4570f57ef023c25f6e2facfdaf3fa7fd1b2acce095f44a2b08ea1d76",
+    "3.2.2": "693a189fb7d397ce47d771f7ce6f604e3874752d21e8308f418b02ceaeeab94e",
+    "3.3.1": "ee798f0f0675baae651cda8745c8f5bf3508a4362b46e983719a58b75ad56511",
+    "3.3.2": "1b1586a8993504fdc8581eebb2695c7a64f4e84f2a88868c7ea8574abda035bb",
+    "3.4.0": "330ffbfa21e9c47072c148426ecce5c35a2497ce8b62def0f997bdd4033977e1",
+    "3.4.1": "e6b37b53a6aee11621f22b473f26c15820d1ea27bab28381c36b63982e76a6e6",
+    "3.4.2": "e347a52edae8c7fa54601d8cdd18973ce2d46a857f77d0a7d7ee1a2f10be051d"
+  },
+  "pydantic_2_8_origin": "Same current source owner contract executed with Pydantic 2.8.0 using explicit PYTHONPATH=src; schema serialization differs, without changing the installed historical acceptance environment.",
+  "pydantic_2_8_profiles": {
+    "1.3.9": "7db46fb187cf9f06862721429b217ac447cd7e97d9e18aa4121fdbbb2b6a412a",
+    "2.0.0": "7da5d269899c79443ff6b51707f194699e0ed046f2446f817b1c4d34187d7086",
+    "2.0.9": "aa2888dd4644768b1108f2e5be10a0f7802f62d560eb64f3ca06d171f99eeebd",
+    "3.0.0": "2f20e406132e7ecb41c075ee540566e12ecea8d15b397422c64cdf68c4c3d4d4",
+    "3.0.6": "d4d98885066ded10aecd27ea49f0b793d2004d392cb9959ba200fffa9da8e33a",
+    "3.1.0": "19439f92525e9afa70eae5c38bb4023b86866fbf033638d17fe20a5071c9825b",
+    "3.1.9": "c155f06b3d0abde4202e281208aa1c92f4531d4297a07a00ae9afe62cd5e963e",
+    "3.2.0": "25035712e4147ef8a9655fbdde5a72864146230f1898ca7421978458d89177f4",
+    "3.2.1": "1676d003b42f089b1750c2cac2e69e8d68bae3770b4fc949345a22a627d1a50d",
+    "3.2.2": "7c96d90b549ff0c9e15d566810f4df620f8c78a11df31ea35c965188d060583c",
+    "3.3.1": "730651ed4ff62d41e6b3dbd2309d6baa31d655b0dec1b853bb5b5fd6f27ba79d",
+    "3.3.2": "9ae88a287753d92438c61a3daeb7cb8942ec6546bd5ea7880da74574f8fc543a",
+    "3.4.0": "bb6c2657c5e93d66e5ad40e97457f31dd70fc2a40e186c5e838d8bd49fb86b05",
+    "3.4.1": "0d8bcef31c5b65644b9d06bf3eff1cdfcce284200683a39d838c23b0af48e31f",
+    "3.4.2": "1bc66fa39a482562bd27f784db8e55264a619754663fd4fd9dd77264b35c18af"
+  }
+}

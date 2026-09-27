@@ -12,6 +12,7 @@ from ds_codegen.extract.inference_support import (
     _collect_method_variable_initializers,
     _collect_method_variable_types,
     _extract_method_invocation_with_qualifier,
+    _iter_callable_return_statements,
     _method_signature_key,
     _resolve_inferred_return_type,
 )
@@ -23,6 +24,8 @@ from ds_codegen.extract.type_lookup import (
     _resolve_service_impl_import_path,
 )
 from ds_codegen.java_source import (
+    SourceResolutionScope,
+    qualify_java_type_references,
     resolve_import_path,
     resolve_referenced_import_path,
 )
@@ -56,8 +59,7 @@ def infer_service_invocation_payload_type(
     service_import_path = resolve_referenced_import_path(
         repo_root,
         service_field_type,
-        import_map,
-        package_name,
+        SourceResolutionScope(import_map, package_name),
     )
     if service_import_path is None:
         return None
@@ -65,11 +67,14 @@ def infer_service_invocation_payload_type(
         repo_root,
         service_import_path,
     )
-    if service_impl_import_path is None:
-        return None
+    # Before DS 2.0 the injected service types are concrete classes rather than
+    # interfaces with ``service.impl`` implementations.  Prefer an indexed
+    # implementation when one exists, but let the same inference pipeline read
+    # the imported service class directly for those legacy sources.
+    service_target_import_path = service_impl_import_path or service_import_path
     loaded_declaration = _load_cached_type_declaration(
         repo_root,
-        service_impl_import_path,
+        service_target_import_path,
     )
     if loaded_declaration is None:
         return None
@@ -85,9 +90,9 @@ def infer_service_invocation_payload_type(
     if service_method is None:
         return None
     service_field_types = _collect_class_field_types(type_declaration)
-    return infer_service_method_payload_type(
+    inferred_type = infer_service_method_payload_type(
         repo_root=repo_root,
-        controller_path=resolve_import_path(repo_root, service_impl_import_path)
+        controller_path=resolve_import_path(repo_root, service_target_import_path)
         or repo_root,
         service_method=service_method,
         service_owner_methods=type_declaration.methods,
@@ -96,6 +101,17 @@ def infer_service_invocation_payload_type(
         service_package_name=service_package_name,
         deps=deps,
         active_service_methods=(),
+    )
+    if inferred_type is None:
+        return None
+    return qualify_java_type_references(
+        repo_root,
+        inferred_type,
+        SourceResolutionScope(
+            service_import_map,
+            service_package_name,
+            service_target_import_path,
+        ),
     )
 
 
@@ -242,7 +258,7 @@ def infer_same_class_delegated_return_type(
     deps: ServiceInferenceDeps,
     active_service_methods: tuple[tuple[str, int], ...],
 ) -> str | None:
-    for _, return_statement in service_method.filter(javalang.tree.ReturnStatement):
+    for return_statement in _iter_callable_return_statements(service_method):
         expression = return_statement.expression
         extracted_invocation = _extract_method_invocation_with_qualifier(expression)
         if extracted_invocation is None:
@@ -255,6 +271,7 @@ def infer_same_class_delegated_return_type(
             "errorWithArgs",
             "getResult",
             "returnDataList",
+            "returnDataListPaging",
             "success",
         }:
             continue

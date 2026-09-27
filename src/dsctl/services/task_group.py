@@ -11,38 +11,35 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
+from dsctl.services._project_scope import resolve_code_project, selected_project_data
+from dsctl.services._validation import (
+    require_non_empty_text,
+    require_non_negative_int,
+    require_positive_int,
+)
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
+)
+from dsctl.upstream.pagination import (
+    DEFAULT_PAGE_SIZE,
+    MAX_AUTO_EXHAUST_PAGES,
+    PageData,
+    requested_page_data,
+)
+from dsctl.upstream.resolver import task_group as resolve_task_group
+from dsctl.upstream.serialization import (
     TaskGroupData,
     TaskGroupQueueData,
     require_resource_text,
     serialize_task_group,
     serialize_task_group_queue,
 )
-from dsctl.services._validation import (
-    require_non_empty_text,
-    require_non_negative_int,
-    require_positive_int,
-)
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
-)
-from dsctl.services.resolver import project as resolve_project
-from dsctl.services.resolver import task_group as resolve_task_group
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
-from dsctl.services.selection import (
-    SelectedValue,
-    require_project_selection,
-    with_selection_source,
-)
+from dsctl.upstream.task_groups import TASK_GROUP_DOMAIN, TaskGroupDomain
 
 if TYPE_CHECKING:
-    from dsctl.services._resolver_models import (
-        ResolvedProjectData,
-        ResolvedTaskGroupData,
-    )
+    from dsctl.output import JsonObject
+    from dsctl.upstream._resolver_models import ResolvedTaskGroupData
     from dsctl.upstream.protocol import TaskGroupRecord
 
 TASK_GROUP_NAME_EXISTS = 130001
@@ -74,10 +71,10 @@ DescriptionUpdate = str | _UnsetValue
 
 
 class TaskGroupQueueForceStartData(TypedDict):
-    """CLI confirmation payload for force-starting one queue item."""
+    """Acceptance receipt; dispatch and task execution remain unobserved."""
 
     queueId: int
-    forceStarted: bool
+    accepted: bool
 
 
 class TaskGroupQueuePriorityData(TypedDict):
@@ -95,7 +92,7 @@ class TaskGroupListResolved(TypedDict, total=False):
     page_no: int
     page_size: int
     all: bool
-    project: dict[str, str | int | None]
+    project: JsonObject
 
 
 def _task_group_identifier(
@@ -131,7 +128,8 @@ def list_task_groups_result(
     ):
         message = (
             "Task-group list cannot combine --project with --search or --status "
-            "because DolphinScheduler 3.4.1 does not expose that filter shape"
+            "because the DolphinScheduler task-group API does not expose that "
+            "combined filter shape"
         )
         raise UserInputError(
             message,
@@ -141,8 +139,9 @@ def list_task_groups_result(
             ),
         )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_GROUP_DOMAIN,
         _list_task_groups_result,
         project=normalized_project,
         search=normalized_search,
@@ -159,8 +158,9 @@ def get_task_group_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Resolve and fetch one task-group payload."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_GROUP_DOMAIN,
         _get_task_group_result,
         task_group=task_group,
     )
@@ -179,8 +179,9 @@ def create_task_group_result(
     normalized_description = _task_group_description(description)
     require_positive_int(group_size, label="group_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_GROUP_DOMAIN,
         _create_task_group_result,
         name=normalized_name,
         group_size=group_size,
@@ -221,8 +222,9 @@ def update_task_group_result(
     if group_size is not None:
         require_positive_int(group_size, label="group_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_GROUP_DOMAIN,
         _update_task_group_result,
         task_group=task_group,
         name=normalized_name,
@@ -237,8 +239,9 @@ def close_task_group_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Close one task group."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_GROUP_DOMAIN,
         _close_task_group_result,
         task_group=task_group,
     )
@@ -250,8 +253,9 @@ def start_task_group_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Start one task group."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_GROUP_DOMAIN,
         _start_task_group_result,
         task_group=task_group,
     )
@@ -275,8 +279,9 @@ def list_task_group_queues_result(
     require_positive_int(page_no, label="page_no")
     require_positive_int(page_size, label="page_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_GROUP_DOMAIN,
         _list_task_group_queues_result,
         task_group=task_group,
         task_instance=normalized_task_instance,
@@ -295,8 +300,9 @@ def force_start_task_group_queue_result(
 ) -> CommandResult:
     """Force-start one task-group queue row."""
     require_positive_int(queue_id, label="queue_id")
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_GROUP_DOMAIN,
         _force_start_task_group_queue_result,
         queue_id=queue_id,
     )
@@ -311,8 +317,9 @@ def set_task_group_queue_priority_result(
     """Set one task-group queue priority."""
     require_positive_int(queue_id, label="queue_id")
     require_non_negative_int(priority, label="priority")
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_GROUP_DOMAIN,
         _set_task_group_queue_priority_result,
         queue_id=queue_id,
         priority=priority,
@@ -320,7 +327,7 @@ def set_task_group_queue_priority_result(
 
 
 def _list_task_groups_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[TaskGroupDomain],
     *,
     project: str | None,
     search: str | None,
@@ -329,7 +336,7 @@ def _list_task_groups_result(
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.task_groups
+    adapter = runtime.domain.task_groups
     resolved = TaskGroupListResolved(
         search=search,
         status=None if status_filter is None else status_filter[1],
@@ -338,14 +345,14 @@ def _list_task_groups_result(
         all=all_pages,
     )
     if project is not None:
-        selected_project = SelectedValue(value=project, source="flag")
-        resolved_project = resolve_project(
-            selected_project.value,
-            adapter=runtime.upstream.projects,
+        selected_project, resolved_project, project_code = resolve_code_project(
+            project,
+            runtime=runtime,
+            definitions=runtime.domain.definitions,
         )
         data: TaskGroupPageData = requested_page_data(
             lambda current_page_no, current_page_size: adapter.list_by_project(
-                project_code=resolved_project.code,
+                project_code=project_code,
                 page_no=current_page_no,
                 page_size=current_page_size,
             ),
@@ -358,11 +365,11 @@ def _list_task_groups_result(
             translate_error=lambda error: _translate_task_group_api_error(
                 error,
                 operation="list",
-                project_code=resolved_project.code,
+                project_code=project_code,
             ),
         )
-        resolved["project"] = _selected_project_data(
-            resolved_project.to_data(),
+        resolved["project"] = selected_project_data(
+            resolved_project,
             selected_project,
         )
     else:
@@ -392,16 +399,15 @@ def _list_task_groups_result(
 
 
 def _get_task_group_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[TaskGroupDomain],
     *,
     task_group: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.task_groups
+    adapter = runtime.domain.task_groups
     resolved_task_group = resolve_task_group(task_group, adapter=adapter)
-    fetched = adapter.get(task_group_id=resolved_task_group.id)
     return CommandResult(
         data=require_json_object(
-            serialize_task_group(fetched),
+            serialize_task_group(resolved_task_group),
             label="task-group data",
         ),
         resolved={
@@ -414,22 +420,22 @@ def _get_task_group_result(
 
 
 def _create_task_group_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[TaskGroupDomain],
     *,
     name: str,
     group_size: int,
     project: str | None,
     description: str,
 ) -> CommandResult:
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
     )
-    adapter = runtime.upstream.task_groups
+    adapter = runtime.domain.task_groups
     try:
         created = adapter.create(
-            project_code=resolved_project.code,
+            project_code=project_code,
             name=name,
             description=description,
             group_size=group_size,
@@ -439,7 +445,7 @@ def _create_task_group_result(
             error,
             operation="create",
             task_group_name=name,
-            project_code=resolved_project.code,
+            project_code=project_code,
         ) from error
 
     return CommandResult(
@@ -449,7 +455,7 @@ def _create_task_group_result(
         ),
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             ),
             "taskGroup": require_json_object(
@@ -461,19 +467,18 @@ def _create_task_group_result(
 
 
 def _update_task_group_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[TaskGroupDomain],
     *,
     task_group: str,
     name: str | None,
     group_size: int | None,
     description: DescriptionUpdate,
 ) -> CommandResult:
-    adapter = runtime.upstream.task_groups
+    adapter = runtime.domain.task_groups
     resolved_task_group = resolve_task_group(task_group, adapter=adapter)
-    current = adapter.get(task_group_id=resolved_task_group.id)
     next_name = (
         require_resource_text(
-            current.name,
+            resolved_task_group.name,
             resource=TASK_GROUP_RESOURCE,
             field_name="task_group.name",
         )
@@ -481,14 +486,20 @@ def _update_task_group_result(
         else name
     )
     if isinstance(description, _UnsetValue):
-        next_description = "" if current.description is None else current.description
+        next_description = (
+            ""
+            if resolved_task_group.description is None
+            else resolved_task_group.description
+        )
     else:
         next_description = description
-    next_group_size = current.groupSize if group_size is None else group_size
+    next_group_size = (
+        resolved_task_group.groupSize if group_size is None else group_size
+    )
     if (
-        next_name == current.name
-        and next_description == (current.description or "")
-        and next_group_size == current.groupSize
+        next_name == resolved_task_group.name
+        and next_description == (resolved_task_group.description or "")
+        and next_group_size == resolved_task_group.groupSize
     ):
         message = "Task-group update requires at least one field change"
         raise UserInputError(
@@ -501,6 +512,7 @@ def _update_task_group_result(
     try:
         updated = adapter.update(
             task_group_id=resolved_task_group.id,
+            project_code=resolved_task_group.projectCode,
             name=next_name,
             description=next_description,
             group_size=next_group_size,
@@ -529,14 +541,14 @@ def _update_task_group_result(
 
 
 def _close_task_group_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[TaskGroupDomain],
     *,
     task_group: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.task_groups
+    adapter = runtime.domain.task_groups
     resolved_task_group = resolve_task_group(task_group, adapter=adapter)
     try:
-        adapter.close(task_group_id=resolved_task_group.id)
+        updated = adapter.close(task_group_id=resolved_task_group.id)
     except ApiResultError as error:
         raise _translate_task_group_api_error(
             error,
@@ -546,7 +558,6 @@ def _close_task_group_result(
             project_code=resolved_task_group.projectCode,
         ) from error
 
-    updated = adapter.get(task_group_id=resolved_task_group.id)
     return CommandResult(
         data=require_json_object(
             serialize_task_group(updated),
@@ -562,14 +573,14 @@ def _close_task_group_result(
 
 
 def _start_task_group_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[TaskGroupDomain],
     *,
     task_group: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.task_groups
+    adapter = runtime.domain.task_groups
     resolved_task_group = resolve_task_group(task_group, adapter=adapter)
     try:
-        adapter.start(task_group_id=resolved_task_group.id)
+        updated = adapter.start(task_group_id=resolved_task_group.id)
     except ApiResultError as error:
         raise _translate_task_group_api_error(
             error,
@@ -579,7 +590,6 @@ def _start_task_group_result(
             project_code=resolved_task_group.projectCode,
         ) from error
 
-    updated = adapter.get(task_group_id=resolved_task_group.id)
     return CommandResult(
         data=require_json_object(
             serialize_task_group(updated),
@@ -595,7 +605,7 @@ def _start_task_group_result(
 
 
 def _list_task_group_queues_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[TaskGroupDomain],
     *,
     task_group: str,
     task_instance: str | None,
@@ -605,7 +615,7 @@ def _list_task_group_queues_result(
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.task_groups
+    adapter = runtime.domain.task_groups
     resolved_task_group = resolve_task_group(task_group, adapter=adapter)
     data: TaskGroupQueuePageData = requested_page_data(
         lambda current_page_no, current_page_size: adapter.list_queues(
@@ -649,11 +659,11 @@ def _list_task_group_queues_result(
 
 
 def _force_start_task_group_queue_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[TaskGroupDomain],
     *,
     queue_id: int,
 ) -> CommandResult:
-    adapter = runtime.upstream.task_groups
+    adapter = runtime.domain.task_groups
     try:
         adapter.force_start(queue_id=queue_id)
     except ApiResultError as error:
@@ -665,18 +675,18 @@ def _force_start_task_group_queue_result(
 
     data: TaskGroupQueueForceStartData = {
         "queueId": queue_id,
-        "forceStarted": True,
+        "accepted": True,
     }
     return CommandResult(data=require_json_object(data, label="queue force-start data"))
 
 
 def _set_task_group_queue_priority_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[TaskGroupDomain],
     *,
     queue_id: int,
     priority: int,
 ) -> CommandResult:
-    adapter = runtime.upstream.task_groups
+    adapter = runtime.domain.task_groups
     try:
         adapter.set_queue_priority(queue_id=queue_id, priority=priority)
     except ApiResultError as error:
@@ -692,20 +702,6 @@ def _set_task_group_queue_priority_result(
     }
     return CommandResult(
         data=require_json_object(data, label="queue priority data"),
-    )
-
-
-def _selected_project_data(
-    project: ResolvedProjectData,
-    selected_project: SelectedValue,
-) -> dict[str, int | str | None]:
-    return with_selection_source(
-        {
-            "code": project["code"],
-            "name": project["name"],
-            "description": project["description"],
-        },
-        selected_project,
     )
 
 

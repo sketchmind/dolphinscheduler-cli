@@ -1,5 +1,3 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
 from tests.fakes import (
     FakeEnumValue,
@@ -8,14 +6,18 @@ from tests.fakes import (
     FakeTaskGroup,
     FakeTaskGroupAdapter,
     FakeTaskGroupQueue,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
+    fake_project_definitions,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
-from dsctl.context import SessionContext
 from dsctl.errors import InvalidStateError, UserInputError
 from dsctl.services import runtime as runtime_service
 from dsctl.services import task_group as task_group_service
+from dsctl.services.selection import ResourceDefaults
+from dsctl.upstream.task_groups import TASK_GROUP_DOMAIN, TaskGroupDomain
 
 
 def _install_task_group_service_fakes(
@@ -23,29 +25,30 @@ def _install_task_group_service_fakes(
     *,
     project_adapter: FakeProjectAdapter,
     task_group_adapter: FakeTaskGroupAdapter,
-    context: SessionContext | None = None,
+    context: ResourceDefaults | None = None,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            task_group_adapter=task_group_adapter,
+    def bound_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is TASK_GROUP_DOMAIN
+        return fake_bound_domain_service_runtime(
+            TaskGroupDomain(
+                definitions=fake_project_definitions(project_adapter),
+                task_groups=task_group_adapter,
+            ),
             context=context,
             profile=make_profile(),
-        ),
+        )
+
+    monkeypatch.setattr(
+        runtime_service,
+        "open_bound_domain_service_runtime",
+        bound_runtime_factory,
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 def test_list_task_groups_result_returns_first_page_by_default(
@@ -169,7 +172,7 @@ def test_create_task_group_result_uses_selected_project_context(
         monkeypatch,
         project_adapter=project_adapter,
         task_group_adapter=task_group_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = task_group_service.create_task_group_result(
@@ -194,6 +197,60 @@ def test_create_task_group_result_uses_selected_project_context(
     assert data["name"] == "etl"
     assert data["projectCode"] == 11
     assert data["status"] == "YES"
+
+
+def test_get_task_group_result_reuses_the_resolution_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task_group_adapter = FakeTaskGroupAdapter(
+        task_groups=[
+            FakeTaskGroup(
+                id=7,
+                name="etl",
+                project_code_value=11,
+                description="bounded concurrency",
+                group_size_value=4,
+                status_value=FakeEnumValue("YES"),
+            )
+        ]
+    )
+    _install_task_group_service_fakes(
+        monkeypatch,
+        project_adapter=FakeProjectAdapter(projects=[]),
+        task_group_adapter=task_group_adapter,
+    )
+
+    result = task_group_service.get_task_group_result("etl")
+
+    assert _mapping(result.data)["description"] == "bounded concurrency"
+    assert task_group_adapter.get_calls == []
+
+
+def test_update_task_group_result_reuses_the_resolution_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task_group_adapter = FakeTaskGroupAdapter(
+        task_groups=[
+            FakeTaskGroup(
+                id=7,
+                name="etl",
+                project_code_value=11,
+                description="bounded concurrency",
+                group_size_value=4,
+                status_value=FakeEnumValue("YES"),
+            )
+        ]
+    )
+    _install_task_group_service_fakes(
+        monkeypatch,
+        project_adapter=FakeProjectAdapter(projects=[]),
+        task_group_adapter=task_group_adapter,
+    )
+
+    result = task_group_service.update_task_group_result("etl", group_size=6)
+
+    assert _mapping(result.data)["groupSize"] == 6
+    assert task_group_adapter.get_calls == []
 
 
 def test_update_task_group_result_requires_one_change(
@@ -277,6 +334,7 @@ def test_close_task_group_result_returns_updated_payload(
         }
     }
     assert data["status"] == "NO"
+    assert task_group_adapter.get_calls == []
 
 
 def test_close_task_group_result_reports_reopen_suggestion_when_already_closed(
@@ -306,8 +364,10 @@ def test_close_task_group_result_reports_reopen_suggestion_when_already_closed(
     assert exc_info.value.suggestion == "Run `dsctl task-group start etl` to reopen it."
 
 
+@pytest.mark.parametrize("task_id", [None, 101])
 def test_list_task_group_queues_result_returns_queue_page(
     monkeypatch: pytest.MonkeyPatch,
+    task_id: int | None,
 ) -> None:
     project_adapter = FakeProjectAdapter(projects=[])
     task_group_adapter = FakeTaskGroupAdapter(
@@ -323,7 +383,7 @@ def test_list_task_group_queues_result_returns_queue_page(
         task_group_queues=[
             FakeTaskGroupQueue(
                 id=31,
-                task_id_value=101,
+                task_id_value=task_id,
                 task_name_value="extract",
                 project_name_value="etl-prod",
                 project_code_value="11",
@@ -363,7 +423,7 @@ def test_list_task_group_queues_result_returns_queue_page(
     assert list(items) == [
         {
             "id": 31,
-            "taskId": 101,
+            "taskId": task_id,
             "taskName": "extract",
             "projectName": "etl-prod",
             "projectCode": "11",
@@ -408,7 +468,7 @@ def test_force_start_task_group_queue_result_returns_confirmation(
 
     assert result.data == {
         "queueId": 31,
-        "forceStarted": True,
+        "accepted": True,
     }
 
 

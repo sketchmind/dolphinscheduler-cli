@@ -2,62 +2,174 @@ name: Publish
 
 on:
   workflow_dispatch:
-  release:
-    types:
-      - published
+    inputs:
+      release_tag:
+        description: Existing protected tag whose draft Release has canonical assets
+        required: true
+        type: string
+      target:
+        description: Package index that receives the canonical assets
+        required: true
+        default: testpypi
+        type: choice
+        options:
+          - testpypi
+          - pypi
+
+concurrency:
+  group: publish-${{ inputs.release_tag }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
+env:
+  RELEASE_TAG: ${{ inputs.release_tag }}
+
 jobs:
-  build:
-    name: Build distributions
+  fetch-draft-assets:
+    name: Snapshot draft Release assets
+    runs-on: ubuntu-latest
+    # Draft assets require a push-capable token. This job never checks out or
+    # executes repository source, and its shell is a fixed read-only snapshot.
+    permissions:
+      contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Verify protected dispatch and draft state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(gh release view "$RELEASE_TAG" --json tagName --jq .tagName)" = "$RELEASE_TAG"
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          test "$(gh release view "$RELEASE_TAG" --json isPrerelease --jq .isPrerelease)" = false
+          version=${RELEASE_TAG#v}
+          expected_assets=$(printf '%s\n' \
+            "dolphinscheduler_cli-$version-py3-none-any.whl" \
+            "dolphinscheduler_cli-$version.tar.gz" | sort)
+          actual_assets=$(gh release view "$RELEASE_TAG" \
+            --json assets --jq '.assets[].name' | sort)
+          test "$actual_assets" = "$expected_assets"
+
+      - name: Download canonical draft assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${RELEASE_TAG#v}
+          mkdir dist
+          gh release download "$RELEASE_TAG" \
+            --dir dist \
+            --pattern "dolphinscheduler_cli-$version-py3-none-any.whl" \
+            --pattern "dolphinscheduler_cli-$version.tar.gz"
+
+      - name: Snapshot canonical distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python-package-distributions-${{ env.RELEASE_TAG }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  validate-artifacts:
+    name: Validate canonical distributions
+    needs: fetch-draft-assets
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Checkout tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify protected release ancestry
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            '+refs/heads/main:refs/remotes/origin/main' \
+            '+refs/heads/release/*:refs/remotes/origin/release/*'
+          remote_tag=$(git ls-remote --refs origin "refs/tags/$RELEASE_TAG" | cut -f1)
+          test -n "$remote_tag"
+          test "$remote_tag" = "$(git rev-parse "$RELEASE_TAG")"
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            test -n "$(git for-each-ref \
+              --format='%(refname)' \
+              --contains HEAD \
+              refs/remotes/origin/release/)"
+          fi
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
 
-      - name: Install build tooling
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install build twine
-
-      - name: Check release version
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: python tools/check_release_version.py --tag "$RELEASE_TAG"
-
-      - name: Build distributions
-        run: python -m build
-
-      - name: Check distributions
-        run: python -m twine check dist/*
-
-      - name: Check package contents
-        run: python tools/check_package_contents.py dist/*
-
-      - name: Upload distributions
-        uses: actions/upload-artifact@v7
+      - name: Download snapshotted distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: python-package-distributions
+          name: python-package-distributions-${{ env.RELEASE_TAG }}
           path: dist/
-          if-no-files-found: error
+
+      - name: Install verification tooling
+        run: python -m pip install --upgrade packaging twine 'javalang>=0.13,<1' dist/*.whl
+
+      - name: Verify source, evidence, and distributions
+        run: |
+          python tools/check_release_version.py --tag "$RELEASE_TAG"
+          python tools/check_exact_profile_read_evidence.py
+          python tools/check_release_artifacts.py --tag "$RELEASE_TAG" dist/*
+          python -m twine check dist/*
+          python tools/check_package_contents.py dist/*
+
+      - name: Verify TestPyPI bytes before PyPI promotion
+        if: inputs.target == 'pypi'
+        run: |
+          version=${RELEASE_TAG#v}
+          curl --fail --silent --show-error --location \
+            "https://test.pypi.org/pypi/dolphinscheduler-cli/$version/json" \
+            --output testpypi.json
+          python tools/check_release_artifacts.py \
+            --tag "$RELEASE_TAG" \
+            --index-json testpypi.json \
+            dist/*
+
+      - name: Smoke-test the canonical wheel
+        run: |
+          python -m venv /tmp/dsctl-release-check
+          /tmp/dsctl-release-check/bin/python -m pip install dist/*.whl
+          /tmp/dsctl-release-check/bin/dsctl version
+          /tmp/dsctl-release-check/bin/dsctl schema --list-groups
+          /tmp/dsctl-release-check/bin/dsctl capabilities
+          /tmp/dsctl-release-check/bin/python - <<'PY'
+          from dsctl.generated.version_profiles import TARGET_DS_VERSIONS
+          from dsctl.upstream._compiled_resource import RESOURCE_PROGRAMS
+          from dsctl.upstream._compiled_workflow_runtime import WORKFLOW_PROGRAMS
+          from dsctl.upstream.task_type_inventory import TaskTypeAdapter
+          from dsctl.upstream.wire import validate_compiled_wire_installation
+
+          validate_compiled_wire_installation()
+          for ds_version in TARGET_DS_VERSIONS:
+              WORKFLOW_PROGRAMS.profile(ds_version).program("task_log")
+              resource = RESOURCE_PROGRAMS.profile(ds_version)
+              assert resource.program("upload").codec.file_fields == ("file",)
+              assert resource.program("download").codec.response_transport == "binary"
+          TaskTypeAdapter.for_version("3.4.2")
+          PY
+
+      - name: Verify tag did not move during validation
+        run: |
+          remote_tag=$(git ls-remote --refs origin "refs/tags/$RELEASE_TAG" | cut -f1)
+          test "$remote_tag" = "$(git rev-parse "$RELEASE_TAG")"
 
   publish-testpypi:
-    name: Publish to TestPyPI
-    needs: build
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      (
-        github.ref == 'refs/heads/main' ||
-        startsWith(github.ref, 'refs/heads/release/')
-      )
+    name: Publish canonical bytes to TestPyPI
+    needs: validate-artifacts
+    if: inputs.target == 'testpypi'
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -67,21 +179,98 @@ jobs:
       id-token: write
 
     steps:
-      - name: Download distributions
-        uses: actions/download-artifact@v8
+      - name: Download validated distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: python-package-distributions
+          name: python-package-distributions-${{ env.RELEASE_TAG }}
           path: dist/
 
       - name: Publish package distributions to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
 
+  verify-testpypi:
+    name: Verify canonical TestPyPI publication
+    needs: publish-testpypi
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+
+      - name: Download validated distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: python-package-distributions-${{ env.RELEASE_TAG }}
+          path: dist/
+
+      - name: Install verification tooling
+        run: python -m pip install --upgrade packaging 'javalang>=0.13,<1' dist/*.whl
+
+      - name: Verify TestPyPI retained the canonical bytes
+        run: |
+          version=${RELEASE_TAG#v}
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if curl --fail --silent --show-error --location \
+              "https://test.pypi.org/pypi/dolphinscheduler-cli/$version/json" \
+              --output testpypi.json; then
+              if python tools/check_release_artifacts.py \
+                --tag "$RELEASE_TAG" \
+                --index-json testpypi.json \
+                dist/*; then
+                break
+              fi
+            fi
+            test "$attempt" -lt 12
+            sleep 10
+          done
+
+      - name: Verify a clean TestPyPI wheel download
+        run: |
+          version=${RELEASE_TAG#v}
+          python -m pip download \
+            --no-cache-dir \
+            --no-deps \
+            --only-binary=:all: \
+            --index-url https://test.pypi.org/simple/ \
+            --dest /tmp/testpypi-download \
+            "dolphinscheduler-cli==$version"
+          cmp dist/*.whl /tmp/testpypi-download/*.whl
+          python -m venv /tmp/dsctl-testpypi-check
+          /tmp/dsctl-testpypi-check/bin/python -m pip install \
+            /tmp/testpypi-download/*.whl
+          /tmp/dsctl-testpypi-check/bin/dsctl version
+          /tmp/dsctl-testpypi-check/bin/dsctl schema --list-groups
+          /tmp/dsctl-testpypi-check/bin/dsctl capabilities
+          /tmp/dsctl-testpypi-check/bin/python - <<'PY'
+          from dsctl.generated.version_profiles import TARGET_DS_VERSIONS
+          from dsctl.upstream._compiled_resource import RESOURCE_PROGRAMS
+          from dsctl.upstream._compiled_workflow_runtime import WORKFLOW_PROGRAMS
+          from dsctl.upstream.task_type_inventory import TaskTypeAdapter
+          from dsctl.upstream.wire import validate_compiled_wire_installation
+
+          validate_compiled_wire_installation()
+          for ds_version in TARGET_DS_VERSIONS:
+              WORKFLOW_PROGRAMS.profile(ds_version).program("task_log")
+              resource = RESOURCE_PROGRAMS.profile(ds_version)
+              assert resource.program("upload").codec.file_fields == ("file",)
+              assert resource.program("download").codec.response_transport == "binary"
+          TaskTypeAdapter.for_version("3.4.2")
+          PY
+
   publish-pypi:
-    name: Publish to PyPI
-    needs: build
-    if: github.event_name == 'release'
+    name: Promote canonical bytes to PyPI
+    needs: validate-artifacts
+    if: inputs.target == 'pypi'
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -91,11 +280,55 @@ jobs:
       id-token: write
 
     steps:
-      - name: Download distributions
-        uses: actions/download-artifact@v8
+      - name: Download validated distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: python-package-distributions
+          name: python-package-distributions-${{ env.RELEASE_TAG }}
           path: dist/
 
       - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+
+  verify-pypi:
+    name: Verify canonical PyPI publication
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+
+      - name: Download validated distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: python-package-distributions-${{ env.RELEASE_TAG }}
+          path: dist/
+
+      - name: Install verification tooling
+        run: python -m pip install --upgrade packaging 'javalang>=0.13,<1' dist/*.whl
+
+      - name: Verify PyPI retained the canonical bytes
+        run: |
+          version=${RELEASE_TAG#v}
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if curl --fail --silent --show-error --location \
+              "https://pypi.org/pypi/dolphinscheduler-cli/$version/json" \
+              --output pypi.json; then
+              if python tools/check_release_artifacts.py \
+                --tag "$RELEASE_TAG" \
+                --index-json pypi.json \
+                dist/*; then
+                break
+              fi
+            fi
+            test "$attempt" -lt 12
+            sleep 10
+          done

@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, cast
 
 import javalang
 
+from ds_codegen.contract_type_refs import replace_type_reference_names
+from ds_codegen.contract_visibility import SERVER_INJECTED_PARAMETER_TYPES
 from ds_codegen.extract.inference_support import _collect_class_field_types
 from ds_codegen.extract.metadata import (
     _annotation_values,
@@ -32,6 +34,7 @@ from ds_codegen.ir import (
     ParameterSpec,
     ResponseProjection,
 )
+from ds_codegen.java_source import SourceResolutionScope, qualify_java_type_references
 from ds_codegen.java_source import (
     build_import_map as _build_import_map,
 )
@@ -72,13 +75,6 @@ IMPLICIT_REQUEST_PARAM_TYPES = {
     "Short",
     "String",
 }
-SERVER_INJECTED_PARAMETER_TYPES = {
-    "HttpServletRequest",
-    "HttpServletResponse",
-    "HttpSession",
-    "ServletRequest",
-    "ServletResponse",
-}
 CONTROLLER_ROOTS = (
     Path(
         "references/dolphinscheduler/dolphinscheduler-api/src/main/java/"
@@ -97,6 +93,7 @@ class ControllerExtractDeps:
     resolve_operation_logical_return_type: Callable[..., str]
     resolve_operation_response_projection: Callable[..., ResponseProjection]
     resolve_referenced_import_path: Callable[..., str | None]
+    resolve_operation_type_import_path: Callable[..., str | None]
     looks_like_request_dto_import: Callable[[str], bool]
     collect_type_reference_names: Callable[[object | None], set[str]]
     collect_type_reference_names_from_java_type: Callable[[str], set[str]]
@@ -126,6 +123,9 @@ def extract_controller_contract(
 
     import_map = _build_import_map(compilation_unit)
     package_name = compilation_unit.package.name if compilation_unit.package else None
+    controller_import_path = (
+        f"{package_name}.{controller.name}" if package_name else controller.name
+    )
     controller_field_types = _collect_class_field_types(controller)
 
     operations: list[OperationSpec] = []
@@ -142,6 +142,7 @@ def extract_controller_contract(
             api_group=api_group,
             import_map=import_map,
             package_name=package_name,
+            controller_import_path=controller_import_path,
             controller_field_types=controller_field_types,
             deps=deps,
         )
@@ -156,8 +157,11 @@ def extract_controller_contract(
             import_path = deps.resolve_referenced_import_path(
                 repo_root,
                 referenced_type,
-                import_map,
-                package_name,
+                SourceResolutionScope(
+                    import_map,
+                    package_name,
+                    controller_import_path,
+                ),
             )
             if import_path is None:
                 continue
@@ -179,11 +183,13 @@ def extract_controller_contract(
             )
         )
         for referenced_type in return_type_names:
-            import_path = deps.resolve_referenced_import_path(
+            import_path = deps.resolve_operation_type_import_path(
                 repo_root,
-                referenced_type,
-                import_map,
-                package_name,
+                operation_id=operation.operation_id,
+                type_name=referenced_type,
+                import_map=import_map,
+                package_name=package_name,
+                owner_import_path=controller_import_path,
             )
             if import_path is not None:
                 model_imports.add(import_path)
@@ -232,6 +238,7 @@ def extract_operation_spec(
     api_group: str,
     import_map: dict[str, str],
     package_name: str | None,
+    controller_import_path: str,
     controller_field_types: dict[str, str],
     deps: ControllerExtractDeps,
 ) -> OperationSpec | None:
@@ -262,10 +269,21 @@ def extract_operation_spec(
     )
     path = _join_paths(class_mapping, method_mapping)
     parameters = [
-        extract_parameter_spec(
-            parameter,
-            parameter_doc=method_doc.params.get(parameter.name),
-            method_parameter_metadata=method_parameter_metadata,
+        replace(
+            extract_parameter_spec(
+                parameter,
+                parameter_doc=method_doc.params.get(parameter.name),
+                method_parameter_metadata=method_parameter_metadata,
+            ),
+            java_type=qualify_java_type_references(
+                repo_root,
+                _render_type(parameter.type),
+                SourceResolutionScope(
+                    import_map,
+                    package_name,
+                    controller_import_path,
+                ),
+            ),
         )
         for parameter in method.parameters
     ]
@@ -279,6 +297,16 @@ def extract_operation_spec(
         import_map=import_map,
         package_name=package_name,
     )
+    if inferred_return_type is not None:
+        inferred_return_type = qualify_java_type_references(
+            repo_root,
+            inferred_return_type,
+            SourceResolutionScope(
+                import_map,
+                package_name,
+                controller_import_path,
+            ),
+        )
 
     operation_id = f"{controller_name}.{method.name}"
     logical_return_type = deps.resolve_operation_logical_return_type(
@@ -288,6 +316,18 @@ def extract_operation_spec(
         inferred_return_type=inferred_return_type,
         import_map=import_map,
         package_name=package_name,
+        owner_import_path=controller_import_path,
+    )
+    logical_return_type = replace_type_reference_names(
+        logical_return_type,
+        lambda reference_name: deps.resolve_operation_type_import_path(
+            repo_root,
+            operation_id=operation_id,
+            type_name=reference_name,
+            import_map=import_map,
+            package_name=package_name,
+            owner_import_path=controller_import_path,
+        ),
     )
 
     return OperationSpec(

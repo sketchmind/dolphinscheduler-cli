@@ -4,27 +4,35 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, TypedDict
 
 from dsctl.client import DolphinSchedulerClient
-from dsctl.config import ClusterProfile, load_profile
-from dsctl.context import (
-    ContextScope,
-    SessionContext,
-    load_context,
-    project_context_path,
-    read_context_layer,
-    user_context_path,
-)
-from dsctl.errors import DsctlError
+from dsctl.errors import CheckFailedError, ConfigError, DsctlError
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import optional_text
+from dsctl.services.version_resolution import (
+    CompatibilityResolution,
+    compatibility_details,
+    invocation_scope,
+    resolve_profile,
+    resolve_runtime_selection,
+    resolve_settings,
+    resolve_target,
+    resolve_version,
+    selection_details,
+)
 from dsctl.upstream import (
     SUPPORTED_VERSIONS,
-    get_default_version_support,
+    Availability,
+    Verification,
+    get_action_capability,
+    get_identity_adapter,
     get_version_support,
 )
+from dsctl.upstream.read_compatibility import available_read_actions
+from dsctl.upstream.serialization import enum_value, optional_text
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from dsctl.client import ReadExecutionPolicy
+    from dsctl.config import ClusterProfile
     from dsctl.support.yaml_io import JsonObject
 
 DoctorStatus = Literal["ok", "warning", "error"]
@@ -60,6 +68,7 @@ class DoctorData(TypedDict):
 class _ProfileCheckResult:
     profile: ClusterProfile | None
     check: DoctorCheckData
+    compatibility: CompatibilityResolution | None = None
 
 
 class DoctorWarningDetail(TypedDict):
@@ -74,10 +83,19 @@ class DoctorWarningDetail(TypedDict):
 
 def get_doctor_result(*, env_file: str | None = None) -> CommandResult:
     """Return a structured runtime and local-environment diagnostic report."""
+    with invocation_scope("doctor"):
+        return _get_doctor_result(env_file=env_file)
+
+
+def _get_doctor_result(*, env_file: str | None) -> CommandResult:
     profile_result = _profile_check(env_file=env_file)
+    if profile_result.compatibility is not None:
+        return _compatibility_doctor_result(
+            profile_result.check, profile_result.compatibility, env_file=env_file
+        )
     checks = [
         profile_result.check,
-        _context_check(),
+        _context_check(env_file=env_file),
         _adapter_check(profile_result.profile),
         (
             _api_health_check(profile_result.profile)
@@ -90,18 +108,37 @@ def get_doctor_result(*, env_file: str | None = None) -> CommandResult:
             else _skipped_current_user_check()
         ),
     ]
-    warnings, warning_details = _doctor_warning_payloads(checks)
-    return CommandResult(
-        data=require_json_object(_doctor_data(checks), label="doctor data"),
-        warnings=warnings,
-        warning_details=warning_details,
-    )
+    return _doctor_result(checks)
 
 
 def _profile_check(*, env_file: str | None) -> _ProfileCheckResult:
     try:
-        profile = load_profile(env_file)
+        with invocation_scope():
+            profile = resolve_profile(env_file, mode="refresh")
+            resolution = resolve_version(env_file, mode="local")
     except DsctlError as exc:
+        if exc.details.get("reason") == "exact_version_required" and exc.details.get(
+            "candidate_versions"
+        ):
+            observed = resolve_target(env_file, mode="local")
+            if isinstance(observed, CompatibilityResolution):
+                return _ProfileCheckResult(
+                    profile=None,
+                    check=_doctor_check(
+                        "profile",
+                        "warning",
+                        "API contract candidates found; exact release is unknown.",
+                        {
+                            **compatibility_details(observed),
+                            "probes": list(observed.probes),
+                        },
+                        suggestion=(
+                            "Use automatic read actions. Configure DS_VERSION "
+                            "from the deployment's release for other operations."
+                        ),
+                    ),
+                    compatibility=observed,
+                )
         return _ProfileCheckResult(
             profile=None,
             check=_doctor_check(
@@ -132,7 +169,12 @@ def _profile_check(*, env_file: str | None) -> _ProfileCheckResult:
             ),
         )
 
-    details = dict(profile.redacted())
+    details: JsonObject = {
+        **profile.redacted(),
+        "version_source": resolution.source,
+        "version_checked_at": resolution.checked_at,
+        "version_evidence": resolution.evidence,
+    }
     if env_file is not None:
         details["env_file"] = env_file
     return _ProfileCheckResult(
@@ -146,99 +188,94 @@ def _profile_check(*, env_file: str | None) -> _ProfileCheckResult:
     )
 
 
-def _context_check() -> DoctorCheckData:
-    layer_errors, layer_suggestion = _context_layer_errors()
+def _compatibility_doctor_result(
+    profile_check: DoctorCheckData,
+    observed: CompatibilityResolution,
+    *,
+    env_file: str | None,
+) -> CommandResult:
+    """Diagnose bounded read readiness without inventing an exact adapter target."""
+    actions = available_read_actions(
+        observed.candidate_versions,
+        compatible_operations=observed.compatible_operations,
+    )
+    checks = [
+        profile_check,
+        _context_check(env_file=env_file),
+        _doctor_check(
+            "adapter",
+            "warning",
+            "Only independently reviewed read contracts are available automatically.",
+            {"automatic_read_actions": sorted(actions), "mutations_allowed": False},
+            suggestion="Configure the actual DS_VERSION for other operations.",
+        ),
+    ]
     try:
-        session = load_context()
+        selection = resolve_runtime_selection(env_file, action="doctor")
+        if selection.read_plan is None:
+            message = "The discovery observation changed during the diagnostic"
+            raise ConfigError(message, suggestion="Rerun `dsctl doctor`.")
+        details = _current_user_defaults_details(
+            selection.execution_profile, read_policy=selection.read_plan.policy
+        )
+        checks.append(
+            _doctor_check(
+                "current_user", "ok", "Authenticated read succeeded.", details
+            )
+        )
     except DsctlError as exc:
-        error_details = _error_details(exc)
-        if layer_errors:
-            error_details["layer_errors"] = layer_errors
+        checks.append(
+            _doctor_check(
+                "current_user",
+                "error",
+                exc.message,
+                _error_details(exc),
+                suggestion=exc.suggestion,
+            )
+        )
+    return _doctor_result(checks)
+
+
+def _context_check(*, env_file: str | None) -> DoctorCheckData:
+    try:
+        settings = resolve_settings(env_file)
+    except DsctlError as exc:
         return _doctor_check(
             "context",
             "error",
             exc.message,
-            error_details,
-            suggestion=_error_suggestion(
-                exc,
-                fallback=(
-                    layer_suggestion
-                    or "Fix or remove the invalid context file and retry."
-                ),
-            ),
+            _error_details(exc),
+            suggestion=exc.suggestion,
         )
-    except Exception as exc:  # pragma: no cover - defensive doctor fallback
-        error_details = _error_details(exc)
-        if layer_errors:
-            error_details["layer_errors"] = layer_errors
+    except Exception as exc:
         return _doctor_check(
             "context",
             "error",
-            _unexpected_message(exc),
-            error_details,
+            "Connection selection could not be inspected.",
+            {"error": {"type": "unexpected_error", "exception": type(exc).__name__}},
             suggestion=(
-                layer_suggestion or "Fix or remove the invalid context file and retry."
+                "Inspect `dsctl config get default-context`, `dsctl context list` "
+                "and the selected connection file."
             ),
         )
-
-    context_details = _context_details(session)
-    if layer_errors:
-        context_details["layer_errors"] = layer_errors
-        return _doctor_check(
-            "context",
-            "warning",
-            "Effective context loaded, but a persisted context layer is invalid.",
-            context_details,
-            suggestion=(
-                layer_suggestion
-                or "Fix or clear each invalid context layer, then rerun `dsctl doctor`."
-            ),
-        )
-
-    if _context_is_empty(session):
-        message = "No persisted context is set."
-    else:
-        message = "Context loaded."
     return _doctor_check(
         "context",
         "ok",
-        message,
-        context_details,
+        "Connection selection resolved.",
+        {**selection_details(settings), "project": settings.project},
     )
-
-
-def _context_details(session: SessionContext) -> JsonObject:
-    """Return effective context values and both persisted layer paths."""
-    return {
-        "project": session.project,
-        "workflow": session.workflow,
-        "set_at": session.set_at,
-        "user_path": str(user_context_path()),
-        "project_path": str(project_context_path()),
-    }
-
-
-def _context_layer_errors() -> tuple[JsonObject, str | None]:
-    """Audit each stored layer, including layers shadowed at runtime."""
-    errors: JsonObject = {}
-    suggestion: str | None = None
-    scopes: tuple[ContextScope, ...] = ("project", "user")
-    for scope in scopes:
-        try:
-            read_context_layer(scope=scope)
-        except Exception as exc:  # doctor must aggregate every diagnostic
-            errors[scope] = _error_payload(exc)
-            if suggestion is None:
-                suggestion = _error_suggestion(exc)
-    return errors, suggestion
 
 
 def _adapter_check(profile: ClusterProfile | None) -> DoctorCheckData:
-    selected_version = (
-        get_default_version_support().server_version
-        if profile is None
-        else profile.ds_version
-    )
+    if profile is None:
+        return _doctor_check(
+            "adapter",
+            "warning",
+            "Adapter validation skipped because the target version was not resolved.",
+            {"skipped": True},
+            suggestion="Resolve the profile diagnostic, then rerun `dsctl doctor`.",
+        )
+    selected_version = profile.ds_version
     try:
         support = get_version_support(selected_version)
     except DsctlError as exc:
@@ -268,18 +305,36 @@ def _adapter_check(profile: ClusterProfile | None) -> DoctorCheckData:
         "support_level": support.support_level,
         "tested": support.tested,
         "supported_versions": list(SUPPORTED_VERSIONS),
+        "catalog": support.catalog.summary_metadata(),
     }
     if support.support_level == "experimental":
-        default_version = get_default_version_support().server_version
+        live_action_count = sum(
+            1
+            for capability in support.catalog.entries.values()
+            if capability.availability is not Availability.UNSUPPORTED
+            and capability.verification
+            in {Verification.LIVE_SMOKE, Verification.LIVE_FULL}
+        )
         if support.tested:
             message = (
                 f"DS {support.server_version} support is experimental even though "
                 "release-specific live smoke testing has passed."
             )
             suggestion = (
-                f"Set `DS_VERSION={default_version}` for stable support, or promote "
-                f"DS {support.server_version} only after its compatibility review "
-                "is complete."
+                "Use `dsctl capabilities --action ACTION` to verify the required "
+                f"operation for DS {support.server_version}; promotion requires "
+                "its complete compatibility review."
+            )
+        elif live_action_count:
+            message = (
+                f"DS {support.server_version} support is experimental: "
+                f"{live_action_count} actions have live evidence, but the "
+                "profile has not passed its complete release gate."
+            )
+            suggestion = (
+                "Use `dsctl capabilities --action ACTION` to verify the required "
+                f"operation for DS {support.server_version} before relying on "
+                "this target."
             )
         else:
             message = (
@@ -287,8 +342,7 @@ def _adapter_check(profile: ClusterProfile | None) -> DoctorCheckData:
                 "passed release-specific live smoke testing."
             )
             suggestion = (
-                f"Set `DS_VERSION={default_version}` and rerun `dsctl doctor`, or "
-                f"complete the DS {support.server_version} live smoke suite before "
+                f"Complete the DS {support.server_version} live smoke suite before "
                 "relying on this target."
             )
         return _doctor_check(
@@ -308,6 +362,36 @@ def _adapter_check(profile: ClusterProfile | None) -> DoctorCheckData:
 
 
 def _api_health_check(profile: ClusterProfile) -> DoctorCheckData:
+    capability = get_action_capability(profile.ds_version, "monitor.health")
+    if capability.availability is not Availability.SUPPORTED:
+        constraint = capability.constraint
+        reason = (
+            "upstream_endpoint_absent"
+            if capability.availability is Availability.UNSUPPORTED
+            else "profile_operation_limited"
+        )
+        return _doctor_check(
+            "api",
+            "warning",
+            constraint
+            or (
+                f"monitor.health is {capability.availability.value} on "
+                f"DolphinScheduler {profile.ds_version}."
+            ),
+            {
+                "reason": reason,
+                "ds_version": profile.ds_version,
+                "operation": "monitor.health",
+                "availability": capability.availability.value,
+                "constraint": constraint,
+                "endpoint": profile.health_url,
+                "verification_fallback": "current_user",
+            },
+            suggestion=(
+                "Use the authenticated current-user check in this report to verify "
+                "API readiness."
+            ),
+        )
     try:
         with DolphinSchedulerClient(profile) as http_client:
             payload = require_json_object(
@@ -353,7 +437,7 @@ def _api_health_check(profile: ClusterProfile) -> DoctorCheckData:
         )
     return _doctor_check(
         "api",
-        "warning",
+        "error" if health_status in ("DOWN", "OUT_OF_SERVICE") else "warning",
         (
             "API actuator health returned a non-UP status."
             if health_status is None
@@ -383,6 +467,21 @@ def _skipped_api_health_check() -> DoctorCheckData:
 
 
 def _current_user_check(profile: ClusterProfile) -> DoctorCheckData:
+    support = get_version_support(profile.ds_version)
+    if support.identity_adapter is None:
+        return _doctor_check(
+            "current_user",
+            "warning",
+            (
+                f"Skipped because the DS {support.server_version} profile does "
+                "not provide the current-user operation."
+            ),
+            {
+                "reason": "profile_operation_unsupported",
+                "ds_version": support.server_version,
+                "operation": "current_user",
+            },
+        )
     try:
         details = _current_user_defaults_details(profile)
     except DsctlError as exc:
@@ -431,17 +530,54 @@ def _skipped_current_user_check() -> DoctorCheckData:
     )
 
 
-def _current_user_defaults_details(profile: ClusterProfile) -> dict[str, str | None]:
-    adapter = get_version_support(profile.ds_version).adapter
-    with DolphinSchedulerClient(profile) as http_client:
-        current_user = adapter.bind(profile, http_client=http_client).users.current()
+def _current_user_defaults_details(
+    profile: ClusterProfile, *, read_policy: ReadExecutionPolicy | None = None
+) -> dict[str, str | None]:
+    adapter = get_identity_adapter(profile.ds_version)
+    client = (
+        DolphinSchedulerClient(profile, read_policy=read_policy)
+        if read_policy is not None
+        else DolphinSchedulerClient(profile)
+    )
+    with client as http_client:
+        current_user = adapter.bind_identity(
+            profile,
+            http_client=http_client,
+        ).current()
     return {
         "userName": optional_text(current_user.userName),
+        "userType": enum_value(current_user.userType),
         "tenantCode": optional_text(current_user.tenantCode),
         "queue": optional_text(current_user.queue),
         "queueName": optional_text(current_user.queueName),
         "timeZone": optional_text(current_user.timeZone),
     }
+
+
+def _doctor_result(checks: list[DoctorCheckData]) -> CommandResult:
+    """Preserve every diagnostic while failing the readiness check on errors."""
+    data = _doctor_data(checks)
+    warnings, warning_details = _doctor_warning_payloads(checks)
+    return CommandResult(
+        data=require_json_object(data, label="doctor data"),
+        warnings=warnings,
+        warning_details=warning_details,
+        failure=(
+            CheckFailedError(
+                "DolphinScheduler readiness checks failed.",
+                details={
+                    "failed_checks": [
+                        c["name"] for c in checks if c["status"] == "error"
+                    ]
+                },
+                suggestion=(
+                    "Resolve the errors in data.checks and rerun `dsctl doctor`."
+                ),
+            )
+            if data["status"] == "error"
+            else None
+        ),
+    )
 
 
 def _doctor_data(checks: list[DoctorCheckData]) -> DoctorData:
@@ -506,12 +642,6 @@ def _doctor_check(
             label=f"doctor check {name} details",
         ),
     }
-
-
-def _context_is_empty(session: SessionContext) -> bool:
-    return (
-        session.project is None and session.workflow is None and session.set_at is None
-    )
 
 
 def _error_details(

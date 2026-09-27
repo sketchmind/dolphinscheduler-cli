@@ -26,6 +26,11 @@ ResponseProjection = Literal[
     "single_data_list",
     "status_data",
 ]
+ReferenceOwnerKind = Literal[
+    "operation_request",
+    "operation_response",
+    "structured_type",
+]
 
 
 @dataclass(frozen=True)

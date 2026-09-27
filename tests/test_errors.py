@@ -11,9 +11,11 @@ from dsctl.errors import (
     ConflictError,
     DsctlError,
     InvalidStateError,
+    MutationOutcomeUnknownError,
     NotFoundError,
     PermissionDeniedError,
     ResolutionError,
+    UnsupportedFeatureError,
     UserInputError,
     WaitTimeoutError,
 )
@@ -47,6 +49,11 @@ def test_dsctl_error_rejects_non_json_source() -> None:
         pytest.param(DsctlError("base"), "dsctl_error", id="base"),
         pytest.param(ConfigError("config"), "config_error", id="config"),
         pytest.param(UserInputError("input"), "user_input_error", id="user-input"),
+        pytest.param(
+            UnsupportedFeatureError("unsupported"),
+            "unsupported_feature",
+            id="unsupported-feature",
+        ),
         pytest.param(ConflictError("conflict"), "conflict", id="conflict"),
         pytest.param(
             PermissionDeniedError("denied"),
@@ -74,6 +81,11 @@ def test_dsctl_error_rejects_non_json_source() -> None:
             ApiTransportError("transport"),
             "api_transport_error",
             id="api-transport",
+        ),
+        pytest.param(
+            MutationOutcomeUnknownError("unknown"),
+            "mutation_outcome_unknown",
+            id="mutation-outcome-unknown",
         ),
         pytest.param(
             ApiHttpError(

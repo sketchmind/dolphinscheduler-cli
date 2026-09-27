@@ -1,11 +1,12 @@
 import json
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.errors import ApiResultError
-from dsctl.services import runtime as runtime_service
+from dsctl.output import CommandResult
 from tests.fakes import (
     FakeDataSource,
     FakeDataSourceAdapter,
@@ -18,9 +19,9 @@ from tests.fakes import (
     FakeTenantAdapter,
     FakeUser,
     FakeUserAdapter,
-    fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.security_fakes import install_user_service_fakes
+from tests.support import normalize_cli_help
 
 runner = CliRunner()
 
@@ -157,17 +158,13 @@ def patch_user_service(
     fake_user_adapter: FakeUserAdapter,
     fake_tenant_adapter: FakeTenantAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            fake_project_adapter,
-            datasource_adapter=fake_datasource_adapter,
-            namespace_adapter=fake_namespace_adapter,
-            user_adapter=fake_user_adapter,
-            tenant_adapter=fake_tenant_adapter,
-            profile=make_profile(),
-        ),
+    install_user_service_fakes(
+        monkeypatch,
+        fake_user_adapter,
+        fake_tenant_adapter,
+        project_adapter=fake_project_adapter,
+        datasource_adapter=fake_datasource_adapter,
+        namespace_adapter=fake_namespace_adapter,
     )
 
 
@@ -247,12 +244,78 @@ def test_user_create_command_returns_created_user() -> None:
     assert payload["data"]["tenantId"] == 11
 
 
+@pytest.mark.parametrize("from_stdin", [False, True])
+def test_user_create_reads_password_without_exposing_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    from_stdin: bool,
+) -> None:
+    secret_file = tmp_path / "password.txt"
+    secret_file.write_text("secret-value\n", encoding="utf-8")
+    received: list[object] = []
+
+    def create(**kwargs: object) -> CommandResult:
+        received.append(kwargs["password"])
+        return CommandResult(data={"userName": "carol"})
+
+    monkeypatch.setattr("dsctl.commands.user.create_user_result", create)
+    result = runner.invoke(
+        app,
+        [
+            "user",
+            "create",
+            "--user-name",
+            "carol",
+            "--email",
+            "carol@example.com",
+            "--tenant",
+            "tenant-prod",
+            "--state",
+            "1",
+            "--password-file",
+            "-" if from_stdin else str(secret_file),
+        ],
+        input="secret-value\n" if from_stdin else None,
+    )
+    assert result.exit_code == 0
+    assert received == ["secret-value"]
+    assert "secret-value" not in result.output
+
+
+def test_user_password_sources_conflict_without_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected(**kwargs: object) -> CommandResult:
+        pytest.fail("invalid password sources must not call the mutation service")
+
+    monkeypatch.setattr("dsctl.commands.user.update_user_result", unexpected)
+    result = runner.invoke(
+        app,
+        [
+            "user",
+            "update",
+            "alice",
+            "--password",
+            "secret-value",
+            "--password-file",
+            "-",
+        ],
+        input="another-secret\n",
+    )
+    assert result.exit_code == 1
+    assert json.loads(result.stderr)["error"]["type"] == "user_input_error"
+    assert "secret-value" not in result.output
+    assert "another-secret" not in result.output
+
+
 def test_user_create_help_points_to_tenant_and_queue_lists() -> None:
     result = runner.invoke(app, ["user", "create", "--help"])
+    help_text = normalize_cli_help(result.stdout)
 
     assert result.exit_code == 0
-    assert "dsctl tenant list" in result.stdout
-    assert "dsctl queue list" in result.stdout
+    assert "dsctl tenant list" in help_text
+    assert "dsctl queue list" in help_text
 
 
 def test_user_create_command_reports_upstream_input_suggestion(
@@ -353,6 +416,7 @@ def test_user_grant_project_command_returns_confirmation() -> None:
     assert payload["action"] == "user.grant.project"
     assert payload["data"]["granted"] is True
     assert payload["data"]["permission"] == "write"
+    assert payload["data"]["verification"] == "membership_only"
     assert payload["resolved"]["project"]["code"] == 701
 
 
@@ -449,9 +513,10 @@ def test_user_grant_namespace_command_returns_confirmation() -> None:
 
 def test_user_grant_namespace_help_points_to_namespace_list() -> None:
     result = runner.invoke(app, ["user", "grant", "namespace", "--help"])
+    help_text = normalize_cli_help(result.stdout)
 
     assert result.exit_code == 0
-    assert "dsctl namespace list" in result.stdout
+    assert "dsctl namespace list" in help_text
 
 
 def test_user_revoke_namespace_command_returns_confirmation() -> None:

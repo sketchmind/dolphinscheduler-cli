@@ -9,6 +9,7 @@ from pkgutil import iter_modules
 from typing import TYPE_CHECKING, TypeGuard
 
 from dsctl.errors import ConfigError
+from dsctl.generated.version_profiles import TARGET_DS_VERSIONS
 from dsctl.upstream.registry import normalize_version
 
 if TYPE_CHECKING:
@@ -19,15 +20,20 @@ if TYPE_CHECKING:
 EnumScalar = str | int
 EnumAttributeValue = str | int | float | bool | None
 
-_ENUM_PACKAGE_ROOTS_BY_VERSION: dict[str, tuple[str, ...]] = {
-    "3.4.1": (
-        "dsctl.generated.versions.ds_3_4_1.api.enums",
-        "dsctl.generated.versions.ds_3_4_1.common.enums",
-        "dsctl.generated.versions.ds_3_4_1.plugin.task_api.enums",
-        "dsctl.generated.versions.ds_3_4_1.registry.api.enums",
-        "dsctl.generated.versions.ds_3_4_1.spi.enums",
-    )
-}
+_ENUM_PACKAGE_SUFFIXES = (
+    "api.enums",
+    "common.enums",
+    "plugin.task_api.enums",
+    "registry.api.enums",
+    "spi.enums",
+)
+_ADDITIONAL_ENUM_TARGETS = (
+    (
+        "plugin.task_api.parameters.dependent_parameters",
+        "DependentParametersDependentFailurePolicyEnum",
+        "dependent-failure-policy",
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -76,9 +82,8 @@ def get_enum_spec(version: str, enum_name: str) -> EnumSpec | None:
 @cache
 def _catalog_for_version(version: str) -> _EnumCatalog:
     normalized_version = normalize_version(version)
-    package_roots = _ENUM_PACKAGE_ROOTS_BY_VERSION.get(normalized_version)
-    if package_roots is None:
-        supported_versions = ", ".join(sorted(_ENUM_PACKAGE_ROOTS_BY_VERSION))
+    if normalized_version not in TARGET_DS_VERSIONS:
+        supported_versions = ", ".join(TARGET_DS_VERSIONS)
         message = f"Unsupported DS version {version!r}"
         raise ConfigError(
             message,
@@ -88,11 +93,15 @@ def _catalog_for_version(version: str) -> _EnumCatalog:
             },
         )
 
-    specs = sorted(
-        (
-            _spec_from_module(module_name)
-            for module_name in _enum_module_names(package_roots)
-        ),
+    package_prefix = _generated_package_prefix(normalized_version)
+    specs = [
+        _spec_from_module(module_name, package_prefix=package_prefix)
+        for module_name in _enum_module_names(
+            tuple(f"{package_prefix}.{suffix}" for suffix in _ENUM_PACKAGE_SUFFIXES)
+        )
+    ]
+    specs.extend(_additional_enum_specs(package_prefix))
+    specs.sort(
         key=lambda spec: spec.name,
     )
     specs_by_name = {spec.name: spec for spec in specs}
@@ -109,20 +118,69 @@ def _catalog_for_version(version: str) -> _EnumCatalog:
 
 def _enum_module_names(package_roots: tuple[str, ...]) -> Iterator[str]:
     for package_root in package_roots:
-        package = import_module(package_root)
+        try:
+            package = import_module(package_root)
+        except ModuleNotFoundError as exc:
+            if exc.name is not None and (
+                package_root == exc.name or package_root.startswith(f"{exc.name}.")
+            ):
+                continue
+            raise
         for module_info in iter_modules(package.__path__, package.__name__ + "."):
             if module_info.ispkg:
                 continue
             yield module_info.name
 
 
-def _spec_from_module(module_name: str) -> EnumSpec:
+def _spec_from_module(module_name: str, *, package_prefix: str) -> EnumSpec:
     module = import_module(module_name)
     enum_type = _enum_type_from_module(module)
-    canonical_name = module_name.rsplit(".", 1)[-1].replace("_", "-")
+    return _spec_from_type(
+        enum_type,
+        module_name=module_name,
+        package_prefix=package_prefix,
+        canonical_name=module_name.rsplit(".", 1)[-1].replace("_", "-"),
+    )
+
+
+def _additional_enum_specs(package_prefix: str) -> Iterator[EnumSpec]:
+    for module_suffix, class_name, canonical_name in _ADDITIONAL_ENUM_TARGETS:
+        module_name = f"{package_prefix}.{module_suffix}"
+        try:
+            module = import_module(module_name)
+        except ModuleNotFoundError as exc:
+            if exc.name is not None and (
+                module_name == exc.name or module_name.startswith(f"{exc.name}.")
+            ):
+                continue
+            raise
+        candidate = getattr(module, class_name, None)
+        if candidate is None:
+            continue
+        if not _is_generated_enum_type(candidate, module_name=module_name):
+            message = f"Generated enum target {module_name}.{class_name} is not an enum"
+            raise ConfigError(message)
+        yield _spec_from_type(
+            candidate,
+            module_name=module_name,
+            package_prefix=package_prefix,
+            canonical_name=canonical_name,
+        )
+
+
+def _spec_from_type(
+    enum_type: type[Enum],
+    *,
+    module_name: str,
+    package_prefix: str,
+    canonical_name: str,
+) -> EnumSpec:
     return EnumSpec(
         name=canonical_name,
-        module=_relative_generated_module_name(module_name),
+        module=_relative_generated_module_name(
+            module_name,
+            package_prefix=package_prefix,
+        ),
         class_name=enum_type.__name__,
         value_type=_enum_value_type(enum_type),
         members=tuple(_member_spec(member) for member in enum_type),
@@ -199,9 +257,17 @@ def _member_attributes(
             yield key, value
 
 
-def _relative_generated_module_name(module_name: str) -> str:
-    prefix = "dsctl.generated.versions.ds_3_4_1."
-    return module_name.removeprefix(prefix)
+def _generated_package_prefix(version: str) -> str:
+    slug = version.replace(".", "_")
+    return f"dsctl.generated.versions.ds_{slug}"
+
+
+def _relative_generated_module_name(
+    module_name: str,
+    *,
+    package_prefix: str,
+) -> str:
+    return module_name.removeprefix(f"{package_prefix}.")
 
 
 def _enum_aliases(spec: EnumSpec) -> Iterator[str]:

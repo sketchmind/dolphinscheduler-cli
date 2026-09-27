@@ -1,0 +1,149 @@
+{
+  "origin": "Independent canonical field inputs retained from the pre-convergence semantic tests. These are not CLI selectors or complete alternate production templates. Exact catalog validation still determines representability.",
+  "cases": {
+    "http-in": {
+      "url": "https://example.test/jobs/${bizdate}",
+      "httpParams": [
+        {
+          "prop": "X-Bizdate",
+          "httpParametersType": "HEADERS",
+          "value": "${bizdate}"
+        }
+      ],
+      "localParams": [
+        {
+          "prop": "bizdate",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "${system.biz.date}"
+        }
+      ]
+    },
+    "procedure-in": {
+      "method": "{call refresh_daily(?)}",
+      "localParams": [
+        {
+          "prop": "bizdate",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "${system.biz.date}"
+        }
+      ]
+    },
+    "python-in-legacy": {
+      "rawScript": "print(\"bizdate=${bizdate}\")\n",
+      "localParams": [
+        {
+          "prop": "bizdate",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "${system.biz.date}"
+        }
+      ],
+      "resourceList": []
+    },
+    "shell-in-legacy": {
+      "rawScript": "echo \"bizdate=${bizdate}\"\n",
+      "localParams": [
+        {
+          "prop": "bizdate",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "${system.biz.date}"
+        }
+      ],
+      "resourceList": []
+    },
+    "sql-in-legacy": {
+      "sql": "select * from source_table where bizdate = '${bizdate}';",
+      "localParams": [
+        {
+          "prop": "bizdate",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "${system.biz.date}"
+        }
+      ]
+    },
+    "sql-lifecycle": {
+      "sql": "insert into target_table\nselect * from staging_table;\n",
+      "sqlType": 1,
+      "preStatements": [
+        "set session sql_mode = 'STRICT_TRANS_TABLES'"
+      ],
+      "postStatements": [
+        "analyze table target_table"
+      ]
+    },
+    "switch-local-input": {
+      "localParams": [
+        {
+          "prop": "route",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "A"
+        }
+      ],
+      "varPool": []
+    },
+    "hivecli-in": {
+      "hiveSqlScript": "SELECT '${bizdate}' AS bizdate;",
+      "localParams": [
+        {
+          "prop": "bizdate",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "2026-08-20"
+        }
+      ]
+    },
+    "jupyter-options": {
+      "parameters": {
+        "business_date": "2026-08-20",
+        "region": "east"
+      },
+      "kernel": "python3",
+      "engine": "nbclient",
+      "executionTimeout": 900,
+      "startTimeout": 60
+    },
+    "sagemaker-in": {
+      "sagemakerRequestJson": "{\n  \"PipelineName\": \"nightly-training\",\n  \"PipelineParameters\": [\n    {\"Name\": \"training_job_name\", \"Value\": \"${training_job_name}\"}\n  ]\n}",
+      "localParams": [
+        {
+          "prop": "training_job_name",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "nightly-training"
+        }
+      ]
+    },
+    "zeppelin-literal-map": {
+      "parameters": {
+        "business_date": "2026-08-20"
+      }
+    },
+    "emr-in": {
+      "jobFlowDefineJson": "{\n  \"Name\": \"${cluster_name}\",\n  \"ReleaseLabel\": \"emr-6.15.0\",\n  \"Instances\": {\"KeepJobFlowAliveWhenNoSteps\": true}\n}",
+      "localParams": [
+        {
+          "prop": "cluster_name",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "nightly-cluster"
+        }
+      ]
+    },
+    "emr-serverless-in": {
+      "startJobRunRequestJson": "{\n  \"JobDriver\": {\n    \"SparkSubmit\": {\"EntryPoint\": \"${entry_point}\"}\n  },\n  \"ConfigurationOverrides\": {}\n}",
+      "localParams": [
+        {
+          "prop": "entry_point",
+          "direct": "IN",
+          "type": "VARCHAR",
+          "value": "s3://example-bucket/jobs/example.py"
+        }
+      ]
+    }
+  }
+}

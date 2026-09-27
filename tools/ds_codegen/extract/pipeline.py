@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from functools import cache
+from functools import cache, partial
 from typing import TYPE_CHECKING
 
 import javalang
 
+from ds_codegen.contract_type_refs import (
+    collect_type_reference_names as _collect_ir_reference_names,
+)
 from ds_codegen.extract import generated_view_support as _generated_view_support
 from ds_codegen.extract import return_type_resolution as _return_type_resolution
 from ds_codegen.extract import type_extraction as _type_extraction
@@ -16,9 +19,6 @@ from ds_codegen.extract.class_creator_inference import (
 )
 from ds_codegen.extract.class_creator_inference import (
     infer_class_creator_return_type as _module_infer_class_creator_return_type,
-)
-from ds_codegen.extract.class_creator_inference import (
-    infer_class_creator_structured_type as _module_infer_class_creator_structured_type,
 )
 from ds_codegen.extract.controller_contract import (
     ControllerExtractDeps as _ControllerExtractDeps,
@@ -36,13 +36,16 @@ from ds_codegen.extract.expression_inference import (
     ExpressionInferenceDeps as _ExpressionInferenceDeps,
 )
 from ds_codegen.extract.expression_inference import (
+    _infer_common_jdk_instance_method_return_type,
+)
+from ds_codegen.extract.expression_inference import (
     infer_expression_data_type as _module_infer_expression_data_type,
 )
 from ds_codegen.extract.expression_inference import (
     infer_expression_return_type as _module_infer_expression_return_type,
 )
 from ds_codegen.extract.expression_inference import (
-    infer_method_invocation_return_type as _module_infer_method_invocation_return_type,
+    infer_stream_map_return_type as _module_infer_stream_map_return_type,
 )
 from ds_codegen.extract.inference_support import (
     _collect_method_variable_initializers,
@@ -67,9 +70,6 @@ from ds_codegen.extract.operation_inference import (
 from ds_codegen.extract.operation_inference import (
     infer_operation_return_type as _module_infer_operation_return_type,
 )
-from ds_codegen.extract.operation_inference import (
-    infer_structured_return_statement_type as _module_infer_structured_return_type,
-)
 from ds_codegen.extract.return_type_resolution import (
     resolve_operation_response_projection as _module_resp_projection,
 )
@@ -86,9 +86,6 @@ from ds_codegen.extract.service_inference import (
     infer_service_invocation_payload_type as _module_infer_service_invocation_payload,
 )
 from ds_codegen.extract.service_inference import (
-    infer_service_method_payload_type as _module_infer_service_method_payload,
-)
-from ds_codegen.extract.service_inference import (
     is_data_list_expression as _module_is_data_list_expression,
 )
 from ds_codegen.extract.structure_inference import (
@@ -98,13 +95,7 @@ from ds_codegen.extract.structure_inference import (
     infer_local_data_structure_type as _module_infer_local_data_structure_type,
 )
 from ds_codegen.extract.structure_inference import (
-    infer_structured_expression_data_type as _module_infer_structured_expression_type,
-)
-from ds_codegen.extract.structure_inference import (
     is_collection_like_java_type as _module_is_collection_like_java_type,
-)
-from ds_codegen.extract.structure_inference import (
-    normalized_collection_base_type as _module_normalized_collection_base_type,
 )
 from ds_codegen.extract.type_lookup import (
     _find_field_type_declaration,
@@ -115,7 +106,9 @@ from ds_codegen.extract.type_lookup import (
     _load_java_type_context,
     _render_reference_name,
     _render_type,
+    _resolve_java_type_context,
     _score_parameter_argument_match,
+    clear_type_lookup_caches,
 )
 from ds_codegen.ir import (
     ContractSnapshot,
@@ -127,11 +120,17 @@ from ds_codegen.ir import (
     ResponseProjection,
 )
 from ds_codegen.java_source import (
+    SourceResolutionScope,
+    java_source_cache_scope,
+    qualify_java_type_references,
+)
+from ds_codegen.java_source import (
     load_type_declaration as _load_type_declaration,
 )
 from ds_codegen.java_source import (
     resolve_referenced_import_path as _resolve_referenced_import_path,
 )
+from ds_codegen.snapshot_resolution import SnapshotTypeResolver
 from ds_codegen.source import default_ds_source_root, read_ds_source_version
 
 if TYPE_CHECKING:
@@ -143,7 +142,26 @@ _GENERATED_VIEW_MODELS: dict[str, ModelSpec] = {}
 
 
 def build_contract_snapshot(repo_root: Path) -> ContractSnapshot:
+    """Extract one exact contract with source caches bounded to this call."""
+    _clear_extraction_caches()
+    with java_source_cache_scope():
+        try:
+            return _build_contract_snapshot(repo_root)
+        finally:
+            _clear_extraction_caches()
+
+
+def _clear_extraction_caches() -> None:
     _GENERATED_VIEW_MODELS.clear()
+    clear_type_lookup_caches()
+    _type_extends_result.cache_clear()
+
+
+def _build_contract_snapshot(repo_root: Path) -> ContractSnapshot:
+    source_version = read_ds_source_version(default_ds_source_root(repo_root))
+    override_scope = _return_type_resolution.LogicalReturnTypeOverrideScope(
+        source_version
+    )
     operations: list[OperationSpec] = []
     enum_imports: set[str] = set()
     dto_imports: set[str] = set()
@@ -160,17 +178,34 @@ def build_contract_snapshot(repo_root: Path) -> ContractSnapshot:
     ] = {}
     declaration_kind_cache: dict[str, DeclarationKind | None] = {}
 
-    for controller_path in _iter_controller_paths(repo_root):
+    controller_paths = _iter_controller_paths(repo_root)
+    for controller_path in controller_paths:
         (
             controller_operations,
             controller_enum_imports,
             controller_dto_imports,
             controller_model_imports,
-        ) = _extract_controller_contract(repo_root, controller_path)
+        ) = _extract_controller_contract(
+            repo_root,
+            controller_path,
+            override_scope=override_scope,
+        )
         operations.extend(controller_operations)
         enum_imports.update(controller_enum_imports)
         dto_imports.update(controller_dto_imports)
         model_imports.update(controller_model_imports)
+    override_scope.validate(
+        controller_names={controller_path.stem for controller_path in controller_paths}
+    )
+
+    # Schedule requests carry a JSON document inside a String form parameter.
+    # Keep its native parser model in the audit closure even though Java's
+    # controller signature cannot expose the nested fields or their defaults.
+    schedule_param = "org.apache.dolphinscheduler.api.dto.ScheduleParam"
+    if any(path.stem == "SchedulerController" for path in controller_paths) and (
+        _load_type_declaration(repo_root, schedule_param, parse_cache) is not None
+    ):
+        model_imports.add(schedule_param)
 
     dto_specs, dto_model_imports, dto_enum_imports = _extract_dto_specs(
         repo_root,
@@ -187,6 +222,12 @@ def build_contract_snapshot(repo_root: Path) -> ContractSnapshot:
         declaration_kind_cache,
     )
     enum_imports.update(model_enum_imports)
+    operations = _generated_view_support.apply_reviewed_response_model_projections(
+        operations=operations,
+        source_models=model_specs,
+        generated_view_models=_GENERATED_VIEW_MODELS,
+        operation_projections=override_scope.response_model_projections(),
+    )
     enum_specs = _extract_enum_specs(repo_root, enum_imports, parse_cache)
     operations.sort(
         key=lambda item: (
@@ -208,9 +249,9 @@ def build_contract_snapshot(repo_root: Path) -> ContractSnapshot:
     additional_model_imports = _collect_generated_view_model_imports(
         repo_root,
         generated_view_models,
-        {dto.name for dto in dto_specs}
-        | {model.name for model in model_specs}
-        | {enum_spec.name for enum_spec in enum_specs},
+        {dto.import_path for dto in dto_specs}
+        | {model.import_path for model in model_specs}
+        | {enum_spec.import_path for enum_spec in enum_specs},
     )
     if additional_model_imports:
         additional_model_specs, additional_model_enum_imports, _ = _extract_model_specs(
@@ -219,23 +260,18 @@ def build_contract_snapshot(repo_root: Path) -> ContractSnapshot:
             parse_cache,
             declaration_kind_cache,
         )
-        existing_model_names = {existing_model.name for existing_model in model_specs}
-        model_specs.extend(
-            model_spec
-            for model_spec in additional_model_specs
-            if model_spec.name not in existing_model_names
-        )
+        _extend_model_specs_by_import_path(model_specs, additional_model_specs)
         additional_enum_specs = _extract_enum_specs(
             repo_root,
-            enum_imports | additional_model_enum_imports,
+            enum_imports | additional_model_imports | additional_model_enum_imports,
             parse_cache,
         )
         enum_specs = additional_enum_specs
     model_specs.extend(generated_view_models)
     model_specs.sort(key=lambda item: item.name)
     enum_specs.sort(key=lambda item: item.name)
-    return ContractSnapshot(
-        ds_version=read_ds_source_version(default_ds_source_root(repo_root)),
+    snapshot = ContractSnapshot(
+        ds_version=source_version,
         operation_count=len(operations),
         enum_count=len(enum_specs),
         dto_count=len(dto_specs),
@@ -245,6 +281,8 @@ def build_contract_snapshot(repo_root: Path) -> ContractSnapshot:
         dtos=dto_specs,
         models=model_specs,
     )
+    SnapshotTypeResolver.compile(snapshot)
+    return snapshot
 
 
 def _iter_controller_paths(repo_root: Path) -> list[Path]:
@@ -254,11 +292,13 @@ def _iter_controller_paths(repo_root: Path) -> list[Path]:
 def _extract_controller_contract(
     repo_root: Path,
     controller_path: Path,
+    *,
+    override_scope: _return_type_resolution.LogicalReturnTypeOverrideScope,
 ) -> tuple[list[OperationSpec], set[str], set[str], set[str]]:
     return _module_extract_controller_contract(
         repo_root=repo_root,
         controller_path=controller_path,
-        deps=_controller_extract_deps(),
+        deps=_controller_extract_deps(override_scope=override_scope),
     )
 
 
@@ -426,36 +466,6 @@ def _infer_operation_return_type(
     )
 
 
-def _infer_structured_return_statement_type(
-    *,
-    repo_root: Path,
-    controller_path: Path,
-    method: javalang.tree.MethodDeclaration,
-    return_statement: javalang.tree.ReturnStatement,
-    controller_field_types: dict[str, str],
-    variable_types: dict[str, str],
-    variable_initializers: dict[str, object],
-    import_map: dict[str, str],
-    package_name: str | None,
-    owner_methods: list[javalang.tree.MethodDeclaration] | None = None,
-    active_same_class_methods: tuple[tuple[str, int], ...] = (),
-) -> str | None:
-    return _module_infer_structured_return_type(
-        repo_root=repo_root,
-        controller_path=controller_path,
-        method=method,
-        return_statement=return_statement,
-        controller_field_types=controller_field_types,
-        variable_types=variable_types,
-        variable_initializers=variable_initializers,
-        import_map=import_map,
-        package_name=package_name,
-        deps=_operation_inference_deps(),
-        owner_methods=owner_methods,
-        active_same_class_methods=active_same_class_methods,
-    )
-
-
 def _operation_inference_deps() -> _OperationInferenceDeps:
     return _OperationInferenceDeps(
         infer_local_data_structure_type=_infer_local_data_structure_type,
@@ -464,6 +474,7 @@ def _operation_inference_deps() -> _OperationInferenceDeps:
         infer_local_return_statement_payload_type=(
             _infer_local_return_statement_payload_type
         ),
+        unwrap_generated_view_data_list_type=_unwrap_generated_view_data_list_type,
     )
 
 
@@ -514,12 +525,22 @@ def _structure_inference_deps() -> _StructureInferenceDeps:
     )
 
 
-def _controller_extract_deps() -> _ControllerExtractDeps:
+def _controller_extract_deps(
+    *,
+    override_scope: _return_type_resolution.LogicalReturnTypeOverrideScope,
+) -> _ControllerExtractDeps:
     return _ControllerExtractDeps(
         infer_operation_return_type=_infer_operation_return_type,
-        resolve_operation_logical_return_type=_resolve_operation_logical_return_type,
+        resolve_operation_logical_return_type=partial(
+            _resolve_operation_logical_return_type,
+            override_scope=override_scope,
+        ),
         resolve_operation_response_projection=_resolve_operation_response_projection,
         resolve_referenced_import_path=_resolve_referenced_import_path,
+        resolve_operation_type_import_path=partial(
+            override_scope.resolve_type_import_path,
+            default_resolver=_resolve_referenced_import_path,
+        ),
         looks_like_request_dto_import=_looks_like_request_dto_import,
         collect_type_reference_names=_collect_type_reference_names,
         collect_type_reference_names_from_java_type=(
@@ -595,36 +616,6 @@ def _infer_expression_return_type(
         import_map=import_map,
         package_name=package_name,
         deps=_expression_inference_deps(),
-        owner_methods=owner_methods,
-        active_same_class_methods=active_same_class_methods,
-    )
-
-
-def _infer_method_invocation_return_type(
-    *,
-    repo_root: Path,
-    controller_path: Path,
-    invocation: javalang.tree.MethodInvocation,
-    controller_field_types: dict[str, str],
-    variable_types: dict[str, str],
-    variable_initializers: dict[str, object],
-    import_map: dict[str, str],
-    package_name: str | None,
-    qualifier_override: str | None = None,
-    owner_methods: list[javalang.tree.MethodDeclaration] | None = None,
-    active_same_class_methods: tuple[tuple[str, int], ...] = (),
-) -> str | None:
-    return _module_infer_method_invocation_return_type(
-        repo_root=repo_root,
-        controller_path=controller_path,
-        invocation=invocation,
-        controller_field_types=controller_field_types,
-        variable_types=variable_types,
-        variable_initializers=variable_initializers,
-        import_map=import_map,
-        package_name=package_name,
-        deps=_expression_inference_deps(),
-        qualifier_override=qualifier_override,
         owner_methods=owner_methods,
         active_same_class_methods=active_same_class_methods,
     )
@@ -706,36 +697,6 @@ def _infer_class_creator_return_type(
         repo_root=repo_root,
         controller_path=controller_path,
         class_creator=class_creator,
-        controller_field_types=controller_field_types,
-        variable_types=variable_types,
-        variable_initializers=variable_initializers,
-        import_map=import_map,
-        package_name=package_name,
-        deps=_class_creator_inference_deps(),
-        owner_methods=owner_methods,
-        active_same_class_methods=active_same_class_methods,
-    )
-
-
-def _infer_class_creator_structured_type(
-    *,
-    repo_root: Path,
-    controller_path: Path,
-    class_creator: javalang.tree.ClassCreator,
-    view_name_hint: str,
-    controller_field_types: dict[str, str],
-    variable_types: dict[str, str],
-    variable_initializers: dict[str, object],
-    import_map: dict[str, str],
-    package_name: str | None,
-    owner_methods: list[javalang.tree.MethodDeclaration] | None = None,
-    active_same_class_methods: tuple[tuple[str, int], ...] = (),
-) -> str | None:
-    return _module_infer_class_creator_structured_type(
-        repo_root=repo_root,
-        controller_path=controller_path,
-        class_creator=class_creator,
-        view_name_hint=view_name_hint,
         controller_field_types=controller_field_types,
         variable_types=variable_types,
         variable_initializers=variable_initializers,
@@ -833,6 +794,31 @@ def _infer_selector_chain_data_type(
     current_package_name = package_name
     for selector in selectors:
         if isinstance(selector, javalang.tree.MethodInvocation):
+            mapped_type = _module_infer_stream_map_return_type(
+                current_java_type=current_java_type,
+                selector=selector,
+                repo_root=repo_root,
+                controller_path=controller_path,
+                controller_field_types=controller_field_types,
+                variable_types=variable_types,
+                variable_initializers=variable_initializers,
+                import_map=import_map,
+                package_name=package_name,
+                deps=_expression_inference_deps(),
+                owner_methods=owner_methods,
+                active_same_class_methods=active_same_class_methods,
+            )
+            if mapped_type is not None:
+                current_java_type = mapped_type
+                continue
+            common_jdk_type = _infer_common_jdk_instance_method_return_type(
+                instance_java_type=current_java_type,
+                method_name=selector.member,
+                method_arity=len(selector.arguments),
+            )
+            if common_jdk_type is not None:
+                current_java_type = common_jdk_type
+                continue
             stream_selector_type = _infer_stream_selector_return_type(
                 current_java_type=current_java_type,
                 selector=selector,
@@ -840,14 +826,15 @@ def _infer_selector_chain_data_type(
             if stream_selector_type is not None:
                 current_java_type = stream_selector_type
                 continue
-            loaded_type = _load_java_type_context(
+            resolved_type = _resolve_java_type_context(
                 repo_root=repo_root,
                 java_type=current_java_type,
                 import_map=current_import_map,
                 package_name=current_package_name,
             )
-            if loaded_type is None:
+            if resolved_type is None:
                 return None
+            type_import_path, loaded_type = resolved_type
             _, type_declaration, type_import_map, type_package_name = loaded_type
             method_declaration = _find_method_declaration(
                 type_declaration.methods,
@@ -868,19 +855,28 @@ def _infer_selector_chain_data_type(
             )
             if method_declaration is None:
                 return None
-            current_java_type = _render_type(method_declaration.return_type)
+            current_java_type = qualify_java_type_references(
+                repo_root,
+                _render_type(method_declaration.return_type),
+                SourceResolutionScope(
+                    type_import_map,
+                    type_package_name,
+                    type_import_path,
+                ),
+            )
             current_import_map = type_import_map
             current_package_name = type_package_name
             continue
         if isinstance(selector, javalang.tree.MemberReference):
-            loaded_type = _load_java_type_context(
+            resolved_type = _resolve_java_type_context(
                 repo_root=repo_root,
                 java_type=current_java_type,
                 import_map=current_import_map,
                 package_name=current_package_name,
             )
-            if loaded_type is None:
+            if resolved_type is None:
                 return None
+            type_import_path, loaded_type = resolved_type
             _, type_declaration, type_import_map, type_package_name = loaded_type
             field_type = _find_field_type_declaration(
                 type_declaration,
@@ -888,7 +884,15 @@ def _infer_selector_chain_data_type(
             )
             if field_type is None:
                 return None
-            current_java_type = field_type
+            current_java_type = qualify_java_type_references(
+                repo_root,
+                field_type,
+                SourceResolutionScope(
+                    type_import_map,
+                    type_package_name,
+                    type_import_path,
+                ),
+            )
             current_import_map = type_import_map
             current_package_name = type_package_name
             continue
@@ -997,20 +1001,24 @@ def _unwrap_result_like_type(java_type: str) -> str | None:
 
 def _resolve_operation_logical_return_type(
     *,
+    override_scope: _return_type_resolution.LogicalReturnTypeOverrideScope,
     operation_id: str,
     repo_root: Path,
     raw_return_type: str,
     inferred_return_type: str | None,
     import_map: dict[str, str],
     package_name: str | None,
+    owner_import_path: str | None = None,
 ) -> str:
     return _return_type_resolution.resolve_operation_logical_return_type(
+        override_scope=override_scope,
         operation_id=operation_id,
         repo_root=repo_root,
         raw_return_type=raw_return_type,
         inferred_return_type=inferred_return_type,
         import_map=import_map,
         package_name=package_name,
+        owner_import_path=owner_import_path,
     )
 
 
@@ -1054,7 +1062,7 @@ def _infer_return_data_list_payload_type(
     if direct_service_invocation is not None:
         direct_invocation, qualifier = direct_service_invocation
         if qualifier in controller_field_types:
-            return _infer_service_invocation_payload_type(
+            inferred_type = _infer_service_invocation_payload_type(
                 repo_root=repo_root,
                 service_field_type=controller_field_types[qualifier],
                 service_method_name=direct_invocation.member,
@@ -1072,6 +1080,12 @@ def _infer_return_data_list_payload_type(
                 import_map=import_map,
                 package_name=package_name,
             )
+            if invocation.member == "returnDataList":
+                return (
+                    _unwrap_generated_view_data_list_type(inferred_type)
+                    or inferred_type
+                )
+            return inferred_type
     if not isinstance(argument, javalang.tree.MemberReference):
         return None
     initializer = variable_initializers.get(argument.member)
@@ -1081,7 +1095,7 @@ def _infer_return_data_list_payload_type(
     initializer_invocation, qualifier = extracted_invocation
     if qualifier not in controller_field_types:
         return None
-    return _infer_service_invocation_payload_type(
+    inferred_type = _infer_service_invocation_payload_type(
         repo_root=repo_root,
         service_field_type=controller_field_types[qualifier],
         service_method_name=initializer_invocation.member,
@@ -1099,6 +1113,9 @@ def _infer_return_data_list_payload_type(
         import_map=import_map,
         package_name=package_name,
     )
+    if invocation.member == "returnDataList":
+        return _unwrap_generated_view_data_list_type(inferred_type) or inferred_type
+    return inferred_type
 
 
 def _infer_service_invocation_payload_type(
@@ -1151,30 +1168,6 @@ def _infer_same_class_method_payload_type(
     )
 
 
-def _infer_service_method_payload_type(
-    *,
-    repo_root: Path,
-    controller_path: Path,
-    service_method: javalang.tree.MethodDeclaration,
-    service_owner_methods: list[javalang.tree.MethodDeclaration],
-    service_field_types: dict[str, str],
-    service_import_map: dict[str, str],
-    service_package_name: str | None,
-    active_service_methods: tuple[tuple[str, int], ...],
-) -> str | None:
-    return _module_infer_service_method_payload(
-        repo_root=repo_root,
-        controller_path=controller_path,
-        service_method=service_method,
-        service_owner_methods=service_owner_methods,
-        service_field_types=service_field_types,
-        service_import_map=service_import_map,
-        service_package_name=service_package_name,
-        deps=_service_inference_deps(),
-        active_service_methods=active_service_methods,
-    )
-
-
 def _is_data_list_expression(expression: object) -> bool:
     return _module_is_data_list_expression(expression)
 
@@ -1187,32 +1180,6 @@ def _service_inference_deps() -> _ServiceInferenceDeps:
         infer_operation_return_type=_infer_operation_return_type,
         unwrap_generated_view_data_list_type=_unwrap_generated_view_data_list_type,
         is_data_list_expression=_module_is_data_list_expression,
-    )
-
-
-def _find_field_declaration(
-    type_declaration: javalang.tree.TypeDeclaration,
-    field_name: str,
-) -> javalang.tree.FieldDeclaration | None:
-    return _generated_view_support.find_field_declaration(type_declaration, field_name)
-
-
-def _find_field_declaration_in_hierarchy(
-    *,
-    repo_root: Path,
-    type_declaration: javalang.tree.TypeDeclaration,
-    import_map: dict[str, str],
-    package_name: str | None,
-    field_name: str,
-    active_import_paths: tuple[str, ...] = (),
-) -> javalang.tree.FieldDeclaration | None:
-    return _generated_view_support.find_field_declaration_in_hierarchy(
-        repo_root=repo_root,
-        type_declaration=type_declaration,
-        import_map=import_map,
-        package_name=package_name,
-        field_name=field_name,
-        active_import_paths=active_import_paths,
     )
 
 
@@ -1235,34 +1202,23 @@ def _resolve_string_constant_value(
     )
 
 
-def _load_static_string_constant_value(
-    *,
-    repo_root: Path,
-    constant_import_path: str,
-    constant_name: str,
-) -> str | None:
-    return _generated_view_support.load_static_string_constant_value(
-        repo_root=repo_root,
-        constant_import_path=constant_import_path,
-        constant_name=constant_name,
-    )
-
-
-def _decode_string_field_initializer(
-    field: javalang.tree.FieldDeclaration,
-) -> str | None:
-    return _generated_view_support.decode_string_field_initializer(field)
-
-
 def _register_generated_view_model(
     *,
+    repo_root: Path,
     base_name: str,
     fields: list[tuple[str, str]],
+    source_import_map: dict[str, str],
+    source_package_name: str | None,
+    source_owner_import_path: str | None,
 ) -> str:
     return _generated_view_support.register_generated_view_model(
+        repo_root=repo_root,
         generated_view_models=_GENERATED_VIEW_MODELS,
         base_name=base_name,
         fields=fields,
+        source_import_map=source_import_map,
+        source_package_name=source_package_name,
+        source_owner_import_path=source_owner_import_path,
     )
 
 
@@ -1348,44 +1304,6 @@ def _is_collection_like_java_type(java_type: str) -> bool:
     return _module_is_collection_like_java_type(java_type)
 
 
-def _normalized_collection_base_type(java_type: str) -> str | None:
-    return _module_normalized_collection_base_type(java_type)
-
-
-def _infer_structured_expression_data_type(
-    *,
-    repo_root: Path,
-    controller_path: Path,
-    method: javalang.tree.MethodDeclaration,
-    expression: object,
-    view_name_hint: str,
-    variable_types: dict[str, str],
-    variable_initializers: dict[str, object],
-    controller_field_types: dict[str, str],
-    import_map: dict[str, str],
-    package_name: str | None,
-    owner_methods: list[javalang.tree.MethodDeclaration] | None = None,
-    active_same_class_methods: tuple[tuple[str, int], ...] = (),
-    active_variables: tuple[str, ...] = (),
-) -> str | None:
-    return _module_infer_structured_expression_type(
-        repo_root=repo_root,
-        controller_path=controller_path,
-        method=method,
-        expression=expression,
-        view_name_hint=view_name_hint,
-        variable_types=variable_types,
-        variable_initializers=variable_initializers,
-        controller_field_types=controller_field_types,
-        import_map=import_map,
-        package_name=package_name,
-        deps=_structure_inference_deps(),
-        owner_methods=owner_methods,
-        active_same_class_methods=active_same_class_methods,
-        active_variables=active_variables,
-    )
-
-
 def _extract_dto_specs(
     repo_root: Path,
     import_paths: set[str],
@@ -1452,13 +1370,25 @@ def _extract_enum_specs(
 def _collect_generated_view_model_imports(
     repo_root: Path,
     generated_view_models: list[ModelSpec],
-    known_type_names: set[str],
+    known_type_import_paths: set[str],
 ) -> set[str]:
     return _type_extraction.collect_generated_view_model_imports(
         repo_root,
         generated_view_models,
-        known_type_names,
+        known_type_import_paths,
     )
+
+
+def _extend_model_specs_by_import_path(
+    model_specs: list[ModelSpec],
+    additional_model_specs: list[ModelSpec],
+) -> None:
+    existing_import_paths = {model.import_path for model in model_specs}
+    for model in additional_model_specs:
+        if model.import_path in existing_import_paths:
+            continue
+        model_specs.append(model)
+        existing_import_paths.add(model.import_path)
 
 
 def _collect_type_reference_names(type_node: object | None) -> set[str]:
@@ -1466,7 +1396,7 @@ def _collect_type_reference_names(type_node: object | None) -> set[str]:
 
 
 def _collect_type_reference_names_from_java_type(java_type: str) -> set[str]:
-    return _type_extraction.collect_type_reference_names_from_java_type(java_type)
+    return _collect_ir_reference_names(java_type)
 
 
 def _looks_like_request_dto_import(import_path: str) -> bool:

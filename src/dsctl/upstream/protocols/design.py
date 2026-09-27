@@ -9,10 +9,11 @@ from typing import (
     Protocol,
     TypedDict,
     TypeVar,
+    runtime_checkable,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from dsctl.support.json_types import JsonObject, JsonValue
     from dsctl.upstream.protocols.base import StringEnumValue
@@ -30,7 +31,7 @@ class ScheduleCreateSpec(Generic[WorkflowCodeT_co]):
     crontab: str
     start_time: str
     end_time: str
-    timezone_id: str
+    timezone_id: str | None
     failure_strategy: str | None = None
     warning_type: str | None = None
     warning_group_id: int = 0
@@ -38,6 +39,8 @@ class ScheduleCreateSpec(Generic[WorkflowCodeT_co]):
     worker_group: str | None = None
     tenant_code: str | None = None
     environment_code: int | None = None
+    project_name: str | None = None
+    missed_fire_policy: str | None = None
 
 
 class ScheduleCreateRequestPlan(TypedDict):
@@ -63,6 +66,15 @@ class WorkflowRecord(Protocol):
     @property
     def version(self) -> int | None:
         """Workflow version."""
+
+
+@runtime_checkable
+class ScheduleMissedFireRecord(Protocol):
+    """Optional exact native field available on newer schedule payloads."""
+
+    @property
+    def missedFirePolicy(self) -> StringEnumValue | str | None:  # noqa: N802
+        """Stored native missed fire policy, including historical null."""
 
 
 class ScheduleRecord(Protocol):
@@ -213,7 +225,7 @@ class WorkflowPayloadRecord(WorkflowRecord, Protocol):
         """Serialized global params."""
 
     @property
-    def globalParamMap(self) -> dict[str, str] | None:  # noqa: N802
+    def globalParamMap(self) -> Mapping[str, str | None] | None:  # noqa: N802
         """Global params map."""
 
     @property
@@ -303,6 +315,14 @@ class WorkflowTaskRelationRecord(Protocol):
     @property
     def postTaskCode(self) -> int:  # noqa: N802
         """Downstream task code."""
+
+    @property
+    def preTaskVersion(self) -> int:  # noqa: N802
+        """Upstream task version captured by the DAG relation."""
+
+    @property
+    def postTaskVersion(self) -> int:  # noqa: N802
+        """Downstream task version captured by the DAG relation."""
 
     @property
     def conditionParams(self) -> JsonValue | None:  # noqa: N802
@@ -437,6 +457,15 @@ class TaskPayloadRecord(TaskRecord, Protocol):
         """Task max memory."""
 
 
+@runtime_checkable
+class TaskCacheStateRecord(Protocol):
+    """Optional exact-profile task cache state used during opaque preservation."""
+
+    @property
+    def isCache(self) -> StringEnumValue | None:  # noqa: N802
+        """Task cache state where the generated source model exposes it."""
+
+
 class WorkflowDagRecord(Protocol):
     """Structural DAG payload used by workflow describe/export operations."""
 
@@ -567,8 +596,8 @@ class WorkflowLineageOperations(Protocol):
         """Return workflows/tasks that depend on one workflow or task."""
 
 
-class WorkflowOperations(Protocol):
-    """Bound workflow operations exposed to the service layer."""
+class WorkflowReadOperations(Protocol):
+    """Bound workflow reads shared by full and read-only version profiles."""
 
     def list_refs(self, *, project_code: int) -> Sequence[WorkflowRecord]:
         """Return inexpensive workflow identities for selector resolution."""
@@ -583,11 +612,19 @@ class WorkflowOperations(Protocol):
     ) -> WorkflowPageRecord:
         """Return one rich public page of workflows inside one project."""
 
-    def get(self, *, code: int) -> WorkflowPayloadRecord:
-        """Fetch one workflow by code."""
+    def get(self, *, project_code: int, code: int) -> WorkflowPayloadRecord:
+        """Fetch one workflow by code inside its owning project."""
+
+
+class WorkflowInspectionOperations(WorkflowReadOperations, Protocol):
+    """Bound workflow reads that include the complete DAG payload."""
 
     def describe(self, *, project_code: int, code: int) -> WorkflowDagRecord:
         """Fetch one workflow DAG payload by project and workflow code."""
+
+
+class WorkflowOperations(WorkflowInspectionOperations, Protocol):
+    """Bound workflow operations exposed to the service layer."""
 
     def create(
         self,
@@ -675,8 +712,8 @@ class WorkflowOperations(Protocol):
         """Backfill one workflow definition and return created instance ids."""
 
 
-class ScheduleOperations(Protocol):
-    """Bound schedule operations exposed to the service layer."""
+class ScheduleReadOperations(Protocol):
+    """Bound schedule reads needed to hydrate stable workflow payloads."""
 
     def list(
         self,
@@ -688,6 +725,10 @@ class ScheduleOperations(Protocol):
         search: str | None = None,
     ) -> SchedulePageRecord:
         """Return one page of schedules inside one project."""
+
+
+class ScheduleOperations(ScheduleReadOperations, Protocol):
+    """Bound schedule operations exposed to the service layer."""
 
     def get(self, *, schedule_id: int) -> SchedulePayloadRecord:
         """Fetch one schedule by id."""

@@ -3,22 +3,32 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.cli_surface import TASK_TYPE_RESOURCE
-from dsctl.models.task_spec import canonical_task_type, supported_typed_task_types
+from dsctl.models.task_spec import canonical_task_type
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import require_resource_text
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
+)
 from dsctl.services.task_authoring import (
     task_type_schema_result,
     task_type_summary_result,
 )
+from dsctl.services.task_authoring_catalog import (
+    default_task_authoring_catalog,
+    get_task_authoring_catalog,
+)
 from dsctl.services.template import (
     generic_task_template_types,
     supported_task_template_types,
+    typed_task_template_types,
 )
+from dsctl.upstream.serialization import require_resource_text
+from dsctl.upstream.task_type_inventory import TASK_TYPE_DOMAIN, TaskTypeDomain
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from dsctl.services.task_authoring_catalog import TaskAuthoringCatalog
     from dsctl.upstream.protocol import TaskTypeRecord
 
 
@@ -50,20 +60,26 @@ class TaskTypeListData(TypedDict):
 
 def list_task_types_result(*, env_file: str | None = None) -> CommandResult:
     """List DS task types visible to the current user/runtime."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        TASK_TYPE_DOMAIN,
         _list_task_types_result,
     )
 
 
-def _list_task_types_result(runtime: ServiceRuntime) -> CommandResult:
+def _list_task_types_result(
+    runtime: BoundDomainServiceRuntime[TaskTypeDomain],
+) -> CommandResult:
     task_types = [
         _serialize_task_type(task_type)
-        for task_type in runtime.upstream.task_types.list()
+        for task_type in runtime.domain.task_types.list()
     ]
     return CommandResult(
         data=require_json_object(
-            _task_type_list_data(task_types),
+            _task_type_list_data(
+                task_types,
+                catalog=get_task_authoring_catalog(runtime.profile.ds_version),
+            ),
             label="task type list data",
         ),
         resolved={"source": "favourite/taskTypes"},
@@ -86,20 +102,29 @@ def _serialize_task_type(task_type: TaskTypeRecord) -> TaskTypeData:
     }
 
 
-def _task_type_list_data(task_types: list[TaskTypeData]) -> TaskTypeListData:
+def _task_type_list_data(
+    task_types: list[TaskTypeData],
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> TaskTypeListData:
+    selected_catalog = default_task_authoring_catalog() if catalog is None else catalog
     task_types_by_category: dict[str, list[str]] = {}
     for task_type in task_types:
         category = task_type["taskCategory"]
         task_types_by_category.setdefault(category, []).append(task_type["taskType"])
 
-    template_types = list(supported_task_template_types())
-    typed_task_specs = list(supported_typed_task_types())
-    generic_template_types = list(generic_task_template_types())
+    template_types = list(supported_task_template_types(catalog=selected_catalog))
+    typed_task_specs = list(typed_task_template_types(catalog=selected_catalog))
+    generic_template_types = list(generic_task_template_types(catalog=selected_catalog))
     supported_template_types = set(template_types)
     untemplated_task_types = _unique_task_types(
         task_type["taskType"]
         for task_type in task_types
-        if canonical_task_type(task_type["taskType"]) not in supported_template_types
+        if (
+            selected_catalog.cli_task_type_for_source(task_type["taskType"])
+            or canonical_task_type(task_type["taskType"])
+        )
+        not in supported_template_types
     )
 
     return {

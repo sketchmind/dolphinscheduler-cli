@@ -3,24 +3,26 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ds_codegen.java_source import (
-    load_type_declaration,
-    resolve_referenced_import_path,
+from ds_codegen.contract_type_refs import (
+    ContractTypeExpression,
+    UnsupportedContractTypeExpressionError,
+    canonicalize_builtin_type_expression,
+    generic_inner_types,
+    parse_contract_type_expression,
 )
 from ds_codegen.render.package.planner import python_class_name
-from ds_codegen.render.requests_example import (
-    _generic_base_type,
-    _generic_inner_types,
-    _split_generic_pair,
-)
+from ds_codegen.snapshot_resolution import ResolutionScope
 
 if TYPE_CHECKING:
+    from ds_codegen.ir import ReferenceOwnerKind
     from ds_codegen.render.package.planner import PackageRenderContext
 
 SCALAR_PYTHON_TYPES = {
     "Any": "object",
+    "ArrayList": "list[object]",
     "ArrayNode": "list[dict[str, object]]",
     "Boolean": "bool",
     "Byte": "int",
@@ -28,14 +30,29 @@ SCALAR_PYTHON_TYPES = {
     "Double": "float",
     "Float": "float",
     "Integer": "int",
+    "Instant": "str",
     "JsonObject": "JsonObject",
     "JsonValue": "JsonValue",
+    "Collection": "list[object]",
+    "HashMap": "dict[str, object]",
+    "LinkedHashMap": "dict[str, object]",
+    "LinkedList": "list[object]",
+    "List": "list[object]",
+    "LocalDate": "str",
+    "LocalDateTime": "str",
+    "LocalTime": "str",
     "Long": "int",
+    "Map": "dict[str, object]",
     "MultipartFile": "UploadFileLike",
     "Object": "object",
     "ObjectNode": "dict[str, object]",
+    "OffsetDateTime": "str",
+    "OffsetTime": "str",
+    "Set": "list[object]",
     "Short": "int",
+    "Stream": "list[object]",
     "String": "str",
+    "ZonedDateTime": "str",
     "Void": "None",
     "boolean": "bool",
     "byte": "int",
@@ -47,6 +64,96 @@ SCALAR_PYTHON_TYPES = {
     "void": "None",
 }
 
+_COLLECTION_GENERIC_BASES = frozenset(
+    {"ArrayList", "Collection", "LinkedList", "List", "Set", "Stream"}
+)
+_MAP_GENERIC_BASES = frozenset({"HashMap", "LinkedHashMap", "Map"})
+
+
+@dataclass(frozen=True)
+class _AnnotationPlan:
+    annotation: str
+    import_targets: frozenset[tuple[tuple[str, ...], str]] = frozenset()
+
+
+@dataclass(frozen=True)
+class _AnnotationPlanner:
+    owner_import_path: str | None
+    context: PackageRenderContext
+    owner_kind: ReferenceOwnerKind
+    specialized_java_type: str | None
+
+    def plan(self, expression: ContractTypeExpression) -> _AnnotationPlan:
+        java_type = expression.render()
+        if _is_type_variable(java_type):
+            return _AnnotationPlan(java_type)
+        specialized = self.context.specialized_by_java_type.get(java_type)
+        if specialized is not None:
+            target = (specialized.module_parts, specialized.class_name)
+            return _AnnotationPlan(specialized.class_name, frozenset({target}))
+        if java_type in {"Byte[]", "byte[]"}:
+            return _AnnotationPlan("bytes")
+        scalar_type = SCALAR_PYTHON_TYPES.get(java_type)
+        if scalar_type is not None:
+            return _AnnotationPlan(scalar_type)
+        if expression.is_array:
+            element = ContractTypeExpression(expression.name, expression.arguments)
+            inner = self.plan(element)
+            return _container_annotation_plan(f"list[{inner.annotation}]", inner)
+        return self._plan_non_array(expression)
+
+    def _plan_non_array(
+        self,
+        expression: ContractTypeExpression,
+    ) -> _AnnotationPlan:
+        arguments = expression.arguments
+        if expression.name == "Optional" and arguments:
+            if len(arguments) != 1:
+                inner = ", ".join(argument.render() for argument in arguments)
+                message = f"unsupported contract type expression: {inner!r}"
+                raise UnsupportedContractTypeExpressionError(message)
+            value = self.plan(arguments[0])
+            return _container_annotation_plan(f"{value.annotation} | None", value)
+        if expression.name in _COLLECTION_GENERIC_BASES and len(arguments) == 1:
+            value = self.plan(arguments[0])
+            return _container_annotation_plan(f"list[{value.annotation}]", value)
+        if expression.name in _MAP_GENERIC_BASES and len(arguments) == 2:
+            key, value = (self.plan(argument) for argument in arguments)
+            return _container_annotation_plan(
+                f"dict[{key.annotation}, {value.annotation}]",
+                key,
+                value,
+            )
+        if self.context.type_resolver.is_opaque_external_reference(expression.name):
+            return _AnnotationPlan("JsonValue")
+        return self._plan_reference(expression)
+
+    def _plan_reference(
+        self,
+        expression: ContractTypeExpression,
+    ) -> _AnnotationPlan:
+        import_path = resolve_owner_reference_import_path(
+            expression.name,
+            self.owner_import_path,
+            self.context,
+            owner_kind=self.owner_kind,
+            specialized_java_type=self.specialized_java_type,
+        )
+        argument_plans = tuple(self.plan(argument) for argument in expression.arguments)
+        assignment = (
+            self.context.assignments_by_import_path.get(import_path)
+            if import_path is not None
+            else None
+        )
+        if assignment is None:
+            return _container_annotation_plan(
+                python_class_name(expression.name),
+                *argument_plans,
+            )
+        targets = {target for plan in argument_plans for target in plan.import_targets}
+        targets.add((assignment.module_parts, assignment.class_name))
+        return _AnnotationPlan(assignment.class_name, frozenset(targets))
+
 
 def field_annotation_type(
     java_type: str,
@@ -54,11 +161,15 @@ def field_annotation_type(
     allow_none: bool,
     owner_import_path: str | None,
     context: PackageRenderContext,
+    owner_kind: ReferenceOwnerKind = "structured_type",
+    specialized_java_type: str | None = None,
 ) -> str:
     rendered_type = render_annotation_type(
         java_type,
         owner_import_path=owner_import_path,
         context=context,
+        owner_kind=owner_kind,
+        specialized_java_type=specialized_java_type,
     )
     if not allow_none or rendered_type == "None" or rendered_type.endswith(" | None"):
         return rendered_type
@@ -70,75 +181,16 @@ def render_annotation_type(
     *,
     owner_import_path: str | None,
     context: PackageRenderContext,
+    owner_kind: ReferenceOwnerKind = "structured_type",
+    specialized_java_type: str | None = None,
 ) -> str:
-    if _is_type_variable(java_type):
-        return java_type
-    if java_type in context.specialized_by_java_type:
-        return context.specialized_by_java_type[java_type].class_name
-    if java_type in {"Byte[]", "byte[]"}:
-        return "bytes"
-    if java_type in SCALAR_PYTHON_TYPES:
-        return SCALAR_PYTHON_TYPES[java_type]
-    if java_type.endswith("[]"):
-        inner_type = render_annotation_type(
-            java_type[:-2],
-            owner_import_path=owner_import_path,
-            context=context,
-        )
-        return f"list[{inner_type}]"
-    if java_type.startswith("Optional<") and java_type.endswith(">"):
-        inner_type = render_annotation_type(
-            java_type[9:-1],
-            owner_import_path=owner_import_path,
-            context=context,
-        )
-        return f"{inner_type} | None"
-    if java_type.startswith("List<") and java_type.endswith(">"):
-        inner_type = render_annotation_type(
-            java_type[5:-1],
-            owner_import_path=owner_import_path,
-            context=context,
-        )
-        return f"list[{inner_type}]"
-    if java_type.startswith("Set<") and java_type.endswith(">"):
-        inner_type = render_annotation_type(
-            java_type[4:-1],
-            owner_import_path=owner_import_path,
-            context=context,
-        )
-        return f"list[{inner_type}]"
-    if java_type.startswith("Collection<") and java_type.endswith(">"):
-        inner_type = render_annotation_type(
-            java_type[11:-1],
-            owner_import_path=owner_import_path,
-            context=context,
-        )
-        return f"list[{inner_type}]"
-    if java_type.startswith("Map<") and java_type.endswith(">"):
-        key_type, value_type = _split_generic_pair(java_type[4:-1])
-        return (
-            "dict["
-            + render_annotation_type(
-                key_type, owner_import_path=owner_import_path, context=context
-            )
-            + ", "
-            + render_annotation_type(
-                value_type, owner_import_path=owner_import_path, context=context
-            )
-            + "]"
-        )
-    generic_base = _generic_base_type(java_type)
-    generic_args = _generic_inner_types(java_type)
-    if generic_args and java_type in context.specialized_by_java_type:
-        return context.specialized_by_java_type[java_type].class_name
-    import_path = resolve_owner_reference_import_path(
-        generic_base,
-        owner_import_path,
-        context,
-    )
-    if import_path is not None and import_path in context.assignments_by_import_path:
-        return context.assignments_by_import_path[import_path].class_name
-    return python_class_name(generic_base)
+    return _annotation_plan(
+        java_type,
+        owner_import_path=owner_import_path,
+        context=context,
+        owner_kind=owner_kind,
+        specialized_java_type=specialized_java_type,
+    ).annotation
 
 
 def collect_annotation_import_targets(
@@ -147,113 +199,73 @@ def collect_annotation_import_targets(
     owner_import_path: str | None,
     current_module_parts: tuple[str, ...],
     context: PackageRenderContext,
+    owner_kind: ReferenceOwnerKind = "structured_type",
+    specialized_java_type: str | None = None,
 ) -> set[tuple[tuple[str, ...], str]]:
-    targets: set[tuple[tuple[str, ...], str]] = set()
-    if _is_type_variable(java_type):
-        return targets
-    if java_type in context.specialized_by_java_type:
-        specialized = context.specialized_by_java_type[java_type]
-        if specialized.module_parts != current_module_parts:
-            targets.add((specialized.module_parts, specialized.class_name))
-        return targets
-    if java_type in {"Byte[]", "byte[]"} or java_type in SCALAR_PYTHON_TYPES:
-        return targets
-    if java_type.endswith("[]"):
-        return collect_annotation_import_targets(
-            java_type[:-2],
-            owner_import_path=owner_import_path,
-            current_module_parts=current_module_parts,
-            context=context,
-        )
-    for prefix, offset in (
-        ("Optional<", 9),
-        ("List<", 5),
-        ("Set<", 4),
-        ("Collection<", 11),
-    ):
-        if java_type.startswith(prefix) and java_type.endswith(">"):
-            return collect_annotation_import_targets(
-                java_type[offset:-1],
-                owner_import_path=owner_import_path,
-                current_module_parts=current_module_parts,
-                context=context,
-            )
-    if java_type.startswith("Map<") and java_type.endswith(">"):
-        key_type, value_type = _split_generic_pair(java_type[4:-1])
-        targets.update(
-            collect_annotation_import_targets(
-                key_type,
-                owner_import_path=owner_import_path,
-                current_module_parts=current_module_parts,
-                context=context,
-            )
-        )
-        targets.update(
-            collect_annotation_import_targets(
-                value_type,
-                owner_import_path=owner_import_path,
-                current_module_parts=current_module_parts,
-                context=context,
-            )
-        )
-        return targets
-    generic_base = _generic_base_type(java_type)
-    for generic_arg in _generic_inner_types(java_type):
-        targets.update(
-            collect_annotation_import_targets(
-                generic_arg,
-                owner_import_path=owner_import_path,
-                current_module_parts=current_module_parts,
-                context=context,
-            )
-        )
-    import_path = resolve_owner_reference_import_path(
-        generic_base,
+    plan = _annotation_plan(
+        java_type,
+        owner_import_path=owner_import_path,
+        context=context,
+        owner_kind=owner_kind,
+        specialized_java_type=specialized_java_type,
+    )
+    return {
+        target for target in plan.import_targets if target[0] != current_module_parts
+    }
+
+
+def _annotation_plan(
+    java_type: str,
+    *,
+    owner_import_path: str | None,
+    context: PackageRenderContext,
+    owner_kind: ReferenceOwnerKind,
+    specialized_java_type: str | None,
+) -> _AnnotationPlan:
+    planner = _AnnotationPlanner(
         owner_import_path,
         context,
+        owner_kind,
+        specialized_java_type,
     )
-    if import_path is None:
-        return targets
-    assignment = context.assignments_by_import_path.get(import_path)
-    if assignment is None or assignment.module_parts == current_module_parts:
-        return targets
-    targets.add((assignment.module_parts, assignment.class_name))
-    return targets
+    return planner.plan(parse_contract_type_expression(java_type))
+
+
+def _container_annotation_plan(
+    annotation: str,
+    *children: _AnnotationPlan,
+) -> _AnnotationPlan:
+    return _AnnotationPlan(
+        annotation,
+        frozenset(target for child in children for target in child.import_targets),
+    )
 
 
 def resolve_owner_reference_import_path(
     reference_name: str,
     owner_import_path: str | None,
     context: PackageRenderContext,
+    *,
+    owner_kind: ReferenceOwnerKind = "structured_type",
+    specialized_java_type: str | None = None,
 ) -> str | None:
-    candidates = context.import_paths_by_name.get(reference_name, set())
+    if context.type_resolver.is_opaque_external_reference(reference_name):
+        return None
+    candidates = context.type_resolver.candidates(reference_name)
     if len(candidates) == 1:
         return next(iter(candidates))
-    if owner_import_path is not None and owner_import_path.startswith(
-        ("org.apache.dolphinscheduler.", "com.")
-    ):
-        loaded = load_type_declaration(
-            context.repo_root,
-            owner_import_path,
-            context.parse_cache,
-        )
-        if loaded is not None:
-            _, _, import_map, package_name = loaded
-            resolved = resolve_referenced_import_path(
-                context.repo_root,
-                reference_name,
-                import_map,
-                package_name,
-                owner_import_path=owner_import_path,
-            )
-            if resolved is not None:
-                return resolved
-    if candidates:
-        return sorted(
-            candidates,
-            key=lambda item: (not item.startswith("org.apache.dolphinscheduler"), item),
-        )[0]
-    return None
+    if specialized_java_type is not None:
+        specialized = context.specialized_by_java_type[specialized_java_type]
+        resolved = specialized.reference_import_paths.get(reference_name)
+        if resolved is not None:
+            return resolved
+    if owner_import_path is None:
+        message = f"reference {reference_name!r} has no contract resolution owner"
+        raise ValueError(message)
+    return context.type_resolver.resolve(
+        reference_name,
+        scope=ResolutionScope(owner_kind, owner_import_path),
+    )
 
 
 def relative_import_statement(
@@ -275,29 +287,15 @@ def relative_import_statement(
 
 
 def render_scalar_annotation_type(java_type: str) -> str:
+    java_type = canonicalize_builtin_type_expression(java_type)
     return SCALAR_PYTHON_TYPES.get(java_type, python_class_name(java_type))
 
 
 def generic_substitutions(java_type: str) -> dict[str, str]:
-    generic_args = _generic_inner_types(java_type)
+    generic_args = generic_inner_types(java_type)
     if len(generic_args) == 1:
         return {"T": generic_args[0]}
     return {}
-
-
-def substitute_type_parameters(java_type: str, substitutions: dict[str, str]) -> str:
-    if java_type in substitutions:
-        return substitutions[java_type]
-    if java_type.endswith("[]"):
-        return substitute_type_parameters(java_type[:-2], substitutions) + "[]"
-    if "<" not in java_type or not java_type.endswith(">"):
-        return substitutions.get(java_type, java_type)
-    generic_base = _generic_base_type(java_type)
-    rendered_args = ", ".join(
-        substitute_type_parameters(generic_arg, substitutions)
-        for generic_arg in _generic_inner_types(java_type)
-    )
-    return f"{generic_base}<{rendered_args}>"
 
 
 def _is_type_variable(java_type: str) -> bool:

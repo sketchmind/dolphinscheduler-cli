@@ -8,12 +8,13 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, Literal, NoReturn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
 LIVE_TESTS_ENABLED_ENV: Final = "DSCTL_RUN_LIVE_TESTS"
+LIVE_EXECUTABLE_ENV: Final = "DSCTL_LIVE_EXECUTABLE"
 LIVE_ADMIN_TESTS_ENABLED_ENV: Final = "DSCTL_RUN_LIVE_ADMIN_TESTS"
 LIVE_API_URL_ENV: Final = "DS_LIVE_API_URL"
 LIVE_ADMIN_TOKEN_ENV: Final = "DS_LIVE_ADMIN_TOKEN"
@@ -29,11 +30,13 @@ PROFILE_ENV_NAMES: Final = frozenset(
         "DS_API_TOKEN",
         "DS_API_RETRY_ATTEMPTS",
         "DS_API_RETRY_BACKOFF_MS",
+        "DS_VERSION",
     }
 )
 LIVE_HARNESS_ENV_NAMES: Final = frozenset(
     {
         LIVE_TESTS_ENABLED_ENV,
+        LIVE_EXECUTABLE_ENV,
         LIVE_ADMIN_TESTS_ENABLED_ENV,
         LIVE_API_URL_ENV,
         LIVE_ADMIN_TOKEN_ENV,
@@ -46,6 +49,19 @@ LIVE_HARNESS_ENV_NAMES: Final = frozenset(
 )
 
 
+def cleanup_live_resources(tasks: list[Callable[[], None]]) -> None:
+    """Attempt every cleanup in order, retaining all ordinary failures."""
+    errors: list[Exception] = []
+    for task in tasks:
+        try:
+            task()
+        except Exception as exc:  # all cleanups must be attempted
+            errors.append(exc)
+    if errors:
+        message = "Live resource cleanup failed"
+        raise ExceptionGroup(message, errors)
+
+
 @dataclass(frozen=True)
 class LiveProfileConfig:
     """Minimal DS profile data needed by the live harness."""
@@ -53,6 +69,21 @@ class LiveProfileConfig:
     api_url: str
     api_token: str
     tenant_code: str | None = None
+    ds_version: str | None = None
+
+    def with_credentials(
+        self,
+        *,
+        api_token: str,
+        tenant_code: str | None,
+    ) -> LiveProfileConfig:
+        """Change the test identity without changing its cluster target."""
+        return LiveProfileConfig(
+            api_url=self.api_url,
+            api_token=api_token,
+            tenant_code=tenant_code,
+            ds_version=self.ds_version,
+        )
 
 
 @dataclass(frozen=True)
@@ -74,6 +105,59 @@ class DsctlCommandResult:
     stdout: str
     stderr: str
     payload: dict[str, object]
+
+
+@dataclass(frozen=True)
+class TaskDefinitionCleanupInvocation:
+    """Identity-free result from the installed-wheel private cleanup runner."""
+
+    operation: Literal["prove", "cleanup"]
+    ds_version: str
+    observed: int
+    released: int
+    deleted: int
+    remaining: int
+    remote_mutations: int
+
+
+class TaskDefinitionCleanupDoNotRetryError(RuntimeError):
+    """A cleanup outcome is ambiguous and must not be attempted again."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_type: str = "mutation_ambiguity_unresolved",
+        result_code: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.error_type = error_type
+        self.result_code = result_code
+
+
+class TaskDefinitionCleanupRejectedError(AssertionError):
+    """A deterministic remote cleanup rejection with bounded diagnostics."""
+
+    def __init__(
+        self,
+        *,
+        error_type: str,
+        message: str,
+        result_code: int | None,
+    ) -> None:
+        super().__init__(message)
+        self.error_type = error_type
+        self.result_code = result_code
+
+
+class TaskDefinitionCleanupPreconditionError(AssertionError):
+    """A fresh cleanup proof failed before the next mutation was attempted."""
+
+    error_type = "precondition_not_proven"
+
+
+class TaskDefinitionCleanupProcessStartError(AssertionError):
+    """The isolated cleanup process did not start, so no mutation was attempted."""
 
 
 @dataclass(frozen=True)
@@ -119,7 +203,7 @@ def load_live_settings() -> LiveSettings:
 def create_live_run_prefix() -> str:
     """Return one DS-safe run prefix for remote resource names."""
     timestamp = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S")
-    return f"dsctl-live-{timestamp}-{os.urandom(2).hex()}"
+    return f"dsctl-live-{timestamp}-{os.urandom(8).hex()}"
 
 
 def future_expire_time(*, days: int = 30) -> str:
@@ -133,6 +217,8 @@ def write_profile_env(path: Path, profile: LiveProfileConfig) -> Path:
         f"DS_API_URL={profile.api_url}",
         f"DS_API_TOKEN={profile.api_token}",
     ]
+    if profile.ds_version is not None:
+        lines.append(f"DS_VERSION={profile.ds_version}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
@@ -142,26 +228,18 @@ def run_dsctl(
     argv: list[str],
     *,
     env_file: Path | None = None,
+    executable: Path | None = None,
     extra_env: dict[str, str] | None = None,
     timeout_seconds: float = 60.0,
 ) -> DsctlCommandResult:
-    """Run `python -m dsctl` as a black-box subprocess and parse its JSON."""
-    command = [sys.executable, "-m", "dsctl"]
-    if env_file is not None:
-        command.extend(["--env-file", str(env_file)])
-    command.extend(argv)
-    env = _clean_dsctl_subprocess_env(os.environ, env_file=env_file)
-    env["PYTHONPATH"] = _pythonpath(repo_root, env.get("PYTHONPATH"))
-    if extra_env is not None:
-        env.update(extra_env)
-    completed = subprocess.run(
-        command,
-        capture_output=True,
-        check=False,
-        cwd=repo_root,
-        env=env,
-        text=True,
-        timeout=timeout_seconds,
+    """Run source or an installed `dsctl` as a black box and parse its JSON."""
+    command, completed = _run_dsctl_process(
+        repo_root,
+        argv,
+        env_file=env_file,
+        executable=executable,
+        extra_env=extra_env,
+        timeout_seconds=timeout_seconds,
     )
     payload = _parse_command_payload(
         command=command,
@@ -183,16 +261,334 @@ def run_dsctl_raw(
     argv: list[str],
     *,
     env_file: Path | None = None,
+    executable: Path | None = None,
     extra_env: dict[str, str] | None = None,
     timeout_seconds: float = 60.0,
 ) -> DsctlCommandResult:
-    """Run `python -m dsctl` as a black-box subprocess without JSON parsing."""
-    command = [sys.executable, "-m", "dsctl"]
+    """Run source or an installed `dsctl` without parsing artifact output."""
+    command, completed = _run_dsctl_process(
+        repo_root,
+        argv,
+        env_file=env_file,
+        executable=executable,
+        extra_env=extra_env,
+        timeout_seconds=timeout_seconds,
+    )
+    return DsctlCommandResult(
+        argv=tuple(command),
+        exit_code=completed.returncode,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+        payload={},
+    )
+
+
+def run_task_definition_cleanup(
+    repo_root: Path,
+    *,
+    python: Path,
+    env_file: Path,
+    ds_version: str,
+    operation: Literal["prove", "cleanup"],
+    project_code: int,
+    workflow_code: int | None,
+    run_id: str,
+    timeout_seconds: float = 60.0,
+) -> TaskDefinitionCleanupInvocation:
+    """Run the private cleanup module from only the candidate wheel interpreter."""
+    del repo_root
+    command = [
+        str(python),
+        "-I",
+        "-m",
+        "dsctl.release_gate.task_definition_cleanup",
+        operation,
+        "--env-file",
+        str(env_file),
+        "--project-code",
+        str(project_code),
+    ]
+    if workflow_code is not None:
+        command.extend(["--workflow-code", str(workflow_code)])
+    command.extend(["--run-id", run_id])
+    env = _clean_dsctl_subprocess_env(os.environ, env_file=env_file)
+    env.pop("PYTHONPATH", None)
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            cwd=python.parent,
+            env=env,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        message = "private task-definition cleanup process timed out"
+        if operation == "cleanup":
+            raise TaskDefinitionCleanupDoNotRetryError(message) from None
+        raise AssertionError(message) from None
+    except (OSError, subprocess.SubprocessError) as exc:
+        _raise_private_cleanup_process_error(exc, operation=operation)
+    try:
+        return _interpret_private_cleanup_result(
+            completed,
+            operation=operation,
+            ds_version=ds_version,
+        )
+    except TaskDefinitionCleanupDoNotRetryError:
+        raise
+    except TaskDefinitionCleanupRejectedError:
+        raise
+    except TaskDefinitionCleanupPreconditionError:
+        raise
+    except AssertionError:
+        if operation == "cleanup":
+            message = "private task-definition cleanup result is ambiguous"
+            raise TaskDefinitionCleanupDoNotRetryError(message) from None
+        raise
+
+
+def _raise_private_cleanup_process_error(
+    exc: OSError | subprocess.SubprocessError,
+    *,
+    operation: Literal["prove", "cleanup"],
+) -> NoReturn:
+    if isinstance(exc, OSError):
+        message = "private task-definition cleanup process failed to start"
+        raise TaskDefinitionCleanupProcessStartError(message) from None
+    message = "private task-definition cleanup process failed"
+    if operation == "cleanup":
+        raise TaskDefinitionCleanupDoNotRetryError(message) from None
+    raise AssertionError(message) from None
+
+
+def _interpret_private_cleanup_result(
+    completed: subprocess.CompletedProcess[str],
+    *,
+    operation: Literal["prove", "cleanup"],
+    ds_version: str,
+) -> TaskDefinitionCleanupInvocation:
+    if completed.returncode < 0:
+        message = "private task-definition cleanup process was terminated"
+        raise AssertionError(message)
+    payload = _private_cleanup_payload(completed.stdout)
+    if completed.returncode != 0:
+        _raise_private_cleanup_failure(
+            payload,
+            operation=operation,
+            ds_version=ds_version,
+        )
+    if completed.stderr:
+        message = "private task-definition cleanup emitted unexpected diagnostics"
+        raise AssertionError(message)
+    return _private_cleanup_success(
+        payload,
+        operation=operation,
+        ds_version=ds_version,
+    )
+
+
+def _private_cleanup_payload(stdout: str) -> dict[str, object]:
+    try:
+        payload = json.loads(stdout)
+    except (json.JSONDecodeError, TypeError):
+        message = "private task-definition cleanup returned invalid sanitized JSON"
+        raise AssertionError(message) from None
+    if type(payload) is not dict:
+        message = "private task-definition cleanup returned invalid sanitized JSON"
+        raise AssertionError(message)
+    return payload
+
+
+def _private_cleanup_success(
+    payload: dict[str, object],
+    *,
+    operation: Literal["prove", "cleanup"],
+    ds_version: str,
+) -> TaskDefinitionCleanupInvocation:
+    expected_keys = {
+        "schema_version",
+        "ok",
+        "operation",
+        "ds_version",
+        "observed",
+        "released",
+        "deleted",
+        "remaining",
+        "remote_mutations",
+    }
+    counts = tuple(
+        payload.get(key)
+        for key in (
+            "observed",
+            "released",
+            "deleted",
+            "remaining",
+            "remote_mutations",
+        )
+    )
+    if (
+        set(payload) != expected_keys
+        or payload.get("schema_version") != 2
+        or payload.get("ok") is not True
+        or payload.get("operation") != operation
+        or payload.get("ds_version") != ds_version
+        or any(type(value) is not int or value < 0 for value in counts)
+    ):
+        message = "private task-definition cleanup success payload drifted"
+        raise AssertionError(message)
+    observed, released, deleted, remaining, remote_mutations = counts
+    assert type(observed) is int
+    assert type(released) is int
+    assert type(deleted) is int
+    assert type(remaining) is int
+    assert type(remote_mutations) is int
+    if (
+        observed - deleted != remaining
+        or released > observed
+        or remote_mutations != released + deleted
+        or (
+            operation == "prove"
+            and (released != 0 or deleted != 0 or remote_mutations != 0)
+        )
+    ):
+        message = "private task-definition cleanup success counts drifted"
+        raise AssertionError(message)
+    return TaskDefinitionCleanupInvocation(
+        operation=operation,
+        ds_version=ds_version,
+        observed=observed,
+        released=released,
+        deleted=deleted,
+        remaining=remaining,
+        remote_mutations=remote_mutations,
+    )
+
+
+def _raise_private_cleanup_failure(
+    payload: dict[str, object],
+    *,
+    operation: Literal["prove", "cleanup"],
+    ds_version: str,
+) -> None:
+    expected_keys = {"schema_version", "ok", "operation", "ds_version", "error"}
+    error = payload.get("error")
+    valid_error = (
+        type(error) is dict
+        and set(error).issubset({"type", "message", "do_not_retry", "result_code"})
+        and set(error).issuperset({"type", "message"})
+        and type(error.get("type")) is str
+        and type(error.get("message")) is str
+        and ("do_not_retry" not in error or type(error.get("do_not_retry")) is bool)
+        and ("result_code" not in error or type(error.get("result_code")) is int)
+    )
+    if (
+        set(payload) != expected_keys
+        or payload.get("schema_version") != 2
+        or payload.get("ok") is not False
+        or payload.get("operation") != operation
+        or payload.get("ds_version") not in {ds_version, None}
+        or not valid_error
+    ):
+        message = "private task-definition cleanup failure payload drifted"
+        raise AssertionError(message)
+    assert isinstance(error, dict)
+    if error.get("do_not_retry") is True:
+        if operation != "cleanup":
+            message = "private task-definition cleanup failure payload drifted"
+            raise AssertionError(message)
+        error_type = error.get("type")
+        result_code = error.get("result_code")
+        assert isinstance(error_type, str)
+        assert result_code is None or type(result_code) is int
+        if error_type not in {
+            "api_result_error",
+            "mutation_ambiguity_unresolved",
+        } or (error_type != "api_result_error" and result_code is not None):
+            message = "private task-definition cleanup failure payload drifted"
+            raise AssertionError(message)
+        if error_type == "api_result_error":
+            code_text = f" result_code={result_code}" if result_code is not None else ""
+            message = (
+                "private task-definition cleanup is unsafe to retry "
+                f"(api_result_error{code_text}); reconcile task state first"
+            )
+        else:
+            message = (
+                f"private task-definition cleanup is unsafe to retry ({error_type})"
+            )
+        raise TaskDefinitionCleanupDoNotRetryError(
+            message,
+            error_type=error_type,
+            result_code=result_code,
+        )
+    if error.get("type") == "api_result_error" and "do_not_retry" not in error:
+        result_code = error.get("result_code")
+        assert result_code is None or type(result_code) is int
+        if operation == "cleanup" and result_code != 50050:
+            drift = "private task-definition cleanup failure payload drifted"
+            raise AssertionError(drift)
+        message = _bounded_cleanup_rejection_message(result_code)
+        if error.get("message") != message:
+            drift = "private task-definition cleanup failure payload drifted"
+            raise AssertionError(drift)
+        raise TaskDefinitionCleanupRejectedError(
+            error_type="api_result_error",
+            message=message,
+            result_code=result_code,
+        )
+    if (
+        error.get("type") == "precondition_not_proven"
+        and "do_not_retry" not in error
+        and "result_code" not in error
+        and error.get("message")
+        == "task-definition cleanup precondition was not proven"
+    ):
+        message = error["message"]
+        assert isinstance(message, str)
+        raise TaskDefinitionCleanupPreconditionError(message)
+    message = "private task-definition cleanup runner failed"
+    raise AssertionError(message)
+
+
+def _bounded_cleanup_rejection_message(result_code: int | None) -> str:
+    if result_code == 50050:
+        return (
+            "DolphinScheduler rejected task-definition cleanup because a task "
+            "remains online; offline the task and retry cleanup"
+        )
+    return (
+        "DolphinScheduler rejected task-definition cleanup; inspect task state "
+        "and permissions before retrying"
+    )
+
+
+def _run_dsctl_process(
+    repo_root: Path,
+    argv: list[str],
+    *,
+    env_file: Path | None,
+    executable: Path | None,
+    extra_env: dict[str, str] | None,
+    timeout_seconds: float,
+) -> tuple[list[str], subprocess.CompletedProcess[str]]:
+    """Assemble and execute one isolated black-box CLI process."""
+    if executable is None:
+        configured_executable = _optional_process_text(LIVE_EXECUTABLE_ENV)
+        if configured_executable is not None:
+            executable = Path(configured_executable)
+    command = (
+        [sys.executable, "-m", "dsctl"] if executable is None else [str(executable)]
+    )
     if env_file is not None:
         command.extend(["--env-file", str(env_file)])
     command.extend(argv)
     env = _clean_dsctl_subprocess_env(os.environ, env_file=env_file)
-    env["PYTHONPATH"] = _pythonpath(repo_root, env.get("PYTHONPATH"))
+    if executable is None:
+        env["PYTHONPATH"] = _pythonpath(repo_root, env.get("PYTHONPATH"))
+    else:
+        env.pop("PYTHONPATH", None)
     if extra_env is not None:
         env.update(extra_env)
     completed = subprocess.run(
@@ -204,13 +600,7 @@ def run_dsctl_raw(
         text=True,
         timeout=timeout_seconds,
     )
-    return DsctlCommandResult(
-        argv=tuple(command),
-        exit_code=completed.returncode,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
-        payload={},
-    )
+    return command, completed
 
 
 def require_mapping(
@@ -409,6 +799,7 @@ def _load_profile_from_process_env_or_file(
         api_url=api_url,
         api_token=api_token,
         tenant_code=_optional_process_text(LIVE_TENANT_CODE_ENV),
+        ds_version=_optional_process_text("DS_VERSION"),
     )
 
 
@@ -426,6 +817,7 @@ def _load_profile_from_env_file(path: Path) -> LiveProfileConfig:
         api_url=api_url.rstrip("/"),
         api_token=api_token,
         tenant_code=values.get("DS_LIVE_TENANT_CODE"),
+        ds_version=values.get("DS_VERSION"),
     )
 
 

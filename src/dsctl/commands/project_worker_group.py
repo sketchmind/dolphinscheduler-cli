@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.project_worker_group import (
     clear_project_worker_groups_result,
     list_project_worker_groups_result,
@@ -21,21 +20,12 @@ def register_project_worker_group_commands(app: typer.Typer) -> None:
 
 
 @project_worker_group_app.command("list")
+@bind_command("project-worker-group.list")
 def list_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """List the worker groups currently reported for one selected project."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -48,31 +38,13 @@ def list_command(
 
 
 @project_worker_group_app.command("set")
+@bind_command("project-worker-group.set")
 def set_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
-    worker_groups: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--worker-group",
-            help=(
-                "Worker group to keep assigned to this project. Repeat as "
-                "needed; run `dsctl worker-group list` to discover values."
-            ),
-        ),
-    ] = None,
+    project: str | None,
+    worker_groups: list[str] | None,
 ) -> None:
-    """Replace the explicit worker-group assignment set for one selected project."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -86,28 +58,13 @@ def set_command(
 
 
 @project_worker_group_app.command("clear")
+@bind_command("project-worker-group.clear")
 def clear_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm removal of all explicit project worker-group assignments.",
-        ),
-    ] = False,
+    project: str | None,
+    force: bool,
 ) -> None:
-    """Clear the explicit worker-group assignment set for one selected project."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

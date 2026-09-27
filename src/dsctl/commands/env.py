@@ -1,9 +1,10 @@
 from pathlib import Path
-from typing import Annotated, cast
+from typing import cast
 
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult
 from dsctl.services.env import (
@@ -22,14 +23,6 @@ env_app = typer.Typer(
     no_args_is_help=True,
 )
 
-ENVIRONMENT_HELP = (
-    "Environment name or numeric code. Run `dsctl environment list` to discover values."
-)
-WORKER_GROUP_HELP = (
-    "Worker group to bind to this environment. Repeat as needed; run "
-    "`dsctl worker-group list` to discover values."
-)
-
 
 def register_env_commands(app: typer.Typer) -> None:
     """Register the `environment` command group."""
@@ -37,41 +30,15 @@ def register_env_commands(app: typer.Typer) -> None:
 
 
 @env_app.command("list")
+@bind_command("environment.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter environments by name using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List environments with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -87,14 +54,11 @@ def list_command(
 
 
 @env_app.command("get")
+@bind_command("environment.get")
 def get_command(
     ctx: typer.Context,
-    environment: Annotated[
-        str,
-        typer.Argument(help=ENVIRONMENT_HELP),
-    ],
+    environment: str,
 ) -> None:
-    """Get one environment by name or code."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -104,59 +68,16 @@ def get_command(
 
 
 @env_app.command("create")
+@bind_command("environment.create")
 def create_command(
     ctx: typer.Context,
     *,
-    name: Annotated[
-        str,
-        typer.Option(
-            "--name",
-            help="Environment name.",
-        ),
-    ],
-    config: Annotated[
-        str | None,
-        typer.Option(
-            "--config",
-            help=(
-                "Inline DS environment shell/export config. Prefer "
-                "--config-file for multiline configs; run "
-                "`dsctl template environment` "
-                "for an example."
-            ),
-        ),
-    ] = None,
-    config_file: Annotated[
-        Path | None,
-        typer.Option(
-            "--config-file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to a DS environment shell/export config file. Run "
-                "`dsctl template environment` for an example."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ] = None,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Optional environment description.",
-        ),
-    ] = None,
-    worker_groups: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--worker-group",
-            help=WORKER_GROUP_HELP,
-        ),
-    ] = None,
+    name: str,
+    config: str | None,
+    config_file: Path | None,
+    description: str | None,
+    worker_groups: list[str] | None,
 ) -> None:
-    """Create one environment; pass --config or --config-file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -179,76 +100,19 @@ def create_command(
 
 
 @env_app.command("update")
+@bind_command("environment.update")
 def update_command(
     ctx: typer.Context,
-    environment: Annotated[
-        str,
-        typer.Argument(help=ENVIRONMENT_HELP),
-    ],
+    environment: str,
     *,
-    name: Annotated[
-        str | None,
-        typer.Option(
-            "--name",
-            help="Updated environment name. Omit to keep the current name.",
-        ),
-    ] = None,
-    config: Annotated[
-        str | None,
-        typer.Option(
-            "--config",
-            help=(
-                "Updated inline DS environment shell/export config. Omit to "
-                "keep the current config; prefer --config-file for multiline "
-                "configs."
-            ),
-        ),
-    ] = None,
-    config_file: Annotated[
-        Path | None,
-        typer.Option(
-            "--config-file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to an updated DS environment shell/export config file. "
-                "Omit both config options to keep the current config."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ] = None,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Updated environment description.",
-        ),
-    ] = None,
-    clear_description: Annotated[
-        bool,
-        typer.Option(
-            "--clear-description",
-            help="Clear the stored environment description.",
-        ),
-    ] = False,
-    worker_groups: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--worker-group",
-            help=WORKER_GROUP_HELP,
-        ),
-    ] = None,
-    clear_worker_groups: Annotated[
-        bool,
-        typer.Option(
-            "--clear-worker-groups",
-            help="Clear all bound worker groups.",
-        ),
-    ] = False,
+    name: str | None,
+    config: str | None,
+    config_file: Path | None,
+    description: str | None,
+    clear_description: bool,
+    worker_groups: list[str] | None,
+    clear_worker_groups: bool,
 ) -> None:
-    """Update one environment; config may come from --config-file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
@@ -293,22 +157,13 @@ def update_command(
 
 
 @env_app.command("delete")
+@bind_command("environment.delete")
 def delete_command(
     ctx: typer.Context,
-    environment: Annotated[
-        str,
-        typer.Argument(help=ENVIRONMENT_HELP),
-    ],
+    environment: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm environment deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one environment."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -344,7 +199,7 @@ def _environment_config_from_options(
         raise UserInputError(
             message,
             suggestion=(
-                "Pass --config TEXT or --config-file PATH. Run "
+                "Pass --config CONFIG or --config-file CONFIG_FILE. Run "
                 "`dsctl template environment` for an example shell/export config."
             ),
         )

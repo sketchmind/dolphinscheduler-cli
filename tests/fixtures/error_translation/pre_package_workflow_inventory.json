@@ -1,0 +1,867 @@
+{
+  "source_commit": "dfd6068",
+  "normalization": "Original workflow.py and workflow_instance.py reports; only source line numbers omitted.",
+  "workflow": {
+    "translators": [
+      {
+        "name": "_raise_legacy_attached_schedule_lookup_error",
+        "handled_codes": [
+          {
+            "name": "PROJECT_NOT_FOUND",
+            "value": 10018
+          },
+          {
+            "name": "_PROJECT_NOT_EXIST",
+            "value": 10190
+          },
+          {
+            "name": "_USER_NO_OPERATION_PERMISSION",
+            "value": 30001
+          },
+          {
+            "name": "_USER_NO_OPERATION_PROJECT_PERMISSION",
+            "value": 30002
+          },
+          {
+            "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+            "value": 50003
+          }
+        ]
+      },
+      {
+        "name": "_raise_workflow_release_error",
+        "handled_codes": [
+          {
+            "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+            "value": 50003
+          }
+        ]
+      },
+      {
+        "name": "_raise_workflow_release_refresh_error",
+        "handled_codes": [
+          {
+            "name": "_USER_NO_OPERATION_PERMISSION",
+            "value": 30001
+          },
+          {
+            "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+            "value": 50003
+          }
+        ]
+      },
+      {
+        "name": "_is_subworkflow_not_online_release_error",
+        "handled_codes": [
+          {
+            "name": "WORKFLOW_DEFINITION_NOT_RELEASE",
+            "value": 50004
+          }
+        ]
+      },
+      {
+        "name": "_raise_workflow_run_error",
+        "handled_codes": []
+      },
+      {
+        "name": "_is_workflow_definition_not_online_run_error",
+        "handled_codes": []
+      },
+      {
+        "name": "_raise_workflow_create_error",
+        "handled_codes": [
+          {
+            "name": "PROJECT_NOT_FOUND",
+            "value": 10018
+          },
+          {
+            "name": "WORKFLOW_DEFINITION_NAME_EXIST",
+            "value": 10168
+          },
+          {
+            "name": "TASK_NAME_DUPLICATE_ERROR",
+            "value": 10198
+          },
+          {
+            "name": "_USER_NO_OPERATION_PERMISSION",
+            "value": 30001
+          },
+          {
+            "name": "DATA_IS_NOT_VALID",
+            "value": 50017
+          },
+          {
+            "name": "WORKFLOW_NODE_HAS_CYCLE",
+            "value": 50019
+          },
+          {
+            "name": "WORKFLOW_NODE_S_PARAMETER_INVALID",
+            "value": 50020
+          },
+          {
+            "name": "TASK_DEFINE_NOT_EXIST",
+            "value": 50030
+          },
+          {
+            "name": "CHECK_WORKFLOW_TASK_RELATION_ERROR",
+            "value": 50036
+          }
+        ]
+      },
+      {
+        "name": "_raise_workflow_update_error",
+        "handled_codes": [
+          {
+            "name": "WORKFLOW_DEFINITION_NAME_EXIST",
+            "value": 10168
+          },
+          {
+            "name": "TASK_NAME_DUPLICATE_ERROR",
+            "value": 10198
+          },
+          {
+            "name": "_USER_NO_OPERATION_PERMISSION",
+            "value": 30001
+          },
+          {
+            "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+            "value": 50003
+          },
+          {
+            "name": "WORKFLOW_DEFINITION_NOT_ALLOWED_EDIT",
+            "value": 50008
+          },
+          {
+            "name": "DATA_IS_NOT_VALID",
+            "value": 50017
+          },
+          {
+            "name": "WORKFLOW_NODE_HAS_CYCLE",
+            "value": 50019
+          },
+          {
+            "name": "WORKFLOW_NODE_S_PARAMETER_INVALID",
+            "value": 50020
+          },
+          {
+            "name": "TASK_DEFINE_NOT_EXIST",
+            "value": 50030
+          },
+          {
+            "name": "CHECK_WORKFLOW_TASK_RELATION_ERROR",
+            "value": 50036
+          }
+        ]
+      },
+      {
+        "name": "_raise_workflow_delete_error",
+        "handled_codes": [
+          {
+            "name": null,
+            "value": 10163
+          },
+          {
+            "name": null,
+            "value": 10193
+          },
+          {
+            "name": "_USER_NO_OPERATION_PERMISSION",
+            "value": 30001
+          },
+          {
+            "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+            "value": 50003
+          },
+          {
+            "name": null,
+            "value": 50021
+          },
+          {
+            "name": null,
+            "value": 50023
+          }
+        ]
+      }
+    ],
+    "api_result_error_excepts": [
+      {
+        "function_name": "_load_workflow_dag",
+        "translator_calls": [
+          "raise_workflow_read_api_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_allocate_workflow_task_codes",
+        "translator_calls": [
+          "ApiTransportError"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_load_legacy_workflow_graph",
+        "translator_calls": [
+          "ApiTransportError",
+          "NotFoundError",
+          "PermissionDeniedError"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_edit_legacy_workflow_result",
+        "translator_calls": [
+          "_raise_workflow_release_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_run_workflow_result",
+        "translator_calls": [
+          "_raise_workflow_run_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_run_workflow_task_result",
+        "translator_calls": [
+          "_raise_workflow_run_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_run_legacy_workflow_task_result",
+        "translator_calls": [
+          "_raise_workflow_run_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_backfill_workflow_result",
+        "translator_calls": [
+          "_raise_workflow_run_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_delete_workflow_result",
+        "translator_calls": [
+          "_raise_workflow_delete_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_set_workflow_release_state_result",
+        "translator_calls": [
+          "_raise_workflow_release_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_prepare_workflow_definition_request",
+        "translator_calls": [
+          "translate_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_create_remote_workflow",
+        "translator_calls": [
+          "_raise_workflow_create_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_update_remote_workflow",
+        "translator_calls": [
+          "_raise_workflow_update_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_apply_workflow_release_and_schedule",
+        "translator_calls": [
+          "translate_schedule_api_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_apply_workflow_release_and_schedule",
+        "translator_calls": [
+          "_raise_workflow_release_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_create_workflow_schedule",
+        "translator_calls": [
+          "translate_schedule_api_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_load_target_attached_schedule",
+        "translator_calls": [
+          "_raise_legacy_attached_schedule_lookup_error",
+          "raise_attached_schedule_lookup_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_refresh_workflow_after_release",
+        "translator_calls": [
+          "_raise_workflow_release_refresh_error"
+        ],
+        "preserves_source_chain": true
+      }
+    ],
+    "pagination_hooks": [],
+    "branch_mappings": {
+      "_raise_legacy_attached_schedule_lookup_error": [
+        {
+          "codes": [
+            {
+              "name": "PROJECT_NOT_FOUND",
+              "value": 10018
+            },
+            {
+              "name": "_PROJECT_NOT_EXIST",
+              "value": 10190
+            }
+          ],
+          "outcomes": [
+            "NotFoundError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+              "value": 50003
+            }
+          ],
+          "outcomes": [
+            "NotFoundError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "_USER_NO_OPERATION_PERMISSION",
+              "value": 30001
+            },
+            {
+              "name": "_USER_NO_OPERATION_PROJECT_PERMISSION",
+              "value": 30002
+            }
+          ],
+          "outcomes": [
+            "PermissionDeniedError"
+          ]
+        }
+      ],
+      "_raise_workflow_release_error": [
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+              "value": 50003
+            }
+          ],
+          "outcomes": [
+            "NotFoundError"
+          ]
+        }
+      ],
+      "_raise_workflow_release_refresh_error": [
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+              "value": 50003
+            }
+          ],
+          "outcomes": [
+            "NotFoundError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "_USER_NO_OPERATION_PERMISSION",
+              "value": 30001
+            }
+          ],
+          "outcomes": [
+            "PermissionDeniedError"
+          ]
+        }
+      ],
+      "_is_subworkflow_not_online_release_error": [
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NOT_RELEASE",
+              "value": 50004
+            }
+          ],
+          "outcomes": [
+            "<unknown-return>"
+          ]
+        }
+      ],
+      "_raise_workflow_run_error": [],
+      "_is_workflow_definition_not_online_run_error": [],
+      "_raise_workflow_create_error": [
+        {
+          "codes": [
+            {
+              "name": "PROJECT_NOT_FOUND",
+              "value": 10018
+            }
+          ],
+          "outcomes": [
+            "NotFoundError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NAME_EXIST",
+              "value": 10168
+            }
+          ],
+          "outcomes": [
+            "ConflictError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "_USER_NO_OPERATION_PERMISSION",
+              "value": 30001
+            }
+          ],
+          "outcomes": [
+            "PermissionDeniedError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "TASK_NAME_DUPLICATE_ERROR",
+              "value": 10198
+            },
+            {
+              "name": "DATA_IS_NOT_VALID",
+              "value": 50017
+            },
+            {
+              "name": "WORKFLOW_NODE_HAS_CYCLE",
+              "value": 50019
+            },
+            {
+              "name": "WORKFLOW_NODE_S_PARAMETER_INVALID",
+              "value": 50020
+            },
+            {
+              "name": "TASK_DEFINE_NOT_EXIST",
+              "value": 50030
+            },
+            {
+              "name": "CHECK_WORKFLOW_TASK_RELATION_ERROR",
+              "value": 50036
+            }
+          ],
+          "outcomes": [
+            "UserInputError"
+          ]
+        }
+      ],
+      "_raise_workflow_update_error": [
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+              "value": 50003
+            }
+          ],
+          "outcomes": [
+            "NotFoundError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NAME_EXIST",
+              "value": 10168
+            }
+          ],
+          "outcomes": [
+            "ConflictError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "_USER_NO_OPERATION_PERMISSION",
+              "value": 30001
+            }
+          ],
+          "outcomes": [
+            "PermissionDeniedError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NOT_ALLOWED_EDIT",
+              "value": 50008
+            }
+          ],
+          "outcomes": [
+            "InvalidStateError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "TASK_NAME_DUPLICATE_ERROR",
+              "value": 10198
+            },
+            {
+              "name": "DATA_IS_NOT_VALID",
+              "value": 50017
+            },
+            {
+              "name": "WORKFLOW_NODE_HAS_CYCLE",
+              "value": 50019
+            },
+            {
+              "name": "WORKFLOW_NODE_S_PARAMETER_INVALID",
+              "value": 50020
+            },
+            {
+              "name": "TASK_DEFINE_NOT_EXIST",
+              "value": 50030
+            },
+            {
+              "name": "CHECK_WORKFLOW_TASK_RELATION_ERROR",
+              "value": 50036
+            }
+          ],
+          "outcomes": [
+            "UserInputError"
+          ]
+        }
+      ],
+      "_raise_workflow_delete_error": [
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NOT_EXIST",
+              "value": 50003
+            }
+          ],
+          "outcomes": [
+            "NotFoundError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "_USER_NO_OPERATION_PERMISSION",
+              "value": 30001
+            }
+          ],
+          "outcomes": [
+            "PermissionDeniedError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": null,
+              "value": 50021
+            }
+          ],
+          "outcomes": [
+            "InvalidStateError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": null,
+              "value": 50023
+            }
+          ],
+          "outcomes": [
+            "InvalidStateError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": null,
+              "value": 10163
+            }
+          ],
+          "outcomes": [
+            "InvalidStateError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": null,
+              "value": 10193
+            }
+          ],
+          "outcomes": [
+            "ConflictError"
+          ]
+        }
+      ]
+    }
+  },
+  "workflow_instance": {
+    "translators": [
+      {
+        "name": "_raise_workflow_instance_action_error",
+        "handled_codes": [
+          {
+            "name": "EXECUTE_NOT_DEFINE_TASK",
+            "value": 10206
+          },
+          {
+            "name": "WORKFLOW_DEFINITION_NOT_RELEASE",
+            "value": 50004
+          },
+          {
+            "name": "WORKFLOW_INSTANCE_EXECUTING_COMMAND",
+            "value": 50009
+          },
+          {
+            "name": "WORKFLOW_INSTANCE_NOT_FINISHED",
+            "value": 50071
+          }
+        ]
+      },
+      {
+        "name": "_translate_workflow_instance_list_error",
+        "handled_codes": []
+      },
+      {
+        "name": "_raise_parent_workflow_instance_lookup_error",
+        "handled_codes": [
+          {
+            "name": "SUB_WORKFLOW_INSTANCE_NOT_EXIST",
+            "value": 50007
+          },
+          {
+            "name": "WORKFLOW_INSTANCE_NOT_SUB_WORKFLOW_INSTANCE",
+            "value": 50010
+          }
+        ]
+      },
+      {
+        "name": "_raise_workflow_instance_edit_error",
+        "handled_codes": [
+          {
+            "name": "DATA_IS_NOT_VALID",
+            "value": 50017
+          },
+          {
+            "name": "WORKFLOW_NODE_HAS_CYCLE",
+            "value": 50019
+          },
+          {
+            "name": "WORKFLOW_NODE_S_PARAMETER_INVALID",
+            "value": 50020
+          },
+          {
+            "name": "CHECK_WORKFLOW_TASK_RELATION_ERROR",
+            "value": 50036
+          }
+        ]
+      }
+    ],
+    "api_result_error_excepts": [
+      {
+        "function_name": "_list_workflow_instances_result",
+        "translator_calls": [
+          "_translate_workflow_instance_list_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "get_workflow_instance",
+        "translator_calls": [
+          "NotFoundError",
+          "PermissionDeniedError"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_get_parent_workflow_instance_result",
+        "translator_calls": [
+          "_raise_parent_workflow_instance_lookup_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_rerun_workflow_instance_result",
+        "translator_calls": [
+          "_raise_workflow_instance_action_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_recover_failed_workflow_instance_result",
+        "translator_calls": [
+          "_raise_workflow_instance_action_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_execute_task_in_workflow_instance_result",
+        "translator_calls": [
+          "_raise_workflow_instance_action_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_edit_workflow_instance_result",
+        "translator_calls": [
+          "_raise_workflow_instance_edit_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_edit_workflow_instance_result",
+        "translator_calls": [
+          "_raise_workflow_instance_edit_error"
+        ],
+        "preserves_source_chain": true
+      },
+      {
+        "function_name": "_edit_legacy_workflow_instance_result",
+        "translator_calls": [
+          "_raise_workflow_instance_edit_error"
+        ],
+        "preserves_source_chain": true
+      }
+    ],
+    "pagination_hooks": [
+      {
+        "function_name": "_list_workflow_instances_result",
+        "translate_error_expr": "lambda exc: _translate_workflow_instance_list_error(\n                exc,\n                project=selected_project.value,\n                workflow=workflow,\n                search=search,\n                executor=executor,\n                host=host,\n                start=start,\n                end=end,\n                state=state,\n            )"
+      }
+    ],
+    "branch_mappings": {
+      "_raise_workflow_instance_action_error": [
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_INSTANCE_EXECUTING_COMMAND",
+              "value": 50009
+            }
+          ],
+          "outcomes": [
+            "InvalidStateError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_INSTANCE_NOT_FINISHED",
+              "value": 50071
+            }
+          ],
+          "outcomes": [
+            "InvalidStateError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_DEFINITION_NOT_RELEASE",
+              "value": 50004
+            }
+          ],
+          "outcomes": [
+            "InvalidStateError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "EXECUTE_NOT_DEFINE_TASK",
+              "value": 10206
+            }
+          ],
+          "outcomes": [
+            "NotFoundError"
+          ]
+        }
+      ],
+      "_translate_workflow_instance_list_error": [],
+      "_raise_parent_workflow_instance_lookup_error": [
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_INSTANCE_NOT_SUB_WORKFLOW_INSTANCE",
+              "value": 50010
+            }
+          ],
+          "outcomes": [
+            "InvalidStateError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "SUB_WORKFLOW_INSTANCE_NOT_EXIST",
+              "value": 50007
+            }
+          ],
+          "outcomes": [
+            "_parent_workflow_instance_not_found"
+          ]
+        }
+      ],
+      "_raise_workflow_instance_edit_error": [
+        {
+          "codes": [
+            {
+              "name": "WORKFLOW_NODE_HAS_CYCLE",
+              "value": 50019
+            }
+          ],
+          "outcomes": [
+            "UserInputError"
+          ]
+        },
+        {
+          "codes": [
+            {
+              "name": "DATA_IS_NOT_VALID",
+              "value": 50017
+            },
+            {
+              "name": "WORKFLOW_NODE_S_PARAMETER_INVALID",
+              "value": 50020
+            },
+            {
+              "name": "CHECK_WORKFLOW_TASK_RELATION_ERROR",
+              "value": 50036
+            }
+          ],
+          "outcomes": [
+            "UserInputError"
+          ]
+        }
+      ]
+    }
+  }
+}

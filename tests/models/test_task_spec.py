@@ -210,7 +210,7 @@ tasks:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=r"task_params\.type must be SSH"):
+    with pytest.raises(ValueError, match=r"task_params\.type: type must be SSH"):
         load_workflow_spec(spec_path)
 
 
@@ -368,6 +368,41 @@ tasks:
         load_workflow_spec(spec_path)
 
 
+def test_load_workflow_spec_rejects_runtime_dependent_result(
+    tmp_path: Path,
+) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: dependent-workflow
+tasks:
+  - name: wait-upstream
+    type: DEPENDENT
+    task_params:
+      dependence:
+        relation: AND
+        dependTaskList:
+          - relation: AND
+            dependItemList:
+              - dependentType: DEPENDENT_ON_WORKFLOW
+                projectCode: 1
+                definitionCode: 1000000000001
+                depTaskCode: 0
+                cycle: day
+                dateValue: last1Days
+                dependResult: SUCCESS
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Task 'wait-upstream' task_params\.dependence",
+    ):
+        load_workflow_spec(spec_path)
+
+
 def test_load_workflow_spec_accepts_switch_task_params(tmp_path: Path) -> None:
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
@@ -427,6 +462,32 @@ tasks:
         load_workflow_spec(spec_path)
 
 
+def test_load_workflow_spec_rejects_runtime_switch_next_branch(
+    tmp_path: Path,
+) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: switch-workflow
+tasks:
+  - name: route
+    type: SWITCH
+    task_params:
+      switchResult:
+        nextNode: task-default
+      nextBranch: task-default
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Task 'route' task_params",
+    ):
+        load_workflow_spec(spec_path)
+
+
 def test_load_workflow_spec_accepts_conditions_task_params(tmp_path: Path) -> None:
     spec_path = tmp_path / "workflow.yaml"
     spec_path.write_text(
@@ -442,12 +503,7 @@ tasks:
         dependTaskList:
           - relation: AND
             dependItemList:
-              - dependentType: DEPENDENT_ON_TASK
-                projectCode: 1
-                definitionCode: 1000000000001
-                depTaskCode: 1000000000002
-                cycle: day
-                dateValue: today
+              - task: upstream-task
                 status: SUCCESS
       conditionResult:
         successNode:
@@ -468,12 +524,7 @@ tasks:
                     "relation": "AND",
                     "dependItemList": [
                         {
-                            "dependentType": "DEPENDENT_ON_TASK",
-                            "projectCode": 1,
-                            "definitionCode": 1000000000001,
-                            "depTaskCode": 1000000000002,
-                            "cycle": "day",
-                            "dateValue": "today",
+                            "task": "upstream-task",
                             "status": "SUCCESS",
                         }
                     ],
@@ -504,12 +555,7 @@ tasks:
         dependTaskList:
           - relation: AND
             dependItemList:
-              - dependentType: DEPENDENT_ON_TASK
-                projectCode: 1
-                definitionCode: 1000000000001
-                depTaskCode: 1000000000002
-                cycle: day
-                dateValue: today
+              - task: upstream-task
                 status: SUCCESS
       conditionResult:
         successNode: []
@@ -522,5 +568,84 @@ tasks:
     with pytest.raises(
         ValueError,
         match=r"Task 'route' task_params\.conditionResult\.successNode",
+    ):
+        load_workflow_spec(spec_path)
+
+
+@pytest.mark.parametrize("status", ["RUNNING_EXECUTION", "FORCED_SUCCESS"])
+def test_load_workflow_spec_rejects_non_terminal_conditions_predicate_status(
+    tmp_path: Path,
+    status: str,
+) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        f"""
+workflow:
+  name: conditions-workflow
+tasks:
+  - name: route
+    type: CONDITIONS
+    task_params:
+      dependence:
+        relation: AND
+        dependTaskList:
+          - relation: AND
+            dependItemList:
+              - task: upstream-task
+                status: {status}
+      conditionResult:
+        successNode:
+          - on-success
+        failedNode:
+          - on-failed
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Task 'route' task_params\.dependence\.dependTaskList\[0\]\."
+            r"dependItemList\[0\]\.status"
+        ),
+    ):
+        load_workflow_spec(spec_path)
+
+
+def test_load_workflow_spec_rejects_dependent_item_fields_for_conditions(
+    tmp_path: Path,
+) -> None:
+    spec_path = tmp_path / "workflow.yaml"
+    spec_path.write_text(
+        """
+workflow:
+  name: conditions-workflow
+tasks:
+  - name: route
+    type: CONDITIONS
+    task_params:
+      dependence:
+        relation: AND
+        dependTaskList:
+          - relation: AND
+            dependItemList:
+              - task: upstream-task
+                projectCode: 1
+                status: FAILURE
+      conditionResult:
+        successNode:
+          - on-success
+        failedNode:
+          - on-failed
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Task 'route' task_params\.dependence\.dependTaskList\[0\]\."
+            r"dependItemList\[0\]\.projectCode"
+        ),
     ):
         load_workflow_spec(spec_path)

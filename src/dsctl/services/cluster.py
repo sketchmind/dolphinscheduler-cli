@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.cli_surface import CLUSTER_RESOURCE
 from dsctl.errors import (
@@ -12,25 +12,24 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
-    ClusterData,
-    optional_text,
-    serialize_cluster,
-)
+from dsctl.services._page_result import paged_command_result
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_positive_int,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.resolver import ResolvedClusterData
-from dsctl.services.resolver import cluster as resolve_cluster
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.clusters import CLUSTER_DOMAIN, ClusterDomain
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.resolver import ResolvedClusterData
+from dsctl.upstream.resolver import cluster as resolve_cluster
+from dsctl.upstream.serialization import (
+    optional_text,
+    serialize_cluster,
+)
 
 if TYPE_CHECKING:
     from dsctl.upstream.protocol import ClusterPayloadRecord
@@ -47,8 +46,6 @@ QUERY_CLUSTER_ERROR = 1200029
 CLUSTER_NOT_EXISTS = 120033
 DELETE_CLUSTER_RELATED_NAMESPACE_EXISTS = 120034
 DESCRIPTION_TOO_LONG_ERROR = 1400004
-
-ClusterPageData: TypeAlias = PageData[ClusterData]
 
 
 class DeleteClusterData(TypedDict):
@@ -78,8 +75,9 @@ def list_clusters_result(
     normalized_search = optional_text(search)
     normalized_page_no = require_positive_int(page_no, label="page_no")
     normalized_page_size = require_positive_int(page_size, label="page_size")
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        CLUSTER_DOMAIN,
         _list_clusters_result,
         search=normalized_search,
         page_no=normalized_page_no,
@@ -94,8 +92,9 @@ def get_cluster_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Resolve and fetch one cluster payload."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        CLUSTER_DOMAIN,
         _get_cluster_result,
         cluster=cluster,
     )
@@ -112,8 +111,9 @@ def create_cluster_result(
     normalized_name = require_non_empty_text(name, label="cluster name")
     normalized_config = require_non_empty_text(config, label="cluster config")
     normalized_description = optional_text(description)
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        CLUSTER_DOMAIN,
         _create_cluster_result,
         name=normalized_name,
         config=normalized_config,
@@ -150,8 +150,9 @@ def update_cluster_result(
         if not isinstance(description, _UnsetValue)
         else UNSET
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        CLUSTER_DOMAIN,
         _update_cluster_result,
         cluster=cluster,
         name=normalized_name,
@@ -168,23 +169,24 @@ def delete_cluster_result(
 ) -> CommandResult:
     """Delete one cluster after explicit confirmation."""
     require_delete_force(force=force, resource_label="Cluster")
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        CLUSTER_DOMAIN,
         _delete_cluster_result,
         cluster=cluster,
     )
 
 
 def _list_clusters_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ClusterDomain],
     *,
     search: str | None,
     page_no: int,
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.clusters
-    data: ClusterPageData = requested_page_data(
+    adapter = runtime.domain.clusters
+    return paged_command_result(
         lambda current_page_no, current_page_size: adapter.list(
             page_no=current_page_no,
             page_size=current_page_size,
@@ -195,30 +197,21 @@ def _list_clusters_result(
         all_pages=all_pages,
         serialize_item=serialize_cluster,
         resource=CLUSTER_RESOURCE,
-        max_pages=MAX_AUTO_EXHAUST_PAGES,
+        resolved={"search": search},
         translate_error=lambda error: _translate_cluster_api_error(
             error,
             operation="list",
             cluster_name=search,
         ),
     )
-    return CommandResult(
-        data=require_json_object(data, label="cluster list data"),
-        resolved={
-            "search": search,
-            "page_no": page_no,
-            "page_size": page_size,
-            "all": all_pages,
-        },
-    )
 
 
 def _get_cluster_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ClusterDomain],
     *,
     cluster: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.clusters
+    adapter = runtime.domain.clusters
     try:
         resolved_cluster = resolve_cluster(cluster, adapter=adapter)
     except ApiResultError as error:
@@ -251,14 +244,14 @@ def _get_cluster_result(
 
 
 def _create_cluster_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ClusterDomain],
     *,
     name: str,
     config: str,
     description: str | None,
 ) -> CommandResult:
     try:
-        created_cluster = runtime.upstream.clusters.create(
+        created_cluster = runtime.domain.clusters.create(
             name=name,
             config=config,
             description=description,
@@ -284,14 +277,14 @@ def _create_cluster_result(
 
 
 def _update_cluster_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ClusterDomain],
     *,
     cluster: str,
     name: str | None,
     config: str | None,
     description: DescriptionUpdate,
 ) -> CommandResult:
-    adapter = runtime.upstream.clusters
+    adapter = runtime.domain.clusters
     try:
         resolved_cluster = resolve_cluster(cluster, adapter=adapter)
     except ApiResultError as error:
@@ -353,11 +346,11 @@ def _update_cluster_result(
 
 
 def _delete_cluster_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ClusterDomain],
     *,
     cluster: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.clusters
+    adapter = runtime.domain.clusters
     try:
         resolved_cluster = resolve_cluster(cluster, adapter=adapter)
     except ApiResultError as error:

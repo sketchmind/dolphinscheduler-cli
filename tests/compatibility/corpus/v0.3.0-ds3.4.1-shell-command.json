@@ -1,0 +1,828 @@
+{
+  "schema_version": 1,
+  "source_cli": {
+    "kind": "git_tag",
+    "tag": "v0.3.0",
+    "package_version": "0.3.0",
+    "commit": "bf7a1174b4a726f68f36d341e67d4132b68e65e8",
+    "artifact_origin": "local_rebuild_from_git_tag",
+    "reconstructed_wheel_sha256": "1966fe1bee4b86396b1f2fb29fca0d0a4f8f311b719ae7dbb9cf073dd19051f2",
+    "source_manifest_sha256": "c0d0ec9dd6df7619c2fc446ab8562b4915559bb4f99c29b6fae0df80f4dda2a0"
+  },
+  "ds_profile": "3.4.1",
+  "task_type": "SHELL",
+  "facet": "command_shorthand",
+  "semantics": {
+    "input": {
+      "workflow": {
+        "name": "published-shell-corpus",
+        "project": "etl-prod"
+      },
+      "tasks": [
+        {
+          "name": "shell",
+          "type": "SHELL",
+          "command": "echo published-shell"
+        }
+      ]
+    },
+    "schema_fields": [
+      {
+        "path": "name",
+        "type": "string",
+        "required": true,
+        "compile_path": "taskDefinitionJson[].name"
+      },
+      {
+        "path": "type",
+        "type": "string",
+        "required": true,
+        "default": "SHELL",
+        "choices": [
+          "SHELL"
+        ],
+        "compile_path": "taskDefinitionJson[].taskType"
+      },
+      {
+        "path": "description",
+        "type": "string",
+        "required": false,
+        "default": "",
+        "compile_path": "taskDefinitionJson[].description"
+      },
+      {
+        "path": "task_params",
+        "type": "object",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].taskParams"
+      },
+      {
+        "path": "command",
+        "type": "string",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].taskParams.rawScript"
+      },
+      {
+        "path": "flag",
+        "type": "enum",
+        "required": false,
+        "default": "YES",
+        "choices": [
+          "YES",
+          "NO"
+        ],
+        "compile_path": "taskDefinitionJson[].flag"
+      },
+      {
+        "path": "worker_group",
+        "type": "string",
+        "required": false,
+        "default": "default",
+        "compile_path": "taskDefinitionJson[].workerGroup"
+      },
+      {
+        "path": "environment_code",
+        "type": "integer",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].environmentCode"
+      },
+      {
+        "path": "task_group_id",
+        "type": "integer",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].taskGroupId"
+      },
+      {
+        "path": "task_group_priority",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].taskGroupPriority"
+      },
+      {
+        "path": "priority",
+        "type": "enum",
+        "required": false,
+        "default": "MEDIUM",
+        "choices": [
+          "HIGHEST",
+          "HIGH",
+          "MEDIUM",
+          "LOW",
+          "LOWEST"
+        ],
+        "compile_path": "taskDefinitionJson[].taskPriority"
+      },
+      {
+        "path": "retry.times",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].failRetryTimes"
+      },
+      {
+        "path": "retry.interval",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].failRetryInterval"
+      },
+      {
+        "path": "timeout",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].timeout"
+      },
+      {
+        "path": "timeout_notify_strategy",
+        "type": "enum",
+        "required": false,
+        "choices": [
+          "WARN",
+          "FAILED",
+          "WARNFAILED"
+        ],
+        "compile_path": "taskDefinitionJson[].timeoutNotifyStrategy"
+      },
+      {
+        "path": "delay",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].delayTime"
+      },
+      {
+        "path": "cpu_quota",
+        "type": "integer",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].cpuQuota"
+      },
+      {
+        "path": "memory_max",
+        "type": "integer",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].memoryMax"
+      },
+      {
+        "path": "depends_on[]",
+        "type": "string",
+        "required": false,
+        "default": [],
+        "compile_path": "workflowTaskRelationList"
+      },
+      {
+        "path": "task_params.rawScript",
+        "type": "string",
+        "required": true,
+        "compile_path": "taskDefinitionJson[].taskParams.rawScript"
+      },
+      {
+        "path": "task_params.localParams[]",
+        "type": "object",
+        "required": false,
+        "default": [],
+        "compile_path": "taskDefinitionJson[].taskParams.localParams"
+      },
+      {
+        "path": "task_params.localParams[].prop",
+        "type": "string",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].taskParams.localParams[].prop"
+      },
+      {
+        "path": "task_params.localParams[].direct",
+        "type": "enum",
+        "required": false,
+        "choices": [
+          "IN",
+          "OUT"
+        ],
+        "compile_path": "taskDefinitionJson[].taskParams.localParams[].direct"
+      },
+      {
+        "path": "task_params.localParams[].type",
+        "type": "enum",
+        "required": false,
+        "choices": [
+          "VARCHAR",
+          "INTEGER",
+          "LONG",
+          "FLOAT",
+          "DOUBLE",
+          "DATE",
+          "TIME",
+          "TIMESTAMP",
+          "BOOLEAN",
+          "LIST",
+          "FILE"
+        ],
+        "compile_path": "taskDefinitionJson[].taskParams.localParams[].type"
+      },
+      {
+        "path": "task_params.localParams[].value",
+        "type": "string",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].taskParams.localParams[].value"
+      },
+      {
+        "path": "task_params.varPool[]",
+        "type": "object",
+        "required": false,
+        "default": [],
+        "compile_path": "taskDefinitionJson[].taskParams.varPool"
+      },
+      {
+        "path": "task_params.resourceList[]",
+        "type": "object",
+        "required": false,
+        "default": [],
+        "compile_path": "taskDefinitionJson[].taskParams.resourceList"
+      },
+      {
+        "path": "task_params.resourceList[].resourceName",
+        "type": "string",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].taskParams.resourceList[].resourceName"
+      }
+    ],
+    "json_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "const": "SHELL",
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        },
+        "command": {
+          "type": "string"
+        },
+        "flag": {
+          "type": "string",
+          "enum": [
+            "YES",
+            "NO"
+          ],
+          "default": "YES"
+        },
+        "worker_group": {
+          "type": "string",
+          "default": "default"
+        },
+        "environment_code": {
+          "type": "integer"
+        },
+        "task_group_id": {
+          "type": "integer"
+        },
+        "task_group_priority": {
+          "type": "integer",
+          "default": 0
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "HIGHEST",
+            "HIGH",
+            "MEDIUM",
+            "LOW",
+            "LOWEST"
+          ],
+          "default": "MEDIUM"
+        },
+        "retry": {
+          "type": "object",
+          "properties": {
+            "times": {
+              "type": "integer",
+              "default": 0
+            },
+            "interval": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        },
+        "timeout": {
+          "type": "integer",
+          "default": 0
+        },
+        "timeout_notify_strategy": {
+          "type": "string",
+          "enum": [
+            "WARN",
+            "FAILED",
+            "WARNFAILED"
+          ]
+        },
+        "delay": {
+          "type": "integer",
+          "default": 0
+        },
+        "cpu_quota": {
+          "type": "integer"
+        },
+        "memory_max": {
+          "type": "integer"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "task_params": {
+          "$ref": "#/$defs/task_params"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "$defs": {
+        "task_params": {
+          "$defs": {
+            "DataType": {
+              "enum": [
+                "VARCHAR",
+                "INTEGER",
+                "LONG",
+                "FLOAT",
+                "DOUBLE",
+                "DATE",
+                "TIME",
+                "TIMESTAMP",
+                "BOOLEAN",
+                "LIST",
+                "FILE"
+              ],
+              "type": "string"
+            },
+            "Direct": {
+              "enum": [
+                "IN",
+                "OUT"
+              ],
+              "type": "string"
+            },
+            "GlobalParamSpec": {
+              "additionalProperties": false,
+              "properties": {
+                "prop": {
+                  "type": "string"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "direct": {
+                  "$ref": "#/$defs/task_params/$defs/Direct",
+                  "default": "IN"
+                },
+                "type": {
+                  "$ref": "#/$defs/task_params/$defs/DataType",
+                  "default": "VARCHAR"
+                }
+              },
+              "required": [
+                "prop"
+              ],
+              "type": "object"
+            },
+            "YamlObject": {
+              "additionalProperties": {
+                "$ref": "#/$defs/task_params/$defs/YamlValue"
+              },
+              "type": "object"
+            },
+            "YamlValue": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "items": {
+                    "$ref": "#/$defs/task_params/$defs/YamlValue"
+                  },
+                  "type": "array"
+                },
+                {
+                  "additionalProperties": {
+                    "$ref": "#/$defs/task_params/$defs/YamlValue"
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": true,
+          "properties": {
+            "rawScript": {
+              "type": "string"
+            },
+            "localParams": {
+              "items": {
+                "$ref": "#/$defs/task_params/$defs/GlobalParamSpec"
+              },
+              "type": "array"
+            },
+            "resourceList": {
+              "items": {
+                "$ref": "#/$defs/task_params/$defs/YamlObject"
+              },
+              "type": "array"
+            },
+            "varPool": {
+              "items": {
+                "$ref": "#/$defs/task_params/$defs/GlobalParamSpec"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "rawScript"
+          ],
+          "type": "object"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "command"
+          ],
+          "not": {
+            "required": [
+              "task_params"
+            ]
+          }
+        },
+        {
+          "required": [
+            "task_params"
+          ],
+          "not": {
+            "required": [
+              "command"
+            ]
+          }
+        }
+      ]
+    },
+    "input_semantics": {
+      "parsed_task": {
+        "name": "shell",
+        "type": "SHELL",
+        "command": "echo published-shell"
+      },
+      "wire_task": {
+        "code": 7001,
+        "version": 1,
+        "name": "shell",
+        "description": "",
+        "taskType": "SHELL",
+        "taskParams": {
+          "rawScript": "echo published-shell",
+          "localParams": [],
+          "resourceList": []
+        },
+        "flag": "YES",
+        "taskPriority": "MEDIUM",
+        "workerGroup": "default",
+        "environmentCode": -1,
+        "taskGroupId": 0,
+        "taskGroupPriority": 0,
+        "failRetryTimes": 0,
+        "failRetryInterval": 0,
+        "timeoutFlag": "CLOSE",
+        "timeoutNotifyStrategy": null,
+        "timeout": 0,
+        "delayTime": 0,
+        "resourceIds": "",
+        "cpuQuota": -1,
+        "memoryMax": -1,
+        "taskExecuteType": "BATCH"
+      }
+    },
+    "template_semantics": {
+      "parsed_task": {
+        "name": "shell-task",
+        "type": "SHELL",
+        "description": "Example shell task",
+        "command": "echo \"hello from DolphinScheduler\"\n",
+        "worker_group": "default",
+        "priority": "MEDIUM",
+        "retry": {
+          "times": 0,
+          "interval": 0
+        },
+        "timeout": 0,
+        "delay": 0,
+        "depends_on": []
+      },
+      "wire_task": {
+        "code": 7001,
+        "version": 1,
+        "name": "shell-task",
+        "description": "Example shell task",
+        "taskType": "SHELL",
+        "taskParams": {
+          "rawScript": "echo \"hello from DolphinScheduler\"\n",
+          "localParams": [],
+          "resourceList": []
+        },
+        "flag": "YES",
+        "taskPriority": "MEDIUM",
+        "workerGroup": "default",
+        "environmentCode": -1,
+        "taskGroupId": 0,
+        "taskGroupPriority": 0,
+        "failRetryTimes": 0,
+        "failRetryInterval": 0,
+        "timeoutFlag": "CLOSE",
+        "timeoutNotifyStrategy": null,
+        "timeout": 0,
+        "delayTime": 0,
+        "resourceIds": "",
+        "cpuQuota": -1,
+        "memoryMax": -1,
+        "taskExecuteType": "BATCH"
+      }
+    },
+    "valid_lint": {
+      "kind": "workflow",
+      "valid": true,
+      "summary": {
+        "name": "published-shell-corpus",
+        "project": "etl-prod",
+        "releaseState": "OFFLINE",
+        "executionType": "PARALLEL",
+        "taskCount": 1,
+        "edgeCount": 0,
+        "taskTypeCounts": {
+          "SHELL": 1
+        },
+        "rootTasks": [
+          "shell"
+        ],
+        "leafTasks": [
+          "shell"
+        ],
+        "hasSchedule": false
+      },
+      "compilation": {
+        "taskDefinitionCount": 1,
+        "taskRelationCount": 1,
+        "globalParamCount": 0
+      }
+    },
+    "missing_command_lint_error": {
+      "error_type": "user_input_error",
+      "suggestion_present": true
+    },
+    "create_dry_run": {
+      "method": "POST",
+      "path": "/projects/7/workflow-definition",
+      "form": {
+        "name": "published-shell-corpus",
+        "description": null,
+        "globalParams": [],
+        "locations": [
+          {
+            "taskCode": 7001,
+            "x": 80,
+            "y": 80
+          }
+        ],
+        "timeout": 0,
+        "taskRelationJson": [
+          {
+            "name": "",
+            "preTaskCode": 0,
+            "preTaskVersion": 0,
+            "postTaskCode": 7001,
+            "postTaskVersion": 1,
+            "conditionType": 0,
+            "conditionParams": "{}"
+          }
+        ],
+        "taskDefinitionJson": [
+          {
+            "code": 7001,
+            "version": 1,
+            "name": "shell",
+            "description": "",
+            "taskType": "SHELL",
+            "taskParams": {
+              "rawScript": "echo published-shell",
+              "localParams": [],
+              "resourceList": []
+            },
+            "flag": "YES",
+            "taskPriority": "MEDIUM",
+            "workerGroup": "default",
+            "environmentCode": -1,
+            "taskGroupId": 0,
+            "taskGroupPriority": 0,
+            "failRetryTimes": 0,
+            "failRetryInterval": 0,
+            "timeoutFlag": "CLOSE",
+            "timeoutNotifyStrategy": null,
+            "timeout": 0,
+            "delayTime": 0,
+            "resourceIds": "",
+            "cpuQuota": -1,
+            "memoryMax": -1,
+            "taskExecuteType": "BATCH"
+          }
+        ],
+        "executionType": "PARALLEL"
+      }
+    },
+    "round_trip": {
+      "native_dag_input": {
+        "workflow_name": "published-shell-corpus",
+        "task_name": "shell",
+        "task_code": 410,
+        "task_params": {
+          "rawScript": "echo original",
+          "localParams": [],
+          "resourceList": [],
+          "legacyOpaque": {
+            "syntheticMarker": "retained"
+          }
+        },
+        "native_unmodeled_marker": "synthetic-only"
+      },
+      "rendered_yaml_document": {
+        "workflow": {
+          "name": "published-shell-corpus",
+          "project": "etl-prod",
+          "description": "Synthetic native workflow",
+          "timeout": 0,
+          "execution_type": "PARALLEL",
+          "release_state": "OFFLINE"
+        },
+        "tasks": [
+          {
+            "name": "shell",
+            "type": "SHELL",
+            "description": "Synthetic native SHELL task",
+            "task_params": {
+              "rawScript": "echo original",
+              "localParams": [],
+              "resourceList": [],
+              "legacyOpaque": {
+                "syntheticMarker": "retained"
+              }
+            },
+            "priority": "HIGH",
+            "retry": {
+              "times": 0,
+              "interval": 0
+            },
+            "timeout": 0,
+            "delay": 0
+          }
+        ]
+      },
+      "edited_yaml_document": {
+        "workflow": {
+          "name": "published-shell-corpus",
+          "project": "etl-prod",
+          "description": "Synthetic updated workflow",
+          "timeout": 0,
+          "execution_type": "PARALLEL",
+          "release_state": "OFFLINE"
+        },
+        "tasks": [
+          {
+            "name": "shell",
+            "type": "SHELL",
+            "description": "Synthetic native SHELL task",
+            "task_params": {
+              "rawScript": "echo original",
+              "localParams": [],
+              "resourceList": [],
+              "legacyOpaque": {
+                "syntheticMarker": "retained"
+              }
+            },
+            "priority": "HIGH",
+            "retry": {
+              "times": 0,
+              "interval": 0
+            },
+            "timeout": 0,
+            "delay": 0
+          }
+        ]
+      },
+      "reparsed_task_params": {
+        "rawScript": "echo original",
+        "localParams": [],
+        "resourceList": [],
+        "legacyOpaque": {
+          "syntheticMarker": "retained"
+        }
+      },
+      "update_dry_run": {
+        "method": "PUT",
+        "path": "/projects/7/workflow-definition/301",
+        "form": {
+          "name": "published-shell-corpus",
+          "description": "Synthetic updated workflow",
+          "globalParams": [],
+          "locations": [
+            {
+              "taskCode": 410,
+              "x": 80,
+              "y": 80
+            }
+          ],
+          "timeout": 0,
+          "taskRelationJson": [
+            {
+              "name": "",
+              "preTaskCode": 0,
+              "preTaskVersion": 0,
+              "postTaskCode": 410,
+              "postTaskVersion": 1,
+              "conditionType": 0,
+              "conditionParams": "{}"
+            }
+          ],
+          "taskDefinitionJson": [
+            {
+              "code": 410,
+              "version": 1,
+              "name": "shell",
+              "description": "Synthetic native SHELL task",
+              "taskType": "SHELL",
+              "taskParams": {
+                "rawScript": "echo original",
+                "localParams": [],
+                "resourceList": [],
+                "legacyOpaque": {
+                  "syntheticMarker": "retained"
+                }
+              },
+              "flag": "YES",
+              "taskPriority": "HIGH",
+              "workerGroup": "default",
+              "environmentCode": -1,
+              "taskGroupId": 0,
+              "taskGroupPriority": 0,
+              "failRetryTimes": 0,
+              "failRetryInterval": 0,
+              "timeoutFlag": "CLOSE",
+              "timeoutNotifyStrategy": null,
+              "timeout": 0,
+              "delayTime": 0,
+              "resourceIds": "",
+              "cpuQuota": -1,
+              "memoryMax": -1,
+              "taskExecuteType": "BATCH"
+            }
+          ],
+          "executionType": "PARALLEL",
+          "releaseState": "OFFLINE"
+        }
+      },
+      "no_change": false
+    },
+    "missing_command_create_error": {
+      "error_type": "user_input_error",
+      "details_keys": [
+        "file"
+      ],
+      "suggestion_present": true
+    }
+  }
+}

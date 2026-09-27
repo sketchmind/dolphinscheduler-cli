@@ -1,18 +1,13 @@
 # Reviewed error-translation governance allowlist.
 # Each line is kind|module|function.
+# Read-time MR/WATERDROP/PYTORCH resource identity lookups deliberately treat
+# unavailable or forbidden reverse/id and exact name-backed verification as
+# opaque state; no upstream error crosses this best-effort boundary.
+except|_task_resource_refs|_merge_read_file_candidates
+except|_task_resource_refs|resolve_read_task_resource_refs
 # Audit list is a direct query surface with no resource-specific DS business code
 # beyond the controller fallback wrapper.
 page_hook|audit|_list_audit_logs_result
-# Project list returns visible projects and currently has no service-specific
-# translation helper for list-time upstream failures.
-page_hook|project|_list_projects_result
-# Task-instance list already resolves the owning workflow instance up front.
-# Remaining page-hook failures are generic DS paging/controller errors rather
-# than stable task-instance domain semantics.
-page_hook|task_instance|_list_task_instances_result
-# Workflow list paging is wrapped by DS status 10122, which is a generic
-# controller fallback without a stable not-found, permission, or input subtype.
-page_hook|workflow|_list_workflows_result
 # These alert-group codes are generic create/list/update/delete upstream
 # failures, not stable domain errors such as conflict or invalid state.
 raw_matrix|alert_group|_translate_alert_group_api_error|CREATE_ALERT_GROUP_ERROR,LIST_PAGING_ALERT_GROUP_ERROR,UPDATE_ALERT_GROUP_ERROR,DELETE_ALERT_GROUP_ERROR

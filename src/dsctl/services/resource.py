@@ -12,20 +12,21 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import ResourceItemData, serialize_resource_item
+from dsctl.services._page_result import paged_command_result
+from dsctl.services._resource_errors import resource_storage_unavailable_error
 from dsctl.services._validation import (
     require_delete_force,
     require_non_empty_text,
     require_non_negative_int,
     require_positive_int,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.resources import RESOURCE_DOMAIN, ResourceDomain
+from dsctl.upstream.serialization import ResourceItemData, serialize_resource_item
 
 if TYPE_CHECKING:
     from dsctl.upstream.protocol import ResourceOperations
@@ -47,7 +48,7 @@ PARENT_RESOURCE_NOT_EXIST = 20015
 RESOURCE_NOT_EXIST_OR_NO_PERMISSION = 20016
 USER_NO_OPERATION_PERM = 30001
 
-ResourcePageData: TypeAlias = PageData[ResourceItemData]
+ResourceServiceRuntime: TypeAlias = BoundDomainServiceRuntime[ResourceDomain]
 
 
 class ResourceContentData(TypedDict):
@@ -96,8 +97,9 @@ def list_resources_result(
     require_positive_int(page_no, label="page_no")
     require_positive_int(page_size, label="page_size")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RESOURCE_DOMAIN,
         _list_resources_result,
         directory=normalized_directory,
         search=normalized_search,
@@ -119,8 +121,9 @@ def view_resource_result(
     require_non_negative_int(skip_line_num, label="skip_line_num")
     require_positive_int(limit, label="limit")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RESOURCE_DOMAIN,
         _view_resource_result,
         resource=normalized_resource,
         skip_line_num=skip_line_num,
@@ -143,8 +146,9 @@ def upload_resource_result(
         else _resource_leaf_name_or_error(file.name, label="resource name")
     )
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RESOURCE_DOMAIN,
         _upload_resource_result,
         file=file,
         directory=normalized_directory,
@@ -173,8 +177,9 @@ def create_resource_result(
         )
     file_name, suffix = _split_resource_name(normalized_name)
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RESOURCE_DOMAIN,
         _create_resource_result,
         name=normalized_name,
         file_name=file_name,
@@ -194,8 +199,9 @@ def mkdir_resource_result(
     normalized_directory = _optional_text(directory)
     normalized_name = _resource_leaf_name_or_error(name, label="directory name")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RESOURCE_DOMAIN,
         _mkdir_resource_result,
         name=normalized_name,
         directory=normalized_directory,
@@ -212,8 +218,9 @@ def download_resource_result(
     """Download one remote resource to one local file path."""
     normalized_resource = _resource_path(resource)
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RESOURCE_DOMAIN,
         _download_resource_result,
         resource=normalized_resource,
         output=output,
@@ -232,8 +239,9 @@ def delete_resource_result(
     normalized_resource = _resource_path(resource)
     require_delete_force(force=force, resource_label="Resource")
 
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RESOURCE_DOMAIN,
         _delete_resource_result,
         resource=normalized_resource,
         is_directory=is_directory,
@@ -241,7 +249,7 @@ def delete_resource_result(
 
 
 def _list_resources_result(
-    runtime: ServiceRuntime,
+    runtime: ResourceServiceRuntime,
     *,
     directory: str | None,
     search: str | None,
@@ -249,9 +257,9 @@ def _list_resources_result(
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.resources
-    resolved_directory = _effective_directory(adapter, directory)
-    data: ResourcePageData = requested_page_data(
+    adapter = runtime.domain.resources
+    resolved_directory = _effective_directory(adapter, directory, operation="list")
+    return paged_command_result(
         lambda current_page_no, current_page_size: adapter.list(
             directory=resolved_directory,
             page_no=current_page_no,
@@ -263,33 +271,23 @@ def _list_resources_result(
         all_pages=all_pages,
         serialize_item=serialize_resource_item,
         resource=RESOURCE_RESOURCE,
-        max_pages=MAX_AUTO_EXHAUST_PAGES,
+        resolved={"directory": resolved_directory, "search": search},
         translate_error=lambda error: _translate_resource_api_error(
             error,
             operation="list",
             directory=resolved_directory,
         ),
     )
-    return CommandResult(
-        data=require_json_object(data, label="resource list data"),
-        resolved={
-            "directory": resolved_directory,
-            "search": search,
-            "page_no": page_no,
-            "page_size": page_size,
-            "all": all_pages,
-        },
-    )
 
 
 def _view_resource_result(
-    runtime: ServiceRuntime,
+    runtime: ResourceServiceRuntime,
     *,
     resource: str,
     skip_line_num: int,
     limit: int,
 ) -> CommandResult:
-    adapter = runtime.upstream.resources
+    adapter = runtime.domain.resources
     try:
         payload = adapter.view(
             full_name=resource,
@@ -317,15 +315,15 @@ def _view_resource_result(
 
 
 def _upload_resource_result(
-    runtime: ServiceRuntime,
+    runtime: ResourceServiceRuntime,
     *,
     file: Path,
     directory: str | None,
     name: str,
 ) -> CommandResult:
-    adapter = runtime.upstream.resources
+    adapter = runtime.domain.resources
     upload_size = 0
-    resolved_directory = _effective_directory(adapter, directory)
+    resolved_directory = _effective_directory(adapter, directory, operation="upload")
     try:
         upload_size = file.stat().st_size
         with file.open("rb") as upload_file:
@@ -370,7 +368,7 @@ def _upload_resource_result(
 
 
 def _create_resource_result(
-    runtime: ServiceRuntime,
+    runtime: ResourceServiceRuntime,
     *,
     name: str,
     file_name: str,
@@ -378,8 +376,8 @@ def _create_resource_result(
     content: str,
     directory: str | None,
 ) -> CommandResult:
-    adapter = runtime.upstream.resources
-    resolved_directory = _effective_directory(adapter, directory)
+    adapter = runtime.domain.resources
+    resolved_directory = _effective_directory(adapter, directory, operation="create")
     try:
         adapter.create_from_content(
             current_dir=resolved_directory,
@@ -412,13 +410,13 @@ def _create_resource_result(
 
 
 def _mkdir_resource_result(
-    runtime: ServiceRuntime,
+    runtime: ResourceServiceRuntime,
     *,
     name: str,
     directory: str | None,
 ) -> CommandResult:
-    adapter = runtime.upstream.resources
-    resolved_directory = _effective_directory(adapter, directory)
+    adapter = runtime.domain.resources
+    resolved_directory = _effective_directory(adapter, directory, operation="mkdir")
     try:
         adapter.create_directory(
             current_dir=resolved_directory,
@@ -448,13 +446,13 @@ def _mkdir_resource_result(
 
 
 def _download_resource_result(
-    runtime: ServiceRuntime,
+    runtime: ResourceServiceRuntime,
     *,
     resource: str,
     output: Path | None,
     overwrite: bool,
 ) -> CommandResult:
-    adapter = runtime.upstream.resources
+    adapter = runtime.domain.resources
     try:
         payload = adapter.download(full_name=resource)
     except ApiResultError as error:
@@ -501,12 +499,12 @@ def _download_resource_result(
 
 
 def _delete_resource_result(
-    runtime: ServiceRuntime,
+    runtime: ResourceServiceRuntime,
     *,
     resource: str,
     is_directory: bool | None,
 ) -> CommandResult:
-    adapter = runtime.upstream.resources
+    adapter = runtime.domain.resources
     try:
         deleted = adapter.delete(full_name=resource)
     except ApiResultError as error:
@@ -529,9 +527,14 @@ def _delete_resource_result(
     )
 
 
-def _effective_directory(adapter: ResourceOperations, directory: str | None) -> str:
+def _effective_directory(
+    adapter: ResourceOperations, directory: str | None, *, operation: str
+) -> str:
     if directory is None:
-        return _resource_path(adapter.base_dir())
+        try:
+            return _resource_path(adapter.base_dir())
+        except ApiResultError as error:
+            raise _translate_resource_api_error(error, operation=operation) from error
     return _resource_path(directory)
 
 
@@ -687,6 +690,9 @@ def _translate_resource_api_error(
     if name is not None:
         details["name"] = name
 
+    storage_error = resource_storage_unavailable_error(error, details=details)
+    if storage_error is not None:
+        return storage_error
     if error.result_code in {RESOURCE_EXIST, RESOURCE_FILE_EXIST}:
         target_name = name or full_name or "resource"
         message = f"Resource {target_name!r} already exists"

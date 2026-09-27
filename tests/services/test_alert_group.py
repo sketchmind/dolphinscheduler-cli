@@ -1,13 +1,12 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeAlertGroup,
     FakeAlertGroupAdapter,
-    FakeProjectAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
 from dsctl.errors import (
     ApiResultError,
@@ -16,33 +15,30 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.services import alert_group as alert_group_service
-from dsctl.services import runtime as runtime_service
+from dsctl.upstream.alert_groups import (
+    ALERT_GROUP_DOMAIN,
+    AlertGroupDomain,
+)
 
 
 def _install_alert_group_service_fakes(
     monkeypatch: pytest.MonkeyPatch,
     adapter: FakeAlertGroupAdapter,
+    *,
+    ds_version: str = "3.4.1",
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            alert_group_adapter=adapter,
-            profile=make_profile(),
-        ),
+    adapter.association = (
+        "legacy-alert-type" if ds_version == "1.3.9" else "plugin-instance-ids"
     )
+    domain = AlertGroupDomain(alert_groups=adapter)
 
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        alert_group_service,
+        expected_domain=ALERT_GROUP_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=lambda: make_profile(ds_version=ds_version),
+    )
 
 
 def _alert_groups() -> list[FakeAlertGroup]:
@@ -92,6 +88,7 @@ def test_list_alert_groups_result_returns_first_page_by_default(
             "id": 21,
             "groupName": "ops",
             "alertInstanceIds": "7,8",
+            "groupType": None,
             "description": "ops alerts",
             "createTime": None,
             "updateTime": None,
@@ -120,6 +117,7 @@ def test_get_alert_group_result_resolves_name_then_fetches_payload(
         "id": 21,
         "groupName": "ops",
         "alertInstanceIds": "7,8",
+        "groupType": None,
         "description": "ops alerts",
         "createTime": None,
         "updateTime": None,
@@ -151,11 +149,64 @@ def test_create_alert_group_result_returns_created_payload(
         "id": 1,
         "groupName": "platform",
         "alertInstanceIds": "7,8",
+        "groupType": None,
         "description": "platform alerts",
         "createTime": None,
         "updateTime": None,
         "createUserId": 1,
     }
+
+
+def test_139_create_alert_group_projects_group_type_instead_of_instance_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeAlertGroupAdapter(alert_groups=[])
+    _install_alert_group_service_fakes(
+        monkeypatch,
+        adapter,
+        ds_version="1.3.9",
+    )
+
+    result = alert_group_service.create_alert_group_result(
+        name="platform",
+        group_type="SMS",
+        description="platform alerts",
+    )
+
+    assert _mapping(result.data)["groupType"] == "SMS"
+    assert _mapping(result.data)["alertInstanceIds"] is None
+
+
+@pytest.mark.parametrize(
+    ("ds_version", "group_type", "instance_ids", "message"),
+    [
+        ("1.3.9", None, None, "requires --group-type"),
+        ("1.3.9", "EMAIL", [7], "does not support --instance-id"),
+        ("3.4.1", "EMAIL", None, "does not support --group-type"),
+    ],
+)
+def test_create_alert_group_rejects_nonrepresentable_version_association(
+    monkeypatch: pytest.MonkeyPatch,
+    ds_version: str,
+    group_type: str | None,
+    instance_ids: list[int] | None,
+    message: str,
+) -> None:
+    adapter = FakeAlertGroupAdapter(alert_groups=[])
+    _install_alert_group_service_fakes(
+        monkeypatch,
+        adapter,
+        ds_version=ds_version,
+    )
+
+    with pytest.raises(UserInputError, match=message):
+        alert_group_service.create_alert_group_result(
+            name="platform",
+            group_type=group_type,
+            instance_ids=instance_ids,
+        )
+
+    assert adapter.alert_groups == []
 
 
 def test_create_alert_group_result_maps_duplicate_name_to_conflict(
@@ -164,34 +215,48 @@ def test_create_alert_group_result_maps_duplicate_name_to_conflict(
     adapter = FakeAlertGroupAdapter(alert_groups=_alert_groups())
     _install_alert_group_service_fakes(monkeypatch, adapter)
 
-    with pytest.raises(ConflictError):
+    with pytest.raises(ConflictError) as exc_info:
         alert_group_service.create_alert_group_result(name="ops")
 
+    assert exc_info.value.to_payload()["source"] == {
+        "kind": "remote",
+        "system": "dolphinscheduler",
+        "layer": "result",
+        "result_code": 10012,
+        "result_message": "alarm group already exists",
+    }
 
+
+@pytest.mark.parametrize("result_code", [10027, 998877])
 def test_create_alert_group_result_preserves_generic_upstream_failure(
     monkeypatch: pytest.MonkeyPatch,
+    result_code: int,
 ) -> None:
     adapter = FakeAlertGroupAdapter(alert_groups=[])
     _install_alert_group_service_fakes(monkeypatch, adapter)
+
+    upstream_error = ApiResultError(
+        result_code=result_code,
+        result_message="create alert group error",
+    )
 
     def broken_create(
         *,
         group_name: str,
         description: str | None,
-        alert_instance_ids: str,
+        alert_instance_ids: str | None,
+        group_type: str | None,
     ) -> FakeAlertGroup:
-        del group_name, description, alert_instance_ids
-        raise ApiResultError(
-            result_code=10027,
-            result_message="create alert group error",
-        )
+        del group_name, description, alert_instance_ids, group_type
+        raise upstream_error
 
     monkeypatch.setattr(adapter, "create", broken_create)
 
     with pytest.raises(ApiResultError, match="create alert group error") as exc_info:
         alert_group_service.create_alert_group_result(name="ops")
 
-    assert exc_info.value.result_code == 10027
+    assert exc_info.value is upstream_error
+    assert exc_info.value.to_payload()["source"] == upstream_error.source
 
 
 def test_update_alert_group_result_preserves_name_and_clears_description(
@@ -218,11 +283,41 @@ def test_update_alert_group_result_preserves_name_and_clears_description(
         "id": 21,
         "groupName": "ops",
         "alertInstanceIds": "8,9",
+        "groupType": None,
         "description": None,
         "createTime": None,
         "updateTime": None,
         "createUserId": 1,
     }
+
+
+def test_139_update_alert_group_preserves_or_changes_group_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeAlertGroupAdapter(
+        alert_groups=[
+            FakeAlertGroup(
+                id=21,
+                group_name_value="ops",
+                group_type_value="EMAIL",
+                description="ops alerts",
+            )
+        ]
+    )
+    _install_alert_group_service_fakes(
+        monkeypatch,
+        adapter,
+        ds_version="1.3.9",
+    )
+
+    renamed = alert_group_service.update_alert_group_result("ops", name="platform")
+    assert _mapping(renamed.data)["groupType"] == "EMAIL"
+
+    changed = alert_group_service.update_alert_group_result(
+        "platform",
+        group_type="SMS",
+    )
+    assert _mapping(changed.data)["groupType"] == "SMS"
 
 
 def test_update_alert_group_result_rejects_no_effective_change(
@@ -235,8 +330,9 @@ def test_update_alert_group_result_rejects_no_effective_change(
         alert_group_service.update_alert_group_result("ops", name="ops")
 
     assert exc_info.value.suggestion == (
-        "Pass a different --name, --description, or --instance-id value, or use "
-        "--clear-description/--clear-instance-ids to remove stored values."
+        "Pass a different --name, --description, --instance-id, or --group-type "
+        "value, or use --clear-description/--clear-instance-ids to remove "
+        "stored values."
     )
 
 
@@ -294,6 +390,7 @@ def test_delete_alert_group_result_rejects_default_group_deletion(
         "Choose a non-default alert group; DolphinScheduler does not allow "
         "deleting the default group."
     )
+    assert _mapping(exc_info.value.to_payload()["source"])["result_code"] == 130030
 
 
 def test_update_alert_group_result_maps_description_too_long_to_suggestion(
@@ -307,9 +404,10 @@ def test_update_alert_group_result_maps_description_too_long_to_suggestion(
         alert_group_id: int,
         group_name: str,
         description: str | None,
-        alert_instance_ids: str,
+        alert_instance_ids: str | None,
+        group_type: str | None,
     ) -> FakeAlertGroup:
-        del alert_group_id, group_name, description, alert_instance_ids
+        del alert_group_id, group_name, description, alert_instance_ids, group_type
         raise ApiResultError(
             result_code=1400004,
             result_message="description too long",
@@ -329,3 +427,4 @@ def test_update_alert_group_result_maps_description_too_long_to_suggestion(
     assert exc_info.value.suggestion == (
         "Shorten --description and retry the same alert-group command."
     )
+    assert _mapping(exc_info.value.to_payload()["source"])["result_code"] == 1400004

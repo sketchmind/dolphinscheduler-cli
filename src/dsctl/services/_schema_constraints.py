@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.schedules import schedule_contract_features
+from dsctl.upstream.worker_groups import worker_group_same_name_update_limitation
+from dsctl.upstream.workflows import workflow_execution_schedule_time_shape
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -50,34 +55,23 @@ def _forbids(if_present: str, *fields: str) -> Constraint:
     }
 
 
-_WORKFLOW_TARGET_ACTIONS = (
-    "workflow.get",
-    "workflow.export",
-    "workflow.describe",
-    "workflow.digest",
-    "workflow.edit",
-    "workflow.online",
-    "workflow.offline",
-    "workflow.run",
-    "workflow.run-task",
-    "workflow.backfill",
-    "workflow.delete",
-    "workflow.lineage.get",
-    "workflow.lineage.dependent-tasks",
-)
-_WORKFLOW_EXPLICIT_PROJECT_CONSTRAINT = (_requires("--project", "WORKFLOW"),)
-
 _SCHEDULE_MUTATION_FIELDS = (
     "--cron",
     "--start",
     "--end",
     "--timezone",
+    "--missed-fire-policy",
     "--failure-strategy",
     "--warning-type",
     "--warning-group-id",
     "--priority",
     "--worker-group",
     "--environment-code",
+)
+_VERSIONED_CONSTRAINT_ACTIONS = (
+    "schedule.preview",
+    "schedule.explain",
+    "schedule.update",
 )
 _FORCE_REQUIRED_ACTIONS = (
     "environment.delete",
@@ -100,12 +94,9 @@ _FORCE_REQUIRED_ACTIONS = (
 )
 
 ACTION_CONSTRAINTS: dict[str, tuple[Constraint, ...]] = {
-    **dict.fromkeys(_WORKFLOW_TARGET_ACTIONS, _WORKFLOW_EXPLICIT_PROJECT_CONSTRAINT),
-    "use.clear": (_fields("requires_all", "--clear"),),
-    "use.project": (_fields("exactly_one_of", "NAME", "--clear"),),
-    "use.workflow": (
-        _fields("exactly_one_of", "NAME", "--clear"),
-        _forbids("--clear", "--project"),
+    "context.update": (
+        _fields("at_most_one_of", "--project", "--clear-project"),
+        _fields("requires_any", "--file", "--project", "--clear-project"),
     ),
     "schema": (
         _fields(
@@ -117,7 +108,9 @@ ACTION_CONSTRAINTS: dict[str, tuple[Constraint, ...]] = {
         ),
         _forbids("--full", "--list-groups", "--list-commands"),
     ),
-    "capabilities": (_fields("at_most_one_of", "--summary", "--section", "--full"),),
+    "capabilities": (
+        _fields("at_most_one_of", "--summary", "--section", "--full", "--action"),
+    ),
     "task-type.schema": (
         _fields(
             "at_most_one_of",
@@ -171,6 +164,7 @@ ACTION_CONSTRAINTS: dict[str, tuple[Constraint, ...]] = {
     ),
     "task-group.list": (_forbids("--project", "--search", "--status"),),
     "task-group.update": (
+        _fields("at_most_one_of", "--description", "--clear-description"),
         _fields(
             "requires_any",
             "--name",
@@ -205,19 +199,21 @@ ACTION_CONSTRAINTS: dict[str, tuple[Constraint, ...]] = {
         _fields("at_most_one_of", "--description", "--clear-description"),
         _fields(
             "requires_any",
-            "--tenant-code",
             "--queue",
             "--description",
             "--clear-description",
         ),
     ),
+    "user.create": (_fields("exactly_one_of", "--password", "--password-file"),),
     "user.update": (
+        _fields("at_most_one_of", "--password", "--password-file"),
         _fields("at_most_one_of", "--phone", "--clear-phone"),
         _fields("at_most_one_of", "--queue", "--clear-queue"),
         _fields(
             "requires_any",
             "--user-name",
             "--password",
+            "--password-file",
             "--email",
             "--tenant",
             "--state",
@@ -246,13 +242,8 @@ ACTION_CONSTRAINTS: dict[str, tuple[Constraint, ...]] = {
         _fields("requires_any", "--name", "--value", "--data-type"),
     ),
     "project-worker-group.set": (_fields("requires_all", "--worker-group"),),
-    "workflow.edit": (
-        *_WORKFLOW_EXPLICIT_PROJECT_CONSTRAINT,
-        _fields("exactly_one_of", "--patch", "--file"),
-        _requires("--file", "WORKFLOW"),
-    ),
+    "workflow.edit": (_fields("exactly_one_of", "--patch", "--file"),),
     "workflow.backfill": (
-        *_WORKFLOW_EXPLICIT_PROJECT_CONSTRAINT,
         _alternatives(
             "at_least_one_of",
             ("--date",),
@@ -262,39 +253,26 @@ ACTION_CONSTRAINTS: dict[str, tuple[Constraint, ...]] = {
         _forbids("--date", "--start", "--end"),
     ),
     "workflow-instance.list": (
-        _requires("--search", "--project"),
-        _requires("--executor", "--project"),
+        _forbids(
+            "--trigger-code",
+            "--workflow",
+            "--search",
+            "--executor",
+            "--host",
+            "--start",
+            "--end",
+            "--state",
+            "--all",
+        ),
+        {
+            "kind": "requires_default",
+            "if_present": "--trigger-code",
+            "defaults": {"--page-no": 1, "--page-size": DEFAULT_PAGE_SIZE},
+        },
     ),
     "workflow-instance.edit": (_fields("exactly_one_of", "--patch", "--file"),),
+    "task-instance.log": (_forbids("--tail", "--start-line", "--limit"),),
     "schedule.list": (_fields("at_most_one_of", "--workflow", "--search"),),
-    "schedule.preview": (
-        _alternatives(
-            "exactly_one_of",
-            ("SCHEDULE_ID",),
-            ("--cron", "--start", "--end", "--timezone"),
-        ),
-        _forbids(
-            "SCHEDULE_ID",
-            "--project",
-            "--cron",
-            "--start",
-            "--end",
-            "--timezone",
-        ),
-    ),
-    "schedule.explain": (
-        _forbids("SCHEDULE_ID", "--workflow", "--project", "--tenant-code"),
-        _requires_when_absent(
-            "SCHEDULE_ID",
-            "--cron",
-            "--start",
-            "--end",
-            "--timezone",
-        ),
-        _requires_any(*_SCHEDULE_MUTATION_FIELDS, if_present="SCHEDULE_ID"),
-        _requires("--project", "--workflow"),
-    ),
-    "schedule.update": (_fields("requires_any", *_SCHEDULE_MUTATION_FIELDS),),
     "template.task": (_requires("--raw", "TASK_TYPE"),),
 }
 
@@ -305,14 +283,89 @@ for _force_action in _FORCE_REQUIRED_ACTIONS:
     )
 
 
-def constraints_for_action(action: str) -> list[Constraint]:
-    """Return stable cross-field constraints mirrored from runtime validation."""
+def constraints_for_action(action: str, *, ds_version: str) -> list[Constraint]:
+    """Return selected-version constraints mirrored from runtime validation."""
+    if action == "worker-group.update":
+        constraints = [dict(item) for item in ACTION_CONSTRAINTS[action]]
+        limitation = worker_group_same_name_update_limitation(ds_version)
+        if limitation is not None:
+            constraints.append(
+                {
+                    "kind": "requires_changed_value",
+                    "fields": ["--name"],
+                    "relative_to": "resolved_worker_group.name",
+                    "reason": limitation,
+                }
+            )
+        return constraints
+    if (
+        action == "workflow.backfill"
+        and workflow_execution_schedule_time_shape(ds_version) == "comma-range"
+    ):
+        return [_fields("requires_all", "--start", "--end")]
+    if action == "alert-group.update" and ds_version == "1.3.9":
+        return [
+            _fields("at_most_one_of", "--description", "--clear-description"),
+            _fields(
+                "requires_any",
+                "--name",
+                "--group-type",
+                "--description",
+                "--clear-description",
+            ),
+        ]
+    schedule_constraints = _schedule_constraints_for_version(
+        action,
+        ds_version=ds_version,
+    )
+    if schedule_constraints is not None:
+        return schedule_constraints
     return [dict(constraint) for constraint in ACTION_CONSTRAINTS.get(action, ())]
+
+
+def _schedule_constraints_for_version(
+    action: str,
+    *,
+    ds_version: str,
+) -> list[Constraint] | None:
+    if action not in {"schedule.preview", "schedule.explain", "schedule.update"}:
+        return None
+    features = schedule_contract_features(ds_version)
+    timing_fields = ["--cron", "--start", "--end"]
+    mutation_fields = [
+        field
+        for field in _SCHEDULE_MUTATION_FIELDS
+        if (field != "--timezone" or features.timezone)
+        and (field != "--environment-code" or features.environment)
+        and (field != "--missed-fire-policy" or features.missed_fire_policy)
+    ]
+    if features.timezone:
+        timing_fields.append("--timezone")
+
+    if action == "schedule.preview":
+        return [
+            _alternatives(
+                "exactly_one_of",
+                ("SCHEDULE_ID",),
+                tuple(timing_fields),
+            ),
+            _forbids("SCHEDULE_ID", *timing_fields),
+        ]
+    if action == "schedule.explain":
+        create_only = ["--workflow"]
+        if features.tenant:
+            create_only.append("--tenant-code")
+        return [
+            _forbids("SCHEDULE_ID", *create_only),
+            _requires_when_absent("SCHEDULE_ID", "--workflow", *timing_fields),
+            _requires_any(*mutation_fields, if_present="SCHEDULE_ID"),
+        ]
+    return [_fields("requires_any", *mutation_fields)]
 
 
 def constrained_actions() -> tuple[str, ...]:
     """Return actions with explicit cross-field runtime constraints."""
-    return tuple(ACTION_CONSTRAINTS)
+    return (*ACTION_CONSTRAINTS, *_VERSIONED_CONSTRAINT_ACTIONS)
 
 
 __all__ = ["constrained_actions", "constraints_for_action"]

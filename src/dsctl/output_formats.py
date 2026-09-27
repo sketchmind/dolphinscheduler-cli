@@ -6,7 +6,10 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, TypeAlias, TypeGuard, cast
 
+from rich.cells import cell_len
+
 from dsctl.command_contract import COMMAND_CATALOG, CommandBindingError
+from dsctl.compact_json import render_compact_table
 from dsctl.data_shapes import (
     DataShape,
     data_shape_for_action,
@@ -18,10 +21,10 @@ from dsctl.schema_contract_rows import command_contract_rows
 if TYPE_CHECKING:
     from dsctl.support.json_types import JsonObject, JsonValue
 
-OutputFormat: TypeAlias = Literal["json", "table", "tsv"]
+OutputFormat: TypeAlias = Literal["json", "json-compact", "table", "tsv"]
 OUTPUT_FORMAT_CHOICES = cast(
     "tuple[OutputFormat, ...]",
-    COMMAND_CATALOG.global_option("output-format").input.choices,
+    COMMAND_CATALOG.global_option("format").input.choices,
 )
 
 
@@ -31,7 +34,6 @@ class RenderOptions:
 
     output_format: OutputFormat = "json"
     columns: tuple[str, ...] = ()
-    compact: bool = False
 
 
 @dataclass(frozen=True)
@@ -62,23 +64,41 @@ def validate_render_options(options: RenderOptions) -> RenderOptions:
     try:
         COMMAND_CATALOG.validate_global_values(
             {
-                "output-format": options.output_format,
-                "compact": options.compact,
+                "format": options.output_format,
             }
         )
     except CommandBindingError as exc:
-        message = "--compact can only be used with --output-format json"
+        message = f"Unsupported output format: {options.output_format}"
         raise UserInputError(
             message,
             details={
-                "compact": True,
                 "output_format": options.output_format,
             },
-            suggestion="Remove --compact or use --output-format json.",
+            suggestion="Use --format json, json-compact, table or tsv.",
         ) from exc
     if options.columns and "*" in options.columns:
         _validate_wildcard_columns(options.columns)
     return options
+
+
+def validate_action_render_options(action: str, options: RenderOptions) -> None:
+    """Validate fixed list projection rules before making a service request."""
+    shape = data_shape_for_action(action)
+    if (
+        options.output_format == "json-compact"
+        and shape is not None
+        and shape.compact_rows
+        and any("." in column for column in options.columns)
+    ):
+        message = "Compact list columns must be top-level field names."
+        raise UserInputError(
+            message,
+            details={"action": action, "columns": list(options.columns)},
+            suggestion=(
+                "Select the parent field (for example --columns id,taskParams), "
+                "or use --format json for dotted field paths."
+            ),
+        )
 
 
 def render_command(
@@ -96,7 +116,7 @@ def render_command(
         )
 
     diagnostics = ""
-    if options.output_format != "json":
+    if options.output_format not in {"json", "json-compact"}:
         diagnostics = _render_success_diagnostics(payload, include_page=True)
     return RenderedCommand(
         stdout=_with_final_newline(body),
@@ -120,23 +140,70 @@ def render_payload(
     options: RenderOptions,
 ) -> str:
     """Render one standard output envelope using the requested format."""
+    payload = _dry_run_view(payload, options=options)
     if payload.get("ok"):
         _validate_data_shape_render_options(
             payload,
             action=action,
             options=options,
         )
-    if options.output_format == "json":
+    if options.output_format in {"json", "json-compact"}:
+        if payload.get("ok"):
+            validate_action_render_options(action, options)
         if options.columns and payload.get("ok"):
             payload = _project_json_payload(
                 payload,
                 action=action,
                 columns=options.columns,
             )
-        return _render_json(payload, compact=options.compact)
+        shape = data_shape_for_action(action, view=_result_view(payload, action=action))
+        if (
+            payload.get("ok")
+            and options.output_format == "json-compact"
+            and shape is not None
+            and shape.compact_rows
+            and shape.row_path is not None
+        ):
+            return render_compact_table(
+                payload, row_path=shape.row_path, columns=options.columns, action=action
+            )
+        return _render_json(payload, compact=options.output_format == "json-compact")
     if not payload.get("ok"):
         return _render_error_payload(payload, output_format=options.output_format)
     return _render_success_payload(payload, action=action, options=options)
+
+
+def _dry_run_view(payload: JsonObject, *, options: RenderOptions) -> JsonObject:
+    """Show prepared effects first; expand wire details through existing columns."""
+    data = payload.get("data")
+    if not isinstance(data, dict) or data.get("dry_run") is not True:
+        return payload
+    requests = data.get("requests")
+    if not isinstance(requests, list):
+        return payload
+    projected = dict(payload)
+    preview = dict(data)
+    projected["data"] = preview
+    preview["execution_order"] = (
+        []
+        if data.get("no_change") is True
+        else [
+            {key: request[key] for key in ("method", "path") if key in request}
+            for request in requests
+            if isinstance(request, dict)
+        ]
+    )
+    preview["observation"] = (
+        "Prepared mutation stages only; lookup and verification reads are omitted. "
+        "Apply prepares again and may observe changed state. "
+        "No server state is reserved."
+    )
+    if not ({"requests", "*"} & set(options.columns)):
+        preview.pop("requests")
+        preview["request_details"] = (
+            "Repeat this dry-run with --columns requests (or '*')."
+        )
+    return projected
 
 
 def _render_json(payload: JsonValue, *, compact: bool) -> str:
@@ -159,8 +226,29 @@ def _render_success_diagnostics(
         page = _pagination_diagnostic(payload)
         if page is not None:
             lines.append(page)
+        coverage = _coverage_diagnostic(payload)
+        if coverage is not None:
+            lines.append(coverage)
     lines.extend(_warning_diagnostics(payload))
     return "\n".join(lines)
+
+
+def _coverage_diagnostic(payload: JsonObject) -> str | None:
+    data = payload.get("data")
+    coverage = data.get("coverage") if isinstance(data, dict) else None
+    if not isinstance(coverage, dict):
+        return None
+    parts = [
+        f"scope={_format_table_cell(coverage.get('scope'))}",
+        f"{_format_cell(coverage.get('rows_read'))} rows / "
+        f"{_format_cell(coverage.get('pages_read'))} pages",
+        "complete" if coverage.get("scope_complete") is True else "partial",
+    ]
+    if coverage.get("totals_changed"):
+        parts.append("totals changed during reading")
+    if coverage.get("atomic_snapshot") is False:
+        parts.append("non-atomic observation")
+    return "coverage: " + "; ".join(parts)
 
 
 def _pagination_diagnostic(payload: JsonObject) -> str | None:
@@ -187,18 +275,17 @@ def _warning_diagnostics(payload: JsonObject) -> list[str]:
     warnings = payload.get("warnings")
     if not _is_sequence_like(warnings):
         return []
-    details = payload.get("warning_details")
-    detail_items = details if _is_sequence_like(details) else ()
-
     lines: list[str] = []
-    for index, warning in enumerate(warnings):
-        if not isinstance(warning, str):
+    for warning in warnings:
+        if not isinstance(warning, Mapping):
             continue
-        detail = detail_items[index] if index < len(detail_items) else None
-        code = detail.get("code") if isinstance(detail, Mapping) else None
+        message = warning.get("message")
+        if not isinstance(message, str):
+            continue
+        code = warning.get("code")
         label = f"warning[{code}]" if isinstance(code, str) and code else "warning"
-        lines.append(f"{label}: {warning}")
-        suggestion = detail.get("suggestion") if isinstance(detail, Mapping) else None
+        lines.append(f"{label}: {message}")
+        suggestion = warning.get("suggestion")
         if isinstance(suggestion, str) and suggestion:
             lines.append(f"  suggestion: {suggestion}")
     return lines
@@ -224,6 +311,8 @@ def _render_success_payload(
     view = _result_view(payload, action=action)
     shape = data_shape_for_action(action, view=view)
     derived_rows = _derived_rows(data, action=action, view=view)
+    if derived_rows is None:
+        derived_rows = _document_line_rows(payload, shape=shape)
     rows = derived_rows
     if rows is None:
         rows = _extract_rows(data, shape=shape)
@@ -233,12 +322,25 @@ def _render_success_payload(
             requested=options.columns,
             defaults=(
                 ()
-                if shape is None or (derived_rows is not None and view != "command")
+                if shape is None
+                or (
+                    derived_rows is not None
+                    and view != "command"
+                    and shape.line_source_path is None
+                )
                 else shape.default_columns
             ),
             action=action,
             view=view,
         )
+        if (
+            options.output_format == "table"
+            and shape is not None
+            and shape.kind == "object"
+            and len(rows) == 1
+            and any(isinstance(rows[0].get(column), (dict, list)) for column in columns)
+        ):
+            return _render_object_sections(_project_row(rows[0], columns))
         return _render_rows(rows, columns=columns, output_format=options.output_format)
 
     if isinstance(data, Mapping):
@@ -257,6 +359,10 @@ def _render_success_payload(
                 columns=columns,
                 output_format=options.output_format,
             )
+        if data.get("dry_run") is True:
+            data = {"resolved": payload.get("resolved"), **data}
+        if options.output_format == "table":
+            return _render_object_sections(data)
         key_value_rows = _object_rows(data)
         return _render_rows(
             key_value_rows,
@@ -275,27 +381,68 @@ def _render_success_payload(
 
 
 def _render_error_payload(payload: JsonObject, *, output_format: OutputFormat) -> str:
-    rows: list[JsonObject] = [
-        {"field": "ok", "value": "false"},
-        {"field": "action", "value": _format_cell(payload.get("action"))},
-    ]
+    del output_format
+    lines: list[str] = []
     error = payload.get("error")
     if isinstance(error, Mapping):
-        rows.extend(
-            {"field": f"error.{key}", "value": _format_cell(error[key])}
-            for key in ("type", "message", "suggestion")
-            if key in error
+        lines.append(
+            f"Error [{_format_table_cell(error.get('type'))}]: "
+            f"{_format_table_cell(error.get('message'))}"
         )
+        if error.get("suggestion"):
+            lines.append(f"Hint: {_format_table_cell(error['suggestion'])}")
+        details = error.get("details")
+        if isinstance(details, Mapping) and details:
+            lines.append(_render_object_sections(details))
         source = error.get("source")
-        if isinstance(source, Mapping):
-            for key, value in source.items():
-                rows.append(
-                    {
-                        "field": f"error.source.{key}",
-                        "value": _format_cell(value),
-                    }
+        if isinstance(source, Mapping) and source:
+            lines.append(f"Source\n{_render_object_sections(source)}")
+    data = payload.get("data")
+    if isinstance(data, Mapping) and data:
+        lines.append(_render_object_sections(data))
+    render_error_details = error.get("details") if isinstance(error, Mapping) else None
+    if (
+        isinstance(render_error_details, Mapping)
+        and render_error_details.get("result_available") is True
+    ):
+        resolved = payload.get("resolved")
+        if isinstance(resolved, Mapping) and resolved:
+            lines.append(f"Resolved\n{_render_object_sections(resolved)}")
+    return "\n".join(lines)
+
+
+def _render_object_sections(data: Mapping[str, JsonValue]) -> str:
+    """Expand nested details into labeled field views instead of JSON cells."""
+    scalar_rows: list[JsonObject] = []
+    sections: list[str] = []
+    for key, value in data.items():
+        if isinstance(value, dict) and value:
+            sections.append(
+                f"{_format_table_cell(key)}\n{_render_object_sections(value)}"
+            )
+        elif (
+            isinstance(value, list)
+            and value
+            and any(isinstance(item, (dict, list)) for item in value)
+        ):
+            rows = _coerce_rows(value) or ()
+            if all(
+                not isinstance(item, (dict, list))
+                for row in rows
+                for item in row.values()
+            ):
+                body = _render_table(rows, columns=_infer_columns(rows))
+            else:
+                body = "\n\n".join(
+                    f"[{index}]\n{_render_object_sections(row)}"
+                    for index, row in enumerate(rows)
                 )
-    return _render_rows(rows, columns=("field", "value"), output_format=output_format)
+            sections.append(f"{_format_table_cell(key)}\n{body}")
+        else:
+            scalar_rows.append({"field": key, "value": value})
+    if scalar_rows:
+        sections.insert(0, _render_table(scalar_rows, columns=("field", "value")))
+    return "\n\n".join(sections) or "(no fields)"
 
 
 def _project_json_payload(
@@ -304,10 +451,21 @@ def _project_json_payload(
     action: str,
     columns: tuple[str, ...],
 ) -> JsonObject:
-    """Return a copy of a success envelope with row/object data projected."""
-    projected = deepcopy(payload)
+    """Copy selected data and changed containers; retain read-only metadata."""
+    projected = dict(payload)
     view = _result_view(projected, action=action)
     shape = data_shape_for_action(action, view=view)
+    document_rows = _document_line_rows(projected, shape=shape)
+    if document_rows is not None and shape is not None and shape.row_path is not None:
+        replacement = _project_json_value(
+            list(document_rows),
+            columns=columns,
+            action=action,
+            view=view,
+        )
+        if _replace_value_at_path(projected, shape.row_path, replacement):
+            _remove_value_at_path(projected, shape.line_source_path)
+            return projected
     derived_rows = _derived_rows(projected.get("data"), action=action, view=view)
     if (
         action == "schema"
@@ -322,7 +480,8 @@ def _project_json_payload(
                 view=view,
             )
         row_field = "command" if view == "command" else "rows"
-        data[row_field] = _project_json_value(
+        projected["data"] = data_copy = dict(data)
+        data_copy[row_field] = _project_json_value(
             list(derived_rows),
             columns=columns,
             action=action,
@@ -400,8 +559,8 @@ def _validate_data_shape_render_options(
                 "supported_output_formats": list(shape.supported_output_formats),
             },
             suggestion=(
-                "Use the default JSON output and omit --columns; --compact remains "
-                "available for complete compact JSON."
+                "Omit --columns and use --format json or json-compact "
+                "to preserve the complete document."
             ),
         )
     if options.columns and not shape.column_projection:
@@ -418,8 +577,8 @@ def _validate_data_shape_render_options(
                 "column_projection": False,
             },
             suggestion=(
-                "Omit --columns to preserve the complete document; --compact remains "
-                "available for complete compact JSON."
+                "Omit --columns to preserve the complete document; "
+                "use --format json-compact for compact JSON."
             ),
         )
 
@@ -427,6 +586,8 @@ def _validate_data_shape_render_options(
 def _result_view(payload: JsonObject, *, action: str) -> str | None:
     resolved = payload.get("resolved")
     data = payload.get("data")
+    if action == "template.task" and isinstance(data, Mapping):
+        return "template" if isinstance(data.get("yaml"), str) else "index"
     if action != "schema":
         resolved_view = resolved.get("view") if isinstance(resolved, Mapping) else None
         if isinstance(resolved_view, str):
@@ -448,6 +609,31 @@ def _result_view(payload: JsonObject, *, action: str) -> str | None:
     return resolved_view if isinstance(resolved_view, str) else None
 
 
+def _document_line_rows(
+    payload: JsonObject,
+    *,
+    shape: DataShape | None,
+) -> tuple[JsonObject, ...] | None:
+    """Derive display rows without storing a second copy of an artifact."""
+    if shape is None or shape.line_source_path is None:
+        return None
+    text = _value_at_path(payload, shape.line_source_path)
+    if not isinstance(text, str):
+        return None
+    return tuple(
+        {"line_no": number, "line": line}
+        for number, line in enumerate(text.splitlines(), start=1)
+    )
+
+
+def _remove_value_at_path(root: JsonObject, path: str | None) -> None:
+    if path is None:
+        return
+    parent = _copy_path_parent(root, path)
+    if parent is not None:
+        parent.pop(path.rsplit(".", 1)[-1], None)
+
+
 def _derived_rows(
     data: JsonValue | None,
     *,
@@ -460,12 +646,30 @@ def _derived_rows(
         command = data.get("command")
         action_name = command.get("action") if isinstance(command, Mapping) else None
         if isinstance(command, Mapping) and isinstance(action_name, str):
-            return tuple(command_contract_rows(command, action=action_name))
+            return (
+                *_schema_capability_rows(data),
+                *command_contract_rows(command, action=action_name),
+            )
     if view in {"full_group", "full_command"}:
         legacy_rows = _coerce_rows(data.get("rows"))
         if legacy_rows is not None:
+            if view == "full_command":
+                return (*_schema_capability_rows(data), *legacy_rows)
             return legacy_rows
     return None
+
+
+def _schema_capability_rows(data: Mapping[str, JsonValue]) -> tuple[JsonObject, ...]:
+    """Project selected-version capability facts into schema tabular views."""
+    capability = data.get("capability")
+    if not isinstance(capability, Mapping):
+        return ()
+    rows: list[JsonObject] = []
+    for field in ("availability", "verification", "constraint"):
+        value = capability.get(field)
+        if isinstance(value, str):
+            rows.append({"kind": "capability", "name": field, "value": value})
+    return tuple(rows)
 
 
 def _project_json_value(
@@ -531,20 +735,56 @@ def _json_rows_for_projection(
 
 
 def _project_row(row: JsonObject, columns: tuple[str, ...]) -> JsonObject:
-    return {column: row[column] for column in columns if column in row}
+    projected: JsonObject = {}
+    for column in columns:
+        found, value = _column_value(row, column)
+        if not found:
+            continue
+        if column in row:
+            projected[column] = deepcopy(value)
+            continue
+        current = projected
+        parts = column.split(".")
+        for part in parts[:-1]:
+            child = current.get(part)
+            if not isinstance(child, dict):
+                child = {}
+                current[part] = child
+            current = child
+        current[parts[-1]] = deepcopy(value)
+    return projected
+
+
+def _column_value(row: JsonObject, column: str) -> tuple[bool, JsonValue]:
+    """Prefer literal keys, then traverse an explicit dotted object path."""
+    if column in row:
+        return True, row[column]
+    value: JsonValue = row
+    for part in column.split("."):
+        if not isinstance(value, dict) or part not in value:
+            return False, None
+        value = value[part]
+    return True, value
 
 
 def _replace_value_at_path(root: JsonObject, path: str, value: JsonValue) -> bool:
-    current: JsonValue = root
-    parts = path.split(".")
-    for part in parts[:-1]:
-        if not isinstance(current, dict):
-            return False
-        current = current.get(part)
-    if not isinstance(current, dict):
+    parent = _copy_path_parent(root, path)
+    if parent is None:
         return False
-    current[parts[-1]] = value
+    parent[path.rsplit(".", 1)[-1]] = value
     return True
+
+
+def _copy_path_parent(root: JsonObject, path: str) -> JsonObject | None:
+    """Detach containers on an edited path without copying unrelated subtrees."""
+    current = root
+    for part in path.split(".")[:-1]:
+        child = current.get(part)
+        if not isinstance(child, dict):
+            return None
+        current[part] = child_copy = dict(child)
+        current = child_copy
+    return current
 
 
 def _is_sequence_like(value: JsonValue | None) -> TypeGuard[Sequence[JsonValue]]:
@@ -639,9 +879,26 @@ def _resolve_columns(
             return _infer_columns(rows)
         _validate_requested_columns(rows, requested, action=action, view=view)
         return requested
+    identity_columns = _identity_native_default_columns(rows, action=action)
+    if identity_columns is not None:
+        return identity_columns
     if defaults and _any_column_present(rows, defaults):
         return defaults
     return _infer_columns(rows)
+
+
+def _identity_native_default_columns(
+    rows: Sequence[JsonObject],
+    *,
+    action: str,
+) -> tuple[str, ...] | None:
+    if action not in {"task.list", "task.get"} or not rows:
+        return None
+    if any("code" in row or "id" not in row for row in rows):
+        return None
+    return tuple(
+        column for column in ("id", "name") if any(column in row for row in rows)
+    )
 
 
 def _validate_wildcard_columns(columns: tuple[str, ...]) -> None:
@@ -667,7 +924,11 @@ def _validate_requested_columns(
 ) -> None:
     if not rows:
         return
-    missing = [column for column in columns if not any(column in row for row in rows)]
+    missing = [
+        column
+        for column in columns
+        if not any(_column_value(row, column)[0] for row in rows)
+    ]
     if not missing:
         return
     message = f"Unknown display column for {action}: {', '.join(missing)}"
@@ -721,9 +982,9 @@ def _render_rows(
 
 
 def _render_tsv(rows: Sequence[JsonObject], *, columns: tuple[str, ...]) -> str:
-    lines = ["\t".join(columns)]
+    lines = ["\t".join(_format_tsv_cell(column) for column in columns)]
     lines.extend(
-        "\t".join(_format_tsv_cell(row.get(column)) for column in columns)
+        "\t".join(_format_tsv_cell(_column_value(row, column)[1]) for column in columns)
         for row in rows
     )
     return "\n".join(lines)
@@ -733,13 +994,15 @@ def _render_table(rows: Sequence[JsonObject], *, columns: tuple[str, ...]) -> st
     if not columns:
         return "(no rows)"
     rendered_rows = [
-        [_format_cell(row.get(column)) for column in columns] for row in rows
+        [_format_table_cell(_column_value(row, column)[1]) for column in columns]
+        for row in rows
     ]
+    headings = tuple(_format_table_cell(column) for column in columns)
     widths = [
-        max((len(column), *(len(row[index]) for row in rendered_rows)))
-        for index, column in enumerate(columns)
+        max((cell_len(column), *(cell_len(row[index]) for row in rendered_rows)))
+        for index, column in enumerate(headings)
     ]
-    header = _render_table_line(columns, widths=widths)
+    header = _render_table_line(headings, widths=widths)
     separator = "-+-".join("-" * width for width in widths)
     lines = [header, separator]
     lines.extend(_render_table_line(tuple(row), widths=widths) for row in rendered_rows)
@@ -752,12 +1015,22 @@ def _render_table_line(values: tuple[str, ...], *, widths: Sequence[int]) -> str
         if index == len(values) - 1:
             padded.append(value)
         else:
-            padded.append(value.ljust(widths[index]))
+            padded.append(value + " " * (widths[index] - cell_len(value)))
     return " | ".join(padded)
 
 
+_CONTROL_ESCAPES = {code: f"\\x{code:02x}" for code in (*range(32), 127)}
+_TABLE_ESCAPES = {**_CONTROL_ESCAPES, 9: "\\t", 10: "\\n", 13: "\\r", 92: "\\\\"}
+_TSV_ESCAPES = {**_CONTROL_ESCAPES, 9: " ", 10: " ", 13: " "}
+
+
 def _format_tsv_cell(value: JsonValue | None) -> str:
-    return _format_cell(value).replace("\t", " ").replace("\n", " ")
+    return _format_cell(value).translate(_TSV_ESCAPES)
+
+
+def _format_table_cell(value: JsonValue | None) -> str:
+    """Keep control characters visible without breaking a displayed row."""
+    return _format_cell(value).translate(_TABLE_ESCAPES)
 
 
 def _format_cell(value: JsonValue | None) -> str:
@@ -781,5 +1054,6 @@ __all__ = [
     "render_command",
     "render_payload",
     "render_raw_command",
+    "validate_action_render_options",
     "validate_render_options",
 ]

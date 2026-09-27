@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
     from typing import IO
 
     from dsctl.client import BinaryResponse
+    from dsctl.support.json_types import JsonObject
     from dsctl.upstream.protocols.base import StringEnumValue
 
 
@@ -422,11 +423,8 @@ class DataSourceOperations(Protocol):
     ) -> DataSourcePageRecord:
         """Return one page of datasources visible to the configured user."""
 
-    def get(self, *, datasource_id: int) -> Mapping[str, object]:
+    def get(self, *, datasource_id: int) -> JsonObject:
         """Fetch one datasource detail payload by id."""
-
-    def authorized_for_user(self, *, user_id: int) -> Sequence[DataSourceRecord]:
-        """Return datasources currently authorized for one user."""
 
     def create(self, *, payload_json: str) -> DataSourceRecord:
         """Create one datasource and return the created datasource summary."""
@@ -445,9 +443,24 @@ class DataSourceOperations(Protocol):
     def connection_test(self, *, datasource_id: int) -> bool:
         """Run one datasource connection test by id."""
 
+    @property
+    def blank_password_preserves_existing(self) -> bool:
+        """Whether a blank update password preserves the stored secret."""
+
+
+class DataQualityAuthoringInspector(Protocol):
+    """Narrow live preflight for the reviewed fixed DATA_QUALITY facet."""
+
+    def inspect(self, *, datasource_id: int, database: str | None) -> None:
+        """Prove permission-visible MYSQL identity and stock-rule semantics."""
+
 
 class NamespaceRecord(Protocol):
     """Structural k8s namespace payload exposed to services and resolvers."""
+
+    @property
+    def supported_fields(self) -> frozenset[str]:
+        """Fields declared by the selected exact namespace response model."""
 
     @property
     def id(self) -> int | None:
@@ -468,6 +481,34 @@ class NamespaceRecord(Protocol):
     @property
     def clusterName(self) -> str | None:  # noqa: N802
         """Owning cluster name."""
+
+    @property
+    def k8s(self) -> str | None:
+        """Legacy 3.0.x Kubernetes cluster selector."""
+
+    @property
+    def limitsCpu(self) -> float | None:  # noqa: N802
+        """Legacy namespace CPU quota, when exposed by upstream."""
+
+    @property
+    def limitsMemory(self) -> int | None:  # noqa: N802
+        """Legacy namespace memory quota, when exposed by upstream."""
+
+    @property
+    def podRequestCpu(self) -> float | None:  # noqa: N802
+        """Legacy observed pod CPU request total."""
+
+    @property
+    def podRequestMemory(self) -> int | None:  # noqa: N802
+        """Legacy observed pod memory request total."""
+
+    @property
+    def podReplicas(self) -> int | None:  # noqa: N802
+        """Legacy observed pod replica count."""
+
+    @property
+    def onlineJobNum(self) -> int | None:  # noqa: N802
+        """Legacy 3.0.x online job count."""
 
     @property
     def userId(self) -> int:  # noqa: N802
@@ -533,15 +574,19 @@ class NamespaceOperations(Protocol):
         self,
         *,
         namespace: str,
-        cluster_code: int,
+        cluster_code: int | None = None,
+        k8s: str | None = None,
+        limits_cpu: float | None = None,
+        limits_memory: int | None = None,
     ) -> NamespaceRecord:
-        """Create one namespace and return the created namespace payload."""
+        """Create one namespace using the exact profile's supported inputs."""
 
     def delete(self, *, namespace_id: int) -> bool:
         """Delete one namespace by id and return the remote deletion flag."""
 
-    def authorized_for_user(self, *, user_id: int) -> Sequence[NamespaceRecord]:
-        """Return namespaces currently authorized for one user."""
+    @property
+    def deletes_kubernetes_namespace(self) -> bool:
+        """Whether deletion also deletes the real Kubernetes namespace."""
 
 
 class PluginDefineRecord(Protocol):
@@ -731,8 +776,8 @@ class AlertGroupRecord(Protocol):
         """Update time."""
 
     @property
-    def createUserId(self) -> int:  # noqa: N802
-        """Creator user id."""
+    def createUserId(self) -> int | None:  # noqa: N802
+        """Creator user id when exposed by the DS profile."""
 
 
 class AlertGroupPageRecord(Protocol):
@@ -766,6 +811,10 @@ class AlertGroupPageRecord(Protocol):
 class AlertGroupOperations(Protocol):
     """Bound alert-group operations exposed to the service layer."""
 
+    @property
+    def association(self) -> Literal["legacy-alert-type", "plugin-instance-ids"]:
+        """Return the exact-version alert-group association model."""
+
     def list(
         self,
         *,
@@ -783,7 +832,8 @@ class AlertGroupOperations(Protocol):
         *,
         group_name: str,
         description: str | None,
-        alert_instance_ids: str,
+        alert_instance_ids: str | None,
+        group_type: str | None,
     ) -> AlertGroupRecord:
         """Create one alert group and return the created payload."""
 
@@ -793,7 +843,8 @@ class AlertGroupOperations(Protocol):
         alert_group_id: int,
         group_name: str,
         description: str | None,
-        alert_instance_ids: str,
+        alert_instance_ids: str | None,
+        group_type: str | None,
     ) -> AlertGroupRecord:
         """Update one alert group and return the updated payload."""
 
@@ -961,8 +1012,8 @@ class QueuePageRecord(Protocol):
         """Alternate remote page number field."""
 
 
-class QueueOperations(Protocol):
-    """Bound queue operations exposed to the service layer."""
+class QueueLookupOperations(Protocol):
+    """Minimal queue discovery surface consumed by dependent domains."""
 
     def list(
         self,
@@ -973,11 +1024,15 @@ class QueueOperations(Protocol):
     ) -> QueuePageRecord:
         """Return one page of queues visible to the configured user."""
 
-    def list_all(self) -> Sequence[QueueRecord]:
-        """Return all queues visible to the configured user."""
-
     def get(self, *, queue_id: int) -> QueueRecord:
         """Fetch one queue by id."""
+
+
+class QueueOperations(QueueLookupOperations, Protocol):
+    """Complete bound queue operations exposed to queue services."""
+
+    def list_all(self) -> Sequence[QueueRecord]:
+        """Return all queues visible to the configured user."""
 
     def create(self, *, queue: str, queue_name: str) -> QueueRecord:
         """Create one queue and return the refreshed queue payload."""
@@ -1176,8 +1231,8 @@ class TaskGroupQueueRecord(Protocol):
         """Task-group queue id."""
 
     @property
-    def taskId(self) -> int:  # noqa: N802
-        """Task-instance task id."""
+    def taskId(self) -> int | None:  # noqa: N802
+        """Task-instance id, unavailable when the native list omits it."""
 
     @property
     def taskName(self) -> str | None:  # noqa: N802
@@ -1212,8 +1267,8 @@ class TaskGroupQueueRecord(Protocol):
         """Whether force-start was requested."""
 
     @property
-    def inQueue(self) -> int:  # noqa: N802
-        """Whether the task is still waiting in queue."""
+    def inQueue(self) -> int | None:  # noqa: N802
+        """Native queue flag, unavailable when the list query omits it."""
 
     @property
     def status(self) -> StringEnumValue | str | None:
@@ -1298,17 +1353,18 @@ class TaskGroupOperations(Protocol):
         self,
         *,
         task_group_id: int,
+        project_code: int,
         name: str,
         description: str,
         group_size: int,
     ) -> TaskGroupRecord:
         """Update one task group and return the updated payload."""
 
-    def close(self, *, task_group_id: int) -> None:
-        """Close one task group."""
+    def close(self, *, task_group_id: int) -> TaskGroupRecord:
+        """Close one task group and return its verified readback."""
 
-    def start(self, *, task_group_id: int) -> None:
-        """Start one task group."""
+    def start(self, *, task_group_id: int) -> TaskGroupRecord:
+        """Start one task group and return its verified readback."""
 
     def list_queues(
         self,
@@ -1424,14 +1480,42 @@ class TenantOperations(Protocol):
         self,
         *,
         tenant_id: int,
-        tenant_code: str,
+        current_tenant_code: str,
         queue_id: int,
         description: str | None = None,
     ) -> TenantRecord:
-        """Update one tenant and return the refreshed payload."""
+        """Update mutable fields while preserving the current tenant code."""
 
     def delete(self, *, tenant_id: int) -> bool:
         """Delete one tenant by id and return the remote deletion flag."""
+
+
+class CurrentUserRecord(Protocol):
+    """Minimal authenticated-user snapshot used for runtime defaults."""
+
+    @property
+    def userName(self) -> str | None:  # noqa: N802
+        """Human-facing user name."""
+
+    @property
+    def userType(self) -> StringEnumValue | None:  # noqa: N802
+        """DS-native authenticated-user type."""
+
+    @property
+    def tenantCode(self) -> str | None:  # noqa: N802
+        """Bound tenant code when available."""
+
+    @property
+    def queueName(self) -> str | None:  # noqa: N802
+        """Tenant queue name when available."""
+
+    @property
+    def queue(self) -> str | None:
+        """Effective queue value when available."""
+
+    @property
+    def timeZone(self) -> str | None:  # noqa: N802
+        """User time zone when available."""
 
 
 class UserListRecord(Protocol):
@@ -1486,12 +1570,8 @@ class UserListRecord(Protocol):
         """Update time."""
 
 
-class UserRecord(UserListRecord, Protocol):
+class UserRecord(UserListRecord, CurrentUserRecord, Protocol):
     """Structural full user snapshot used for get and patch-preserving update."""
-
-    @property
-    def timeZone(self) -> str | None:  # noqa: N802
-        """User time zone when available."""
 
     @property
     def storedQueue(self) -> str | None:  # noqa: N802
@@ -1526,11 +1606,15 @@ class UserPageRecord(Protocol):
         """Alternate remote page number field."""
 
 
-class UserOperations(Protocol):
-    """Bound user operations exposed to the service layer."""
+class CurrentUserOperations(Protocol):
+    """Minimal authenticated-user operations used by identity checks."""
 
-    def current(self) -> UserRecord:
+    def current(self) -> CurrentUserRecord:
         """Fetch the current authenticated user snapshot."""
+
+
+class UserReadOperations(Protocol):
+    """Minimal user lookup operations used by cross-domain resolution."""
 
     def list(
         self,
@@ -1546,6 +1630,10 @@ class UserOperations(Protocol):
 
     def get(self, *, user_id: int) -> UserRecord:
         """Fetch one user by id."""
+
+
+class UserOperations(CurrentUserOperations, UserReadOperations, Protocol):
+    """Bound user administration operations exposed to the service layer."""
 
     def create(
         self,
@@ -1677,8 +1765,33 @@ class ResourceContentRecord(Protocol):
         """Fetched file content chunk."""
 
 
+class TaskResourceFileResolution(Protocol):
+    """Resolved canonical FILE identity for one exact task wire."""
+
+    @property
+    def resource_id(self) -> int | None:
+        """Positive legacy resource id, or ``None`` on name-backed wires."""
+
+    @property
+    def wire_full_name(self) -> str:
+        """Exact fullName that the selected task wire must persist."""
+
+
+class TaskResourceResolver(Protocol):
+    """Exact visible, non-directory FILE resolver for task authoring."""
+
+    def resolve_task_file(self, full_name: str) -> TaskResourceFileResolution:
+        """Resolve one canonical FILE name into the selected exact wire identity."""
+
+    def resolve_id(self, full_name: str) -> int:
+        """Resolve one visible FILE fullName to its exact positive resource id."""
+
+    def resolve_full_name(self, resource_id: int) -> str:
+        """Resolve one visible FILE id to its exact resource fullName."""
+
+
 class ResourceOperations(Protocol):
-    """Bound resource operations exposed to the service layer."""
+    """Bound resource CRUD operations exposed to the service layer."""
 
     def base_dir(self) -> str:
         """Return the effective DS base directory for file resources."""
@@ -1752,8 +1865,12 @@ class MonitorServerRecord(Protocol):
         """Server port."""
 
     @property
+    def serverDirectories(self) -> Sequence[str]:  # noqa: N802
+        """Every server working directory exposed by the selected release."""
+
+    @property
     def serverDirectory(self) -> str | None:  # noqa: N802
-        """Server working directory."""
+        """Compatibility scalar, present only when the directory is unambiguous."""
 
     @property
     def heartBeatInfo(self) -> str | None:  # noqa: N802
@@ -1772,11 +1889,11 @@ class MonitorDatabaseRecord(Protocol):
     """Structural database metrics payload returned by upstream monitor ops."""
 
     @property
-    def dbType(self) -> StringEnumValue | None:  # noqa: N802
+    def dbType(self) -> StringEnumValue | str | None:  # noqa: N802
         """Database type enum."""
 
     @property
-    def state(self) -> StringEnumValue | None:
+    def state(self) -> StringEnumValue | str | None:
         """Database health state."""
 
     @property

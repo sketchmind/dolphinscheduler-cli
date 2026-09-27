@@ -4,14 +4,19 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.context import SessionContext
 from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
+from dsctl.upstream.project_preferences import (
+    PROJECT_PREFERENCE_DOMAIN,
+    ProjectPreferenceDomain,
+)
 from tests.fakes import (
     FakeProject,
     FakeProjectAdapter,
     FakeProjectPreference,
     FakeProjectPreferenceAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
+    fake_project_definitions,
 )
 from tests.support import make_profile
 
@@ -44,15 +49,29 @@ def patch_project_preference_service(
     fake_project_adapter: FakeProjectAdapter,
     fake_project_preference_adapter: FakeProjectPreferenceAdapter,
 ) -> None:
+    context = ResourceDefaults(project="etl-prod")
+
+    def bound_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is PROJECT_PREFERENCE_DOMAIN
+        return fake_bound_domain_service_runtime(
+            ProjectPreferenceDomain(
+                definitions=fake_project_definitions(fake_project_adapter),
+                preferences=fake_project_preference_adapter,
+            ),
+            profile=make_profile(),
+            context=context,
+        )
+
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            fake_project_adapter,
-            project_preference_adapter=fake_project_preference_adapter,
-            profile=make_profile(),
-            context=SessionContext(project="etl-prod"),
-        ),
+        "open_bound_domain_service_runtime",
+        bound_runtime_factory,
     )
 
 

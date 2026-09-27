@@ -107,6 +107,33 @@ def test_list_enum_result_uses_selected_version_with_compatible_contract(
     assert data["name"] == "priority"
 
 
+@pytest.mark.parametrize(
+    ("ds_version", "present", "absent"),
+    [
+        ("1.3.9", "BOOLEAN", "LIST"),
+        ("2.0.0", "LIST", "FILE"),
+        ("3.4.2", "FILE", "missing"),
+    ],
+)
+def test_list_enum_result_projects_exact_data_type_evolution(
+    tmp_path: Path,
+    ds_version: str,
+    present: str,
+    absent: str,
+) -> None:
+    env_file = tmp_path / f"ds-{ds_version}.env"
+    env_file.write_text(f"DS_VERSION={ds_version}\n", encoding="utf-8")
+
+    result = list_enum_result("data-type", env_file=str(env_file))
+    data = _mapping(result.data)
+    members = data["members"]
+    assert isinstance(members, list)
+    names = {str(member["name"]) for member in members if isinstance(member, dict)}
+
+    assert present in names
+    assert absent not in names
+
+
 def test_list_enum_result_rejects_unknown_enum() -> None:
     with pytest.raises(UserInputError, match="Unsupported enum"):
         list_enum_result("missing-enum")

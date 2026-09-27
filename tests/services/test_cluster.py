@@ -1,13 +1,12 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeCluster,
     FakeClusterAdapter,
-    FakeProjectAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
 from dsctl.errors import (
     ApiResultError,
@@ -16,33 +15,22 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.services import cluster as cluster_service
-from dsctl.services import runtime as runtime_service
+from dsctl.upstream.clusters import CLUSTER_DOMAIN, ClusterDomain
 
 
 def _install_cluster_service_fakes(
     monkeypatch: pytest.MonkeyPatch,
     adapter: FakeClusterAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            cluster_adapter=adapter,
-            profile=make_profile(),
-        ),
+    domain = ClusterDomain(clusters=adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        cluster_service,
+        expected_domain=CLUSTER_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 def test_list_clusters_result_returns_first_page_by_default(

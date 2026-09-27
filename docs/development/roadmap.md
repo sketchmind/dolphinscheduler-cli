@@ -1,609 +1,295 @@
 # Roadmap
 
-This file tracks committed implementation phases.
-
-Use `docs/reference/future-capabilities.md` for loose future ideas,
-`docs/reference/domain-model.md` for DS grounding, and
-`docs/development/codegen.md` for local upstream source setup.
-
-## Current Foundation (Done)
-
-- [x] Local upstream DolphinScheduler `3.4.1` source available for generator
-      development and DS-facing behavior review
-- [x] AST extraction and code generation pipeline (`tools/ds_codegen/`)
-- [x] Versioned package renderer emitting typed DS-native packages
-- [x] Runtime transport (`client.py`), config, error, output infrastructure
-- [x] Top-tier lint/type-check standards (ruff 30+ rule sets, mypy strict)
-- [x] Design docs: architecture, CLI contract, roadmap, domain reference
-
----
-
-## Phase 0: Wire the Generated Layer into src/ (Done)
-
-**Goal:** The generated contracts are importable from `src/dsctl/generated/`,
-the upstream adapter compiles, and `dsctl version` works end to end.
-
-- [x] Copy generated package from `build/` into
-      `src/dsctl/generated/versions/ds_3_4_1/`
-- [x] Copy upstream adapter layer (protocol, registry, ds_3_4_1 adapter)
-      into `src/dsctl/upstream/`
-- [x] Reconcile the generated `_base.py` HTTP layer with existing `client.py`
-      through a handwritten upstream transport bridge
-- [x] Create `src/dsctl/app.py` (Typer root app, global options, error handler)
-- [x] Create `src/dsctl/context.py` (session context read/write)
-- [x] Create `src/dsctl/commands/meta.py` with `dsctl version` and
-      `dsctl context`
-- [x] Wire `__main__.py` to `app.py`
-- [x] Add `typer` to project dependencies
-- [x] All quality gate checks pass
-
-**Done when:**
-```bash
-dsctl version
-# → {"ok": true, "action": "version", "data": {"cli": "<cli_version>", "ds": "3.4.1"}}
-
-dsctl context
-# → {"ok": true, "action": "context", "data": {"api_url": "...", "project": null, "workflow": null, ...}}
-```
-
----
-
-## Phase 1: First Vertical Slice — Project CRUD (Done)
-
-**Goal:** One complete resource works end to end through all four layers.
-This proves the full architecture (commands → services → upstream → generated).
-
-- [x] `src/dsctl/commands/project.py` — list, get, create, update, delete
-- [x] `src/dsctl/services/project.py` — business logic
-- [x] `src/dsctl/services/resolver.py` — name → code resolution (project only)
-- [x] `src/dsctl/services/pagination.py` — page exhaust helper
-- [x] Adapter: add `list_projects`, `get_project`, `create_project`,
-      `update_project`, `delete_project` to `DS341Adapter`
-- [x] `tests/commands/test_project.py` — CliRunner integration tests
-- [x] `tests/services/test_project.py` — unit tests with mock adapter
-- [x] `tests/services/test_resolver.py` — resolver tests
-- [x] `tests/services/test_pagination.py` — pagination tests
-
-**Done when:**
-```bash
-dsctl project list
-dsctl project get etl-prod
-dsctl project create --name test-project --description "test"
-dsctl project update test-project --description "updated"
-dsctl project delete test-project --force
-
-# All return JSON envelopes. All resolve names to codes.
-# All tests pass. Quality gate passes.
-```
-
----
-
-## Phase 2: Context + Workflow Read (Done)
-
-**Goal:** `dsctl use` works, and workflow/task read operations complete the
-query side of the two most important resources.
-
-- [x] `src/dsctl/commands/use.py` — `dsctl use project|workflow|--clear`
-- [x] Context integration in project/workflow/task commands
-- [x] `src/dsctl/commands/workflow.py` — list, get, describe
-- [x] `src/dsctl/services/workflow.py` — list, get (with YAML export), describe
-- [x] `src/dsctl/commands/task.py` — list, get
-- [x] `src/dsctl/services/task.py` — list, get
-- [x] Resolver: add workflow and task name resolution
-- [x] `src/dsctl/support/yaml_io.py` — YAML rendering
-- [x] `dsctl workflow export` returns roundtrip-able workflow YAML
-- [x] Tests for all of the above
-
-**Done when:**
-```bash
-dsctl use project etl-prod
-dsctl workflow list                        # uses context
-dsctl workflow get daily-etl               # uses context
-dsctl workflow export daily-etl         # YAML output
-dsctl use workflow daily-etl
-dsctl task list                            # uses project + workflow context
-dsctl task get extract                     # single task detail
-dsctl use --clear
-```
-
----
-
-## Phase 3: YAML Models + Workflow Create (In Progress)
-
-**Goal:** LLM or human can create a complete workflow from a YAML file.
-
-- [x] `src/dsctl/models/common.py` — shared enums, RetryConfig, etc.
-- [x] `src/dsctl/models/task_spec.py` — per-task-type field schemas
-- [x] `src/dsctl/models/workflow_spec.py` — WorkflowSpec, full YAML schema
-- [x] `src/dsctl/commands/workflow.py` — add `create` subcommand
-- [x] `src/dsctl/services/workflow.py` — create logic:
-      WorkflowSpec → taskDefinitionJson + taskRelationJson
-- [x] Adapter: `create_workflow` in DS341Adapter
-- [x] DAG validation (acyclic check, unique names, dependency resolution)
-- [x] `--dry-run` support
-- [x] `tests/models/test_workflow_spec.py` — YAML parsing tests
-- [x] `tests/services/test_workflow.py` — create workflow tests
-- [x] `dsctl template workflow`, workflow patch templates, `dsctl template environment`,
-      `dsctl template cluster`, and `dsctl template task SHELL|SQL|HTTP|...`
-- [x] YAML `schedule:` block support during `workflow create`
-- [x] extend task-type coverage for DS logical/compound nodes:
-      `SUB_WORKFLOW`, `DEPENDENT`, `SWITCH`, `CONDITIONS`
-- [ ] Deepen workflow compilation into one pure prepared-compilation object
-      that validates once, owns active/unavailable task identities, and can
-      materialize either preview or server-allocated task codes without
-      duplicating phase-order knowledge across mutation services.
-
-**Done when:**
-```bash
-# Create from YAML
-dsctl workflow create --file workflow.yaml
-dsctl workflow create --file workflow.yaml --dry-run
-dsctl workflow create --file workflow.yaml --confirm-risk TOKEN
-
-# Template discovery
-dsctl template workflow --raw # → full YAML template with comments
-dsctl template workflow-patch --raw # → workflow edit patch template
-dsctl template workflow-instance-patch --raw # → instance edit patch template
-dsctl template task SHELL     # → SHELL task template
-
-# The created workflow appears in DS UI and can be triggered.
-# Optional schedule blocks are created after workflow online and may require a
-# separate confirmation token for high-frequency cron expressions.
-# Basic `depends_on` edges are stable; DS logical nodes expand through
-# task-type-specific YAML models rather than through a generic dependency DSL.
-# `SWITCH` and `CONDITIONS` branch targets are written as task names in YAML
-# and compiled into DS task codes during create.
-```
-
----
-
-## Phase 4: Patch + Edit Workflows (Done)
-
-**Goal:** LLM can edit existing workflows with minimal patch YAML and get a
-stable dry-run diff before apply.
-
-- [x] `src/dsctl/models/workflow_patch.py` — WorkflowPatch model + merge logic
-- [x] `src/dsctl/commands/workflow.py` — add `edit` subcommand
-- [x] `src/dsctl/services/workflow.py` — edit logic:
-      fetch current → merge patch → validate → submit
-- [x] Edit response includes diff (added/modified/removed tasks and edges)
-- [x] `dsctl workflow delete` with offline/schedule/runtime/dependency guardrails
-- [x] `tests/models/test_workflow_patch.py` — merge logic tests
-- [x] `tests/services/test_workflow.py` — edit tests
-- [x] `dsctl task update --set key=value` inline edits
-
-**Done when:**
-```bash
-# Patch workflow
-dsctl workflow edit --patch patch.yaml
-dsctl workflow edit --patch patch.yaml --dry-run
-dsctl workflow edit WORKFLOW --file workflow.yaml --dry-run
-# → {"data": {"diff": {"added_tasks": [...], "removed_edges": [...]}}}
-
-# Inline task update
-dsctl task update extract --set command="python v2.py"
-dsctl task update extract --set retry.times=5 --set priority=HIGH
-```
-
----
-
-## Phase 5: Execution + Monitoring (Done)
-
-**Goal:** Trigger workflows and inspect runtime state using explicit
-instance-oriented resources.
-
-**Contract:**
-
-- current stable slice:
-  - `workflow online|offline|run|run-task|backfill WORKFLOW`
-  - `workflow-instance list|get|parent|edit|watch|stop|rerun|recover-failed|execute-task`
-  - `task-instance list|get|sub-workflow|log|force-success|savepoint|stop`
-
-**Grounding:**
-
-- new execution belongs to the workflow definition surface
-- control actions on an existing execution belong to workflow instances
-- task-instance is an observation resource, not a launch resource
-
-**Implementation:**
-
-- [x] `src/dsctl/commands/workflow.py` — add `run`
-- [x] `src/dsctl/commands/workflow.py` — add `online|offline`
-- [x] `src/dsctl/commands/workflow_instance.py`
-- [x] `src/dsctl/commands/task_instance.py`
-- [x] `src/dsctl/services/workflow.py` — add release lifecycle
-- [x] `src/dsctl/services/workflow_instance.py`
-- [x] `src/dsctl/services/task_instance.py`
-- [x] Adapter support for:
-      `online_workflow`, `offline_workflow`, `trigger_workflow`,
-      `list_workflow_instances`, `get_workflow_instance`,
-      `update_workflow_instance`,
-      `stop_workflow_instance`, `rerun_workflow_instance`,
-      `recover_failed_workflow_instance`, `execute_task`,
-      `list_task_instances`, `get_task_instance`, `get_task_log`,
-      `force_task_success`, `task_save_point`, `stop_task`
-- [x] Workflow online/offline returns refreshed workflow payloads and keeps the
-      attached-schedule lifecycle explicit
-- [x] Runtime selector rule: workflow-instance and task-instance are id-first
-- [x] `workflow-instance edit` compiles a DAG patch against finished-instance
-      `dagData` and can optionally sync the saved DAG back to the current
-      workflow definition
-- [x] `workflow-instance watch` blocks until DS reaches a final execution state
-- [x] `workflow-instance stop` validates stop eligibility against the current DS
-      execution state before issuing the stop request
-- [x] `execute-task` scope mapping: `self|pre|post` →
-      DS `TASK_ONLY|TASK_PRE|TASK_POST`
-- [x] `workflow run-task` starts a workflow from one task using
-      `startNodeList` and emits the dependent-node caveat
-- [x] `workflow backfill` mirrors DS complement-data execution with range or
-      explicit-date selection and optional task-scoped starts
-- [x] Tests for the delivered success and not-found paths
-- [x] Tests for delivered runtime control invalid-state and timeout paths
-
-**Done when:**
-```bash
-dsctl workflow online daily-etl
-dsctl workflow offline daily-etl
-dsctl workflow run daily-etl
-dsctl workflow run-task daily-etl --task extract_orders
-dsctl workflow backfill daily-etl --start "2026-04-01 00:00:00" --end "2026-04-02 00:00:00"
-dsctl workflow-instance list --state RUNNING
-dsctl workflow-instance get 123
-dsctl workflow-instance parent 456
-dsctl workflow-instance edit 123 --patch instance-patch.yaml
-dsctl workflow-instance edit 123 --patch instance-patch.yaml --sync-definition
-dsctl workflow-instance stop 123
-dsctl workflow-instance rerun 123
-dsctl workflow-instance recover-failed 123
-dsctl workflow-instance execute-task 123 --task extract_orders --scope pre
-dsctl task-instance list --workflow-instance 123
-dsctl task-instance sub-workflow 456 --workflow-instance 123
-dsctl task-instance log 456 --tail 200
-dsctl task-instance force-success 456 --workflow-instance 123
-dsctl task-instance savepoint 456 --workflow-instance 123
-dsctl task-instance stop 456 --workflow-instance 123
-```
-
----
-
-## Phase 6: Schedule Management (Done)
-
-**Goal:** Full schedule lifecycle as an independent resource bound to workflow
-definitions.
-
-**Contract:**
-
-- `schedule list|get|preview|create|update|delete|online|offline`
-
-**Grounding:**
-
-- in DS 3.4.1 schedule is a persisted trigger resource, not a workflow field
-- get/delete use v2 schedule CRUD APIs
-- create uses v2 when a positive environment code is present and the generated
-  legacy project-scoped operation when the schedule has no environment
-- update uses the generated legacy project-scoped operation because the DS
-  3.4.1 v2 update request cannot faithfully express no-environment schedules or
-  zero-valued fields such as a cleared warning group; an explicitly changed
-  positive environment is validated before mutation
-- list currently uses the legacy project-scoped paging endpoint by design:
-  the v2 `filterSchedule` API is global and filters by `projectName like`,
-  while the CLI contract for `schedule list` is explicitly "inside one
-  resolved project"
-- preview uses the legacy project-scoped preview endpoint and returns the next
-  five fire times
-- online/offline is a separate lifecycle that materializes or removes Quartz
-  jobs
-- workflow offline also forces schedule offline
-
-**Implementation:**
-
-- [x] `src/dsctl/commands/schedule.py`
-- [x] `src/dsctl/services/schedule.py`
-- [x] Adapter support for schedule CRUD and schedule lifecycle actions
-- [x] `schedule preview`, `schedule explain`, and stateless `--confirm-risk`
-      safety confirmation
-- [x] DS 3.4.1 bridge mixes:
-      legacy schedule paging with v2 schedule get/create/update/delete and
-      legacy schedule preview/online/offline endpoints
-- [x] Tests for preview, create/update/delete, and lifecycle rules
-- [x] Schedule section in YAML (`workflow.yaml` → `schedule:` block)
-- [x] `dsctl workflow create --file workflow.yaml` auto-creates schedule if
-      `schedule:` is present
-- [x] Add one service-internal authoritative attached-schedule lookup seam for
-      workflow get/describe/digest/export/edit/release behavior. DS 3.4.1
-      detail and DAG responses do not join the independently persisted
-      schedule; reads and safety-sensitive mutations fail closed when lookup is
-      unavailable, and selector resolution remains lightweight.
-- [x] Make complete scheduled workflow exports valid full-file edit inputs by
-      verifying `schedule:` as a read-only snapshot before definition compile;
-      schedule changes remain explicit schedule commands.
-
-**Done when:**
-```bash
-dsctl schedule create --workflow daily-etl --cron "0 0 2 * * ?" \
-  --timezone Asia/Shanghai --start 2024-01-01 --end 2025-12-31
-dsctl schedule list --workflow daily-etl
-dsctl schedule get 1
-dsctl schedule preview 1
-dsctl schedule online 1
-dsctl schedule offline 1
-dsctl schedule delete 1 --force
-```
-
----
-
-## Phase 7: Remaining Resources
-
-**Goal:** Complete the governance and self-description resource coverage needed
-for production use.
-
-- [x] Codegen follow-up: datasource detail now routes through the generated
-      `queryDataSource` client. The shared `BaseDataSourceParamDTO` contract is
-      rendered as an open model with a synthetic `type` field so DS-native
-      plugin-specific detail keys survive validation and JSON emission. A fully
-      typed per-plugin datasource union remains optional future refinement, not
-      a blocker for the CLI surface.
-- [x] `resource` — list/view/upload/create/mkdir/download/delete
-- [x] `user` — CRUD
-- [x] `user grant` — project grant/revoke
-- [x] `user grant` — datasource grant/revoke
-- [x] `user grant` — namespace grant/revoke
-- [x] `datasource` — CRUD + connection test
-- [x] `namespace` — list/get/available/create/delete
-- [x] `queue` — CRUD
-- [x] `worker-group` — CRUD
-- [x] `task-group` — lifecycle plus task-group queue list/force-start/priority
-- [x] `alert-plugin` — list/get/definition list/schema/create/update/delete/test
-- [x] `alert-group` — CRUD
-- [x] `tenant` — CRUD
-- [x] `environment` — environment CRUD
-- [x] `cluster` — cluster CRUD
-- [x] `monitor` — health, servers, database stats
-- [x] `audit` — list, model-types, operation-types
-- [x] `project-preference` — get/update/enable/disable singleton project preference
-- [x] `capabilities` — version capability discovery
-- [x] `schema` — stable self-description for the current surface
-- [x] `template` — YAML/template discovery
-- [x] Tests for each
-
-**Done when:** Every resource in the architecture doc has a working command
-group with tests.
-
----
-
-## Phase 8: Diagnostics + LLM Integration
-
-**Goal:** Add diagnostics and AI-native ergonomics on top of the stable resource
-surface.
-
-- [ ] `dsctl digest` / resource-specific `digest` views where they materially
-      reduce context size
-  - [x] `dsctl workflow digest` — compact workflow DAG summary
-  - [x] `dsctl workflow-instance digest` — compact runtime progress summary
-- [x] `schedule explain` for pre-mutation schedule reasoning
-- [ ] broader `dsctl explain` for execution-context and parameter reasoning
-- [x] `dsctl lint` for local workflow design-time checks
-- [x] `dsctl doctor` for runtime and governance diagnostics
-- [x] `dsctl schema` — bounded index and action-local JSON contracts, with
-      explicit `--full` expansion for the current stable surface
-- [x] `dsctl enum names`, `dsctl enum list <enum>` — enum value discovery
-- [x] `dsctl task-type list` — live DS task-type discovery with favourite flags
-- [x] `dsctl task-type get|schema` — local task authoring summaries, field
-      contracts, state rules, choices, and compile mappings
-- [x] make task authoring discovery progressive: keep one canonical field
-      contract and add explicit field, JSON Schema, compile, and full views
-      instead of repeating the same metadata in one large response
-- [ ] make complex mutation dry-runs semantic by default: return the ordered
-      plan, compiled counts, and resolved selectors; expose raw REST requests
-      through one explicit detail view without duplicating `request` and
-      `requests[0]`
-- [ ] in the next explicit CLI contract version, make list JSON use the
-      registered summary projection by default, keep `get` as full detail, and
-      retain `--columns '*'` as the complete-row escape hatch; do not add
-      resource-specific summary aliases that duplicate list interfaces
-- [x] add bounded lifecycle `next_actions` (two or three command patterns per
-      transition) for create, run, watch, task inspection, and log retrieval
-- [x] add bounded row-fact `action_index` discovery to workflow, schedule,
-      workflow-instance, and task-instance list JSON without polluting row output
-- [ ] let task-instance read/control commands resolve directly from `--project`
-      as well as `--workflow-instance`, so standalone STREAM task rows can expose
-      savepoint and stop without inventing a workflow instance id
-- [ ] add an explicit read-only context validity check without making ordinary
-      `dsctl context` perform remote calls
-- [ ] in the next explicit CLI contract version, simplify persisted selection
-      context after a compatibility and migration review:
-  - keep `dsctl context` as the local, read-only answer to “which target will a
-    later command use?”, including source provenance and an explicit statement
-    that no remote validation occurred
-  - prefer one workspace-bound project selection over the current exact-CWD
-    project layer plus global user layer, and bind it to a stable workspace or
-    profile identity rather than an incidental process directory
-  - remove ambient workflow selection; workflow selectors are task-specific
-    enough to remain explicit on commands, files, or returned commands
-  - collapse duplicate clear spellings as part of the same breaking change;
-    do not silently change the stable `0.2` surface
-- [x] audit log inspection and audit filter metadata discovery
-- [x] workflow lineage inspection and dependent-task discovery
-- [ ] `--non-interactive` mode (never prompt stdin)
-- [ ] Error hints with concrete next-step guidance
-  - [x] config, resolver, selection, delete-force, confirmation, timeout, and
-        common discovery/input errors emit `error.suggestion`
-- [x] repository-distributed `dsctl` agent skill with a closed-loop operating
-      contract independent from the PyPI CLI installation
-- [x] progressively disclosed skill references for workflow authoring,
-      schedules, runtime recovery, and structured errors
-- [ ] End-to-end LLM agent test: create workflow → trigger → check → report
-
-**Done when:** The `dsctl` skill can autonomously:
-1. Create a multi-task workflow from natural language description.
-2. Trigger it and wait for completion.
-3. Check status, retrieve logs on failure, and report results.
-4. Edit the workflow to fix issues and re-trigger.
-
-All without human intervention beyond the initial instruction.
-
----
-
-## Live Validation Track (In Progress)
-
-**Goal:** Prove the current CLI surface against a real DolphinScheduler
-cluster, not just mocked transports and fake adapters.
-
-This track runs in parallel with feature development. Any cluster-interacting
-surface is only partially validated until the corresponding live coverage
-exists.
-
-Current snapshot:
-
-- [x] full tracked live suite passes on the current test cluster
-- [x] admin bootstrap now creates a tenant, ETL-style user, and access token
-- [x] runtime, schedule, governance, and optional-capability semantics are
-      captured in `docs/development/live-testing.md`
-
-### Live Phase A: Harness + Policy
-
-- [x] `docs/development/live-testing.md` defines personas, coverage rules, and failure
-      analysis principles
-- [x] Explicit rule: every cluster-interacting command needs live coverage
-- [x] Explicit matrix for the current surface
-- [x] `tests/live/` package scaffold
-- [x] pytest markers for:
-      `live`, `live_admin`, `live_developer`, `destructive`, `slow`,
-      `optional_capability`
-- [x] shared live helpers for unique run prefixes, env loading, cleanup, and
-      CLI invocation
-
-**Done when:** a contributor can run the documented live suites with a stable
-test harness and env-file convention.
-
-### Live Phase B: Preflight + Bootstrap
-
-- [x] preflight checks for `doctor` and `monitor`
-- [x] admin bootstrap flow:
-      tenant → user → access-token
-- [x] generated non-admin token is used by the main suite
-- [x] explicit negative check proving the ETL persona is not silently running
-      with admin privileges
-
-**Done when:** the suite can prepare or validate the required non-admin test
-identity from the provided admin token and can fail early with precise setup
-diagnostics.
-
-### Live Phase C: Mandatory Core Contract Coverage
-
-- [x] live contract cases for:
-      `doctor`, `task-type`, `monitor`, `project`, `workflow`, `task`,
-      `schedule`, `workflow-instance`, `task-instance`
-- [x] live contract cases for:
-      `project-parameter`, `project-preference`, `project-worker-group`
-- [x] live contract cases for:
-      `audit`, `resource`, `namespace`
-- [x] read surfaces prove payload projection and selector semantics
-- [x] mutation surfaces prove write → read-back → cleanup
-
-**Done when:** every non-optional core ETL surface has at least one passing
-live contract test.
-
-### Live Phase D: Governance + Admin Coverage
-
-- [x] live contract cases for:
-      `tenant`, `user`, `access-token`, `queue`, `worker-group`
-- [x] live contract cases for:
-      `environment`, `cluster`, `alert-group`
-- [x] permission-boundary tests for admin-only mutations
-- [x] grant/revoke live tests where cluster policy allows them
-
-**Done when:** all governance surfaces that our current cluster can support
-have admin-path live coverage plus at least one denial or boundary case.
-
-### Live Phase E: Optional Capability Coverage
-
-- [x] `datasource` live tests in an environment with real reachable backends
-- [x] `alert-plugin` live tests in an environment with installed plugin
-      backends
-- [x] capability-gated `environment`, `cluster`, `namespace`, and `resource`
-      scenarios
-      in compatible deployments where needed
-- [x] any skipped suite records the missing capability explicitly
-
-**Done when:** every remaining cluster-interacting command either has passing
-live coverage or an explicit documented capability block.
-
-### Live Phase F: Runtime Semantics And Recovery
-
-- [x] schedule-created instances observed in real runtime
-- [x] `workflow-instance watch` terminal-state validation
-- [x] `stop`, `rerun`, `recover-failed`, and `execute-task` scenario coverage
-- [x] `task-instance log`, `stop`, `force-success`, `savepoint` scenario
-      coverage where the cluster semantics allow them
-- [x] sub-workflow and dependency-sensitive runtime scenarios
-
-**Done when:** runtime and schedule correctness is proven by real state
-transitions, not just request/response contract checks.
-
-### Live Phase G: Closure
-
-- [x] live failures have matching offline regression tests where possible
-- [x] docs updated for cluster constraints and discovered semantics
-- [x] command warnings, diagnostics, or suggestions improved from live findings
-- [x] release readiness reviewed against `docs/development/live-testing.md`
-
-**Done when:** live validation has become a repeatable maintenance track rather
-than a one-time verification spike.
-
-### Stop Conditions
-
-The live-validation track should proceed autonomously unless blocked by one of
-these:
-
-- missing credentials or env files
-- unsafe destructive behavior on a shared cluster without reliable cleanup
-- missing external capability for an optional suite
-- a real product decision that cannot be reduced to implementation work
-
----
-
-## Definition of Done (Overall)
-
-The project is **production-ready** when all of these are true:
-
-### Functional Completeness
-- [x] All stable resource groups in the architecture doc have working command groups
-- [x] Full YAML create/edit/get roundtrip for workflows
-- [x] Patch dialect merges correctly for all task types
-- [ ] `dsctl use` context switching works across all commands
-- [x] Pagination auto-exhaust works for all paginated list commands
-- [x] Name-first resolution works for all supported name-first resources
-
-### LLM Readiness
-- [ ] Every command returns structured JSON envelope (no exceptions)
-  - [x] all registered command callbacks are structurally required to route
-        through `emit_result`
-- [x] `dsctl schema` provides progressive discovery and complete action-local
-      contracts; `schema --full` outputs the expanded tool definition
-- [ ] complete schema parity for every deterministic cross-field command
-      validator; high-impact mode, source, update, selector, and force guards
-      are already machine-readable through `command.constraints`
-- [x] `dsctl template` covers all upstream default task types
-- [ ] Error responses include machine-actionable `type` and `suggestion`
-- [ ] `--dry-run` available on all mutating commands
-- [ ] the repository-distributed `dsctl` skill works end-to-end
-
-### Quality
-- [x] ruff 30+ rule sets pass with zero violations
-- [x] mypy strict passes with zero errors
-- [ ] Test coverage ≥ 80% on `services/` and `models/`
-- [x] Every cluster-interacting command has at least one live test in a
-      compatible environment
-- [x] Every error type has at least one test
-- [x] Architecture boundary check passes (no upward imports)
-- [ ] No hardcoded IPs, tokens, or secrets in source
-  - [x] handwritten source is scanned for local/private host literals and
-        literal secret assignments
-
-### Documentation
-- [ ] `docs/development/architecture.md` matches actual code
-- [x] `docs/reference/cli-contract.md` — stable command surface documented
-- [ ] `docs/development/roadmap.md` matches implemented and planned phases
-- [ ] `docs/reference/domain-model.md` stays grounded in upstream DS semantics
-- [x] `dsctl schema` output is tested to match actual commands
+This document tracks current product scope and unfinished work. Architecture,
+command contracts and release receipts have their own owners; completed
+implementation logs and local candidate reports do not establish readiness.
+
+## Current State
+
+The [current architecture](architecture.md#current-stable-surface) owns the
+installed action inventory and exact action/version decision counts. The
+compiler covers 153 semantic operations through 21 domain plans. All 37 final DS
+releases from `1.3.9` through `3.4.3` have independent exact profiles. DS `3.4.1`
+remains the stable runtime target; terminal decisions, source admission and local tests do not promote an
+experimental profile.
+
+The [final-release admission record](stable-release-admission.md) owns the added
+release decisions and exact differences. The
+[reviewed task authoring boundaries](task-authoring-boundaries.md) own the 42
+families, 902 exact memberships, runtime holes and worker prerequisites. Typed
+validation, explicit opaque authoring and existing-baseline preservation remain
+separate claims. Do not infer task support from a native model's presence.
+
+Implemented behavior is maintained in these documents rather than repeated here:
+
+| Area | Authoritative document |
+| --- | --- |
+| Layer ownership, command catalog and compiled runtime | [Architecture](architecture.md), [compatibility ADR](decisions/0001-multi-version-compatibility.md) |
+| Exact source decisions, regeneration and runtime packaging | [Codegen](codegen.md), [compatibility architecture](multi-version-architecture.md) |
+| Invocations, schema, errors, previews and output | [CLI contract](../reference/cli-contract.md), [CLI UX decisions](cli-ux-convergence.md#product-decisions) |
+| Connection selection and persistence | [Configuration](../user/configuration.md), [named-context design](persistent-connection-context-design.md) |
+| Workflow and task create/edit/preservation | [Workflow authoring](../user/workflow-authoring.md), [task boundaries](task-authoring-boundaries.md), [task examples](../user/task-examples.md) |
+| Schedule, execution, recovery and mutation uncertainty | [CLI contract](../reference/cli-contract.md), [execution outcomes](execution-outcomes.md) |
+| Relations and compact business lists | [Frontend operation relations](frontend-operation-relations.md), [compact JSON boundaries](compact-json-study.md) |
+| Contributor checks and live scenario obligations | [Tooling](tooling.md#test-and-quality-gate-lanes), [live testing](live-testing.md#coverage-policy) |
+| Release eligibility and publication | [Release process](release.md) |
+
+## Correctness and Discovery Follow-up
+
+Confirmed correctness defects and misleading contracts require correction before
+a release. Broader audits below establish whether further changes are needed;
+they do not authorize adding commands merely to complete a checklist. Optional
+ergonomic extensions are listed separately and need a demonstrated user benefit.
+
+- [x] Render effective project schedule preferences in `workflow.create
+  --dry-run` and bind confirmation to those values. Recheck before schedule
+  creation; changed effective values stop that stage and report any already
+  completed workflow mutations.
+
+- [x] Translate explicit native `60002` (`STORAGE_NOT_STARTUP`) to `invalid_state`
+  with server-storage guidance, retaining its upstream source. Source review
+  across all 37 releases found this status defined consistently in the 26
+  releases from `3.0.0`; native resource guards in `3.0.x` and `3.1.x` return it
+  when resource storage is disabled. The shared service rule covers resource
+  commands, default-directory discovery and typed task-resource resolution. Generic
+  `10057`/`10061` errors remain distinct. This fixes error guidance, not the
+  server's storage configuration or the pending resource live coverage.
+- [x] Prevent whole-workflow deletion from orphaning observed owner lineage on
+  exact `3.3.1` and `3.3.2`: a source-backed recipe selects a read-only preflight,
+  with service-owned `conflict` guidance and no automatic version-history repair.
+  The [deletion contract](../reference/cli-contract.md#dsctl-workflow-delete-workflow---force)
+  preserves the REST read/delete concurrency boundary.
+- [ ] Improve diagnosis of lineage already orphaned by earlier whole-workflow
+  deletions on `3.3.1` and `3.3.2`. Generic native `50022` alone does not prove
+  orphan lineage, and the CLI has no REST repair for a deleted owner.
+- [x] Reconcile `workflow-instance.execute-task` runtime support with its native
+  executor: `3.3.1`, `3.3.2`, `3.4.0` and `3.4.1` expose the API but have no
+  master `EXECUTE_TASK` handler. API acceptance is not execution evidence.
+  Capabilities and schema report `limited`, and CLI preflight blocks dispatch
+  while retaining the native wire evidence. Positive self-execution scenarios target
+  `3.2.0`–`3.2.2` and `3.4.2`–`3.4.3`; only the former increments `runTimes`.
+  Dependency-subgraph execution remains a separate unverified facet.
+- [x] Verify native status provenance through alert-plugin and alert-group
+  service error payloads, including UI plugin schema discovery. The shared
+  exception-chain renderer already retains upstream facts; preserve that
+  mechanism. Reference conflicts guide users through group list and detail
+  inspection because older list projections can omit instance associations.
+- [ ] Prepare reversible handling of dangling references in upstream seed
+  groups for live acceptance, without treating a missing list field as proof
+  that no reference exists.
+- [x] Review workflow create/edit final readbacks and online/offline pre-mutation
+  detail and post-mutation readbacks. Pre-edit detail failures use the shared
+  workflow read translation; release readback failures retain already translated
+  domain error types and the applied write. Production exact `3.4.3` adapter
+  regressions cover both release actions, both edit input forms and successive
+  pre-edit detail reads in
+  [workflow error boundaries](../../tests/services/workflow/test_error_boundaries.py).
+  [Mutation progress regressions](../../tests/services/workflow/test_mutation_progress.py)
+  retain create/edit identities, completed stages and uncertain outcomes. This
+  closes the reviewed readback/detail scope, not every workflow mutation error
+  path; [execution outcomes](execution-outcomes.md#partial-mutations) remains the
+  behavior owner. A readback failure must not imply an unapplied preceding write.
+- [x] Verify that parent/child relations do not generate navigation scoped to
+  the source project. Current relation replies retain native IDs without
+  inferred target-project commands; regression tests cover both directions.
+  Relation IDs alone do not establish shared project scope. Keep the
+  [relation ownership rules](frontend-operation-relations.md) and
+  [operational investigation](../user/operational-investigation.md) intact.
+- [x] Let task-instance get/watch/savepoint/stop resolve directly from `--project`
+  as well as `--workflow-instance`, so standalone STREAM rows can expose
+  savepoint and stop without inventing a workflow-instance ID. Project-only
+  selection uses bounded BATCH/STREAM paging where supported; force-success
+  and sub-workflow retain their required workflow selector. Preserve native
+  ID-only log access and the selected command's exact availability in the
+  [CLI contract](../reference/cli-contract.md).
+- [x] Review schema parity for deterministic cross-field command validators.
+  Mode, source, update, selector, force and log-window guards are represented in
+  `command.constraints`; alert-group updates retain their exact-version field
+  sets. Constraint references are checked against projected options on all 37
+  profiles. Future validators must update the same
+  [schema contract](../reference/cli-contract.md#dsctl-schema).
+- [x] Review actionable guidance for common configuration, selection, authoring,
+  permission and execution failures. Non-mapping workflow YAML now returns
+  `user_input_error`; create conflicts/project/permission errors and missing
+  instance tasks supply scoped next steps. RPC failures retain dispatch
+  uncertainty; nested recovery hints are emitted once. Future translations
+  follow the [stable error envelope](../reference/cli-contract.md#standard-envelope).
+- [x] Review mutation previews and confirmations against all 181 catalog actions.
+  Compiled edits/execution plans retain their seven dry-run surfaces; unchanged
+  workflow, task and workflow-instance edits now expose empty mutation plans.
+  Direct operations, destructive confirmation, schedule risk review and atomic
+  local writes follow the
+  [mutation review contract](../reference/cli-contract.md#mutation-review-and-confirmation).
+  Nested workflow failures retain their precise stage and one recovery hint.
+- [x] Verify that `context` and `doctor` separate saved selection, effective
+  settings and remote validity. Context inspection stays local; configuration
+  writes report saved and effective selection separately. Doctor describes
+  connection/version/API checks and makes no project-permission or task-execution
+  claim. See the [context contract](../reference/cli-contract.md#dsctl-context).
+
+## Exact-Version Compatibility Track (In Progress)
+
+The exact wire matrix and compiled-domain ownership are implemented. Remaining
+work concerns behavior evidence and specific semantic decisions, rather than
+another adapter/family migration. The
+[compatibility architecture](multi-version-architecture.md) and
+[exact profile gates](live-testing.md#exact-version-profile-gates) define the
+review and promotion boundaries.
+
+- [x] Correct the `3.0.0`–`3.0.6` namespace-permission projection when native
+  responses have no `clusterCode`; retain absence without inventing an identity.
+- [x] Review legacy `1.3.9` project and datasource GET deletions independently.
+  Both now execute once and preserve an uncertain mutation outcome instead of
+  retrying because the upstream route uses GET. Independent transport tests
+  retain the native encodings and failure behavior.
+- [x] Aligned cross-version project-selector help and schema with the native
+  identity contract: DS `1.3.9` uses `id`, while newer releases use `code`.
+  Project-only `name_or_native_identity` metadata makes this distinction
+  explicit; code-only domain selectors retain their existing meaning.
+- [x] Preserved pagination evidence in project/workflow `DefinitionPage`
+  output by reusing the shared pagination implementation. Both single-page
+  and `--all` output retain original totals and observed scope; materialized
+  counts describe returned rows. Regression coverage includes a non-first
+  start page, where returned count differs from the original total. Existing
+  project-lifecycle receipts still rely on native-identity GETs and explicit
+  first-page absence searches, independently of this next-candidate fix.
+- [x] Corrected exact `3.2.2` project-worker-group clear capability: the
+  action-specific source decision is `limited` / `not_executable`, while list
+  and nonempty set remain supported. Capabilities, schema and CLI preflight
+  expose the same constraint; remote `1402003` preserves its source and
+  explains the nonempty assignment requirement. All 37 profiles were
+  regenerated, with focused generator and CLI regressions. Receipts collected
+  before this correction retain their original artifact identity. Persistent
+  `3.2.2` assignment tests still need a
+  safe cleanup plan because project deletion does not cascade assignment rows.
+- [ ] Capture released parsed-YAML semantics, schema compatibility, template
+  parse/compile semantics, lint, dry-run, errors and round-trip behavior by CLI
+  artifact and exact DS profile. Do not freeze presentation bytes as the public
+  compatibility contract. See the
+  [published-CLI compatibility corpus requirement](multi-version-architecture.md#1-correct-evidence-through-the-task-authoring-tracer).
+- [x] Expanded the `v0.3.0` / exact `3.4.1` SQL inline baseline with
+  source-matched historical package captures for those semantic boundaries.
+  Comparisons explicitly select the profile, preserve native update identities
+  and unknown SQL parameters, and record intentional lint/schema migrations.
+  This is a local rebuild of the release tag, not verification of the original
+  distribution binary; other artifacts, profiles and authoring facets remain
+  covered by the open corpus requirement above.
+- [x] Added the same bounded `v0.3.0` / exact `3.4.1` baseline for SHELL
+  command shorthand: parsed input, command schema, template compilation, lint
+  and create errors, create dry-run, and export/reparse/edit preservation.
+  Resource-list schema changes remain outside this command-only slice.
+- [x] Add deterministic installed-wheel evidence for the optimistic stale-plan
+  negative before promoting `task.update` to `live_full`. Unit/contract tests
+  cover the guard; live cleanup proves only that an observed concurrent fixture
+  change is not overwritten. Preserve the PUT concurrency/readback limits in
+  the [task mutation policy](multi-version-architecture.md#mutation-and-unknown-field-preservation).
+  `tests/live/test_task_stale_plan.py` now supplies the exact `3.4.2` scenario:
+  retain one prepared object, apply a separate legal update, then require a
+  conflict with no stale write and safely restore the exclusive fixture.
+  The exact `3.4.2` installed-wheel scenario is independently verified: the same
+  prepared object conflicts after interference, makes zero stale PUT calls,
+  preserves the intervening state and restores the owned fixture. This does not
+  establish generic atomic CAS, coverage on other versions or current-wheel
+  release evidence.
+- [ ] Close the remaining supported scenarios under the
+  [shared live obligations](live-testing.md#current-stable-surface-matrix).
+  Completed development coverage is summarized in the
+  [coverage snapshot](live-testing.md#current-coverage-snapshot); do not repeat
+  completed scenarios because an earlier checkpoint lists them as pending.
+  Remaining cleanup constraints concern legacy task-group mutations, queues
+  without DELETE and exact `3.2.2` project-worker-group assignments. Positive
+  namespace CRUD also requires a working K8S backend and is outside the current
+  acceptance scope. Existing missing-backend probes do not establish positive
+  mutations. Other optional fields and permission paths remain separate from
+  common lifecycle coverage. Apply the
+  [acceptance closeout criteria](release.md#closing-development-acceptance)
+  to each promised scope.
+- [x] Verify the audit-list subset on all 19 profiles without filter-metadata
+  endpoints. The installed-wheel evidence covers read-only list behavior and
+  temporary credential cleanup; it does not close unrelated governance cases.
+- [x] Verify task-group queue controls on all nine cleanup-safe profiles:
+  owned waiting-queue identity, priority readback, full capacity and actual
+  execution overlap after force-start. Preserve independent proofs and cleanup
+  records, including corrected interpretations of transient queue snapshots.
+- [x] Adapt datasource and namespace failure cleanup: use the configured
+  backend's exact native type, verify grant removal and object absence, and
+  register namespace-probe cluster cleanup before response assertions. Separate
+  namespace missing-resource assertions from the cluster-dependent probe.
+  Portable harness checks do not establish live acceptance.
+- [x] Adapt runtime-control scenarios before batch execution: use
+  exact stop states and independent recovery/rerun, force-success and execute-task
+  scenarios. Require evidence of the new execution before cleanup; an old
+  terminal result cannot settle an uncertain start or replay. Harness regression
+  checks remain separate from installed-wheel live evidence.
+- [x] Adapt the task-group queue scenario before batch execution: resolve the
+  fresh run, verify the owned waiting row and persisted priority, and prove
+  force-start through actual overlapping task execution at full group capacity.
+  Cleanup checks quiescence and group/project ownership before deletion.
+  Portable checks do not establish live acceptance; fixture prerequisites and
+  exact cleanup restrictions still apply.
+- [x] Complete the `0.4.0` same-wheel release corpus: 37 conformance receipts,
+  37 exact-read receipts and the separate exact `3.4.2` schema-7 gate, with
+  independently verified cleanup. The corrected full release gate and package
+  validation passed; subsequent documentation changes have separate review and
+  validation. This does not publish the release or promote entire profiles.
+  Every future candidate must satisfy the same
+  [release process](release.md#candidate-validation). Historical receipts keep
+  their original artifacts and scopes; do not relabel them as new evidence.
+
+## Measured Ergonomics and Agent Acceptance
+
+- [ ] Add resource-specific `digest` views only where they materially reduce
+  context while preserving task correctness. Workflow and workflow-instance
+  digests are delivered; additional candidates belong to the
+  [future capability inventory](../reference/future-capabilities.md).
+- [ ] Assess broader `explain` views for execution-context and parameter
+  reasoning. Preserve the delivered schedule explain contract and require a
+  concrete user journey before adding another surface.
+- [ ] Compare dynamic action-index designs on equivalent black-box tasks before
+  changing existing discovery groups. Preserve identity, coverage and
+  uncertainty; new UI-derived actions need separate exact-release review. Use
+  the [comparison requirements](compact-json-study.md#验收要求) and
+  [relation rules](frontend-operation-relations.md).
+- [ ] Validate the repository-distributed `dsctl` skill end-to-end: create a
+  multi-task workflow from an instruction, trigger and observe the new execution,
+  retrieve logs on failure, report the result, then edit and retry where needed.
+  The skill is already distributed with progressive references; distribution
+  does not prove task completion or a general benefit. Compare agent outcomes
+  under the [same correctness-first acceptance](compact-json-study.md#验收要求).
+
+## Continuing Quality Obligations
+
+These obligations apply to future changes as well as the current release.
+Completed local checks are observations of their tree and artifact, rather than
+permanent checkmarks.
+
+- [ ] Prioritize shared rule ownership and mechanical replacement by remaining
+  maintenance effort, rather than domain counts or line targets. Remove
+  superseded implementations in the same change, retain independent expected
+  behavior/evidence, and follow the
+  [one-edit-path maintenance goals](refactoring-plan.md#next-maintenance-goals).
+- [ ] Establish and maintain at least 80% test coverage for `services/` and
+  `models/`, with meaningful behavior tests. Passing test counts alone do not
+  establish this coverage target.
+- [ ] Keep machine-specific private hosts, literal credentials and local
+  development reports out of submitted source and release payloads. Retain
+  legitimate placeholders, upstream source provenance and secret-free receipt
+  evidence. Handwritten literal scanning is delivered; package and documentation
+  boundaries remain subject to the [release review](release.md#product-review-before-the-candidate-build).
+- [ ] Keep [architecture](architecture.md), this roadmap and the
+  [domain model](../reference/domain-model.md) aligned with current code, exact
+  DS semantics and unresolved decisions. Run documentation link checks against
+  clean-checkout files or immutable upstream sources when updating them.
+
+Substantial implementation changes must pass
+`python tools/check_quality_gate.py --mode development` with the documented
+lanes. Review changed user journeys before freezing a candidate. Release
+readiness requires the complete release gate and fresh receipts for the same
+wheel; a development gate or historical campaign cannot substitute for it.
+
+The stable live suite, personas, optional capability blocks, cleanup policy and
+runtime/recovery scenarios are maintained in
+[live testing](live-testing.md#current-coverage-snapshot). New or changed
+cluster-interacting behavior needs appropriate scenario coverage. Credentials,
+optional backends and unsafe shared-cluster cleanup remain real execution
+prerequisites, rather than reasons to mark an unrun gate complete.

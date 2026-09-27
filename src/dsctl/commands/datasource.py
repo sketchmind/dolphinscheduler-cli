@@ -1,9 +1,9 @@
 from pathlib import Path
-from typing import Annotated
 
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.datasource import (
     connection_test_datasource_result,
     create_datasource_result,
@@ -21,10 +21,6 @@ datasource_app = typer.Typer(
     no_args_is_help=True,
 )
 
-DATASOURCE_HELP = (
-    "Datasource name or numeric id. Run `dsctl datasource list` to discover values."
-)
-
 
 def register_datasource_commands(app: typer.Typer) -> None:
     """Register the `datasource` command group."""
@@ -32,41 +28,15 @@ def register_datasource_commands(app: typer.Typer) -> None:
 
 
 @datasource_app.command("list")
+@bind_command("datasource.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter datasources by name using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List datasource identities and summary fields."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -82,14 +52,11 @@ def list_command(
 
 
 @datasource_app.command("get")
+@bind_command("datasource.get")
 def get_command(
     ctx: typer.Context,
-    datasource: Annotated[
-        str,
-        typer.Argument(help=DATASOURCE_HELP),
-    ],
+    datasource: str,
 ) -> None:
-    """Get one datasource by name or id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -99,28 +66,12 @@ def get_command(
 
 
 @datasource_app.command("create")
+@bind_command("datasource.create")
 def create_command(
     ctx: typer.Context,
     *,
-    file: Annotated[
-        Path,
-        typer.Option(
-            "--file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to one DS-native datasource JSON payload file. Start "
-                "with `dsctl template datasource`, then "
-                "`dsctl template datasource --type TYPE` and pass the saved "
-                "data.json path here."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ],
+    file: Path,
 ) -> None:
-    """Create one datasource from a JSON payload file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -130,33 +81,13 @@ def create_command(
 
 
 @datasource_app.command("update")
+@bind_command("datasource.update")
 def update_command(
     ctx: typer.Context,
-    datasource: Annotated[
-        str,
-        typer.Argument(help=DATASOURCE_HELP),
-    ],
+    datasource: str,
     *,
-    file: Annotated[
-        Path,
-        typer.Option(
-            "--file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to one DS-native datasource JSON payload file. Start from "
-                "`dsctl datasource get DATASOURCE` or "
-                "`dsctl template datasource --type TYPE`, then pass the saved "
-                "JSON path here. Masked password ****** preserves the existing "
-                "password."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ],
+    file: Path,
 ) -> None:
-    """Update one datasource from a JSON payload file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -170,22 +101,13 @@ def update_command(
 
 
 @datasource_app.command("delete")
+@bind_command("datasource.delete")
 def delete_command(
     ctx: typer.Context,
-    datasource: Annotated[
-        str,
-        typer.Argument(help=DATASOURCE_HELP),
-    ],
+    datasource: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm datasource deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one datasource by name or id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -199,14 +121,11 @@ def delete_command(
 
 
 @datasource_app.command("test")
+@bind_command("datasource.test")
 def test_command(
     ctx: typer.Context,
-    datasource: Annotated[
-        str,
-        typer.Argument(help=DATASOURCE_HELP),
-    ],
+    datasource: str,
 ) -> None:
-    """Run one datasource connection test after create or update."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

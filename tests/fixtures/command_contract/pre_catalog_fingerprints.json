@@ -1,0 +1,726 @@
+{
+  "access-token.create": {
+    "parser": "7322686b43e82d6b50f75b03534f61b90c1992ef69458e97a260d03465c9657e",
+    "summary": "Create one access token."
+  },
+  "access-token.delete": {
+    "parser": "e00a2f571e5e0e04f2e2e50def37dab43d473036ce7f29c433b101a6a85550c4",
+    "summary": "Delete one access token by numeric id."
+  },
+  "access-token.generate": {
+    "parser": "e617f18669b23ba8d809a3af51450bdaf92a18efd0639fa0fcf9b83e2e2deaa3",
+    "summary": "Generate one token string without persisting it."
+  },
+  "access-token.get": {
+    "parser": "4eb8a2568bcc752ebbfefddd9dc6d04789bdd8abed1bab26554f5d8e7296de22",
+    "summary": "Get one access token by numeric id."
+  },
+  "access-token.list": {
+    "parser": "d3b1469b8a6710c8dc8792042e43f5dfce6b96974fa3dd9c66062dba3389a19f",
+    "summary": "List access tokens with optional filtering and pagination controls."
+  },
+  "access-token.update": {
+    "parser": "fe7ba59627687744934636006398dbb885da1ec6f7beb6e93ba84d0a739ae843",
+    "summary": "Update one access token by numeric id."
+  },
+  "alert-group.create": {
+    "parser": "88e66006ccd486e29c44669a7bff0e1fb77908cb8b375f0b78007c5a801ec03c",
+    "summary": "Create one alert group."
+  },
+  "alert-group.delete": {
+    "parser": "0c1f075b9da8dc003ccb987b1bd76fde6f5ba5e3eda0c7bdc9167bdffe322183",
+    "summary": "Delete one alert group."
+  },
+  "alert-group.get": {
+    "parser": "dc338ac832fb7d2f57f58e2aff1fc7dc2ea1f9e99df9e828a0cc303bef933044",
+    "summary": "Get one alert group by name or id."
+  },
+  "alert-group.list": {
+    "parser": "05aba7303c10eb3c0041d6261003ed224b86ae7a8f014bec7deb730021569c22",
+    "summary": "List alert groups with optional filtering and pagination controls."
+  },
+  "alert-group.update": {
+    "parser": "18e4ddef615f0bb98d67dea4fe0aeffed3a5e2c42dfbb15acf00c54fc4131e36",
+    "summary": "Update one alert group."
+  },
+  "alert-plugin.create": {
+    "parser": "cc2e835f1c0bf86e582de8f6262d176a962076fc92fa17584563e2e652793187",
+    "summary": "Create one alert-plugin instance."
+  },
+  "alert-plugin.definition.list": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "List supported alert-plugin definitions, not configured instances."
+  },
+  "alert-plugin.delete": {
+    "parser": "09a0c1118e74abce5435404610de2e9565baa8198809a1e5e50fd609d7d54247",
+    "summary": "Delete one alert-plugin instance."
+  },
+  "alert-plugin.get": {
+    "parser": "4ddc6ab1806119b87a8f0a1cb6245d458a1e0e44cad95b9fbf99f3e7b343d884",
+    "summary": "Get one alert-plugin instance by name or id."
+  },
+  "alert-plugin.list": {
+    "parser": "01e0d88dba80bc817bd3b1fd2f81fe4809ee62edb1908d7106115f1fd5e86e85",
+    "summary": "List alert-plugin instances with optional filtering and pagination."
+  },
+  "alert-plugin.schema": {
+    "parser": "0768deb80e4d237691ad81a05c08f3c760d747e2b0f18b7e023161f438a4c77a",
+    "summary": "Get one alert-plugin definition schema by name or id."
+  },
+  "alert-plugin.test": {
+    "parser": "4ddc6ab1806119b87a8f0a1cb6245d458a1e0e44cad95b9fbf99f3e7b343d884",
+    "summary": "Send one test alert using one existing alert-plugin instance."
+  },
+  "alert-plugin.update": {
+    "parser": "2b88f47c53b2095ea2d0a34ec0d5743c8ae3c6d5e2afb5ee7b301dd9f60f5036",
+    "summary": "Update one alert-plugin instance."
+  },
+  "audit.list": {
+    "parser": "40e02c0e781a92df82dc3baff65a96ad3668d9533b081520e7643283ff3669fa",
+    "summary": "List audit-log rows with optional filters."
+  },
+  "audit.model-types": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "List DS audit model types."
+  },
+  "audit.operation-types": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "List DS audit operation types."
+  },
+  "capabilities": {
+    "parser": "08790e1b3462b7f3910e84a601d0ab065306adb25933cb1286e00401f0f243d6",
+    "summary": "Discover supported features and versions; use schema for command syntax."
+  },
+  "cluster.create": {
+    "parser": "b516e012c8cd91a84d7c833d813ecab2c436fdfbe64fd12ac6cbf3150500e804",
+    "summary": "Create one cluster; pass --config or --config-file."
+  },
+  "cluster.delete": {
+    "parser": "95da5201e3f54189f27cc3d870678f7f8321154b59afe2b43c63bbb32a2d551a",
+    "summary": "Delete one cluster."
+  },
+  "cluster.get": {
+    "parser": "fc90e666442148c2d5130e2677be28968337d416661d899584ce10a30a9d4114",
+    "summary": "Get one cluster by name or code."
+  },
+  "cluster.list": {
+    "parser": "0ff1f9fbb836c8868842ba99cebd5f6574721fd945573e08b38458b8458a4e02",
+    "summary": "List clusters with optional filtering and pagination controls."
+  },
+  "cluster.update": {
+    "parser": "04133e87b20957dc25ab5abdb424df1ff6c4536afe2aa7dd045e4b62b6dc8645",
+    "summary": "Update one cluster; config may come from --config-file."
+  },
+  "config.get": {
+    "parser": "a52321f38324979f7106e147e032f8c1fdb42be480127189eb98cc3cb7a04984",
+    "summary": "Read one saved user configuration value."
+  },
+  "config.set": {
+    "parser": "9efb75e6e4a4afd3a206512a74cc6964fff6b6e9f877bd31db0ebd27f7812414",
+    "summary": "Save the default context; higher-priority selectors still apply."
+  },
+  "config.unset": {
+    "parser": "a52321f38324979f7106e147e032f8c1fdb42be480127189eb98cc3cb7a04984",
+    "summary": "Clear the saved default context."
+  },
+  "context": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "Show the local target for later commands; no remote validation."
+  },
+  "context.create": {
+    "parser": "8cf436752a527230d918b03c4243f06245b60b3377ff0299021a2140a2bbbbd6",
+    "summary": "Save a context referencing a locally validated connection file."
+  },
+  "context.delete": {
+    "parser": "813303e3fe0beb103d4ae85d73bf864c3499c2c68945875ae3cdd0d705ffde36",
+    "summary": "Delete one saved context after unsetting it as the default."
+  },
+  "context.get": {
+    "parser": "813303e3fe0beb103d4ae85d73bf864c3499c2c68945875ae3cdd0d705ffde36",
+    "summary": "Show one saved context without loading its connection file."
+  },
+  "context.list": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "List saved contexts without remote validation."
+  },
+  "context.update": {
+    "parser": "309d99c8e5bc94252008475a0da71187f49d58600a88261ccec8989714516bd2",
+    "summary": "Update a saved connection reference or project binding locally."
+  },
+  "datasource.create": {
+    "parser": "0bf1f7c8621165fa46e5d235edfdc74258ae307242efa8b8827bb0d457972de5",
+    "summary": "Create one datasource from a JSON payload file."
+  },
+  "datasource.delete": {
+    "parser": "a4a82f443c68308dbc8d14553bc5d2cd00a2fff1479aab12618e0ca189205c0a",
+    "summary": "Delete one datasource by name or id."
+  },
+  "datasource.get": {
+    "parser": "cb309c1bf9d886b3059f330bff61ad01116997fd64580d5b527663e9a30a3f59",
+    "summary": "Get one datasource by name or id."
+  },
+  "datasource.list": {
+    "parser": "4e034773365b44f21e56a05bb5057e9c365fa631749f7bedcd1a32dcd628157e",
+    "summary": "List datasource identities and summary fields."
+  },
+  "datasource.test": {
+    "parser": "cb309c1bf9d886b3059f330bff61ad01116997fd64580d5b527663e9a30a3f59",
+    "summary": "Run one datasource connection test after create or update."
+  },
+  "datasource.update": {
+    "parser": "ec210323148915a9e593d9b205feb5b3a4bd1245dceea2214fec773b6398a330",
+    "summary": "Update one datasource from a JSON payload file."
+  },
+  "doctor": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "Check connection settings, version and API access; no task execution."
+  },
+  "enum.list": {
+    "parser": "edf0411770a90eceac5f023557964263e894db63997fb283778535c1ffaf674a",
+    "summary": "List the members of one supported generated enum."
+  },
+  "enum.names": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "List supported generated enum discovery names."
+  },
+  "environment.create": {
+    "parser": "008ecb68df1c662191d4a07ce69591329e04c4f25c894093ddafc8a93b79157a",
+    "summary": "Create one environment; pass --config or --config-file."
+  },
+  "environment.delete": {
+    "parser": "75d5437942fd709ee2e9e7b4c1aac758c99c0af13f0c8d6350ccfba04f27d24d",
+    "summary": "Delete one environment."
+  },
+  "environment.get": {
+    "parser": "be1431ccf85cb93032896a9b7aa9d50fc94ab78d90d2a0906fa468f4cb7e853f",
+    "summary": "Get one environment by name or code."
+  },
+  "environment.list": {
+    "parser": "be957d2b80b0c8495b74ac62c7c1e67d5317e61b5eb01b18a17acca570a8d97c",
+    "summary": "List environments with optional filtering and pagination controls."
+  },
+  "environment.update": {
+    "parser": "38171bc5bc2c404c97313fbeb0d1fe90391481d1d43ebb7fd561b7cd66e8c23a",
+    "summary": "Update one environment; config may come from --config-file."
+  },
+  "lint.workflow": {
+    "parser": "0b7561c0b5fa730325724cc5c3fa6de1b7621d5be07ba3ca5d7b6abc0e99f43a",
+    "summary": "Lint one workflow YAML file using the local spec and compile pipeline."
+  },
+  "lint.workflow-instance-patch": {
+    "parser": "8a68be39984ea26bf8d05aa1b864a9dea6bd32e856d1d845bc8301db73255458",
+    "summary": "Lint workflow-instance patch structure and baseline-independent semantics without contacting DolphinScheduler."
+  },
+  "lint.workflow-patch": {
+    "parser": "93cc0c7b76d22b4773481c4d62f292757ee59ea58feb83f62e0d587a855290e0",
+    "summary": "Lint workflow patch structure and baseline-independent semantics without contacting DolphinScheduler."
+  },
+  "monitor.database": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "List database health metrics reported by the monitor API."
+  },
+  "monitor.health": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "Get the API server actuator health payload."
+  },
+  "monitor.server": {
+    "parser": "3b8f5abccc1e87853693def7b6cd09808d8d7b214d9b4900028d585946ac86bb",
+    "summary": "List registry-backed servers for one node type."
+  },
+  "namespace.available": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "List namespaces available to the current login user."
+  },
+  "namespace.create": {
+    "parser": "2e934083add5cbd2c4f62bcc072e699ece6ac23c10526c1802415ada01d877fe",
+    "summary": "Create and register one real Kubernetes namespace."
+  },
+  "namespace.delete": {
+    "parser": "cd23e6c29f59ebb6ba8624e95ca98bf96951bb9a57281cc45a820ed14a28b978",
+    "summary": "Delete a namespace registration and, on DS 3.0-3.1, its K8s object."
+  },
+  "namespace.get": {
+    "parser": "17ea0b81b967fbe5b30dc4d23115ea605d7246c2143871ef2b13a606b4fb7ffc",
+    "summary": "Get one namespace by name or id."
+  },
+  "namespace.list": {
+    "parser": "41691fa95de8dd34f4c9b6eeeee277797484dd07f95172ea5a0dc1dd8cd96a5a",
+    "summary": "List namespaces with optional filtering and pagination controls."
+  },
+  "project-parameter.create": {
+    "parser": "f7df4c4b73085a866810777b66e3528daa8af450a821e817b5bee31d5f4a715a",
+    "summary": "Create one project parameter."
+  },
+  "project-parameter.delete": {
+    "parser": "be62b86e85983c79d5256400fb97d78aed969af713defb2e506dd5f80e4f76d3",
+    "summary": "Delete one project parameter."
+  },
+  "project-parameter.get": {
+    "parser": "2d67bf95ce30903b487d077339ab9afe33b9112bf4bd616430a036131e0e99e2",
+    "summary": "Get one project parameter by name or code."
+  },
+  "project-parameter.list": {
+    "parser": "3642a53f363aa16b020888fdea6941510f6e0b34275521b04d078cb0a520ef35",
+    "summary": "List project parameters inside one selected project."
+  },
+  "project-parameter.update": {
+    "parser": "5d5e6ce0f49512001f9a18e045e714c47a23d8a63aaf48c439f769fa6c7883b4",
+    "summary": "Update one project parameter."
+  },
+  "project-preference.disable": {
+    "parser": "06cc9d0d47970a3b6c2d729bd77231f0ffbd14a2a25dc1387fe6096a83807c13",
+    "summary": "Disable the selected project preference default-value source."
+  },
+  "project-preference.enable": {
+    "parser": "06cc9d0d47970a3b6c2d729bd77231f0ffbd14a2a25dc1387fe6096a83807c13",
+    "summary": "Enable the selected project preference default-value source."
+  },
+  "project-preference.get": {
+    "parser": "06cc9d0d47970a3b6c2d729bd77231f0ffbd14a2a25dc1387fe6096a83807c13",
+    "summary": "Get the singleton project preference default source for one selected project."
+  },
+  "project-preference.update": {
+    "parser": "c350e88194e6b3f8f4d6cdf158936bc65808c96aace2b11556a2e3a654ebe532",
+    "summary": "Create or update the selected project-level default-value source."
+  },
+  "project-worker-group.clear": {
+    "parser": "46eb26c7ac0920bc772f190c7e721852bc8844dcd08589ca9622489aea20ed98",
+    "summary": "Clear the explicit worker-group assignment set for one selected project."
+  },
+  "project-worker-group.list": {
+    "parser": "06cc9d0d47970a3b6c2d729bd77231f0ffbd14a2a25dc1387fe6096a83807c13",
+    "summary": "List the worker groups currently reported for one selected project."
+  },
+  "project-worker-group.set": {
+    "parser": "f91ad7b0f930201d57c3923f388afb35785c8c13bebe8b40e789811c4abd3614",
+    "summary": "Replace the explicit worker-group assignment set for one selected project."
+  },
+  "project.create": {
+    "parser": "bd9fa5330db4c900e35e00ec37d6fe9a1d9d35f9f7d4c676271dfb1428cdaaf7",
+    "summary": "Create a project."
+  },
+  "project.delete": {
+    "parser": "9281b5ab5ce5c2860e2361b984ff69f9f6e5227774689a141fb7dd03d4e92aef",
+    "summary": "Delete a project."
+  },
+  "project.get": {
+    "parser": "b542dce6eb10d5acc1851a10169cc2afc56b2cef861208a0d95523420ed0f587",
+    "summary": "Get one project by name or native numeric identity (id on DS 1.3.9, code on newer versions)."
+  },
+  "project.list": {
+    "parser": "df83547a350611c1cb3b5a72922149d5fc08eb5ddf837da02acd18fa9727b8b0",
+    "summary": "List projects with optional filtering and pagination controls."
+  },
+  "project.update": {
+    "parser": "70bf292bbff3d3568615ab2ba1aaf164f36cbcf21e839ef53e09d3e4763fd7ac",
+    "summary": "Update a project."
+  },
+  "queue.create": {
+    "parser": "90823e1f1fe729fab4f45dd1c2a825123ed1f668202ed1f2262abc9a9c3399b5",
+    "summary": "Create one queue."
+  },
+  "queue.delete": {
+    "parser": "eea8eaad4e84a6bbb32745f1dc2e6e306d7e5876e17859266e8e02032d430ba8",
+    "summary": "Delete one queue."
+  },
+  "queue.get": {
+    "parser": "7f89a530813807a9bbbd832bfb6457101bf71a2888cdbf5f3b89db8a09bce3fd",
+    "summary": "Get one queue by name or id."
+  },
+  "queue.list": {
+    "parser": "ef34ceabb3b4aa72b3479b2ff51cdc6b2d7939ec90e80692c69077c2b4b501a6",
+    "summary": "List queues with optional filtering and pagination controls."
+  },
+  "queue.update": {
+    "parser": "ab55549e249df013dd03b29b836b5e15ed5de10ee5b7b1b730dce6bf03227d26",
+    "summary": "Update one queue."
+  },
+  "resource.create": {
+    "parser": "91576132dbd5a662648f3d8f1f31c287d51c28f958b43d61672fdc04b80eeb01",
+    "summary": "Create one text resource from inline content."
+  },
+  "resource.delete": {
+    "parser": "07add4a62d1d6f28365653100def85c32cac860a491323d8cc9ad4936d5b21fb",
+    "summary": "Delete one resource."
+  },
+  "resource.download": {
+    "parser": "a26bd826ca76edd1c4e09435be502b309e11905cfc244a6b1e8b63ea2e062351",
+    "summary": "Download one remote resource to one local file path."
+  },
+  "resource.list": {
+    "parser": "d261c5808b02ae79914d34d6a9b4a9b6f073b139b8e8d43e368db813bac6f746",
+    "summary": "List resources inside one DS directory."
+  },
+  "resource.mkdir": {
+    "parser": "143af3298d3037a442f717714fd3ccf9f2c2a6b5ed576d3d55899aea3febe542",
+    "summary": "Create one directory inside one DS resource directory."
+  },
+  "resource.upload": {
+    "parser": "fa590da361036f59df4a51a86293b14f7731e3b3495743c687fb20d311e1768b",
+    "summary": "Upload one local file into one DS directory."
+  },
+  "resource.view": {
+    "parser": "46987868efea8a3bafaabb81dde10bae07f9ab396907ec7fb1175e01faaecf5c",
+    "summary": "View one text content window for one resource file."
+  },
+  "schedule.create": {
+    "parser": "c9015d5a2db92f7e98fb7bc9fba338ef9c5dfea785574c5ba1aeaee001fbebc7",
+    "summary": "Create one schedule."
+  },
+  "schedule.delete": {
+    "parser": "159dbad6aa987361ba78a01dbc4ab5b4fd68c497571f32593a6923ffba80e5f5",
+    "summary": "Delete one schedule."
+  },
+  "schedule.explain": {
+    "parser": "9e2b3ff9e3c841b83a01e20b057566486deef9e8705128c621c8c48836e61dce",
+    "summary": "Explain one schedule create or update mutation."
+  },
+  "schedule.get": {
+    "parser": "be1d480c906e8ad6a9d7173adbd330aaefd443ed4f8614c677774b3eb34b64e0",
+    "summary": "Get one schedule by id."
+  },
+  "schedule.list": {
+    "parser": "fa123ba8b4812a8d6d479a254b2ba7042699aa020921310f8559dfeb168b21fa",
+    "summary": "List schedules inside one project."
+  },
+  "schedule.offline": {
+    "parser": "be1d480c906e8ad6a9d7173adbd330aaefd443ed4f8614c677774b3eb34b64e0",
+    "summary": "Bring one schedule offline."
+  },
+  "schedule.online": {
+    "parser": "be1d480c906e8ad6a9d7173adbd330aaefd443ed4f8614c677774b3eb34b64e0",
+    "summary": "Activate one schedule; its workflow definition must be online."
+  },
+  "schedule.preview": {
+    "parser": "983c10d75fefd460927801ab2f76e4bae1c5a45b9d4e1f81801570f1f435ad7d",
+    "summary": "Preview the next fire times for a schedule."
+  },
+  "schedule.update": {
+    "parser": "441ae980917489b5ac8e892bd43af0ab811c8835f11392d4058198e651e06f07",
+    "summary": "Update one offline schedule. Use schedule explain to review inputs and schedule preview to inspect fire times; activate separately."
+  },
+  "schema": {
+    "parser": "2225a391155a09bda1f567068f9b2d6396a9c05916c42a338b38f72b69f0c365",
+    "summary": "Discover exact contracts; use group or index only when action is unknown."
+  },
+  "task-group.close": {
+    "parser": "2e0c3c339f9e03be02a6e79f6a36cd589d71eee56700d549ad6301a4e6a3bfdf",
+    "summary": "Close one task group."
+  },
+  "task-group.create": {
+    "parser": "38de21b446bfb63d4120bfa3951f3b273ffe375cc694a0dc357ddf52f446523f",
+    "summary": "Create one task group."
+  },
+  "task-group.get": {
+    "parser": "2e0c3c339f9e03be02a6e79f6a36cd589d71eee56700d549ad6301a4e6a3bfdf",
+    "summary": "Get one task group by name or id."
+  },
+  "task-group.list": {
+    "parser": "d88a54d7a58d068d08922a406d4e917ef17cc5c6855477f4950729a83b75dde5",
+    "summary": "List task groups."
+  },
+  "task-group.queue.force-start": {
+    "parser": "019a58b05481b8f90ac64c9c542985fdc088ed748adc36476f8a4d6171d2e290",
+    "summary": "Request force-start for one waiting queue row. Acceptance does not prove task execution; inspect the queue and its task instance."
+  },
+  "task-group.queue.list": {
+    "parser": "6d93cae40a53469f8aa628ca8828a0c6e954c8e6f39d17ed674eb6744ba548ad",
+    "summary": "List queue rows for one task group."
+  },
+  "task-group.queue.set-priority": {
+    "parser": "0b6f6db8d26b10a9615715b111fd4512c21d98e3543ede8b0791d2ff13ec121e",
+    "summary": "Set one task-group queue priority."
+  },
+  "task-group.start": {
+    "parser": "2e0c3c339f9e03be02a6e79f6a36cd589d71eee56700d549ad6301a4e6a3bfdf",
+    "summary": "Start one task group."
+  },
+  "task-group.update": {
+    "parser": "7f71c8e446e94c55b3587ada5f4483846beecd9387c63581ee5c432ece77fb04",
+    "summary": "Update one task group."
+  },
+  "task-instance.force-success": {
+    "parser": "c4f5ae77db4d17c85269c1d7751be15d6e61a38cb07640763386025dbe124018",
+    "summary": "Force one failed task instance into FORCED_SUCCESS."
+  },
+  "task-instance.get": {
+    "parser": "cca142a2f73615d81042516c7cf1ea19163bbfdc459baefe561e2ea6ea671982",
+    "summary": "Get one task instance by id within a project."
+  },
+  "task-instance.list": {
+    "parser": "3d37ba8122bae784e3d50dd88abf499da8d4eabb3561382fd110b3192295e484",
+    "summary": "List task instances with project-scoped runtime filters."
+  },
+  "task-instance.log": {
+    "parser": "dd2515134bbe5e1971ac290801ccbe49a0c62a796f44277904f9e9f4a6ecb742",
+    "summary": "Read a task-instance log tail or a located line window."
+  },
+  "task-instance.savepoint": {
+    "parser": "cca142a2f73615d81042516c7cf1ea19163bbfdc459baefe561e2ea6ea671982",
+    "summary": "Request one savepoint for a running task instance."
+  },
+  "task-instance.stop": {
+    "parser": "cca142a2f73615d81042516c7cf1ea19163bbfdc459baefe561e2ea6ea671982",
+    "summary": "Request stop for one task instance."
+  },
+  "task-instance.sub-workflow": {
+    "parser": "c4f5ae77db4d17c85269c1d7751be15d6e61a38cb07640763386025dbe124018",
+    "summary": "Return the child workflow instance for one SUB_WORKFLOW task instance."
+  },
+  "task-instance.watch": {
+    "parser": "d522f7b6bcf76ed21072003da7b12f28307b70be3973858e9a7cf308fec49a1d",
+    "summary": "Poll one task instance until it reaches a finished state."
+  },
+  "task-type.get": {
+    "parser": "5b32022aacc2e4327c13cea43f73c4f48ddd1c2489c5f6140f1bd2994944aa06",
+    "summary": "Summarize the local authoring contract for one task type."
+  },
+  "task-type.list": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "List live DS task types, categories, favourite flags, and CLI authoring coverage."
+  },
+  "task-type.schema": {
+    "parser": "1044fdd3f9633561e3b616f59c099d481f0b0f5e733c0cf5dab0b2b152b376b8",
+    "summary": "Print a bounded field contract for one task type; select detailed views explicitly."
+  },
+  "task.get": {
+    "parser": "78dc4ccc151cd6b5b7d96b896ee239764f656af98906914319b93a18da1ba272",
+    "summary": "Get one task definition by name or code."
+  },
+  "task.list": {
+    "parser": "28ff89142b1b8feb3fef7b58268d03627763776dbcd331e76403bbae2a8c7447",
+    "summary": "List tasks inside one workflow."
+  },
+  "task.update": {
+    "parser": "419b7e01f1b8e32c7e284a66d41dfcd83c5e2cbeb55ef0b0accad04ea684fa02",
+    "summary": "Update one task and its incoming dependencies. Use workflow edit for changes spanning multiple tasks; workflow-instance edit repairs a run."
+  },
+  "template.cluster": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "Emit a DS cluster config JSON template."
+  },
+  "template.datasource": {
+    "parser": "14d83bfc06ede818ee8af4cc92659d1b93587969a47d03822274772c7828f6f7",
+    "summary": "Emit datasource JSON payload-template type discovery or one template."
+  },
+  "template.environment": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "Emit a DS environment shell/export config template."
+  },
+  "template.params": {
+    "parser": "969eb9dd8126355992df318e2bf29c66b1f4f57c066bb8496f948bf74ee6033d",
+    "summary": "Emit stable DS parameter syntax metadata and examples."
+  },
+  "template.task": {
+    "parser": "f6f3815dc7983a195268e687eb49884b723051ebbf1ed8318aa11da5c2dbfee3",
+    "summary": "Emit one task YAML template or list supported task types."
+  },
+  "template.workflow": {
+    "parser": "1770cd6629344ec1198ef4f52eeef456d81ddc2d6318cb7e5113fb385b25a3bf",
+    "summary": "Emit a workflow YAML template for the selected DS version."
+  },
+  "template.workflow-instance-patch": {
+    "parser": "c5202a2541df7480826cf67b88d1e3fb5bdf4d193b985b421b2c5ab41a997c25",
+    "summary": "Emit the stable workflow-instance edit patch YAML template."
+  },
+  "template.workflow-patch": {
+    "parser": "d1575fda2eddeee00fae76185c56ee4236d57a7601d414bd76ddcaaaf54cc987",
+    "summary": "Emit the stable workflow edit patch YAML template."
+  },
+  "tenant.create": {
+    "parser": "1404c3fe5eb29bbabee485a40d66c2c326665433fb9cbb9d146cb80495f5c28b",
+    "summary": "Create one tenant."
+  },
+  "tenant.delete": {
+    "parser": "123b7c1c9c50afbcc215282519eade1e3913e4901fc22d11d78499fa6c3f09a3",
+    "summary": "Delete one tenant."
+  },
+  "tenant.get": {
+    "parser": "76290032f754f44ef2a05f58b8a066aeba617db9033bc59ac59542306b144311",
+    "summary": "Get one tenant by code or id."
+  },
+  "tenant.list": {
+    "parser": "d14106e26a88ea4e36b8a671f02d94ae0fb55ee16ef27c6fa77963874c9169e2",
+    "summary": "List tenants with optional filtering and pagination controls."
+  },
+  "tenant.update": {
+    "parser": "604552c2ffc4225056534a431eabc27430197286e3c040dc45e58ac200f66cde",
+    "summary": "Update a tenant's queue or description; its tenant code is immutable."
+  },
+  "user.create": {
+    "parser": "679a531a62cf4a78bbbf77f02061958c4933bca2f4d1ab24de93ed4b1ea101f5",
+    "summary": "Create one user."
+  },
+  "user.delete": {
+    "parser": "c027322c023fd6e36a78b7b13c2995490c7973699a81e47f4619bd31913fc778",
+    "summary": "Delete one user."
+  },
+  "user.get": {
+    "parser": "cce423b1daa7e4ac63afb6e6168a1f75fd09d3fa80a22dac461a7cc3433fbe5c",
+    "summary": "Get one user by name or id."
+  },
+  "user.grant.datasource": {
+    "parser": "9b6cf47098962959e03e5198c1bbbb7c7e941ed7c3d0faf57ea9bf5cea96d97f",
+    "summary": "Grant one or more datasources to one user."
+  },
+  "user.grant.namespace": {
+    "parser": "51a593beba34ec3826a3f46ded8100749a05ce0f5fc4473d26ec6e6608f2b072",
+    "summary": "Grant one or more namespaces to one user."
+  },
+  "user.grant.project": {
+    "parser": "b281dda6239c33b4045495571b4030dad6f92a1ed5c3a241b7bae896f92b30a2",
+    "summary": "Grant one project to one user with write permission."
+  },
+  "user.list": {
+    "parser": "0bf2ca32ada5075cd1c9e55cfbb9ccbf8a4d7e92e525077ce0ace32d3080d718",
+    "summary": "List users with optional filtering and pagination controls."
+  },
+  "user.revoke.datasource": {
+    "parser": "0dc2709eeebd7dfd53a02e77188e0f3b0d91a1c3ded809f315b9363b50538466",
+    "summary": "Revoke one or more datasources from one user."
+  },
+  "user.revoke.namespace": {
+    "parser": "5e86c626f1e404a2c728d39f59a1caa978180264c56fcc984cec41548ec583b1",
+    "summary": "Revoke one or more namespaces from one user."
+  },
+  "user.revoke.project": {
+    "parser": "b281dda6239c33b4045495571b4030dad6f92a1ed5c3a241b7bae896f92b30a2",
+    "summary": "Revoke one project from one user."
+  },
+  "user.update": {
+    "parser": "ab3b5a2993ff2b78cc96478499b2ad074618216b2687e87d223e97954b44ef6c",
+    "summary": "Update one user."
+  },
+  "version": {
+    "parser": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "summary": "Print CLI and selectable DolphinScheduler version metadata."
+  },
+  "worker-group.create": {
+    "parser": "f2ef5afbae2142dad37704a34f1f20ab5da02ffa9c31f62ac0d64b43ff9b6f50",
+    "summary": "Create one worker group."
+  },
+  "worker-group.delete": {
+    "parser": "97c9e85eb3ad90426cb44cb59d3f4a6970082d5c703dfedf08f75e3d8c3f7e92",
+    "summary": "Delete one worker group."
+  },
+  "worker-group.get": {
+    "parser": "123023144b9d194532d61e818ba821274ba22ff37c5c41f735d5fcf668c7db5c",
+    "summary": "Get one worker group by name or id."
+  },
+  "worker-group.list": {
+    "parser": "a9d3ce18a40451da4c5fb4de2ef70a5c7d222b6c6045d8cf58112dcf0f0cd897",
+    "summary": "List worker groups with optional filtering and pagination controls."
+  },
+  "worker-group.update": {
+    "parser": "b84997f83c2d0587da060f93c5b9fe02ff95f4002369ebe5a642836865e91f5f",
+    "summary": "Update one worker group."
+  },
+  "workflow-instance.digest": {
+    "parser": "de7767ef95deb76b437e074a92c6e1380eb523bcf4f4f3da65d6ede32581497c",
+    "summary": "Return one compact workflow-instance runtime digest."
+  },
+  "workflow-instance.edit": {
+    "parser": "95a86c5dd83c6439218baeaea15ad15cb742052798b0f7b18fe57107c167e5ca",
+    "summary": "Edit one finished workflow instance from a YAML patch or full YAML file."
+  },
+  "workflow-instance.execute-task": {
+    "parser": "a36579e387a649857de570ea9f1bf55f806c2990e52cebb73695b210a6a86888",
+    "summary": "Execute one task inside one finished workflow instance."
+  },
+  "workflow-instance.export": {
+    "parser": "de7767ef95deb76b437e074a92c6e1380eb523bcf4f4f3da65d6ede32581497c",
+    "summary": "Export one workflow instance DAG as an editable YAML document."
+  },
+  "workflow-instance.get": {
+    "parser": "de7767ef95deb76b437e074a92c6e1380eb523bcf4f4f3da65d6ede32581497c",
+    "summary": "Get one workflow instance by id."
+  },
+  "workflow-instance.list": {
+    "parser": "cadecd41758eaf443847a918cf3cfacb23903c458a9927a469bc27f59018593c",
+    "summary": "List workflow instances using explicit runtime filters."
+  },
+  "workflow-instance.parent": {
+    "parser": "a6dee66dca225373d8727e3e8d9f10ee347201dea7355029cf18d06922498747",
+    "summary": "Return the parent workflow instance for one sub-workflow instance."
+  },
+  "workflow-instance.recover-failed": {
+    "parser": "de7767ef95deb76b437e074a92c6e1380eb523bcf4f4f3da65d6ede32581497c",
+    "summary": "Recover one failed workflow instance from failed tasks."
+  },
+  "workflow-instance.rerun": {
+    "parser": "de7767ef95deb76b437e074a92c6e1380eb523bcf4f4f3da65d6ede32581497c",
+    "summary": "Request rerun for one finished workflow instance."
+  },
+  "workflow-instance.stop": {
+    "parser": "de7767ef95deb76b437e074a92c6e1380eb523bcf4f4f3da65d6ede32581497c",
+    "summary": "Request stop for one workflow instance."
+  },
+  "workflow-instance.watch": {
+    "parser": "d5dd3b7a7ec784e059dc8365833f78a8a8685e9879bf0baffaa5cae5b602ac1d",
+    "summary": "Poll one workflow instance until it reaches a final state."
+  },
+  "workflow.backfill": {
+    "parser": "dcfea9f46d4073a320b96fb2ce3f2892ad90e449ccf61b4e12568f46d93c8ec4",
+    "summary": "Backfill one workflow definition and return created workflow instance ids."
+  },
+  "workflow.create": {
+    "parser": "4133af2cd9827cae479e353a342e8cc12c75797f1d9bec1a6226174d4bbb61bf",
+    "summary": "Create one workflow definition from a YAML file."
+  },
+  "workflow.delete": {
+    "parser": "9836c4af5252dc756a69448b331326220baf413f31fb008d8caad7463fdf843b",
+    "summary": "Delete one workflow definition."
+  },
+  "workflow.describe": {
+    "parser": "7ac09bba72b4e71fce3265fdbd9db6a322a41d2d61a1ea64a98cf681d7928fa3",
+    "summary": "Describe one workflow with tasks and relations."
+  },
+  "workflow.digest": {
+    "parser": "7ac09bba72b4e71fce3265fdbd9db6a322a41d2d61a1ea64a98cf681d7928fa3",
+    "summary": "Return one compact workflow graph summary."
+  },
+  "workflow.edit": {
+    "parser": "3068c764d40018d7fd2540ce282153bce3d741fe672419b48df8f46f292fb6f2",
+    "summary": "Edit one workflow definition from a YAML patch or full YAML file."
+  },
+  "workflow.export": {
+    "parser": "7ac09bba72b4e71fce3265fdbd9db6a322a41d2d61a1ea64a98cf681d7928fa3",
+    "summary": "Export raw YAML for clone/create or read-only schedule-aware edit."
+  },
+  "workflow.get": {
+    "parser": "7ac09bba72b4e71fce3265fdbd9db6a322a41d2d61a1ea64a98cf681d7928fa3",
+    "summary": "Get one workflow by name or code."
+  },
+  "workflow.lineage.dependent-tasks": {
+    "parser": "56489dd9c056d47f433df5fab2e6674e7a5c828b731715249f52577f3b52f487",
+    "summary": "Return workflows/tasks that depend on one workflow or task."
+  },
+  "workflow.lineage.get": {
+    "parser": "7ac09bba72b4e71fce3265fdbd9db6a322a41d2d61a1ea64a98cf681d7928fa3",
+    "summary": "Return the lineage graph anchored on one workflow."
+  },
+  "workflow.lineage.list": {
+    "parser": "06cc9d0d47970a3b6c2d729bd77231f0ffbd14a2a25dc1387fe6096a83807c13",
+    "summary": "Return the project-wide workflow lineage graph."
+  },
+  "workflow.list": {
+    "parser": "53cdba46fad1d9a9dc07b2ebe74bfe3c8e14c514ec7b37c411a198af531f4a1c",
+    "summary": "List workflows with optional filtering and pagination controls."
+  },
+  "workflow.offline": {
+    "parser": "7ac09bba72b4e71fce3265fdbd9db6a322a41d2d61a1ea64a98cf681d7928fa3",
+    "summary": "Bring one workflow definition and its attached schedule offline. Bringing the definition online again does not reactivate the schedule."
+  },
+  "workflow.online": {
+    "parser": "7ac09bba72b4e71fce3265fdbd9db6a322a41d2d61a1ea64a98cf681d7928fa3",
+    "summary": "Bring one workflow definition online. Run it manually or configure its schedule separately; this does not reactivate an offline schedule."
+  },
+  "workflow.run": {
+    "parser": "a314d0f3ed68351cbefb7cbb6048c016af26fed587e9e1ca952d9fab24370615",
+    "summary": "Trigger one workflow definition and return created workflow instance ids."
+  },
+  "workflow.run-task": {
+    "parser": "83140cb8d137f54d0bc355d4ebae8f3f032d54e01076a09f47803287cfcfbffc",
+    "summary": "Start one workflow definition from a selected task."
+  }
+}

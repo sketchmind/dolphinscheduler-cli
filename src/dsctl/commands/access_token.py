@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.access_token import (
     create_access_token_result,
     delete_access_token_result,
@@ -17,8 +16,6 @@ access_token_app = typer.Typer(
     no_args_is_help=True,
 )
 
-ACCESS_ID_HELP = "Access-token id. Run `dsctl access-token list` to discover values."
-
 
 def register_access_token_commands(app: typer.Typer) -> None:
     """Register the `access-token` command group."""
@@ -26,41 +23,15 @@ def register_access_token_commands(app: typer.Typer) -> None:
 
 
 @access_token_app.command("list")
+@bind_command("access-token.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter access tokens using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List access tokens with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -76,14 +47,11 @@ def list_command(
 
 
 @access_token_app.command("get")
+@bind_command("access-token.get")
 def get_command(
     ctx: typer.Context,
-    access_token: Annotated[
-        int,
-        typer.Argument(help=ACCESS_ID_HELP),
-    ],
+    access_token: int,
 ) -> None:
-    """Get one access token by numeric id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -93,32 +61,14 @@ def get_command(
 
 
 @access_token_app.command("create")
+@bind_command("access-token.create")
 def create_command(
     ctx: typer.Context,
     *,
-    user: Annotated[
-        str,
-        typer.Option(
-            "--user",
-            help="User name or numeric id. Run `dsctl user list` to discover values.",
-        ),
-    ],
-    expire_time: Annotated[
-        str,
-        typer.Option(
-            "--expire-time",
-            help="Token expiration time, for example '2027-01-01 00:00:00'.",
-        ),
-    ],
-    token: Annotated[
-        str | None,
-        typer.Option(
-            "--token",
-            help="Optional token string. Omit to let DS generate one.",
-        ),
-    ] = None,
+    user: str,
+    expire_time: str,
+    token: str | None,
 ) -> None:
-    """Create one access token."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -133,46 +83,16 @@ def create_command(
 
 
 @access_token_app.command("update")
+@bind_command("access-token.update")
 def update_command(
     ctx: typer.Context,
-    access_token: Annotated[
-        int,
-        typer.Argument(help=ACCESS_ID_HELP),
-    ],
+    access_token: int,
     *,
-    user: Annotated[
-        str | None,
-        typer.Option(
-            "--user",
-            help=(
-                "Updated user name or numeric id. Run `dsctl user list` to "
-                "discover values."
-            ),
-        ),
-    ] = None,
-    expire_time: Annotated[
-        str | None,
-        typer.Option(
-            "--expire-time",
-            help=("Updated token expiration time, for example '2027-01-01 00:00:00'."),
-        ),
-    ] = None,
-    token: Annotated[
-        str | None,
-        typer.Option(
-            "--token",
-            help="Updated token string.",
-        ),
-    ] = None,
-    regenerate_token: Annotated[
-        bool,
-        typer.Option(
-            "--regenerate-token",
-            help="Ask DS to generate a fresh token string.",
-        ),
-    ] = False,
+    user: str | None,
+    expire_time: str | None,
+    token: str | None,
+    regenerate_token: bool,
 ) -> None:
-    """Update one access token by numeric id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -189,22 +109,13 @@ def update_command(
 
 
 @access_token_app.command("delete")
+@bind_command("access-token.delete")
 def delete_command(
     ctx: typer.Context,
-    access_token: Annotated[
-        int,
-        typer.Argument(help=ACCESS_ID_HELP),
-    ],
+    access_token: int,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm access-token deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one access token by numeric id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -218,25 +129,13 @@ def delete_command(
 
 
 @access_token_app.command("generate")
+@bind_command("access-token.generate")
 def generate_command(
     ctx: typer.Context,
     *,
-    user: Annotated[
-        str,
-        typer.Option(
-            "--user",
-            help="User name or numeric id. Run `dsctl user list` to discover values.",
-        ),
-    ],
-    expire_time: Annotated[
-        str,
-        typer.Option(
-            "--expire-time",
-            help="Token expiration time, for example '2027-01-01 00:00:00'.",
-        ),
-    ],
+    user: str,
+    expire_time: str,
 ) -> None:
-    """Generate one token string without persisting it."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

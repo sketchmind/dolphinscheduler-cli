@@ -20,7 +20,8 @@ runner = CliRunner()
 
 
 EXPECTED_GROUP_NAMES = (
-    "use",
+    "context",
+    "config",
     "enum",
     "lint",
     "environment",
@@ -61,7 +62,11 @@ EXPECTED_PROJECT_ACTION_ROWS = (
     ("project.delete", "dsctl schema --command project.delete"),
 )
 EXPECTED_PROJECT_CREATE_CONTRACT_ROWS = (
+    ("capability", "availability"),
+    ("capability", "verification"),
     ("command", "project.create"),
+    ("effects", "remote"),
+    ("effects", "local"),
     ("option", "name"),
     ("option", "description"),
 )
@@ -174,7 +179,7 @@ def test_schema_tabular_formats_render_the_selected_view_rows(
     result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             output_format,
             "--columns",
             ",".join(case.columns),
@@ -227,6 +232,49 @@ def test_schema_json_columns_project_scoped_full_derived_rows(
     assert isinstance(data["commands"], list)
 
 
+@pytest.mark.parametrize("output_format", ["table", "tsv"])
+def test_group_tabular_discovery_preserves_selected_version_availability(
+    output_format: str,
+) -> None:
+    result = runner.invoke(
+        app,
+        ["--format", output_format, "schema", "--group", "task-type"],
+        env={"DS_VERSION": "1.3.9"},
+    )
+
+    assert result.exit_code == 0
+    rows = _parse_rendered_rows(result.stdout, output_format=output_format)
+    task_type_list = next(row for row in rows if row["action"] == "task-type.list")
+    assert task_type_list["availability"] == "unsupported"
+    assert task_type_list["verification"] == "static"
+
+
+@pytest.mark.parametrize("output_format", ["table", "tsv"])
+@pytest.mark.parametrize("full", [False, True], ids=("bounded", "full"))
+def test_action_tabular_schema_preserves_selected_version_capability(
+    output_format: str,
+    *,
+    full: bool,
+) -> None:
+    schema_args = ["schema", "--command", "task-type.list"]
+    if full:
+        schema_args.append("--full")
+    result = runner.invoke(
+        app,
+        ["--format", output_format, *schema_args],
+        env={"DS_VERSION": "1.3.9"},
+    )
+
+    assert result.exit_code == 0
+    rows = _parse_rendered_rows(result.stdout, output_format=output_format)
+    availability = next(
+        row
+        for row in rows
+        if row.get("kind") == "capability" and row.get("name") == "availability"
+    )
+    assert availability["value"] == "unsupported"
+
+
 def _rows_at_path(data: object, path: tuple[str, ...]) -> list[dict[str, object]]:
     current = data
     for part in path:
@@ -268,7 +316,7 @@ def _assert_view_rows(
         return
     if case.name == "list-commands":
         actions = tuple(value[0] for value in values)
-        assert len(actions) == 174
+        assert len(actions) == 181
         assert actions == _natural_surface_actions()
         return
     if case.name == "group":
@@ -282,7 +330,9 @@ def _natural_surface_actions() -> tuple[str, ...]:
     actions = list(TOP_LEVEL_COMMANDS)
     for group, commands in RESOURCE_COMMAND_TREE.items():
         actions.extend(
-            action for action in GROUP_LEVEL_ACTIONS if action.startswith(f"{group}.")
+            action
+            for action in GROUP_LEVEL_ACTIONS
+            if action == group or action.startswith(f"{group}.")
         )
         for command in commands:
             actions.extend(_surface_command_actions((group,), command))
@@ -301,3 +351,29 @@ def _surface_command_actions(
         for child in command.commands
         for action in _surface_command_actions(path, child)
     )
+
+
+@pytest.mark.parametrize(
+    ("action", "local"),
+    [
+        ("context", "none"),
+        ("context.list", "none"),
+        ("context.get", "none"),
+        ("context.create", "configuration"),
+        ("context.update", "configuration"),
+        ("context.delete", "configuration"),
+        ("config.get", "none"),
+        ("config.set", "configuration"),
+        ("config.unset", "configuration"),
+    ],
+)
+def test_context_and_config_schema_declare_local_effects(
+    action: str, *, local: str
+) -> None:
+    result = runner.invoke(app, ["schema", "--command", action])
+    assert result.exit_code == 0, result.output
+    command = json.loads(result.stdout)["data"]["command"]
+    assert command["effects"] == {"remote": "none", "local": local}
+    assert "mutates" not in command
+    assert "mutation_target" not in command
+    assert "remote_requests" not in command

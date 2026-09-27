@@ -12,17 +12,21 @@ from dsctl.errors import (
     UserInputError,
 )
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
-    serialize_project_preference,
+from dsctl.services._project_scope import (
+    resolve_code_project,
+    selected_project_data,
 )
 from dsctl.services._validation import require_non_empty_text
-from dsctl.services.resolver import ResolvedProject, ResolvedProjectData
-from dsctl.services.resolver import project as resolve_project
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
-from dsctl.services.selection import (
-    SelectedValue,
-    require_project_selection,
-    with_selection_source,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
+)
+from dsctl.upstream.project_preferences import (
+    PROJECT_PREFERENCE_DOMAIN,
+    ProjectPreferenceDomain,
+)
+from dsctl.upstream.serialization import (
+    serialize_project_preference,
 )
 
 if TYPE_CHECKING:
@@ -57,8 +61,9 @@ def get_project_preference_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Fetch the selected project preference default-value source."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_PREFERENCE_DOMAIN,
         _get_project_preference_result,
         project=project,
     )
@@ -73,8 +78,9 @@ def update_project_preference_result(
 ) -> CommandResult:
     """Create or update the selected project preference default-value source."""
     preferences = _preferences_payload(preferences_json=preferences_json, file=file)
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_PREFERENCE_DOMAIN,
         _update_project_preference_result,
         project=project,
         preferences=preferences,
@@ -87,8 +93,9 @@ def enable_project_preference_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Enable the selected project preference default-value source."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_PREFERENCE_DOMAIN,
         _set_project_preference_state_result,
         project=project,
         state=PROJECT_PREFERENCE_ENABLED,
@@ -101,8 +108,9 @@ def disable_project_preference_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Disable the selected project preference default-value source."""
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        PROJECT_PREFERENCE_DOMAIN,
         _set_project_preference_state_result,
         project=project,
         state=PROJECT_PREFERENCE_DISABLED,
@@ -110,14 +118,18 @@ def disable_project_preference_result(
 
 
 def _get_project_preference_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectPreferenceDomain],
     *,
     project: str | None,
 ) -> CommandResult:
-    selected_project, resolved_project = _selected_project(runtime, project=project)
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
+    )
     payload = _get_project_preference(
         runtime,
-        project_code=resolved_project.code,
+        project_code=project_code,
     )
     data = (
         None
@@ -131,7 +143,7 @@ def _get_project_preference_result(
         data=data,
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             )
         },
@@ -139,21 +151,25 @@ def _get_project_preference_result(
 
 
 def _update_project_preference_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectPreferenceDomain],
     *,
     project: str | None,
     preferences: str,
 ) -> CommandResult:
-    selected_project, resolved_project = _selected_project(runtime, project=project)
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
+    )
     try:
-        payload = runtime.upstream.project_preferences.update(
-            project_code=resolved_project.code,
+        payload = runtime.domain.preferences.update(
+            project_code=project_code,
             preferences=preferences,
         )
     except ApiResultError as error:
         raise _translate_project_preference_api_error(
             error,
-            project_code=resolved_project.code,
+            project_code=project_code,
             operation="update",
         ) from error
     return CommandResult(
@@ -163,7 +179,7 @@ def _update_project_preference_result(
         ),
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             )
         },
@@ -171,28 +187,32 @@ def _update_project_preference_result(
 
 
 def _set_project_preference_state_result(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectPreferenceDomain],
     *,
     project: str | None,
     state: int,
 ) -> CommandResult:
-    selected_project, resolved_project = _selected_project(runtime, project=project)
+    selected_project, resolved_project, project_code = resolve_code_project(
+        project,
+        runtime=runtime,
+        definitions=runtime.domain.definitions,
+    )
     operation = "enable" if state == PROJECT_PREFERENCE_ENABLED else "disable"
     try:
-        runtime.upstream.project_preferences.set_state(
-            project_code=resolved_project.code,
+        runtime.domain.preferences.set_state(
+            project_code=project_code,
             state=state,
         )
     except ApiResultError as error:
         raise _translate_project_preference_api_error(
             error,
-            project_code=resolved_project.code,
+            project_code=project_code,
             operation=operation,
         ) from error
 
-    payload = _get_project_preference(runtime, project_code=resolved_project.code)
+    payload = _get_project_preference(runtime, project_code=project_code)
     warning = _missing_project_preference_warning(
-        project_code=resolved_project.code,
+        project_code=project_code,
         requested_state=state,
         payload=payload,
     )
@@ -210,7 +230,7 @@ def _set_project_preference_state_result(
         data=data,
         resolved={
             "project": require_json_object(
-                _selected_project_data(resolved_project.to_data(), selected_project),
+                selected_project_data(resolved_project, selected_project),
                 label="resolved project",
             )
         },
@@ -219,46 +239,19 @@ def _set_project_preference_state_result(
     )
 
 
-def _selected_project(
-    runtime: ServiceRuntime,
-    *,
-    project: str | None,
-) -> tuple[SelectedValue, ResolvedProject]:
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
-    )
-    return selected_project, resolved_project
-
-
 def _get_project_preference(
-    runtime: ServiceRuntime,
+    runtime: BoundDomainServiceRuntime[ProjectPreferenceDomain],
     *,
     project_code: int,
 ) -> ProjectPreferenceRecord | None:
     try:
-        return runtime.upstream.project_preferences.get(project_code=project_code)
+        return runtime.domain.preferences.get(project_code=project_code)
     except ApiResultError as error:
         raise _translate_project_preference_api_error(
             error,
             project_code=project_code,
             operation="get",
         ) from error
-
-
-def _selected_project_data(
-    project: ResolvedProjectData,
-    selected_project: SelectedValue,
-) -> dict[str, int | str | None]:
-    return with_selection_source(
-        {
-            "code": project["code"],
-            "name": project["name"],
-            "description": project["description"],
-        },
-        selected_project,
-    )
 
 
 def _preferences_payload(

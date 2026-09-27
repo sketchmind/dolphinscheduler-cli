@@ -1,44 +1,196 @@
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
 
+import httpx
 import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
+from dsctl.client import DolphinSchedulerClient
 from dsctl.services import runtime as runtime_service
+from dsctl.services.runtime import BoundDomainServiceRuntime
+from dsctl.services.selection import ResourceDefaults
+from dsctl.upstream.bound_domain import BoundDomain
+from dsctl.upstream.task_type_inventory import TASK_TYPE_DOMAIN, TaskTypeDomain
 from tests.fakes import (
-    FakeProjectAdapter,
     FakeTaskType,
     FakeTaskTypeAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
 )
 from tests.support import make_profile, strip_cli_ansi
 
 runner = CliRunner()
 
+_LEGACY_CATALOG_VERSIONS = tuple(f"3.1.{patch}" for patch in range(10))
+_CATEGORY_CATALOG_VERSIONS = (
+    "3.2.0",
+    "3.2.1",
+    "3.2.2",
+    "3.3.1",
+    "3.3.2",
+    "3.4.0",
+    "3.4.1",
+    "3.4.2",
+    "3.4.3",
+)
+
+
+def _install_native_task_type_transport(
+    monkeypatch: pytest.MonkeyPatch,
+    ds_version: str,
+    rows: list[dict[str, str | bool | None]],
+) -> list[httpx.Request]:
+    profile = make_profile(ds_version=ds_version)
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"code": 0, "msg": "success", "data": rows})
+
+    @contextmanager
+    def open_runtime(
+        domain: BoundDomain[TaskTypeDomain],
+        *,
+        env_file: str | None = None,
+    ) -> Iterator[BoundDomainServiceRuntime[TaskTypeDomain]]:
+        del env_file
+        assert domain is TASK_TYPE_DOMAIN
+        with DolphinSchedulerClient(
+            profile, transport=httpx.MockTransport(handler)
+        ) as client:
+            yield BoundDomainServiceRuntime(
+                profile=profile,
+                context=ResourceDefaults(),
+                http_client=client,
+                domain=TASK_TYPE_DOMAIN.bind(profile, http_client=client),
+            )
+
+    monkeypatch.setattr(
+        runtime_service, "open_bound_domain_service_runtime", open_runtime
+    )
+    return requests
+
+
+@pytest.mark.parametrize(
+    "ds_version", _LEGACY_CATALOG_VERSIONS + _CATEGORY_CATALOG_VERSIONS
+)
+def test_task_type_list_projects_native_catalog_through_codec_service_and_cli(
+    monkeypatch: pytest.MonkeyPatch,
+    ds_version: str,
+) -> None:
+    name_field, category_field = (
+        ("taskName", "taskType")
+        if ds_version in _LEGACY_CATALOG_VERSIONS
+        else ("taskType", "taskCategory")
+    )
+    # TaskTypeConfiguration constructs (task name, collection flag, category).
+    requests = _install_native_task_type_transport(
+        monkeypatch,
+        ds_version,
+        [
+            {name_field: "SHELL", category_field: "Universal", "collection": True},
+            {name_field: "DEPENDENT", category_field: "Logic", "collection": False},
+        ],
+    )
+
+    result = runner.invoke(app, ["task-type", "list"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["action"] == "task-type.list"
+    assert payload["resolved"]["source"] == "favourite/taskTypes"
+    assert payload["data"]["taskTypes"] == [
+        {"taskType": "SHELL", "taskCategory": "Universal", "isCollection": True},
+        {"taskType": "DEPENDENT", "taskCategory": "Logic", "isCollection": False},
+    ]
+    assert payload["data"]["taskTypesByCategory"] == {
+        "Universal": ["SHELL"],
+        "Logic": ["DEPENDENT"],
+    }
+    assert payload["data"]["count"] == 2
+    coverage = payload["data"]["cliCoverage"]
+    assert "SHELL" in coverage["taskTemplateTypes"]
+    assert coverage["untemplatedTaskTypes"] == []
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("GET", "/dolphinscheduler/favourite/taskTypes"),
+    ]
+
+
+@pytest.mark.parametrize("ds_version", ["3.1.0", "3.1.9", "3.2.0", "3.4.3"])
+@pytest.mark.parametrize("field", ["name", "category"])
+@pytest.mark.parametrize("missing", [False, True])
+def test_task_type_list_still_rejects_missing_native_name_or_category(
+    monkeypatch: pytest.MonkeyPatch,
+    ds_version: str,
+    field: str,
+    *,
+    missing: bool,
+) -> None:
+    name_field, category_field = (
+        ("taskName", "taskType")
+        if ds_version in _LEGACY_CATALOG_VERSIONS
+        else ("taskType", "taskCategory")
+    )
+    native: dict[str, str | bool | None] = {
+        name_field: "SHELL",
+        category_field: "Universal",
+        "collection": True,
+    }
+    selected = name_field if field == "name" else category_field
+    if missing:
+        native.pop(selected)
+    else:
+        native[selected] = None
+    requests = _install_native_task_type_transport(monkeypatch, ds_version, [native])
+
+    result = runner.invoke(app, ["task-type", "list"])
+
+    assert result.exit_code != 0
+    payload = json.loads(result.stderr)
+    assert payload["error"]["type"] == "api_transport_error"
+    expected = "taskType" if field == "name" else "taskCategory"
+    assert f"missing required field '{expected}'" in payload["error"]["message"]
+    assert len(requests) == 1
+
 
 @pytest.fixture(autouse=True)
 def patch_task_type_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = FakeTaskTypeAdapter(
+        task_types=[
+            FakeTaskType(
+                task_type_value="SHELL",
+                is_collection_value=True,
+                task_category_value="Universal",
+            ),
+            FakeTaskType(
+                task_type_value="CUSTOM_PLUGIN",
+                is_collection_value=False,
+                task_category_value="Universal",
+            ),
+        ]
+    )
+
+    @contextmanager
+    def open_fake_runtime(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: Path | None = None,
+    ) -> Iterator[BoundDomainServiceRuntime[object]]:
+        del env_file, cwd
+        assert domain is TASK_TYPE_DOMAIN
+        with fake_bound_domain_service_runtime(
+            TaskTypeDomain(task_types=adapter),
+            profile=make_profile(),
+        ) as runtime:
+            yield runtime
+
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            profile=make_profile(),
-            task_type_adapter=FakeTaskTypeAdapter(
-                task_types=[
-                    FakeTaskType(
-                        task_type_value="SHELL",
-                        is_collection_value=True,
-                        task_category_value="Universal",
-                    ),
-                    FakeTaskType(
-                        task_type_value="CUSTOM_PLUGIN",
-                        is_collection_value=False,
-                        task_category_value="Universal",
-                    ),
-                ]
-            ),
-        ),
+        "open_bound_domain_service_runtime",
+        open_fake_runtime,
     )
 
 
@@ -48,7 +200,15 @@ def test_task_type_list_command_returns_remote_discovery_payload() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "task-type.list"
-    assert payload["resolved"] == {"source": "favourite/taskTypes"}
+    assert payload["resolved"] == {
+        "selection": {
+            "source": "unconfigured",
+            "context": None,
+            "env_file": None,
+            "api_url": None,
+        },
+        "source": "favourite/taskTypes",
+    }
     assert payload["data"]["count"] == 2
     assert payload["data"]["taskTypes"][0] == {
         "taskType": "SHELL",
@@ -58,7 +218,8 @@ def test_task_type_list_command_returns_remote_discovery_payload() -> None:
     assert payload["data"]["taskTypesByCategory"] == {
         "Universal": ["SHELL", "CUSTOM_PLUGIN"]
     }
-    assert "SPARK" in payload["data"]["cliCoverage"]["genericTaskTemplateTypes"]
+    assert "DATAX" in payload["data"]["cliCoverage"]["typedTaskSpecs"]
+    assert "DATAX" not in payload["data"]["cliCoverage"]["genericTaskTemplateTypes"]
     assert payload["data"]["cliCoverage"]["untemplatedTaskTypes"] == ["CUSTOM_PLUGIN"]
 
 
@@ -80,7 +241,15 @@ def test_task_type_get_command_returns_local_authoring_summary() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "task-type.get"
-    assert payload["resolved"] == {"task_type": "SQL"}
+    assert payload["resolved"] == {
+        "selection": {
+            "source": "unconfigured",
+            "context": None,
+            "env_file": None,
+            "api_url": None,
+        },
+        "task_type": "SQL",
+    }
     assert payload["data"]["task_type"] == "SQL"
     assert payload["data"]["schema_command"] == "dsctl task-type schema SQL"
     assert payload["data"]["raw_template_command"] == "dsctl template task SQL --raw"
@@ -94,7 +263,16 @@ def test_task_type_schema_command_returns_field_contract() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["action"] == "task-type.schema"
-    assert payload["resolved"] == {"task_type": "SQL", "view": "fields"}
+    assert payload["resolved"] == {
+        "selection": {
+            "source": "unconfigured",
+            "context": None,
+            "env_file": None,
+            "api_url": None,
+        },
+        "task_type": "SQL",
+        "view": "fields",
+    }
     field_paths = [field["path"] for field in payload["data"]["fields"]]
     assert "task_params.sqlType" in field_paths
     assert payload["data"]["state_rules"][1]["when"] == "task_params.sqlType == 1"
@@ -113,8 +291,11 @@ def test_task_type_schema_command_returns_choice_sources_for_fields() -> None:
         for field in payload["data"]["fields"]
         if field["path"] == "task_params.resourceList[].resourceName"
     )
-    assert resource_field["choice_source"] == "dsctl resource list --dir DIR"
-    assert resource_field["choice_value"] == "fullName"
+    assert resource_field["choice_source"] == "dsctl resource list"
+    assert (
+        resource_field["choice_value"]
+        == "fullName relative to the FILE root, retaining one leading slash"
+    )
     assert resource_field["related_commands"] == [
         "dsctl resource list",
         "dsctl resource upload --file FILE",
@@ -125,7 +306,7 @@ def test_task_type_schema_command_returns_choice_sources_for_fields() -> None:
 def test_task_type_schema_table_uses_canonical_fields() -> None:
     result = runner.invoke(
         app,
-        ["--output-format", "table", "task-type", "schema", "SHELL"],
+        ["--format", "table", "task-type", "schema", "SHELL"],
     )
 
     assert result.exit_code == 0
@@ -138,7 +319,8 @@ def test_task_type_schema_json_columns_project_canonical_fields() -> None:
     result = runner.invoke(
         app,
         [
-            "--compact",
+            "--format",
+            "json-compact",
             "--columns",
             "path,type",
             "task-type",
@@ -207,7 +389,7 @@ def test_task_type_schema_compile_table_uses_mapping_rows() -> None:
     result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             "table",
             "task-type",
             "schema",
@@ -225,7 +407,7 @@ def test_task_type_schema_field_table_is_one_canonical_row() -> None:
     result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             "table",
             "task-type",
             "schema",
@@ -245,7 +427,8 @@ def test_task_type_compile_columns_project_mapping_rows() -> None:
     result = runner.invoke(
         app,
         [
-            "--compact",
+            "--format",
+            "json-compact",
             "--columns",
             "authoring_path,ds_payload_path",
             "task-type",
@@ -270,7 +453,7 @@ def test_task_type_json_schema_rejects_lossy_row_formats(
     result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             output_format,
             "task-type",
             "schema",
@@ -308,7 +491,7 @@ def test_task_type_json_schema_rejects_column_projection() -> None:
 def test_task_type_json_schema_supports_compact_complete_json() -> None:
     result = runner.invoke(
         app,
-        ["--compact", "task-type", "schema", "SHELL", "--json-schema"],
+        ["--format", "json-compact", "task-type", "schema", "SHELL", "--json-schema"],
     )
 
     assert result.exit_code == 0
@@ -334,14 +517,16 @@ def test_task_type_compile_column_error_points_to_the_selected_view() -> None:
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
     assert payload["error"]["details"]["view"] == "compile_mappings"
-    assert "data_shapes_by_view.compile_mappings" in payload["error"]["suggestion"]
+    suggestion = payload["error"]["suggestion"]
+    assert "Do not repeat the command" in suggestion
+    assert "data_shapes_by_view.compile_mappings" in suggestion
 
 
 def test_task_type_schema_tsv_and_full_table_use_the_selected_row_shape() -> None:
     tsv_result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             "tsv",
             "task-type",
             "schema",
@@ -352,7 +537,7 @@ def test_task_type_schema_tsv_and_full_table_use_the_selected_row_shape() -> Non
     full_result = runner.invoke(
         app,
         [
-            "--output-format",
+            "--format",
             "table",
             "task-type",
             "schema",

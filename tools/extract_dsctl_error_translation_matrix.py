@@ -7,13 +7,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from audit_dsctl_error_translation import (
-    SERVICES_ROOT,
     CodeReference,
     analyze_module,
     called_name,
     extract_code_references,
     is_result_code_expr,
     iter_functions,
+    service_module_paths,
 )
 
 
@@ -39,9 +39,7 @@ class MatrixReport:
 
 def build_report() -> MatrixReport:
     helpers: list[HelperMatrix] = []
-    for path in sorted(SERVICES_ROOT.glob("*.py")):
-        if path.name == "__init__.py":
-            continue
+    for path in service_module_paths():
         module_report = analyze_module(path)
         if not module_report.translators:
             continue

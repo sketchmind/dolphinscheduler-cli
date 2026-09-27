@@ -5,14 +5,14 @@ from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.services import runtime as runtime_service
+from dsctl.upstream.observability import MonitorDomain
 from tests.fakes import (
     FakeEnumValue,
     FakeHttpClient,
     FakeMonitorAdapter,
     FakeMonitorDatabase,
     FakeMonitorServer,
-    FakeProjectAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
 )
 from tests.support import make_profile
 
@@ -23,34 +23,35 @@ runner = CliRunner()
 def patch_monitor_service(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
+        "open_bound_domain_service_runtime",
+        lambda domain, env_file=None: fake_bound_domain_service_runtime(
+            MonitorDomain(
+                monitor=FakeMonitorAdapter(
+                    {
+                        "MASTER": [
+                            FakeMonitorServer(
+                                id=1,
+                                host="master-1",
+                                port=5678,
+                            )
+                        ]
+                    },
+                    databases=[
+                        FakeMonitorDatabase(
+                            db_type_value=FakeEnumValue("MYSQL"),
+                            state_value=FakeEnumValue("YES"),
+                            max_connections_value=50,
+                            max_used_connections_value=10,
+                            threads_connections_value=4,
+                            threads_running_connections_value=1,
+                            date_value="2026-04-11 10:10:00",
+                        )
+                    ],
+                )
+            ),
             profile=make_profile(),
             http_client=FakeHttpClient(
                 health_payload={"status": "UP", "components": {"db": {"status": "UP"}}}
-            ),
-            monitor_adapter=FakeMonitorAdapter(
-                {
-                    "MASTER": [
-                        FakeMonitorServer(
-                            id=1,
-                            host="master-1",
-                            port=5678,
-                        )
-                    ]
-                },
-                databases=[
-                    FakeMonitorDatabase(
-                        db_type_value=FakeEnumValue("MYSQL"),
-                        state_value=FakeEnumValue("YES"),
-                        max_connections_value=50,
-                        max_used_connections_value=10,
-                        threads_connections_value=4,
-                        threads_running_connections_value=1,
-                        date_value="2026-04-11 10:10:00",
-                    )
-                ],
             ),
         ),
     )
@@ -83,11 +84,17 @@ def test_monitor_database_command_returns_database_metrics() -> None:
     payload = json.loads(result.stdout)
     assert payload["action"] == "monitor.database"
     assert payload["resolved"] == {
-        "endpoint": "http://example.test/dolphinscheduler/monitor/databases"
+        "selection": {
+            "source": "unconfigured",
+            "context": None,
+            "env_file": None,
+            "api_url": None,
+        },
+        "endpoint": "http://example.test/dolphinscheduler/monitor/databases",
     }
     assert payload["data"][0]["dbType"] == "MYSQL"
-    assert payload["warnings"] == []
-    assert payload["warning_details"] == []
+    assert "warnings" not in payload
+    assert "warning_details" not in payload
 
 
 def test_monitor_server_command_rejects_unknown_node_type() -> None:

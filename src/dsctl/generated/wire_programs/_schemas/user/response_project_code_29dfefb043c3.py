@@ -1,0 +1,24 @@
+from __future__ import annotations
+
+from pydantic import Field
+from ....wire_runtime._models import BaseEntityModel
+
+class Project(BaseEntityModel):
+    id: int = Field(default=0)
+    userId: int = Field(default=0)
+    userName: str | None = Field(default=None)
+    code: int = Field(default=0)
+    name: str | None = Field(default=None)
+    description: str | None = Field(default=None)
+    createTime: str | None = Field(default=None)
+    updateTime: str | None = Field(default=None)
+    perm: int = Field(default=0)
+    defCount: int = Field(default=0)
+    instRunningCount: int = Field(default=0)
+
+__all__ = ["Project"]
+
+Project.model_rebuild(_types_namespace=globals())
+
+RESPONSE_TYPE = list[Project]
+EXECUTABLE_SCHEMA_DIGEST = 'sha256:29dfefb043c3778ac4360acc4decc6c2f474daa2e2a02623f15c9f35b37790f7'

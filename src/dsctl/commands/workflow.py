@@ -1,13 +1,11 @@
 from pathlib import Path
-from typing import Annotated
 
 import typer
 
 from dsctl.cli_runtime import emit_raw_result, emit_result, get_app_state
 from dsctl.command_contract import COMMAND_CATALOG
-from dsctl.commands._contract_adapter import typer_option
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.output import CommandResult
-from dsctl.services.pagination import DEFAULT_PAGE_SIZE
 from dsctl.services.workflow import (
     backfill_workflow_result,
     create_workflow_result,
@@ -23,6 +21,7 @@ from dsctl.services.workflow import (
     run_workflow_result,
     run_workflow_task_result,
 )
+from dsctl.services.workflow.execution import validate_backfill_workflow_inputs
 from dsctl.services.workflow_lineage import (
     get_workflow_lineage_result,
     list_workflow_dependent_tasks_result,
@@ -39,46 +38,6 @@ workflow_lineage_app = typer.Typer(
 )
 workflow_app.add_typer(workflow_lineage_app, name="lineage")
 
-ENVIRONMENT_CODE_HELP = (
-    "Environment code. Run `dsctl environment list` to discover values; omit to "
-    "allow enabled project preference."
-)
-PARAM_HELP = (
-    "Workflow start parameter in KEY=VALUE form. Repeat for multiple parameters."
-)
-PROJECT_HELP = (
-    "Project name or code. Run `dsctl project list` to discover values; falls "
-    "back to stored project context."
-)
-TASK_HELP = (
-    "Task name or numeric code inside the selected workflow. Run `dsctl task "
-    "list` to discover values."
-)
-TENANT_HELP = (
-    "Override the tenant code used to start the workflow instance. Run `dsctl "
-    "tenant list` to discover values; omit to allow enabled project preference "
-    "before the DS fallback `default` tenant."
-)
-WARNING_GROUP_HELP = (
-    "Warning group id. Run `dsctl alert-group list` to discover ids; omit to "
-    "allow enabled project preference."
-)
-WORKER_GROUP_HELP = (
-    "Override the worker group used to start the workflow instance. Run `dsctl "
-    "worker-group list` to discover values; omit to allow enabled project "
-    "preference before the DS fallback `default` worker group."
-)
-WORKFLOW_HELP = (
-    "Workflow name or numeric code. Run `dsctl workflow list` in the selected "
-    "project to discover values. When omitted, uses workflow context only when "
-    "project also comes from context; otherwise pass WORKFLOW."
-)
-WORKFLOW_EDIT_HELP = (
-    "Workflow name or numeric code. Run `dsctl workflow list` in the selected "
-    "project to discover values. Required with --file; with --patch, uses "
-    "workflow context only when project also comes from context; otherwise "
-    "pass WORKFLOW."
-)
 _WORKFLOW_CREATE = COMMAND_CATALOG.command("workflow.create")
 
 
@@ -88,48 +47,16 @@ def register_workflow_commands(app: typer.Typer) -> None:
 
 
 @workflow_app.command("list")
+@bind_command("workflow.list")
 def list_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter workflows by name using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = DEFAULT_PAGE_SIZE,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    project: str | None,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List workflows with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -146,24 +73,13 @@ def list_command(
 
 
 @workflow_app.command("get")
+@bind_command("workflow.get")
 def get_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Get one workflow by name or code."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -177,27 +93,13 @@ def get_command(
 
 
 @workflow_app.command("export")
+@bind_command("workflow.export")
 def export_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Export raw YAML for clone/create or read-only schedule-aware edit.
-
-    Global display options do not alter successful YAML artifact output.
-    """
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_raw_result(
@@ -212,24 +114,13 @@ def export_command(
 
 
 @workflow_app.command("describe")
+@bind_command("workflow.describe")
 def describe_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Describe one workflow with tasks and relations."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -243,24 +134,13 @@ def describe_command(
 
 
 @workflow_app.command("digest")
+@bind_command("workflow.digest")
 def digest_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Return one compact workflow graph summary."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -274,18 +154,12 @@ def digest_command(
 
 
 @workflow_lineage_app.command("list")
+@bind_command("workflow.lineage.list")
 def lineage_list_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Return the project-wide workflow lineage graph."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -298,24 +172,13 @@ def lineage_list_command(
 
 
 @workflow_lineage_app.command("get")
+@bind_command("workflow.lineage.get")
 def lineage_get_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Return the lineage graph anchored on one workflow."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -329,31 +192,14 @@ def lineage_get_command(
 
 
 @workflow_lineage_app.command("dependent-tasks")
+@bind_command("workflow.lineage.dependent-tasks")
 def lineage_dependent_tasks_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    task: Annotated[
-        str | None,
-        typer.Option(
-            "--task",
-            help=TASK_HELP,
-        ),
-    ] = None,
+    project: str | None,
+    task: str | None,
 ) -> None:
-    """Return workflows/tasks that depend on one workflow or task."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -367,28 +213,16 @@ def lineage_dependent_tasks_command(
     )
 
 
-@workflow_app.command(_WORKFLOW_CREATE.name, help=_WORKFLOW_CREATE.summary)
+@workflow_app.command(_WORKFLOW_CREATE.name)
+@bind_command("workflow.create")
 def create_command(
     ctx: typer.Context,
     *,
-    file: Annotated[
-        Path,
-        typer_option(_WORKFLOW_CREATE.input("file")),
-    ],
-    project: Annotated[
-        str | None,
-        typer_option(_WORKFLOW_CREATE.input("project")),
-    ] = None,
-    dry_run: Annotated[
-        bool,
-        typer_option(_WORKFLOW_CREATE.input("dry-run")),
-    ] = False,
-    confirm_risk: Annotated[
-        str | None,
-        typer_option(_WORKFLOW_CREATE.input("confirm-risk")),
-    ] = None,
+    file: Path,
+    project: str | None,
+    dry_run: bool,
+    confirm_risk: str | None,
 ) -> None:
-    """Execute the canonical workflow.create command."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -404,89 +238,17 @@ def create_command(
 
 
 @workflow_app.command("edit")
+@bind_command("workflow.edit")
 def edit_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_EDIT_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    patch: Annotated[
-        Path | None,
-        typer.Option(
-            "--patch",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to one workflow patch YAML file. Use exactly one of "
-                "--patch or --file. Inspect the current definition with "
-                "`dsctl workflow export WORKFLOW`, then write only "
-                "the intended delta. Start from `dsctl template workflow-patch "
-                "--raw`; use --dry-run to inspect the compiled diff. "
-                "`tasks.create[]` uses full task fragments from `dsctl "
-                "template task`; "
-                "`tasks.update[].set` uses partial task fields discovered with "
-                "`dsctl task-type schema TYPE`."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ] = None,
-    file: Annotated[
-        Path | None,
-        typer.Option(
-            "--file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help=(
-                "Path to one full workflow YAML file describing the desired "
-                "definition state. Use exactly one of --patch or --file. Start "
-                "from `dsctl workflow export WORKFLOW` or `dsctl "
-                "template workflow --raw`; use --dry-run to inspect the "
-                "compiled diff. Full-file edits match task identity by exact "
-                "task name and do not infer renames. An exported `schedule:` "
-                "block is verified as a read-only snapshot and remains unchanged; "
-                "use schedule commands to modify it."
-            ),
-            readable=True,
-            resolve_path=True,
-        ),
-    ] = None,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help=(
-                "Compile the merged workflow edit payload without sending it. "
-                "When the full request is unnecessary, use `--columns "
-                "diff,no_change,workflow_state_constraints,schedule_impacts` "
-                "for a bounded review."
-            ),
-        ),
-    ] = False,
-    confirm_risk: Annotated[
-        str | None,
-        typer.Option(
-            "--confirm-risk",
-            help=(
-                "Explicit confirmation token returned by a previous high-risk "
-                "full-file edit validation failure."
-            ),
-        ),
-    ] = None,
+    patch: Path | None,
+    file: Path | None,
+    project: str | None,
+    dry_run: bool,
+    confirm_risk: str | None,
 ) -> None:
-    """Edit one workflow definition from a YAML patch or full YAML file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -504,24 +266,13 @@ def edit_command(
 
 
 @workflow_app.command("online")
+@bind_command("workflow.online")
 def online_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Bring one workflow definition online."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -535,24 +286,13 @@ def online_command(
 
 
 @workflow_app.command("offline")
+@bind_command("workflow.offline")
 def offline_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Bring one workflow definition offline."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -566,103 +306,23 @@ def offline_command(
 
 
 @workflow_app.command("run")
+@bind_command("workflow.run")
 def run_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    worker_group: Annotated[
-        str | None,
-        typer.Option(
-            "--worker-group",
-            help=WORKER_GROUP_HELP,
-        ),
-    ] = None,
-    tenant: Annotated[
-        str | None,
-        typer.Option(
-            "--tenant",
-            help=TENANT_HELP,
-        ),
-    ] = None,
-    failure_strategy: Annotated[
-        str | None,
-        typer.Option(
-            "--failure-strategy",
-            help="Failure strategy: continue or end. Defaults to DS UI continue.",
-        ),
-    ] = None,
-    priority: Annotated[
-        str | None,
-        typer.Option(
-            "--priority",
-            help=(
-                "Workflow instance priority: highest, high, medium, low, or "
-                "lowest. Omit to allow enabled project preference before medium."
-            ),
-        ),
-    ] = None,
-    warning_type: Annotated[
-        str | None,
-        typer.Option(
-            "--warning-type",
-            help=(
-                "Warning type: none, success, failure, or all. Omit to allow "
-                "enabled project preference before none."
-            ),
-        ),
-    ] = None,
-    warning_group_id: Annotated[
-        int | None,
-        typer.Option(
-            "--warning-group-id",
-            help=WARNING_GROUP_HELP,
-        ),
-    ] = None,
-    environment_code: Annotated[
-        int | None,
-        typer.Option(
-            "--environment-code",
-            help=ENVIRONMENT_CODE_HELP,
-        ),
-    ] = None,
-    params: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--param",
-            help=PARAM_HELP,
-        ),
-    ] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help="Resolve and compile the start request without sending it.",
-        ),
-    ] = False,
-    execution_dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--execution-dry-run",
-            help=(
-                "Set DolphinScheduler dryRun=1; DS creates dry-run instances and "
-                "skips task plugin trigger execution."
-            ),
-        ),
-    ] = False,
+    project: str | None,
+    worker_group: str | None,
+    tenant: str | None,
+    failure_strategy: str | None,
+    priority: str | None,
+    warning_type: str | None,
+    warning_group_id: int | None,
+    environment_code: int | None,
+    params: list[str] | None,
+    dry_run: bool,
+    execution_dry_run: bool,
 ) -> None:
-    """Trigger one workflow definition and return created workflow instance ids."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -686,117 +346,25 @@ def run_command(
 
 
 @workflow_app.command("run-task")
+@bind_command("workflow.run-task")
 def run_task_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    task: Annotated[
-        str,
-        typer.Option(
-            "--task",
-            help=TASK_HELP,
-        ),
-    ],
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    scope: Annotated[
-        str,
-        typer.Option(
-            "--scope",
-            help="Task execution scope: self, pre, or post.",
-        ),
-    ] = "self",
-    worker_group: Annotated[
-        str | None,
-        typer.Option(
-            "--worker-group",
-            help=WORKER_GROUP_HELP,
-        ),
-    ] = None,
-    tenant: Annotated[
-        str | None,
-        typer.Option(
-            "--tenant",
-            help=TENANT_HELP,
-        ),
-    ] = None,
-    failure_strategy: Annotated[
-        str | None,
-        typer.Option(
-            "--failure-strategy",
-            help="Failure strategy: continue or end. Defaults to DS UI continue.",
-        ),
-    ] = None,
-    priority: Annotated[
-        str | None,
-        typer.Option(
-            "--priority",
-            help=(
-                "Workflow instance priority: highest, high, medium, low, or "
-                "lowest. Omit to allow enabled project preference before medium."
-            ),
-        ),
-    ] = None,
-    warning_type: Annotated[
-        str | None,
-        typer.Option(
-            "--warning-type",
-            help=(
-                "Warning type: none, success, failure, or all. Omit to allow "
-                "enabled project preference before none."
-            ),
-        ),
-    ] = None,
-    warning_group_id: Annotated[
-        int | None,
-        typer.Option(
-            "--warning-group-id",
-            help=WARNING_GROUP_HELP,
-        ),
-    ] = None,
-    environment_code: Annotated[
-        int | None,
-        typer.Option(
-            "--environment-code",
-            help=ENVIRONMENT_CODE_HELP,
-        ),
-    ] = None,
-    params: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--param",
-            help=PARAM_HELP,
-        ),
-    ] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help="Resolve and compile the start request without sending it.",
-        ),
-    ] = False,
-    execution_dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--execution-dry-run",
-            help=(
-                "Set DolphinScheduler dryRun=1; DS creates dry-run instances and "
-                "skips task plugin trigger execution."
-            ),
-        ),
-    ] = False,
+    task: str,
+    project: str | None,
+    scope: str,
+    worker_group: str | None,
+    tenant: str | None,
+    failure_strategy: str | None,
+    priority: str | None,
+    warning_type: str | None,
+    warning_group_id: int | None,
+    environment_code: int | None,
+    params: list[str] | None,
+    dry_run: bool,
+    execution_dry_run: bool,
 ) -> None:
-    """Start one workflow definition from a selected task."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -822,176 +390,33 @@ def run_task_command(
 
 
 @workflow_app.command("backfill")
+@bind_command("workflow.backfill")
 def backfill_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    start: Annotated[
-        str | None,
-        typer.Option(
-            "--start",
-            help="Complement start datetime, for example '2026-04-01 00:00:00'.",
-        ),
-    ] = None,
-    end: Annotated[
-        str | None,
-        typer.Option(
-            "--end",
-            help="Complement end datetime, for example '2026-04-10 00:00:00'.",
-        ),
-    ] = None,
-    dates: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--date",
-            help=(
-                "Explicit complement schedule datetime. Repeat for multiple "
-                "dates instead of using --start/--end."
-            ),
-        ),
-    ] = None,
-    task: Annotated[
-        str | None,
-        typer.Option(
-            "--task",
-            help=TASK_HELP,
-        ),
-    ] = None,
-    scope: Annotated[
-        str,
-        typer.Option(
-            "--scope",
-            help="Task execution scope when --task is set: self, pre, or post.",
-        ),
-    ] = "self",
-    run_mode: Annotated[
-        str | None,
-        typer.Option(
-            "--run-mode",
-            help="Complement run mode: serial or parallel.",
-        ),
-    ] = None,
-    expected_parallelism_number: Annotated[
-        int,
-        typer.Option(
-            "--expected-parallelism-number",
-            help="Expected parallelism number when --run-mode parallel is used.",
-        ),
-    ] = 2,
-    complement_dependent_mode: Annotated[
-        str | None,
-        typer.Option(
-            "--complement-dependent-mode",
-            help="Complement dependent mode: off or all.",
-        ),
-    ] = None,
-    all_level_dependent: Annotated[
-        bool,
-        typer.Option(
-            "--all-level-dependent",
-            help="Enable all-level dependent complement when dependent mode is all.",
-        ),
-    ] = False,
-    execution_order: Annotated[
-        str | None,
-        typer.Option(
-            "--execution-order",
-            help="Complement execution order: desc or asc.",
-        ),
-    ] = None,
-    worker_group: Annotated[
-        str | None,
-        typer.Option(
-            "--worker-group",
-            help=WORKER_GROUP_HELP,
-        ),
-    ] = None,
-    tenant: Annotated[
-        str | None,
-        typer.Option(
-            "--tenant",
-            help=TENANT_HELP,
-        ),
-    ] = None,
-    failure_strategy: Annotated[
-        str | None,
-        typer.Option(
-            "--failure-strategy",
-            help="Failure strategy: continue or end. Defaults to DS UI continue.",
-        ),
-    ] = None,
-    priority: Annotated[
-        str | None,
-        typer.Option(
-            "--priority",
-            help=(
-                "Workflow instance priority: highest, high, medium, low, or "
-                "lowest. Omit to allow enabled project preference before medium."
-            ),
-        ),
-    ] = None,
-    warning_type: Annotated[
-        str | None,
-        typer.Option(
-            "--warning-type",
-            help=(
-                "Warning type: none, success, failure, or all. Omit to allow "
-                "enabled project preference before none."
-            ),
-        ),
-    ] = None,
-    warning_group_id: Annotated[
-        int | None,
-        typer.Option(
-            "--warning-group-id",
-            help=WARNING_GROUP_HELP,
-        ),
-    ] = None,
-    environment_code: Annotated[
-        int | None,
-        typer.Option(
-            "--environment-code",
-            help=ENVIRONMENT_CODE_HELP,
-        ),
-    ] = None,
-    params: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--param",
-            help=PARAM_HELP,
-        ),
-    ] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help="Resolve and compile the backfill request without sending it.",
-        ),
-    ] = False,
-    execution_dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--execution-dry-run",
-            help=(
-                "Set DolphinScheduler dryRun=1; DS creates dry-run instances and "
-                "skips task plugin trigger execution."
-            ),
-        ),
-    ] = False,
+    project: str | None,
+    start: str | None,
+    end: str | None,
+    dates: list[str] | None,
+    task: str | None,
+    scope: str,
+    run_mode: str | None,
+    expected_parallelism_number: int | None,
+    complement_dependent_mode: str | None,
+    all_level_dependent: bool,
+    execution_order: str | None,
+    worker_group: str | None,
+    tenant: str | None,
+    failure_strategy: str | None,
+    priority: str | None,
+    warning_type: str | None,
+    warning_group_id: int | None,
+    environment_code: int | None,
+    params: list[str] | None,
+    dry_run: bool,
+    execution_dry_run: bool,
 ) -> None:
-    """Backfill one workflow definition and return created workflow instance ids."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -1021,35 +446,30 @@ def backfill_command(
             execution_dry_run=execution_dry_run,
             env_file=env_file,
         ),
+        local_validate=lambda: validate_backfill_workflow_inputs(
+            start=start,
+            end=end,
+            dates=[] if dates is None else dates,
+            scope=scope,
+            run_mode=run_mode,
+            expected_parallelism_number=expected_parallelism_number,
+            complement_dependent_mode=complement_dependent_mode,
+            all_level_dependent=all_level_dependent,
+            execution_order=execution_order,
+            params=[] if params is None else params,
+        ),
     )
 
 
 @workflow_app.command("delete")
+@bind_command("workflow.delete")
 def delete_command(
     ctx: typer.Context,
-    workflow: Annotated[
-        str | None,
-        typer.Argument(
-            help=WORKFLOW_HELP,
-        ),
-    ] = None,
+    workflow: str,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=PROJECT_HELP,
-        ),
-    ] = None,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm workflow deletion without prompting.",
-        ),
-    ] = False,
+    project: str | None,
+    force: bool,
 ) -> None:
-    """Delete one workflow definition."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

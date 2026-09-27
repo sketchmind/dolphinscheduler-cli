@@ -13,6 +13,7 @@ from dsctl.cli_surface import (
     TOP_LEVEL_COMMANDS,
     WORKFLOW_INSTANCE_RESOURCE,
 )
+from dsctl.command_contract import COMMAND_CATALOG
 from dsctl.result_navigation import (
     ACTION_INDEX_FIELDS,
     ACTION_INDEX_GROUP_FIELDS,
@@ -30,6 +31,10 @@ SELECTION_PRECEDENCE: tuple[str, ...] = ("flag", "context")
 SELECTOR_TYPES: dict[str, str] = {
     "opaque_name": "User-provided DS resource name.",
     "name_or_code": "Name-first selector with numeric code shortcut.",
+    "name_or_native_identity": (
+        "Project name or native numeric identity: id on DS 1.3.9, code on newer "
+        "versions."
+    ),
     "name_or_id": "Name-first selector with numeric id shortcut.",
     "resource_path": "DS resource fullName path.",
     "id": "Numeric runtime or schedule id.",
@@ -58,10 +63,9 @@ OUTPUT_SUCCESS_FIELDS: tuple[str, ...] = (
     "action",
     "resolved",
     "data",
-    "warnings",
-    "warning_details",
 )
 OUTPUT_OPTIONAL_SUCCESS_FIELDS: tuple[str, ...] = (
+    "warnings",
     "next_actions",
     "action_index",
 )
@@ -69,16 +73,6 @@ OUTPUT_ERROR_FIELDS: tuple[str, ...] = (
     *OUTPUT_SUCCESS_FIELDS,
     "error",
 )
-TOP_LEVEL_COMMAND_SUMMARIES: dict[str, str] = {
-    "version": "Return CLI and selectable DolphinScheduler version metadata.",
-    "context": (
-        "Return the locally resolved target for subsequent commands without "
-        "remote validation."
-    ),
-    "doctor": "Return structured local and remote diagnostics for the current runtime.",
-    "schema": "Return the stable machine-readable schema for the current CLI surface.",
-    "capabilities": "Return stable version and surface capability discovery.",
-}
 
 
 class SelfDescriptionData(TypedDict):
@@ -89,6 +83,8 @@ class SelfDescriptionData(TypedDict):
     capabilities: bool
     command_invocation_source: str
     capabilities_scope: str
+    surface_inventory_scope: str
+    action_availability_command_pattern: str
 
 
 def selection_schema_data() -> dict[str, object]:
@@ -158,12 +154,18 @@ def error_capabilities_data() -> dict[str, object]:
 def output_schema_data() -> dict[str, object]:
     """Return the schema-scoped standard output envelope contract."""
     return {
-        "formats": ["json", "table", "tsv"],
+        "formats": list(COMMAND_CATALOG.global_option("format").input.choices),
         "default_format": "json",
-        "format_option": "--output-format",
+        "format_option": "--format",
         "columns_option": "--columns",
-        "compact_option": "--compact",
         "compact_json": True,
+        "compact_list_encoding": "columns_rows",
+        "compact_list_contract": {
+            "data_shape_flag": "compact_rows",
+            "fields": ["columns", "rows"],
+            "column_selection": "top_level_fields",
+            "scope_paths": "decoded_logical_collections",
+        },
         "json_encoding": "utf-8",
         "default_json_layout": "pretty",
         "error_channel": "stderr",
@@ -175,7 +177,7 @@ def output_schema_data() -> dict[str, object]:
             "success": True,
             "error": False,
         },
-        "warning_details_aligned": True,
+        "warnings": {"type": "array", "items": "object", "presence": "nonempty"},
         "data_shape_metadata": True,
         "json_column_projection": True,
         "next_actions": {
@@ -196,7 +198,7 @@ def output_schema_data() -> dict[str, object]:
             "index_fields": list(ACTION_INDEX_FIELDS),
             "target_fields": list(ACTION_INDEX_TARGET_FIELDS),
             "group_fields": list(ACTION_INDEX_GROUP_FIELDS),
-            "all_targets_semantics": "all_indexed_targets",
+            "all_targets_semantics": "all_returned_rows",
             "authorization": "not_evaluated",
             "eligibility": "row_facts_only",
             "row_output": False,
@@ -208,9 +210,10 @@ def output_capabilities_data() -> dict[str, object]:
     """Return the capabilities-scoped standard output support flags."""
     return {
         "standard_envelope": True,
-        "formats": ["json", "table", "tsv"],
+        "formats": list(COMMAND_CATALOG.global_option("format").input.choices),
         "default_format": "json",
         "compact_json": True,
+        "compact_list_encoding": "columns_rows",
         "json_encoding": "utf-8",
         "default_json_layout": "pretty",
         "error_channel": "stderr",
@@ -220,7 +223,7 @@ def output_capabilities_data() -> dict[str, object]:
         "json_column_projection": True,
         "resolved_metadata": True,
         "warnings": True,
-        "warning_details_alignment": True,
+        "structured_warnings": True,
         "structured_errors": True,
         "structured_next_actions": True,
         "structured_action_index": True,
@@ -236,6 +239,8 @@ def self_description_data() -> SelfDescriptionData:
         "capabilities": True,
         "command_invocation_source": "schema",
         "capabilities_scope": "feature_discovery",
+        "surface_inventory_scope": "installed_cli_surface",
+        "action_availability_command_pattern": ("dsctl capabilities --action ACTION"),
     }
 
 

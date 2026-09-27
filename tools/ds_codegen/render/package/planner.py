@@ -5,20 +5,26 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import TYPE_CHECKING
 
-from ds_codegen.render.requests_client import _collect_specialized_model_types
-from ds_codegen.render.requests_example import (
-    _generic_base_type,
-    _generic_inner_types,
-    _RenderContext,
-    _snake_case,
+from ds_codegen.contract_type_refs import (
+    canonicalize_builtin_type_expression,
+    generic_base_type,
+    generic_inner_types,
+    substitute_type_parameters,
 )
+from ds_codegen.contract_visibility import (
+    has_executable_response_type,
+    is_client_supplied_parameter,
+)
+from ds_codegen.render.package.render_support import snake_case
+from ds_codegen.snapshot_resolution import ResolutionScope, SnapshotTypeResolver
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Iterator
 
-    from ds_codegen.ir import ContractSnapshot, DtoFieldSpec
+    from ds_codegen.ir import ContractSnapshot, DtoFieldSpec, DtoSpec, ModelSpec
 
 
 @dataclass(frozen=True)
@@ -34,38 +40,44 @@ class SpecializedModel:
     class_name: str
     base_import_path: str
     module_parts: tuple[str, ...]
+    reference_import_paths: dict[str, str]
 
 
 @dataclass(frozen=True)
 class PackageRenderContext:
-    repo_root: Path
     snapshot: ContractSnapshot
+    type_resolver: SnapshotTypeResolver
     assignments_by_import_path: dict[str, AssignedType]
-    import_paths_by_name: dict[str, set[str]]
     specialized_by_java_type: dict[str, SpecializedModel]
-    parse_cache: dict[
-        str,
-        tuple[object, object, dict[str, str], str | None] | None,
-    ]
+
+
+@dataclass(frozen=True)
+class _PendingTypeUse:
+    java_type: str
+    scope: ResolutionScope
+    substitutions: tuple[tuple[str, _PendingTypeUse], ...] = ()
+
+
+@dataclass(frozen=True)
+class _ResolvedSpecialization:
+    base_import_path: str
+    reference_import_paths: tuple[tuple[str, str], ...]
 
 
 def build_package_context(
-    repo_root: Path,
     snapshot: ContractSnapshot,
 ) -> PackageRenderContext:
     """Plan stable module/class assignments before rendering any file content."""
+    type_resolver = SnapshotTypeResolver.compile(snapshot)
     assignments_by_import_path: dict[str, AssignedType] = {}
-    import_paths_by_name: dict[str, set[str]] = defaultdict(set)
 
     for enum_spec in snapshot.enums:
         assignment = _assign_spec_module(enum_spec.import_path)
         assignments_by_import_path[enum_spec.import_path] = assignment
-        import_paths_by_name[enum_spec.name].add(enum_spec.import_path)
 
     for dto_spec in snapshot.dtos:
         assignment = _assign_spec_module(dto_spec.import_path)
         assignments_by_import_path[dto_spec.import_path] = assignment
-        import_paths_by_name[dto_spec.name].add(dto_spec.import_path)
 
     for model_spec in snapshot.models:
         assignment = _assign_spec_module(
@@ -73,47 +85,268 @@ def build_package_context(
             fields=model_spec.fields,
         )
         assignments_by_import_path[model_spec.import_path] = assignment
-        import_paths_by_name[model_spec.name].add(model_spec.import_path)
 
     assignments_by_import_path = _dedupe_assigned_type_names(assignments_by_import_path)
     assignments_by_import_path = _dedupe_module_package_collisions(
         assignments_by_import_path
     )
 
-    name_context = _RenderContext(
-        dtos_by_name={dto.name: dto for dto in snapshot.dtos},
-        models_by_name={model.name: model for model in snapshot.models},
-        enums_by_name={enum_spec.name: enum_spec for enum_spec in snapshot.enums},
-    )
-    specialized_model_types = _collect_specialized_model_types(
+    specializations = _collect_exact_specializations(
         snapshot,
-        name_context,
-        set(name_context.dtos_by_name),
-        set(name_context.models_by_name),
+        resolver=type_resolver,
+    )
+    specialized_class_names = _specialized_class_names(
+        specializations,
+        assignments_by_import_path=assignments_by_import_path,
     )
     specialized_by_java_type: dict[str, SpecializedModel] = {}
-    for specialized_java_type in sorted(specialized_model_types):
-        base_java_type = _generic_base_type(specialized_java_type)
-        base_candidates = import_paths_by_name.get(base_java_type)
-        if not base_candidates:
-            continue
-        base_import_path = sorted(base_candidates)[0]
+    for specialized_java_type, specialization in sorted(specializations.items()):
+        base_import_path = specialization.base_import_path
         base_assignment = assignments_by_import_path[base_import_path]
         specialized_by_java_type[specialized_java_type] = SpecializedModel(
             java_type=specialized_java_type,
-            class_name=_specialized_class_name(specialized_java_type),
+            class_name=specialized_class_names[specialized_java_type],
             base_import_path=base_import_path,
             module_parts=base_assignment.module_parts,
+            reference_import_paths=dict(specialization.reference_import_paths),
         )
 
     return PackageRenderContext(
-        repo_root=repo_root,
         snapshot=snapshot,
+        type_resolver=type_resolver,
         assignments_by_import_path=assignments_by_import_path,
-        import_paths_by_name=dict(import_paths_by_name),
         specialized_by_java_type=specialized_by_java_type,
-        parse_cache={},
     )
+
+
+def _collect_exact_specializations(
+    snapshot: ContractSnapshot,
+    *,
+    resolver: SnapshotTypeResolver,
+) -> dict[str, _ResolvedSpecialization]:
+    models_by_import_path = {model.import_path: model for model in snapshot.models}
+    structured_by_import_path = {
+        spec.import_path: spec for spec in _iter_structured_specs(snapshot)
+    }
+    pending: list[_PendingTypeUse] = []
+    for operation in snapshot.operations:
+        if has_executable_response_type(operation):
+            pending.append(
+                _PendingTypeUse(
+                    operation.logical_return_type,
+                    ResolutionScope("operation_response", operation.operation_id),
+                )
+            )
+        pending.extend(
+            _PendingTypeUse(
+                parameter.java_type,
+                ResolutionScope("operation_request", operation.operation_id),
+            )
+            for parameter in operation.parameters
+            if is_client_supplied_parameter(parameter)
+        )
+    occurrences: dict[str, set[_ResolvedSpecialization]] = defaultdict(set)
+    visited: set[_PendingTypeUse] = set()
+    while pending:
+        use = _apply_direct_substitution(pending.pop())
+        if use in visited:
+            continue
+        visited.add(use)
+        java_type = use.java_type
+        generic_args = generic_inner_types(java_type)
+        base_import_path = _resolve_pending_reference(
+            resolver,
+            generic_base_type(java_type),
+            use,
+        )
+        base_spec = (
+            structured_by_import_path.get(base_import_path)
+            if base_import_path is not None
+            else None
+        )
+        base_model = (
+            models_by_import_path.get(base_import_path)
+            if base_import_path is not None
+            else None
+        )
+        if generic_args and base_model is not None and base_import_path is not None:
+            rendered_java_type = _materialize_pending_type(use)
+            argument_resolutions = _generic_argument_resolutions(
+                resolver,
+                use,
+                specialized_java_type=rendered_java_type,
+            )
+            occurrences[rendered_java_type].add(
+                _ResolvedSpecialization(
+                    base_import_path=base_import_path,
+                    reference_import_paths=tuple(sorted(argument_resolutions.items())),
+                )
+            )
+            substitutions = (
+                (("T", _nested_type_use(generic_args[0], use)),)
+                if len(generic_args) == 1
+                else ()
+            )
+            nested_scope = ResolutionScope("structured_type", base_import_path)
+            pending.extend(
+                _PendingTypeUse(
+                    field.java_type,
+                    nested_scope,
+                    substitutions,
+                )
+                for field in base_model.fields
+            )
+            continue
+        if base_spec is not None and base_import_path is not None:
+            nested_scope = ResolutionScope("structured_type", base_import_path)
+            if base_spec.extends is not None:
+                pending.append(_PendingTypeUse(base_spec.extends, nested_scope))
+            pending.extend(
+                _PendingTypeUse(field.java_type, nested_scope)
+                for field in base_spec.fields
+            )
+            continue
+        if java_type.endswith("[]"):
+            pending.append(
+                _PendingTypeUse(
+                    java_type[:-2],
+                    use.scope,
+                    use.substitutions,
+                )
+            )
+            continue
+        pending.extend(
+            _PendingTypeUse(
+                generic_arg,
+                use.scope,
+                use.substitutions,
+            )
+            for generic_arg in generic_args
+        )
+
+    resolved: dict[str, _ResolvedSpecialization] = {}
+    for java_type, candidates in occurrences.items():
+        if len(candidates) != 1:
+            rendered = sorted(
+                (item.base_import_path, item.reference_import_paths)
+                for item in candidates
+            )
+            message = (
+                f"specialized type {java_type} has conflicting exact identities: "
+                f"{rendered!r}"
+            )
+            raise ValueError(message)
+        resolved[java_type] = next(iter(candidates))
+    return resolved
+
+
+def _generic_argument_resolutions(
+    resolver: SnapshotTypeResolver,
+    use: _PendingTypeUse,
+    *,
+    specialized_java_type: str,
+) -> dict[str, str]:
+    resolutions: dict[str, str] = {}
+    for generic_arg in generic_inner_types(use.java_type):
+        _collect_pending_resolutions(
+            resolver,
+            _nested_type_use(generic_arg, use),
+            resolutions=resolutions,
+            specialized_java_type=specialized_java_type,
+        )
+    return resolutions
+
+
+def _collect_pending_resolutions(
+    resolver: SnapshotTypeResolver,
+    use: _PendingTypeUse,
+    *,
+    resolutions: dict[str, str],
+    specialized_java_type: str,
+) -> None:
+    normalized = _apply_direct_substitution(use)
+    java_type = normalized.java_type
+    if java_type.endswith("[]"):
+        _collect_pending_resolutions(
+            resolver,
+            _PendingTypeUse(
+                java_type[:-2],
+                normalized.scope,
+                normalized.substitutions,
+            ),
+            resolutions=resolutions,
+            specialized_java_type=specialized_java_type,
+        )
+        return
+    reference_name = generic_base_type(java_type)
+    import_path = _resolve_pending_reference(resolver, reference_name, normalized)
+    if import_path is not None:
+        previous = resolutions.setdefault(reference_name, import_path)
+        if previous != import_path:
+            message = (
+                f"specialized type {specialized_java_type} resolves "
+                f"{reference_name!r} to conflicting targets: "
+                f"{sorted({previous, import_path})!r}"
+            )
+            raise ValueError(message)
+    for generic_arg in generic_inner_types(java_type):
+        _collect_pending_resolutions(
+            resolver,
+            _nested_type_use(generic_arg, normalized),
+            resolutions=resolutions,
+            specialized_java_type=specialized_java_type,
+        )
+
+
+def _nested_type_use(java_type: str, parent: _PendingTypeUse) -> _PendingTypeUse:
+    return _PendingTypeUse(java_type, parent.scope, parent.substitutions)
+
+
+def _apply_direct_substitution(use: _PendingTypeUse) -> _PendingTypeUse:
+    resolved = dict(use.substitutions).get(use.java_type, use)
+    canonical_java_type = canonicalize_builtin_type_expression(resolved.java_type)
+    if canonical_java_type == resolved.java_type:
+        return resolved
+    return _PendingTypeUse(
+        canonical_java_type,
+        resolved.scope,
+        resolved.substitutions,
+    )
+
+
+def _materialize_pending_type(
+    use: _PendingTypeUse,
+    *,
+    active: frozenset[str] = frozenset(),
+) -> str:
+    substitutions: dict[str, str] = {}
+    for name, replacement in use.substitutions:
+        if name in active:
+            continue
+        substitutions[name] = _materialize_pending_type(
+            replacement,
+            active=active | {name},
+        )
+    return canonicalize_builtin_type_expression(
+        substitute_type_parameters(use.java_type, substitutions)
+    )
+
+
+def _resolve_pending_reference(
+    resolver: SnapshotTypeResolver,
+    reference_name: str,
+    use: _PendingTypeUse,
+) -> str | None:
+    if resolver.state(reference_name) == "missing":
+        return None
+    return resolver.resolve(reference_name, scope=use.scope)
+
+
+def _iter_structured_specs(
+    snapshot: ContractSnapshot,
+) -> Iterator[DtoSpec | ModelSpec]:
+    yield from snapshot.dtos
+    yield from snapshot.models
 
 
 def python_class_name(logical_name: str) -> str:
@@ -158,7 +391,7 @@ def _assign_spec_module(
                 _api_view_module_name(package_parts, type_parts),
             ),
         )
-    module_parts = (*_map_package_parts(package_parts), _snake_case(type_parts[0]))
+    module_parts = (*_map_package_parts(package_parts), snake_case(type_parts[0]))
     return AssignedType(
         import_path=import_path,
         class_name=python_class_name(".".join(type_parts)),
@@ -189,9 +422,9 @@ def _api_view_module_name(
 ) -> str:
     nested_view_parts = package_parts[5:]
     if nested_view_parts:
-        return _snake_case(nested_view_parts[-1])
+        return snake_case(nested_view_parts[-1])
     type_name = type_parts[0].removesuffix("VO")
-    return _snake_case(type_name)
+    return snake_case(type_name)
 
 
 def _dedupe_assigned_type_names(
@@ -205,7 +438,7 @@ def _dedupe_assigned_type_names(
             seen_names[assignment.class_name] = import_path
             updated_assignments[import_path] = assignment
             continue
-        if seen_names[assignment.class_name] != import_path:
+        if seen_names[assignment.class_name] == import_path:
             updated_assignments[import_path] = assignment
             continue
         suffix_index = 2
@@ -315,10 +548,14 @@ def _map_package_parts(package_parts: list[str]) -> tuple[str, ...]:
         return ("common", "enums", *_snake_case_parts(package_parts[5:]))
     if package_parts[:5] == ["org", "apache", "dolphinscheduler", "common", "model"]:
         return ("common", "model", *_snake_case_parts(package_parts[5:]))
+    if package_parts[:4] == ["org", "apache", "dolphinscheduler", "common"]:
+        return ("common", *_snake_case_parts(package_parts[4:]))
     if package_parts[:5] == ["org", "apache", "dolphinscheduler", "dao", "entity"]:
         return ("dao", "entities", *_snake_case_parts(package_parts[5:]))
     if package_parts[:5] == ["org", "apache", "dolphinscheduler", "dao", "model"]:
         return ("dao", "model", *_snake_case_parts(package_parts[5:]))
+    if package_parts[:5] == ["org", "apache", "dolphinscheduler", "dao", "vo"]:
+        return ("dao", "views", *_snake_case_parts(package_parts[5:]))
     if package_parts[:7] == [
         "org",
         "apache",
@@ -350,20 +587,32 @@ def _map_package_parts(package_parts: list[str]) -> tuple[str, ...]:
     if package_parts[:4] == ["org", "apache", "dolphinscheduler", "spi"]:
         return ("spi", *_snake_case_parts(package_parts[4:]))
     if package_parts[:4] == ["org", "apache", "dolphinscheduler", "plugin"]:
-        plugin_name = _snake_case(package_parts[4])
+        plugin_name = snake_case(package_parts[4])
         remaining = package_parts[5:]
         if remaining and remaining[0] == "api":
             remaining = remaining[1:]
         return ("plugin", f"{plugin_name}_api", *_snake_case_parts(remaining))
+    if package_parts[:4] == ["org", "apache", "dolphinscheduler", "extract"]:
+        return ("extract", *_snake_case_parts(package_parts[4:]))
+    if package_parts[:4] == ["org", "apache", "dolphinscheduler", "task"]:
+        return ("task", *_snake_case_parts(package_parts[4:]))
+    if package_parts[:4] == ["org", "apache", "dolphinscheduler", "remote"]:
+        return ("remote", *_snake_case_parts(package_parts[4:]))
     if package_parts[:4] == ["com", "baomidou", "mybatisplus", "annotation"]:
         return ("external", "mybatisplus", "annotation")
+    if package_parts[:2] == ["org", "springframework"]:
+        return (
+            "external",
+            "springframework",
+            *_snake_case_parts(package_parts[2:]),
+        )
     package_path = ".".join(package_parts)
     message = f"Unsupported package mapping for {package_path}"
     raise ValueError(message)
 
 
 def _snake_case_parts(parts: list[str]) -> tuple[str, ...]:
-    return tuple(_snake_case(part) for part in parts)
+    return tuple(snake_case(part) for part in parts)
 
 
 def _generated_view_module_name(logical_name: str) -> str:
@@ -374,7 +623,7 @@ def _generated_view_module_name(logical_name: str) -> str:
             break
     if not owner:
         owner = logical_name
-    return _snake_case(owner)
+    return snake_case(owner)
 
 
 def _generated_view_class_name(
@@ -433,11 +682,11 @@ def _generated_view_class_name(
 
 
 def _specialized_class_name(java_type: str) -> str:
-    generic_base = _generic_base_type(java_type)
-    name_parts = [python_class_name(generic_base)]
+    generic_base = generic_base_type(java_type)
+    name_parts = [_specialized_reference_name_part(generic_base)]
     name_parts.extend(
         _specialized_type_name_part(generic_arg)
-        for generic_arg in _generic_inner_types(java_type)
+        for generic_arg in generic_inner_types(java_type)
     )
     return "".join(name_parts)
 
@@ -446,10 +695,150 @@ def _specialized_type_name_part(java_type: str) -> str:
     if java_type.endswith("[]"):
         return _specialized_type_name_part(java_type[:-2]) + "List"
     if "<" not in java_type or not java_type.endswith(">"):
-        return python_class_name(java_type)
-    generic_base = _generic_base_type(java_type)
-    parts = [python_class_name(generic_base)]
+        return _specialized_reference_name_part(java_type)
+    generic_base = generic_base_type(java_type)
+    parts = [_specialized_reference_name_part(generic_base)]
     parts.extend(
-        _specialized_type_name_part(item) for item in _generic_inner_types(java_type)
+        _specialized_type_name_part(item) for item in generic_inner_types(java_type)
     )
     return "".join(parts)
+
+
+def _specialized_reference_name_part(reference_name: str) -> str:
+    """Return the declaration name without embedding its Java package."""
+    _, type_parts = _split_import_path(reference_name)
+    return python_class_name(".".join(type_parts))
+
+
+def _specialized_class_names(
+    specializations: dict[str, _ResolvedSpecialization],
+    *,
+    assignments_by_import_path: dict[str, AssignedType],
+) -> dict[str, str]:
+    """Allocate deterministic short specialization names within each module."""
+    grouped: dict[tuple[tuple[str, ...], str], list[str]] = defaultdict(list)
+    for java_type, specialization in specializations.items():
+        module_parts = assignments_by_import_path[
+            specialization.base_import_path
+        ].module_parts
+        short_name = _specialized_class_name(java_type)
+        grouped[(module_parts, short_name)].append(java_type)
+
+    resolved: dict[str, str] = {}
+    occupied_by_module: dict[tuple[str, ...], set[str]] = defaultdict(set)
+    for assignment in assignments_by_import_path.values():
+        occupied_by_module[assignment.module_parts].add(assignment.class_name)
+    collision_groups: list[tuple[tuple[str, ...], str, list[str]]] = []
+    for (module_parts, short_name), java_types in sorted(grouped.items()):
+        ordered_java_types = sorted(java_types)
+        if (
+            len(ordered_java_types) == 1
+            and short_name not in occupied_by_module[module_parts]
+        ):
+            resolved[ordered_java_types[0]] = short_name
+            occupied_by_module[module_parts].add(short_name)
+        else:
+            collision_groups.append((module_parts, short_name, ordered_java_types))
+
+    for module_parts, short_name, java_types in collision_groups:
+        occupied = occupied_by_module[module_parts]
+        candidates = _shortest_package_qualified_names(
+            short_name,
+            java_types,
+            occupied=occupied,
+        )
+        if candidates is None:
+            candidates = _hashed_specialization_names(
+                short_name,
+                java_types,
+                occupied=occupied,
+            )
+        resolved.update(candidates)
+        occupied.update(candidates.values())
+
+    return resolved
+
+
+def _shortest_package_qualified_names(
+    short_name: str,
+    java_types: list[str],
+    *,
+    occupied: set[str],
+) -> dict[str, str] | None:
+    references_by_type = {
+        java_type: _fully_qualified_references(java_type) for java_type in java_types
+    }
+    common_references = set.intersection(
+        *(set(references) for references in references_by_type.values())
+    )
+    differing_packages = {
+        java_type: [
+            _split_import_path(reference)[0]
+            for reference in references
+            if reference not in common_references
+        ]
+        for java_type, references in references_by_type.items()
+    }
+    max_depth = max(
+        (
+            len(package_parts)
+            for packages in differing_packages.values()
+            for package_parts in packages
+        ),
+        default=0,
+    )
+    for depth in range(1, max_depth + 1):
+        candidates = {
+            java_type: short_name
+            + "".join(
+                python_class_name(".".join(package_parts[-depth:]))
+                for package_parts in packages
+            )
+            for java_type, packages in differing_packages.items()
+        }
+        if (
+            len(set(candidates.values())) == len(java_types)
+            and not set(candidates.values()) & occupied
+        ):
+            return candidates
+    return None
+
+
+def _fully_qualified_references(java_type: str) -> list[str]:
+    references: list[str] = []
+    pending = [java_type]
+    while pending:
+        current = pending.pop()
+        if current.endswith("[]"):
+            pending.append(current[:-2])
+            continue
+        base = generic_base_type(current)
+        package_parts, _ = _split_import_path(base)
+        if package_parts:
+            references.append(base)
+        pending.extend(generic_inner_types(current))
+    return sorted(set(references))
+
+
+def _hashed_specialization_names(
+    short_name: str,
+    java_types: list[str],
+    *,
+    occupied: set[str],
+) -> dict[str, str]:
+    digests = {
+        java_type: sha256(java_type.encode("utf-8")).hexdigest()
+        for java_type in java_types
+    }
+    for length in range(8, 65, 4):
+        candidates = {
+            java_type: f"{short_name}H{digest[:length]}"
+            for java_type, digest in digests.items()
+        }
+        if (
+            len(set(candidates.values())) == len(java_types)
+            and not set(candidates.values()) & occupied
+        ):
+            return candidates
+    message = f"could not allocate unique specialization names for {java_types!r}"
+    raise ValueError(message)

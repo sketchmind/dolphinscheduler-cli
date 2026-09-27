@@ -55,9 +55,7 @@ class AuditReport:
 
 def build_report() -> AuditReport:
     modules: list[ModuleReport] = []
-    for path in sorted(SERVICES_ROOT.glob("*.py")):
-        if path.name == "__init__.py":
-            continue
+    for path in service_module_paths():
         module_report = analyze_module(path)
         if (
             not module_report.translators
@@ -69,20 +67,89 @@ def build_report() -> AuditReport:
     return AuditReport(modules=modules)
 
 
+def service_module_paths() -> list[Path]:
+    """Include service packages and any implementation in their initializers."""
+    return sorted(SERVICES_ROOT.rglob("*.py"))
+
+
+def service_module_name(path: Path) -> str:
+    parts = path.relative_to(SERVICES_ROOT).with_suffix("").parts
+    if parts[-1] == "__init__" and len(parts) > 1:
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
 def analyze_module(path: Path) -> ModuleReport:
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
-    constants = collect_module_int_constants(tree)
+    constants = _IntConstantResolver(ROOT / "src").collect(path, tree)
     translators = collect_translators(tree, constants)
     excepts = collect_api_result_error_excepts(tree)
     hooks = collect_pagination_hooks(tree, source)
     return ModuleReport(
-        module=path.stem,
+        module=service_module_name(path),
         path=path.relative_to(ROOT).as_posix(),
         translators=translators,
         api_result_error_excepts=excepts,
         pagination_hooks=hooks,
     )
+
+
+class _IntConstantResolver:
+    """Read literal constants and explicit local re-exports without importing code."""
+
+    def __init__(self, source_root: Path) -> None:
+        self.source_root = source_root
+        self.active: set[Path] = set()
+
+    def collect(self, path: Path, tree: ast.Module) -> dict[str, int]:
+        constants = collect_module_int_constants(tree)
+        if path in self.active:
+            return constants
+        self.active.add(path)
+        try:
+            for node in tree.body:
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                aliases = [
+                    alias
+                    for alias in node.names
+                    if (alias.asname or alias.name).isupper()
+                ]
+                if not aliases:
+                    continue
+                imported_path = self.import_path(path, node)
+                if imported_path is None:
+                    continue
+                imported_tree = ast.parse(
+                    imported_path.read_text(encoding="utf-8"),
+                    filename=str(imported_path),
+                )
+                imported_constants = self.collect(imported_path, imported_tree)
+                for alias in aliases:
+                    if alias.name in imported_constants:
+                        constants.setdefault(
+                            alias.asname or alias.name, imported_constants[alias.name]
+                        )
+        finally:
+            self.active.remove(path)
+        return constants
+
+    def import_path(self, path: Path, node: ast.ImportFrom) -> Path | None:
+        if node.level:
+            base = path.parent
+            for _ in range(node.level - 1):
+                base = base.parent
+        else:
+            base = self.source_root
+        if node.module:
+            base = base.joinpath(*node.module.split("."))
+        if not base.is_relative_to(self.source_root):
+            return None
+        for candidate in (base / "__init__.py", base.with_suffix(".py")):
+            if candidate.is_file():
+                return candidate
+        return None
 
 
 def collect_module_int_constants(tree: ast.Module) -> dict[str, int]:
@@ -183,11 +250,16 @@ def collect_pagination_hooks(
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        if not is_requested_page_data_call(node):
+        if not is_pagination_call(node):
             continue
         translate_error_expr: str | None = None
         for keyword in node.keywords:
-            if keyword.arg == "translate_error" and keyword.value is not None:
+            if keyword.arg == "translate_error":
+                if (
+                    isinstance(keyword.value, ast.Constant)
+                    and keyword.value.value is None
+                ):
+                    break
                 translate_error_expr = ast.get_source_segment(source, keyword.value)
                 if translate_error_expr is None:
                     translate_error_expr = ast.unparse(keyword.value)
@@ -319,8 +391,8 @@ def called_name(node: ast.expr) -> str:
     return ""
 
 
-def is_requested_page_data_call(node: ast.Call) -> bool:
-    return called_name(node.func) == "requested_page_data"
+def is_pagination_call(node: ast.Call) -> bool:
+    return called_name(node.func) in {"requested_page_data", "paged_command_result"}
 
 
 def is_translation_helper_name(name: str) -> bool:
@@ -396,7 +468,7 @@ def render_summary(report: AuditReport) -> str:
             "  translated except sites preserving source chain: "
             f"{len(chained_translated_excepts)}"
         ),
-        f"  requested_page_data hooks: {len(pagination_hooks)}",
+        f"  pagination hooks: {len(pagination_hooks)}",
         f"  hooks with translate_error: {len(translated_hooks)}",
     ]
     if raw_hook_modules:

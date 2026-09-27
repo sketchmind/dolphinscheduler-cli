@@ -1,13 +1,13 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult
 from dsctl.services.alert_group import (
     UNSET,
     DescriptionUpdate,
+    GroupTypeUpdate,
     InstanceIdsUpdate,
     create_alert_group_result,
     delete_alert_group_result,
@@ -21,10 +21,6 @@ alert_group_app = typer.Typer(
     no_args_is_help=True,
 )
 
-ALERT_GROUP_HELP = (
-    "Alert-group name or numeric id. Run `dsctl alert-group list` to discover values."
-)
-
 
 def register_alert_group_commands(app: typer.Typer) -> None:
     """Register the `alert-group` command group."""
@@ -32,41 +28,15 @@ def register_alert_group_commands(app: typer.Typer) -> None:
 
 
 @alert_group_app.command("list")
+@bind_command("alert-group.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter alert groups by group name using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List alert groups with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -82,14 +52,11 @@ def list_command(
 
 
 @alert_group_app.command("get")
+@bind_command("alert-group.get")
 def get_command(
     ctx: typer.Context,
-    alert_group: Annotated[
-        str,
-        typer.Argument(help=ALERT_GROUP_HELP),
-    ],
+    alert_group: str,
 ) -> None:
-    """Get one alert group by name or id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -99,36 +66,15 @@ def get_command(
 
 
 @alert_group_app.command("create")
+@bind_command("alert-group.create")
 def create_command(
     ctx: typer.Context,
     *,
-    name: Annotated[
-        str,
-        typer.Option(
-            "--name",
-            help="Alert-group name.",
-        ),
-    ],
-    instance_ids: Annotated[
-        list[int] | None,
-        typer.Option(
-            "--instance-id",
-            min=1,
-            help=(
-                "Alert plugin instance id to bind to this group. Repeat as "
-                "needed; run `dsctl alert-plugin list` to discover ids."
-            ),
-        ),
-    ] = None,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Optional alert-group description.",
-        ),
-    ] = None,
+    name: str,
+    instance_ids: list[int] | None,
+    group_type: str | None,
+    description: str | None,
 ) -> None:
-    """Create one alert group."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -136,6 +82,7 @@ def create_command(
         lambda: create_alert_group_result(
             name=name,
             instance_ids=instance_ids,
+            group_type=group_type,
             description=description,
             env_file=env_file,
         ),
@@ -143,60 +90,25 @@ def create_command(
 
 
 @alert_group_app.command("update")
+@bind_command("alert-group.update")
 def update_command(
     ctx: typer.Context,
-    alert_group: Annotated[
-        str,
-        typer.Argument(help=ALERT_GROUP_HELP),
-    ],
+    alert_group: str,
     *,
-    name: Annotated[
-        str | None,
-        typer.Option(
-            "--name",
-            help="Updated alert-group name. Omit to keep the current name.",
-        ),
-    ] = None,
-    instance_ids: Annotated[
-        list[int] | None,
-        typer.Option(
-            "--instance-id",
-            min=1,
-            help=(
-                "Alert plugin instance id to bind to this group. Repeat as "
-                "needed; run `dsctl alert-plugin list` to discover ids."
-            ),
-        ),
-    ] = None,
-    clear_instance_ids: Annotated[
-        bool,
-        typer.Option(
-            "--clear-instance-ids",
-            help="Clear all bound alert plugin instance ids.",
-        ),
-    ] = False,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Updated alert-group description.",
-        ),
-    ] = None,
-    clear_description: Annotated[
-        bool,
-        typer.Option(
-            "--clear-description",
-            help="Clear the stored alert-group description.",
-        ),
-    ] = False,
+    name: str | None,
+    instance_ids: list[int] | None,
+    clear_instance_ids: bool,
+    group_type: str | None,
+    description: str | None,
+    clear_description: bool,
 ) -> None:
-    """Update one alert group."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
     def build_result() -> CommandResult:
         description_update: DescriptionUpdate
         instance_ids_update: InstanceIdsUpdate
+        group_type_update: GroupTypeUpdate
 
         if instance_ids is not None and clear_instance_ids:
             message = "--instance-id and --clear-instance-ids cannot be used together"
@@ -212,6 +124,8 @@ def update_command(
         else:
             instance_ids_update = UNSET
 
+        group_type_update = UNSET if group_type is None else group_type
+
         if clear_description:
             description_update = None
         elif description is not None:
@@ -224,6 +138,7 @@ def update_command(
             name=name,
             description=description_update,
             instance_ids=instance_ids_update,
+            group_type=group_type_update,
             env_file=env_file,
         )
 
@@ -231,22 +146,13 @@ def update_command(
 
 
 @alert_group_app.command("delete")
+@bind_command("alert-group.delete")
 def delete_command(
     ctx: typer.Context,
-    alert_group: Annotated[
-        str,
-        typer.Argument(help=ALERT_GROUP_HELP),
-    ],
+    alert_group: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm alert-group deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one alert group."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

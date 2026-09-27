@@ -1,10 +1,30 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from textwrap import dedent, indent
-from typing import TYPE_CHECKING, Literal, TypedDict
+from dataclasses import dataclass, replace
+from functools import cache
+from textwrap import dedent
+from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
+import yaml
+
+from dsctl.models.common import is_yaml_object
 from dsctl.models.task_spec import supported_typed_task_types
+from dsctl.services.task_authoring_catalog import (
+    TaskAuthoringCatalog,
+    default_task_authoring_catalog,
+)
+from dsctl.services.task_authoring_catalog import (
+    task_template_with_runtime_controls as _task_template_with_runtime_controls,
+)
+from dsctl.services.task_authoring_catalog.parameter_guidance import (
+    nested_workflow_parameter_rules,
+    switch_parameter_guidance,
+    switch_uses_local_params,
+)
+from dsctl.services.task_authoring_catalog.templates import (
+    generic_task_runtime_limitation,
+    project_task_runtime_template,
+)
 from dsctl.upstream import (
     upstream_default_task_types,
     upstream_default_task_types_by_category,
@@ -12,6 +32,8 @@ from dsctl.upstream import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from dsctl.models.common import YamlObject, YamlValue
 
 TaskTemplateKind = Literal["generic", "typed"]
 
@@ -21,7 +43,6 @@ class TaskTemplateMetadata(TypedDict):
 
     kind: TaskTemplateKind
     category: str
-    default_variant: str
     variants: list[str]
     variant_summaries: dict[str, str]
     payload_modes: list[str]
@@ -39,97 +60,622 @@ class TaskTemplateVariant:
     payload_modes: tuple[str, ...]
     parameter_fields: tuple[str, ...] = ()
     resource_fields: tuple[str, ...] = ()
+    purpose: Literal["scenario", "option"] = "scenario"
 
 
-def supported_task_template_types() -> tuple[str, ...]:
-    """Return the supported stable task template types."""
-    return _SUPPORTED_TASK_TEMPLATE_TYPES
+@dataclass(frozen=True)
+class _DefaultTaskTemplateIndex:
+    typed: tuple[str, ...]
+    supported: tuple[str, ...]
+    generic: tuple[str, ...]
 
 
-def typed_task_template_types() -> tuple[str, ...]:
-    """Return task types backed by typed `task_params` models."""
-    return _TYPED_TASK_TEMPLATE_TYPES
+@cache
+def _default_task_template_index() -> _DefaultTaskTemplateIndex:
+    typed = _validated_typed_task_template_types()
+    supported = _validated_supported_task_template_types(typed)
+    return _DefaultTaskTemplateIndex(
+        typed=typed,
+        supported=supported,
+        generic=tuple(task_type for task_type in supported if task_type not in typed),
+    )
 
 
-def generic_task_template_types() -> tuple[str, ...]:
-    """Return task types that currently emit generic raw `task_params` templates."""
-    return _GENERIC_TASK_TEMPLATE_TYPES
+def _ordered_authorable_task_types(
+    catalog: TaskAuthoringCatalog,
+    *,
+    baseline: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Keep baseline ordering while admitting exact-profile-only types."""
+    authorable = frozenset(catalog.authorable_task_types)
+    stable = tuple(task_type for task_type in baseline if task_type in authorable)
+    extra = tuple(sorted(authorable - set(baseline)))
+    return (*stable, *extra)
 
 
-def all_task_template_variants() -> tuple[str, ...]:
+def supported_task_template_types(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> tuple[str, ...]:
+    """Return exact-profile task types, retaining stable default ordering."""
+    if catalog is None:
+        return _default_task_template_index().supported
+    return _ordered_authorable_task_types(
+        catalog,
+        baseline=upstream_default_task_types(),
+    )
+
+
+def typed_task_template_types(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> tuple[str, ...]:
+    """Return task types whose exact profile passed typed authoring review."""
+    if catalog is None:
+        return _default_task_template_index().typed
+    return tuple(sorted(catalog.reviewed_typed_task_types))
+
+
+def generic_task_template_types(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> tuple[str, ...]:
+    """Return exact task types emitted as opaque task_params templates."""
+    if catalog is None:
+        return _default_task_template_index().generic
+    typed = frozenset(typed_task_template_types(catalog=catalog))
+    return tuple(
+        task_type
+        for task_type in supported_task_template_types(catalog=catalog)
+        if task_type not in typed
+    )
+
+
+def all_task_template_variants(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> tuple[str, ...]:
     """Return every known task template variant name."""
+    selected_catalog = _selected_catalog(catalog)
     variant_names = {
-        variant.name for variants in _VARIANTS.values() for variant in variants
+        variant.name
+        for task_type in supported_task_template_types(catalog=selected_catalog)
+        for variant in _variants_for(task_type, catalog=selected_catalog)
+        if variant.name != "minimal"
     }
     return tuple(sorted(variant_names))
 
 
-def task_template_variants(task_type: str) -> tuple[str, ...]:
+def task_template_variants(
+    task_type: str,
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> tuple[str, ...]:
     """Return variant names supported by one normalized task type."""
-    return tuple(variant.name for variant in _variants_for(task_type))
+    return tuple(
+        variant.name
+        for variant in _variants_for(task_type, catalog=_selected_catalog(catalog))
+        if variant.name != "minimal"
+    )
 
 
-def task_template_kind(task_type: str) -> TaskTemplateKind:
+def task_template_kind(
+    task_type: str,
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> TaskTemplateKind:
     """Return the template kind for one normalized task type."""
-    return "typed" if task_type in _TYPED_TASK_TEMPLATE_TYPES else "generic"
+    selected_catalog = _selected_catalog(catalog)
+    entry = selected_catalog.entries.get(task_type)
+    if entry is not None:
+        return cast("TaskTemplateKind", entry.kind)
+    return (
+        "typed" if selected_catalog.supports_typed_authoring(task_type) else "generic"
+    )
 
 
-def task_template_category(task_type: str) -> str:
+def task_template_category(
+    task_type: str,
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> str:
     """Return the upstream default category for one normalized task type."""
-    return _TASK_TYPE_TO_CATEGORY[task_type]
+    entry = _selected_catalog(catalog).entries.get(task_type)
+    if entry is not None:
+        return entry.category
+    return _TASK_TYPE_TO_CATEGORY.get(task_type, "Upstream")
 
 
-def task_template_metadata() -> dict[str, TaskTemplateMetadata]:
+def task_template_metadata(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> dict[str, TaskTemplateMetadata]:
     """Return task template metadata for all supported task types."""
+    selected_catalog = _selected_catalog(catalog)
     return {
-        task_type: _metadata_for(task_type)
-        for task_type in _SUPPORTED_TASK_TEMPLATE_TYPES
+        task_type: _metadata_for(task_type, catalog=selected_catalog)
+        for task_type in supported_task_template_types(catalog=selected_catalog)
     }
 
 
-def task_template_yaml(task_type: str, *, variant: str = "minimal") -> str:
+def task_template_yaml(
+    task_type: str,
+    *,
+    variant: str | None = None,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> str:
     """Render one task template for a normalized type and variant."""
-    for candidate in _variants_for(task_type):
-        if candidate.name == variant:
-            return candidate.builder()
+    selected_catalog = _selected_catalog(catalog)
+    candidates = _variants_for(task_type, catalog=selected_catalog)
+    for candidate in candidates:
+        if candidate.name == variant or (
+            variant is None and candidate == candidates[0]
+        ):
+            rendered = candidate.builder()
+            if candidate.name == candidates[0].name:
+                rendered = _main_template_options(
+                    task_type, rendered, catalog=selected_catalog
+                )
+            return rendered
     message = (
         f"Unsupported task template variant '{variant}' for task type '{task_type}'"
     )
     raise KeyError(message)
 
 
-def _metadata_for(task_type: str) -> TaskTemplateMetadata:
-    variants = _variants_for(task_type)
+def _main_template_options(
+    task_type: str, rendered: str, *, catalog: TaskAuthoringCatalog
+) -> str:
+    """Show short input and field hints without duplicating complete scenarios."""
+    active = yaml.safe_load(rendered)
+    if not is_yaml_object(active):
+        return rendered
+    seen: set[str] = set()
+    for variant in _examples_for(task_type, catalog=catalog)[1:]:
+        if variant.purpose != "option" and variant.name != "output":
+            continue
+        example_text = variant.builder()
+        example = yaml.safe_load(example_text)
+        if not is_yaml_object(example):
+            continue
+        example_params = example.get("task_params")
+        if not is_yaml_object(example_params):
+            continue
+        active_params = active.get("task_params", {})
+        if not is_yaml_object(active_params):
+            active_params = {}
+        changed = _optional_field_delta(example_params, active_params)
+        if not changed:
+            continue
+        block = yaml.safe_dump(changed, sort_keys=False).rstrip()
+        if block in seen:
+            continue
+        seen.add(block)
+        rendered += (
+            "\n# Optional task_params fields: replace the fields above; "
+            "do not append duplicate keys.\n"
+        )
+        rendered += _optional_field_notes(task_type, changed, example_params, active)
+        rendered += "".join("# " + line + "\n" for line in block.splitlines())
+    return rendered
+
+
+def _optional_field_delta(example: YamlObject, active: YamlObject) -> YamlObject:
+    changed: YamlObject = {
+        key: example[key]
+        for key in ("parameters", "preStatements", "postStatements")
+        if key in example and example[key] != active.get(key)
+    }
+    local_params = example.get("localParams")
+    if isinstance(local_params, list):
+        inputs: list[YamlValue] = [
+            parameter
+            for parameter in local_params
+            if isinstance(parameter, dict) and parameter.get("direct") == "IN"
+        ]
+        if inputs:
+            changed["localParams"] = inputs[:1]
+    return changed
+
+
+def _optional_field_notes(
+    task_type: str,
+    changed: YamlObject,
+    example: YamlObject,
+    active: YamlObject,
+) -> str:
+    notes = ""
+    if "localParams" in changed:
+        if "command" in active:
+            notes += (
+                "# Move command to task_params.rawScript before adding localParams.\n"
+            )
+        if task_type == "SWITCH":
+            notes += (
+                "# Pair route with ${route} in switchResult branch conditions; "
+                "the first matching branch wins.\n"
+            )
+        elif task_type != "PROCEDURE":
+            notes += (
+                "# Use ${prop} in the task's script/request field; "
+                "the declaration alone does not substitute a value.\n"
+            )
+        if task_type == "PROCEDURE":
+            notes += (
+                f"# Pair localParams with method: {example['method']!r}; "
+                "one ordered binding per ?.\n"
+            )
+    if "preStatements" in changed or "postStatements" in changed:
+        notes += (
+            "# Pre/main/post statements are not an automatic transaction "
+            "or rollback; retry may repeat their effects.\n"
+        )
+    return notes
+
+
+def _metadata_for(
+    task_type: str,
+    *,
+    catalog: TaskAuthoringCatalog,
+) -> TaskTemplateMetadata:
+    variants = _variants_for(task_type, catalog=catalog)
+    examples = _examples_for(task_type, catalog=catalog)
     return {
-        "kind": task_template_kind(task_type),
-        "category": task_template_category(task_type),
-        "default_variant": variants[0].name,
-        "variants": [variant.name for variant in variants],
-        "variant_summaries": {variant.name: variant.summary for variant in variants},
+        "kind": task_template_kind(task_type, catalog=catalog),
+        "category": task_template_category(task_type, catalog=catalog),
+        "variants": [variant.name for variant in variants if variant.name != "minimal"],
+        "variant_summaries": {
+            variant.name: variant.summary
+            for variant in variants
+            if variant.name != "minimal"
+        },
         "payload_modes": sorted(
-            {mode for variant in variants for mode in variant.payload_modes}
+            {mode for variant in examples for mode in variant.payload_modes}
         ),
         "parameter_fields": sorted(
-            {field for variant in variants for field in variant.parameter_fields}
+            {field for variant in examples for field in variant.parameter_fields}
         ),
         "resource_fields": sorted(
-            {field for variant in variants for field in variant.resource_fields}
+            {field for variant in examples for field in variant.resource_fields}
         ),
     }
 
 
-def _variants_for(task_type: str) -> tuple[TaskTemplateVariant, ...]:
-    variants = _VARIANTS.get(task_type)
+def _variants_for(
+    task_type: str,
+    *,
+    catalog: TaskAuthoringCatalog,
+) -> tuple[TaskTemplateVariant, ...]:
+    """Return only independently useful, exact-supported public scenarios."""
+    return tuple(
+        example
+        for example in _examples_for(task_type, catalog=catalog)
+        if example.purpose == "scenario"
+    )
+
+
+def _examples_for(
+    task_type: str,
+    *,
+    catalog: TaskAuthoringCatalog,
+) -> tuple[TaskTemplateVariant, ...]:
+    entry = catalog.entries.get(task_type)
+    if entry is not None:
+        entry_variants = tuple(
+            TaskTemplateVariant(
+                name=template.name,
+                summary=template.summary,
+                builder=template.render,
+                payload_modes=template.payload_modes,
+                parameter_fields=template.parameter_fields,
+                resource_fields=template.resource_fields,
+                purpose=template.purpose,
+            )
+            for template in entry.default.contract.templates
+        )
+        return _project_typed_variants(
+            task_type,
+            variants=entry_variants,
+            catalog=catalog,
+        )
+    variants = (
+        _VARIANTS.get(task_type)
+        if catalog.supports_typed_authoring(task_type)
+        else None
+    )
     if variants is not None:
-        return variants
+        return _project_typed_variants(
+            task_type,
+            variants=variants,
+            catalog=catalog,
+        )
     return (
         TaskTemplateVariant(
             name="minimal",
             summary="Generic DS-native task_params placeholder.",
-            builder=lambda: _generic_task_template_yaml(task_type),
+            builder=lambda: _project_task_template_yaml(
+                task_type, _generic_task_template_yaml(task_type), catalog=catalog
+            ),
             payload_modes=("task_params",),
         ),
     )
+
+
+def _project_typed_variants(
+    task_type: str,
+    *,
+    variants: tuple[TaskTemplateVariant, ...],
+    catalog: TaskAuthoringCatalog,
+) -> tuple[TaskTemplateVariant, ...]:
+    """Bind static examples to one exact profile's reviewed authoring surface."""
+    projected: list[TaskTemplateVariant] = []
+    legacy_sub_workflow = (
+        task_type == "SUB_WORKFLOW" and catalog.profile_version == "1.3.9"
+    )
+    for source_variant in variants:
+        variant = source_variant
+        if (
+            variant.name == "output"
+            and not catalog.parameter_semantics.output.var_pool_transport
+        ):
+            variant = replace(variant, name="params", purpose="option")
+        if (
+            task_type in {"PYTHON", "SHELL"}
+            and catalog.profile_version == "1.3.9"
+            and variant.name == "resource"
+        ):
+            continue
+        if (
+            task_type == "HTTP"
+            and variant.name == "post-json"
+            and not catalog.authoring_surface.http.request_body
+        ):
+            continue
+        summary = variant.summary
+        if legacy_sub_workflow:
+            summary = (
+                "Resolve one same-project child workflow name to its exact "
+                "DolphinScheduler 1.3.9 processDefinitionId."
+            )
+        if (
+            task_type in {"PYTHON", "SHELL"}
+            and variant.name == "params"
+            and not catalog.parameter_semantics.output.var_pool_transport
+        ):
+            summary = f"{task_type} example with one IN localParam."
+        projected.append(
+            TaskTemplateVariant(
+                name=variant.name,
+                summary=summary,
+                builder=_projected_template_builder(
+                    task_type=task_type,
+                    variant=variant,
+                    catalog=catalog,
+                ),
+                payload_modes=variant.payload_modes,
+                parameter_fields=(
+                    ()
+                    if legacy_sub_workflow
+                    else tuple(
+                        field
+                        for field in variant.parameter_fields
+                        if field != "task_params.varPool[]"
+                        or catalog.parameter_semantics.output.var_pool_transport
+                    )
+                ),
+                resource_fields=(
+                    () if legacy_sub_workflow else variant.resource_fields
+                ),
+                purpose=variant.purpose,
+            )
+        )
+    return tuple(projected)
+
+
+def _projected_template_builder(
+    *,
+    task_type: str,
+    variant: TaskTemplateVariant,
+    catalog: TaskAuthoringCatalog,
+) -> Callable[[], str]:
+    def render() -> str:
+        return _project_task_template_yaml(
+            task_type,
+            variant.builder(),
+            catalog=catalog,
+        )
+
+    return render
+
+
+def _project_task_template_yaml(
+    task_type: str,
+    yaml_text: str,
+    *,
+    catalog: TaskAuthoringCatalog,
+) -> str:
+    yaml_text = project_task_runtime_template(yaml_text, catalog=catalog)
+    if catalog.authoring_surface.task_node.wire == "legacy-process-json":
+        yaml_text = _project_legacy_task_node_template(yaml_text, catalog=catalog)
+    if task_type == "PYTHON" and catalog.profile_version == "1.3.9":
+        yaml_text = _python_139_runtime_guidance() + yaml_text
+    if task_type == "CONDITIONS":
+        yaml_text = _conditions_graph_guidance() + yaml_text
+        if catalog.profile_version == "1.3.9":
+            yaml_text = _conditions_139_runtime_guidance() + yaml_text
+    if task_type == "HTTP" and not catalog.authoring_surface.http.request_body:
+        projected = yaml_text.replace('  httpBody: ""\n', "")
+        if catalog.profile_version == "1.3.9":
+            projected = _http_139_runtime_guidance() + projected
+        return projected
+    yaml_text = _project_special_runtime_guidance(task_type, yaml_text, catalog=catalog)
+    if task_type == "SUB_WORKFLOW":
+        return _project_sub_workflow_template(yaml_text, catalog=catalog)
+    return yaml_text
+
+
+def _project_special_runtime_guidance(
+    task_type: str, yaml_text: str, *, catalog: TaskAuthoringCatalog
+) -> str:
+    if task_type == "SWITCH":
+        if not switch_uses_local_params(catalog.profile_version):
+            yaml_text = yaml_text.replace(
+                "  localParams:\n    - prop: route\n      direct: IN\n"
+                "      type: VARCHAR\n      value: A\n",
+                "",
+            )
+        return (
+            "# "
+            + switch_parameter_guidance(catalog.profile_version)
+            + "\n# Define task-a, task-b and task-default in this workflow; "
+            "branch edges are added automatically.\n" + yaml_text
+        )
+    reason = generic_task_runtime_limitation(task_type, catalog=catalog)
+    if reason is not None:
+        return (
+            f"# Runtime limitation in DS {catalog.profile_version}: {reason}\n"
+            "# Saving opaque state does not establish a runnable stream task.\n"
+            + yaml_text
+        )
+    return yaml_text
+
+
+def _project_sub_workflow_template(
+    yaml_text: str,
+    *,
+    catalog: TaskAuthoringCatalog,
+) -> str:
+    """Bind one SUB_WORKFLOW template to its exact identity and input epoch."""
+    if catalog.profile_version == "1.3.9":
+        yaml_text = _project_sub_workflow_139_identity(yaml_text)
+    rules = "".join(f"# {rule}\n" for rule in _nested_workflow_template_rules(catalog))
+    return rules + yaml_text
+
+
+def _project_sub_workflow_139_identity(yaml_text: str) -> str:
+    """Project the canonical name selector onto the reviewed 1.3.9 subset."""
+    projected = yaml_text.replace(
+        "  workflowDefinitionCode: 1000000000001\n",
+        "  childWorkflowName: child-daily\n",
+    )
+    projected = projected.replace("  localParams: []\n", "")
+    projected = projected.replace("  resourceList: []\n", "")
+    projected = projected.replace("  varPool: []\n", "")
+    return (
+        "# Identity boundary: childWorkflowName is resolved within the same project "
+        "to native processDefinitionId.\n"
+        "# Compile path: processDefinitionJson.tasks[].params.processDefinitionId.\n"
+        f"{projected}"
+    )
+
+
+def _http_139_runtime_guidance() -> str:
+    """Return exact execution warnings for the legacy HTTP worker task."""
+    return (
+        "# Runtime boundary: DolphinScheduler applies prepared placeholder "
+        "substitution to the URL and each HTTP property.\n"
+        "# Logging warning: upstream logs complete task params, substituted request "
+        "params and properties, the configured URL, status, and the full response "
+        "body at INFO.\n"
+        "# Security boundary: task fields are not secret storage; dsctl does not "
+        "redact them.\n"
+        "# Recovery boundary: there is no reliable cancel or worker-failover resume.\n"
+        "# Retry reissues the whole HTTP request; POST, PUT, and DELETE side effects "
+        "can duplicate.\n"
+    )
+
+
+def _python_139_runtime_guidance() -> str:
+    """Return exact execution warnings for the legacy Python worker task."""
+    return (
+        "# Runtime boundary: DolphinScheduler performs placeholder substitution "
+        "after CRLF-to-LF normalization, writes the substituted script as UTF-8, "
+        "and selects PYTHON_HOME with a python fallback.\n"
+        "# Logging warning: upstream logs full task params, the original and "
+        "substituted script, its command, and stdout/stderr at INFO.\n"
+        "# Security boundary: task fields are not secret storage; dsctl does not "
+        "redact them.\n"
+        "# Resource boundary: typed resourceList must stay empty because the "
+        "legacy full-name path bypasses positive-ID permission checks; nonempty "
+        "native resource state remains unchanged/export opaque.\n"
+        "# Recovery boundary: this is a local process with best-effort cancel, no "
+        "structured output, and no worker-failover resume.\n"
+        "# Retry reruns the whole script; database, file, and remote side effects "
+        "can repeat.\n"
+    )
+
+
+def _conditions_graph_guidance() -> str:
+    """Explain how a CONDITIONS fragment connects to its surrounding tasks."""
+    return (
+        "# Define every referenced task name in the same workflow tasks[] list.\n"
+        "# dsctl automatically adds incoming edges from predicate tasks and outgoing\n"
+        "# edges to successNode/failedNode targets; "
+        "no duplicate depends_on is needed.\n"
+    )
+
+
+def _conditions_139_runtime_guidance() -> str:
+    """Return exact execution warnings for the legacy master-local router."""
+    return (
+        "# Runtime boundary: DolphinScheduler 1.3.9 evaluates same-process "
+        "task-name predicates on the master; dependence and conditionResult are "
+        "split TaskNode fields beside params.\n"
+        "# Logging warning: upstream logs task names, expected and actual states, "
+        "and the final condition result at INFO; these fields are not secret "
+        "storage.\n"
+        "# Graph boundary: successNode and failedNode each name exactly one "
+        "different direct successor in this reviewed subset.\n"
+        "# Recovery boundary: there is no worker process, structured output, "
+        "remote application id, or durable failover resume. Retry or master "
+        "failover can reevaluate persisted task state.\n"
+    )
+
+
+def _project_legacy_task_node_template(
+    yaml_text: str,
+    *,
+    catalog: TaskAuthoringCatalog,
+) -> str:
+    """Remove parameter examples that cannot compile into the legacy payload."""
+    projected_lines: list[str] = []
+    skip_output_param = False
+    for line in yaml_text.splitlines(keepends=True):
+        stripped = line.strip()
+        if (
+            stripped == "varPool: []"
+            and not catalog.parameter_semantics.output.var_pool_transport
+        ):
+            continue
+        if stripped == "- prop: row_count":
+            skip_output_param = True
+            continue
+        if skip_output_param:
+            if stripped.startswith(("direct:", "type:", "value:")):
+                continue
+            skip_output_param = False
+        if "${setValue(row_count=42)}" in line:
+            continue
+        projected_lines.append(line)
+    return "".join(projected_lines).replace(
+        "description: Use IN params and emit one OUT param",
+        "description: Use one IN parameter",
+    )
+
+
+def nested_workflow_parameter_guidance(catalog: TaskAuthoringCatalog) -> str:
+    """Render the shared exact child-parameter rules for schema summaries."""
+    return " ".join(_nested_workflow_template_rules(catalog))
+
+
+def _nested_workflow_template_rules(catalog: TaskAuthoringCatalog) -> tuple[str, ...]:
+    return tuple(nested_workflow_parameter_rules(catalog.parameter_semantics))
+
+
+def _selected_catalog(
+    catalog: TaskAuthoringCatalog | None,
+) -> TaskAuthoringCatalog:
+    return default_task_authoring_catalog() if catalog is None else catalog
 
 
 def _workflow_script_resource_fields() -> tuple[str, ...]:
@@ -161,7 +707,7 @@ def _shell_template_yaml() -> str:
     )
 
 
-def _shell_params_template_yaml() -> str:
+def _shell_output_template_yaml() -> str:
     return _task_template_with_runtime_controls(
         dedent(
             """\
@@ -207,7 +753,7 @@ def _shell_resource_template_yaml() -> str:
               rawScript: |
                 bash scripts/job.sh
               resourceList:
-                - resourceName: /tenant/resources/scripts/job.sh
+                - resourceName: /scripts/job.sh
               localParams: []
               varPool: []
             worker_group: default
@@ -242,7 +788,7 @@ def _python_template_yaml() -> str:
     )
 
 
-def _python_params_template_yaml() -> str:
+def _python_output_template_yaml() -> str:
     return _task_template_with_runtime_controls(
         dedent(
             """\
@@ -286,9 +832,9 @@ def _python_resource_template_yaml() -> str:
             description: Run a python script attached from DS resources
             task_params:
               rawScript: |
-                python scripts/job.py
+                import runpy; runpy.run_path("scripts/job.py", run_name="__main__")
               resourceList:
-                - resourceName: /tenant/resources/scripts/job.py
+                - resourceName: /scripts/job.py
               localParams: []
               varPool: []
             worker_group: default
@@ -326,7 +872,7 @@ def _remote_shell_template_yaml() -> str:
     )
 
 
-def _remote_shell_params_template_yaml() -> str:
+def _remote_shell_output_template_yaml() -> str:
     return _task_template_with_runtime_controls(
         dedent(
             """\
@@ -349,127 +895,6 @@ def _remote_shell_params_template_yaml() -> str:
                   direct: OUT
                   type: INTEGER
                   value: "0"
-              varPool: []
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            """
-        )
-    )
-
-
-def _sql_template_yaml() -> str:
-    return _task_template_with_runtime_controls(
-        dedent(
-            """\
-            # Task template for SQL
-            name: sql-task
-            type: SQL
-            description: Example SQL task
-            task_params:
-              type: MYSQL
-              datasource: 1
-              sql: |
-                select 1;
-              sqlType: 0
-              sendEmail: false
-              displayRows: 10
-              showType: TABLE
-              connParams: ""
-              preStatements: []
-              postStatements: []
-              groupId: 0
-              title: ""
-              limit: 0
-              localParams: []
-              varPool: []
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            """
-        )
-    )
-
-
-def _sql_params_template_yaml() -> str:
-    return _task_template_with_runtime_controls(
-        dedent(
-            """\
-            # Task template for SQL with dynamic parameters
-            name: sql-params-task
-            type: SQL
-            description: Use one IN param and publish one OUT param from result rows
-            task_params:
-              type: MYSQL
-              datasource: 1
-              sql: |
-                select count(*) as row_count
-                from source_table
-                where bizdate = '${bizdate}';
-              sqlType: 0
-              sendEmail: false
-              displayRows: 10
-              showType: TABLE
-              connParams: ""
-              preStatements: []
-              postStatements: []
-              groupId: 0
-              title: ""
-              limit: 0
-              localParams:
-                - prop: bizdate
-                  direct: IN
-                  type: VARCHAR
-                  value: ${system.biz.date}
-                - prop: row_count
-                  direct: OUT
-                  type: INTEGER
-                  value: "0"
-              varPool: []
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            """
-        )
-    )
-
-
-def _sql_pre_post_template_yaml() -> str:
-    return _task_template_with_runtime_controls(
-        dedent(
-            """\
-            # Task template for SQL with pre/post statements
-            name: sql-pre-post-task
-            type: SQL
-            description: Run SQL with setup and cleanup statements
-            task_params:
-              type: MYSQL
-              datasource: 1
-              sql: |
-                insert into target_table
-                select * from staging_table;
-              sqlType: 1
-              sendEmail: false
-              displayRows: 10
-              showType: TABLE
-              connParams: ""
-              preStatements:
-                - set session sql_mode = 'STRICT_TRANS_TABLES'
-              postStatements:
-                - analyze table target_table
-              groupId: 0
-              title: ""
-              limit: 0
-              localParams: []
               varPool: []
             worker_group: default
             priority: MEDIUM
@@ -509,40 +934,15 @@ def _http_template_yaml() -> str:
     )
 
 
-def _http_params_template_yaml() -> str:
-    return _task_template_with_runtime_controls(
-        dedent(
-            """\
-            # Task template for HTTP with dynamic parameters
-            name: http-params-task
-            type: HTTP
-            description: Call an HTTP endpoint with one IN param
-            task_params:
-              url: https://example.test/jobs/${bizdate}
-              httpMethod: GET
-              httpParams:
-                - prop: X-Bizdate
-                  httpParametersType: HEADERS
-                  value: ${bizdate}
-              httpBody: ""
-              httpCheckCondition: STATUS_CODE_DEFAULT
-              condition: ""
-              connectTimeout: 10000
-              localParams:
-                - prop: bizdate
-                  direct: IN
-                  type: VARCHAR
-                  value: ${system.biz.date}
-              varPool: []
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            """
-        )
-    )
+def _http_input_field_example() -> str:
+    """Return one concise IN field example for the main template."""
+    return """task_params:
+  localParams:
+  - prop: bizdate
+    direct: IN
+    type: VARCHAR
+    value: ${system.biz.date}
+"""
 
 
 def _http_post_json_template_yaml() -> str:
@@ -550,6 +950,7 @@ def _http_post_json_template_yaml() -> str:
         dedent(
             """\
             # Task template for HTTP POST with JSON body
+            # POST may change the remote system; rerunning can repeat that change.
             name: http-post-json-task
             type: HTTP
             description: Call an HTTP JSON endpoint
@@ -597,109 +998,6 @@ def _sub_workflow_template_yaml() -> str:
     )
 
 
-def _sub_workflow_params_template_yaml() -> str:
-    return _task_template_with_runtime_controls(
-        dedent(
-            """\
-            # Task template for SUB_WORKFLOW parameter inheritance
-            # Set values supplied by this parent in workflow.global_params or
-            # pass them as parent startup parameters. Put standalone defaults
-            # in the child workflow.global_params.
-            # SUB_WORKFLOW localParams do not become child inputs in DS 3.4.1.
-            # The inherited varPool is the parent workflow-instance varPool,
-            # not task_params.varPool below; keep compatibility fields empty.
-            name: child-workflow-params-task
-            type: SUB_WORKFLOW
-            description: Run one child workflow with inherited parent parameters
-            task_params:
-              workflowDefinitionCode: 1000000000001
-              localParams: []
-              resourceList: []
-              varPool: []
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            """
-        )
-    )
-
-
-def _dependent_template_yaml() -> str:
-    return _task_template_with_runtime_controls(
-        dedent(
-            """\
-            # Task template for DEPENDENT
-            name: dependent-task
-            type: DEPENDENT
-            description: Example dependent task
-            task_params:
-              dependence:
-                relation: AND
-                checkInterval: 10
-                failurePolicy: DEPENDENT_FAILURE_FAILURE
-                dependTaskList:
-                  - relation: AND
-                    dependItemList:
-                      - dependentType: DEPENDENT_ON_WORKFLOW
-                        projectCode: 1
-                        definitionCode: 1000000000001
-                        depTaskCode: 0
-                        cycle: day
-                        dateValue: last1Days
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            """
-        )
-    )
-
-
-def _dependent_params_template_yaml() -> str:
-    return _task_template_with_runtime_controls(
-        dedent(
-            """\
-            # Task template for DEPENDENT with dynamic parameters
-            name: dependent-params-task
-            type: DEPENDENT
-            description: Wait for an upstream workflow with a parameterized date window
-            task_params:
-              dependence:
-                relation: AND
-                checkInterval: 10
-                failurePolicy: DEPENDENT_FAILURE_FAILURE
-                dependTaskList:
-                  - relation: AND
-                    dependItemList:
-                      - dependentType: DEPENDENT_ON_WORKFLOW
-                        projectCode: 1
-                        definitionCode: 1000000000001
-                        depTaskCode: 0
-                        cycle: day
-                        dateValue: ${date_window}
-              localParams:
-                - prop: date_window
-                  direct: IN
-                  type: VARCHAR
-                  value: last1Days
-              resourceList: []
-              varPool: []
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            """
-        )
-    )
-
-
 def _switch_template_yaml() -> str:
     return _task_template_with_runtime_controls(
         dedent(
@@ -727,36 +1025,17 @@ def _switch_template_yaml() -> str:
     )
 
 
-def _switch_params_template_yaml() -> str:
-    return _task_template_with_runtime_controls(
-        dedent(
-            """\
-            # Task template for SWITCH with dynamic parameters
-            name: switch-params-task
-            type: SWITCH
-            description: Route branches from a parameter value
-            task_params:
-              switchResult:
-                dependTaskList:
-                  - condition: ${route} == "A"
-                    nextNode: task-a
-                  - condition: ${route} == "B"
-                    nextNode: task-b
-                nextNode: task-default
-              localParams:
-                - prop: route
-                  direct: IN
-                  type: VARCHAR
-                  value: A
-              varPool: []
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            """
-        )
+def _switch_input_field_example() -> str:
+    """Return one concise IN field example for the main template."""
+    return dedent(
+        """\
+        task_params:
+          localParams:
+            - prop: route
+              direct: IN
+              type: VARCHAR
+              value: A
+        """
     )
 
 
@@ -774,61 +1053,13 @@ def _conditions_template_yaml() -> str:
                 dependTaskList:
                   - relation: AND
                     dependItemList:
-                      - dependentType: DEPENDENT_ON_TASK
-                        projectCode: 1
-                        definitionCode: 1000000000001
-                        depTaskCode: 1000000000002
-                        cycle: day
-                        dateValue: today
+                      - task: upstream-task
                         status: SUCCESS
               conditionResult:
                 successNode:
                   - on-success
                 failedNode:
                   - on-failed
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            """
-        )
-    )
-
-
-def _conditions_params_template_yaml() -> str:
-    return _task_template_with_runtime_controls(
-        dedent(
-            """\
-            # Task template for CONDITIONS with dynamic parameters
-            name: conditions-params-task
-            type: CONDITIONS
-            description: Route downstream branches and expose task params explicitly
-            task_params:
-              dependence:
-                relation: AND
-                dependTaskList:
-                  - relation: AND
-                    dependItemList:
-                      - dependentType: DEPENDENT_ON_TASK
-                        projectCode: 1
-                        definitionCode: 1000000000001
-                        depTaskCode: 1000000000002
-                        cycle: day
-                        dateValue: today
-                        status: SUCCESS
-              conditionResult:
-                successNode:
-                  - on-success
-                failedNode:
-                  - on-failed
-              localParams:
-                - prop: bizdate
-                  direct: IN
-                  type: VARCHAR
-                  value: ${system.biz.date}
-              varPool: []
             worker_group: default
             priority: MEDIUM
             retry:
@@ -862,35 +1093,20 @@ def _generic_task_template_yaml(task_type: str) -> str:
     )
 
 
-def _task_template_with_runtime_controls(base: str) -> str:
-    """Append the shared task-runtime comment block to one task template."""
-    return f"{base}{_task_runtime_controls_comment_block()}delay: 0\ndepends_on: []\n"
-
-
-def _task_runtime_controls_comment_block(*, indent_level: int = 0) -> str:
-    """Return one shared commented task-runtime block for authoring templates."""
-    block = dedent(
-        """\
-        # Optional task runtime controls:
-        # flag: NO
-        # environment_code: 42
-        # task_group_id: 12
-        # task_group_priority: 0
-        # timeout_notify_strategy: WARN
-        # cpu_quota: 50
-        # memory_max: 1024
-        """
-    )
-    return indent(block, " " * indent_level)
-
-
 def _task_template_name(task_type: str) -> str:
     return f"{task_type.lower().replace('_', '-')}-task"
 
 
 def _validated_typed_task_template_types() -> tuple[str, ...]:
     expected = supported_typed_task_types()
-    actual = tuple(sorted(_VARIANTS))
+    actual = tuple(
+        sorted(
+            {
+                *_VARIANTS,
+                *default_task_authoring_catalog().reviewed_typed_task_types,
+            }
+        )
+    )
     if actual == expected:
         return expected
 
@@ -908,13 +1124,18 @@ def _validated_typed_task_template_types() -> tuple[str, ...]:
     raise RuntimeError(message)
 
 
-def _validated_supported_task_template_types() -> tuple[str, ...]:
-    supported = upstream_default_task_types()
-    missing_typed = sorted(set(_TYPED_TASK_TEMPLATE_TYPES) - set(supported))
+def _validated_supported_task_template_types(
+    typed_task_types: tuple[str, ...],
+) -> tuple[str, ...]:
+    supported = _ordered_authorable_task_types(
+        default_task_authoring_catalog(),
+        baseline=upstream_default_task_types(),
+    )
+    missing_typed = sorted(set(typed_task_types) - set(supported))
     if missing_typed:
         message = (
-            "Task template support must include every typed task spec in the "
-            f"upstream default task-type set (missing: {', '.join(missing_typed)})"
+            "Task template support must include every typed task spec authorized "
+            f"by the stable exact profile (missing: {', '.join(missing_typed)})"
         )
         raise RuntimeError(message)
     return supported
@@ -928,40 +1149,6 @@ _VARIANTS: dict[str, tuple[TaskTemplateVariant, ...]] = {
             builder=_conditions_template_yaml,
             payload_modes=("task_params",),
         ),
-        TaskTemplateVariant(
-            name="params",
-            summary="CONDITIONS example with explicit localParams and varPool fields.",
-            builder=_conditions_params_template_yaml,
-            payload_modes=("task_params",),
-            parameter_fields=_task_parameter_fields(),
-        ),
-        TaskTemplateVariant(
-            name="condition-routing",
-            summary="Explicit CONDITIONS example with success and failure targets.",
-            builder=_conditions_template_yaml,
-            payload_modes=("task_params",),
-        ),
-    ),
-    "DEPENDENT": (
-        TaskTemplateVariant(
-            name="minimal",
-            summary="Wait for an upstream workflow or task dependency.",
-            builder=_dependent_template_yaml,
-            payload_modes=("task_params",),
-        ),
-        TaskTemplateVariant(
-            name="params",
-            summary="DEPENDENT example with a parameterized dateValue.",
-            builder=_dependent_params_template_yaml,
-            payload_modes=("task_params",),
-            parameter_fields=_task_parameter_fields(),
-        ),
-        TaskTemplateVariant(
-            name="workflow-dependency",
-            summary="DEPENDENT example targeting an upstream workflow.",
-            builder=_dependent_template_yaml,
-            payload_modes=("task_params",),
-        ),
     ),
     "HTTP": (
         TaskTemplateVariant(
@@ -972,8 +1159,9 @@ _VARIANTS: dict[str, tuple[TaskTemplateVariant, ...]] = {
         ),
         TaskTemplateVariant(
             name="params",
+            purpose="option",
             summary="HTTP example with localParams used in URL and headers.",
-            builder=_http_params_template_yaml,
+            builder=_http_input_field_example,
             payload_modes=("task_params",),
             parameter_fields=_task_parameter_fields(),
         ),
@@ -992,9 +1180,9 @@ _VARIANTS: dict[str, tuple[TaskTemplateVariant, ...]] = {
             payload_modes=("command",),
         ),
         TaskTemplateVariant(
-            name="params",
+            name="output",
             summary="PYTHON example with IN localParams and one OUT varPool value.",
-            builder=_python_params_template_yaml,
+            builder=_python_output_template_yaml,
             payload_modes=("task_params",),
             parameter_fields=_task_parameter_fields(),
         ),
@@ -1014,19 +1202,13 @@ _VARIANTS: dict[str, tuple[TaskTemplateVariant, ...]] = {
             payload_modes=("task_params",),
         ),
         TaskTemplateVariant(
-            name="params",
+            name="output",
             summary=(
                 "REMOTESHELL example with IN localParams and one OUT varPool value."
             ),
-            builder=_remote_shell_params_template_yaml,
+            builder=_remote_shell_output_template_yaml,
             payload_modes=("task_params",),
             parameter_fields=_task_parameter_fields(),
-        ),
-        TaskTemplateVariant(
-            name="datasource",
-            summary="REMOTESHELL example showing type and datasource fields.",
-            builder=_remote_shell_template_yaml,
-            payload_modes=("task_params",),
         ),
     ),
     "SHELL": (
@@ -1037,9 +1219,9 @@ _VARIANTS: dict[str, tuple[TaskTemplateVariant, ...]] = {
             payload_modes=("command",),
         ),
         TaskTemplateVariant(
-            name="params",
+            name="output",
             summary="SHELL example with IN localParams and one OUT varPool value.",
-            builder=_shell_params_template_yaml,
+            builder=_shell_output_template_yaml,
             payload_modes=("task_params",),
             parameter_fields=_task_parameter_fields(),
         ),
@@ -1051,46 +1233,10 @@ _VARIANTS: dict[str, tuple[TaskTemplateVariant, ...]] = {
             resource_fields=_workflow_script_resource_fields(),
         ),
     ),
-    "SQL": (
-        TaskTemplateVariant(
-            name="minimal",
-            summary="SQL task with datasource, sqlType, and result display fields.",
-            builder=_sql_template_yaml,
-            payload_modes=("task_params",),
-        ),
-        TaskTemplateVariant(
-            name="params",
-            summary="SQL example with IN localParams and one OUT result column.",
-            builder=_sql_params_template_yaml,
-            payload_modes=("task_params",),
-            parameter_fields=_task_parameter_fields(),
-        ),
-        TaskTemplateVariant(
-            name="pre-post-statements",
-            summary="SQL task with preStatements and postStatements.",
-            builder=_sql_pre_post_template_yaml,
-            payload_modes=("task_params",),
-        ),
-    ),
     "SUB_WORKFLOW": (
         TaskTemplateVariant(
             name="minimal",
             summary="Run one child workflow definition by code.",
-            builder=_sub_workflow_template_yaml,
-            payload_modes=("task_params",),
-        ),
-        TaskTemplateVariant(
-            name="params",
-            summary=(
-                "SUB_WORKFLOW values inherited from parent workflow globals, "
-                "startup parameters, and workflow-instance varPool."
-            ),
-            builder=_sub_workflow_params_template_yaml,
-            payload_modes=("task_params",),
-        ),
-        TaskTemplateVariant(
-            name="child-workflow",
-            summary="SUB_WORKFLOW example showing workflowDefinitionCode.",
             builder=_sub_workflow_template_yaml,
             payload_modes=("task_params",),
         ),
@@ -1104,28 +1250,16 @@ _VARIANTS: dict[str, tuple[TaskTemplateVariant, ...]] = {
         ),
         TaskTemplateVariant(
             name="params",
+            purpose="option",
             summary="SWITCH example with branch routing from localParams.",
-            builder=_switch_params_template_yaml,
+            builder=_switch_input_field_example,
             payload_modes=("task_params",),
             parameter_fields=_task_parameter_fields(),
-        ),
-        TaskTemplateVariant(
-            name="branching",
-            summary="SWITCH example with named branch targets.",
-            builder=_switch_template_yaml,
-            payload_modes=("task_params",),
         ),
     ),
 }
 
-_TYPED_TASK_TEMPLATE_TYPES = _validated_typed_task_template_types()
 _TASK_TEMPLATE_TYPES_BY_CATEGORY = upstream_default_task_types_by_category()
-_SUPPORTED_TASK_TEMPLATE_TYPES = _validated_supported_task_template_types()
-_GENERIC_TASK_TEMPLATE_TYPES = tuple(
-    task_type
-    for task_type in _SUPPORTED_TASK_TEMPLATE_TYPES
-    if task_type not in _TYPED_TASK_TEMPLATE_TYPES
-)
 _TASK_TYPE_TO_CATEGORY = {
     task_type: category
     for category, task_types in _TASK_TEMPLATE_TYPES_BY_CATEGORY.items()

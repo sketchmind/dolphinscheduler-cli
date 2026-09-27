@@ -6,14 +6,17 @@ from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.errors import ApiResultError
-from dsctl.services import runtime as runtime_service
+from dsctl.services import alert_plugin as alert_plugin_service
+from dsctl.upstream.alert_plugins import (
+    ALERT_PLUGIN_DOMAIN,
+    AlertPluginDomain,
+)
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeAlertPlugin,
     FakeAlertPluginAdapter,
     FakePluginDefine,
-    FakeProjectAdapter,
     FakeUiPluginAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
 
@@ -24,6 +27,7 @@ ALERT_PLUGIN_PARAMS = json.dumps(
         {
             "field": "url",
             "name": "url",
+            "title": "Webhook URL",
             "type": "input",
             "value": "https://hooks.example.test/ops",
         }
@@ -70,15 +74,17 @@ def patch_alert_plugin_service(
     fake_ui_plugin_adapter: FakeUiPluginAdapter,
     fake_alert_plugin_adapter: FakeAlertPluginAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            ui_plugin_adapter=fake_ui_plugin_adapter,
-            alert_plugin_adapter=fake_alert_plugin_adapter,
-            profile=make_profile(),
-        ),
+    domain = AlertPluginDomain(
+        ui_plugins=fake_ui_plugin_adapter,
+        alert_plugins=fake_alert_plugin_adapter,
+    )
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        alert_plugin_service,
+        expected_domain=ALERT_PLUGIN_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 
@@ -95,7 +101,7 @@ def test_alert_plugin_list_command_returns_paginated_payload() -> None:
 def test_alert_plugin_list_command_uses_projected_fields_for_default_table() -> None:
     result = runner.invoke(
         app,
-        ["--output-format", "table", "alert-plugin", "list"],
+        ["--format", "table", "alert-plugin", "list"],
     )
 
     assert result.exit_code == 0

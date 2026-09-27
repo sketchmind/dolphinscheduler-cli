@@ -86,8 +86,8 @@ class ProjectPageRecord(Protocol):
         """Alternate remote page number field."""
 
 
-class ProjectOperations(Protocol):
-    """Bound project operations exposed to the service layer."""
+class ProjectReadOperations(Protocol):
+    """Bound project reads shared by full and read-only version profiles."""
 
     def list(
         self,
@@ -100,6 +100,10 @@ class ProjectOperations(Protocol):
 
     def get(self, *, code: int) -> ProjectPayloadRecord:
         """Fetch a single project by code."""
+
+
+class ProjectOperations(ProjectReadOperations, Protocol):
+    """Bound project operations exposed to the service layer."""
 
     def create(
         self,

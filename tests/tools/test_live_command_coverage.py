@@ -9,10 +9,20 @@ LIVE_DIR = REPO_ROOT / "tests/live"
 
 LOCAL_ONLY_COMMANDS = {
     "capabilities",
+    "config get",
+    "config set",
+    "config unset",
     "context",
+    "context create",
+    "context delete",
+    "context get",
+    "context list",
+    "context update",
     "enum names",
     "enum list",
     "lint workflow",
+    "lint workflow-instance-patch",
+    "lint workflow-patch",
     "schema",
     "template cluster",
     "template datasource",
@@ -24,8 +34,6 @@ LOCAL_ONLY_COMMANDS = {
     "template workflow-patch",
     "task-type get",
     "task-type schema",
-    "use project",
-    "use workflow",
     "version",
 }
 

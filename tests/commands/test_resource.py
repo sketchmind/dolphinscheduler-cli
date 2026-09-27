@@ -5,12 +5,12 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.services import runtime as runtime_service
+from dsctl.services import resource as resource_service
+from dsctl.upstream.resources import RESOURCE_DOMAIN, ResourceDomain
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
-    FakeProjectAdapter,
     FakeResourceAdapter,
     FakeResourceItem,
-    fake_service_runtime,
 )
 from tests.support import make_profile, normalize_cli_help
 
@@ -51,14 +51,14 @@ def patch_resource_service(
     monkeypatch: pytest.MonkeyPatch,
     fake_resource_adapter: FakeResourceAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            resource_adapter=fake_resource_adapter,
-            profile=make_profile(),
-        ),
+    domain = ResourceDomain(resources=fake_resource_adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        resource_service,
+        expected_domain=RESOURCE_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 
@@ -132,7 +132,7 @@ def test_resource_create_help_points_to_upload_for_local_files() -> None:
     result = runner.invoke(app, ["resource", "create", "--help"])
 
     assert result.exit_code == 0
-    assert "resource upload --file PATH" in normalize_cli_help(result.stdout)
+    assert "resource upload --file FILE" in normalize_cli_help(result.stdout)
 
 
 def test_resource_download_command_writes_output_file(tmp_path: Path) -> None:

@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.audit import (
     list_audit_logs_result,
     list_audit_model_types_result,
@@ -21,82 +20,20 @@ def register_audit_commands(app: typer.Typer) -> None:
 
 
 @audit_app.command("list")
+@bind_command("audit.list")
 def list_command(
     ctx: typer.Context,
     *,
-    model_types: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--model-type",
-            help=(
-                "Audit model type filter. Repeat as needed; run "
-                "`dsctl audit model-types` to discover values."
-            ),
-        ),
-    ] = None,
-    operation_types: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--operation-type",
-            help=(
-                "Audit operation type filter. Repeat as needed; run "
-                "`dsctl audit operation-types` to discover values."
-            ),
-        ),
-    ] = None,
-    start: Annotated[
-        str | None,
-        typer.Option(
-            "--start",
-            help="Start datetime in DS format 'YYYY-MM-DD HH:MM:SS'.",
-        ),
-    ] = None,
-    end: Annotated[
-        str | None,
-        typer.Option(
-            "--end",
-            help="End datetime in DS format 'YYYY-MM-DD HH:MM:SS'.",
-        ),
-    ] = None,
-    user_name: Annotated[
-        str | None,
-        typer.Option(
-            "--user-name",
-            help="Filter by audit actor user name.",
-        ),
-    ] = None,
-    model_name: Annotated[
-        str | None,
-        typer.Option(
-            "--model-name",
-            help="Filter by audited model name.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    model_types: list[str] | None,
+    operation_types: list[str] | None,
+    start: str | None,
+    end: str | None,
+    user_name: str | None,
+    model_name: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List audit-log rows with optional filters."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -117,8 +54,8 @@ def list_command(
 
 
 @audit_app.command("model-types")
+@bind_command("audit.model-types")
 def model_types_command(ctx: typer.Context) -> None:
-    """List DS audit model types."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -128,8 +65,8 @@ def model_types_command(ctx: typer.Context) -> None:
 
 
 @audit_app.command("operation-types")
+@bind_command("audit.operation-types")
 def operation_types_command(ctx: typer.Context) -> None:
-    """List DS audit operation types."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import replace
 from typing import TYPE_CHECKING, Literal, cast
 
 import javalang
 
+from ds_codegen.contract_type_refs import (
+    collect_type_reference_names as collect_type_reference_names_from_java_type,
+)
 from ds_codegen.extract.metadata import (
     _decode_scalar,
     _find_annotation_values,
@@ -17,6 +19,7 @@ from ds_codegen.extract.metadata import (
     _parse_doc_comment,
     _value_to_string,
 )
+from ds_codegen.extract.model_wire_projection import project_model_wire_fields
 from ds_codegen.extract.type_lookup import _render_reference_name, _render_type
 from ds_codegen.ir import (
     DtoFieldSpec,
@@ -27,9 +30,7 @@ from ds_codegen.ir import (
     ModelKind,
     ModelSpec,
 )
-from ds_codegen.java_source import (
-    BUILTIN_REFERENCE_TYPES,
-)
+from ds_codegen.java_source import SourceResolutionScope
 from ds_codegen.java_source import (
     find_nested_type_declaration as _find_nested_type_declaration,
 )
@@ -43,7 +44,7 @@ from ds_codegen.java_source import (
     parse_java_compilation_unit as _parse_java_compilation_unit,
 )
 from ds_codegen.java_source import (
-    resolve_global_import_path as _resolve_global_import_path,
+    qualify_java_type_references as _qualify_java_type_references,
 )
 from ds_codegen.java_source import (
     resolve_import_path_with_nested as _resolve_import_path_with_nested,
@@ -64,9 +65,14 @@ REQUEST_DTO_SUFFIXES = (
     "VerifyRequest",
     "Request",
 )
-_BASE_DATASOURCE_PARAM_DTO_IMPORT = (
-    "org.apache.dolphinscheduler.plugin.datasource.api.datasource."
-    "BaseDataSourceParamDTO"
+_BASE_DATASOURCE_PARAM_DTO_IMPORTS = frozenset(
+    {
+        ("org.apache.dolphinscheduler.common.datasource.BaseDataSourceParamDTO"),
+        (
+            "org.apache.dolphinscheduler.plugin.datasource.api.datasource."
+            "BaseDataSourceParamDTO"
+        ),
+    }
 )
 _PAGE_INFO_IMPORT = "org.apache.dolphinscheduler.api.utils.PageInfo"
 _TASK_DEFINITION_IMPORT = "org.apache.dolphinscheduler.dao.entity.TaskDefinition"
@@ -248,22 +254,21 @@ def extract_enum_specs(
 def collect_generated_view_model_imports(
     repo_root: Path,
     generated_view_models: list[ModelSpec],
-    known_type_names: set[str],
+    known_type_import_paths: set[str],
 ) -> set[str]:
+    """Collect exact source identities retained by generated-view fields."""
+
     additional_imports: set[str] = set()
     for generated_view_model in generated_view_models:
         for field in generated_view_model.fields:
             for referenced_type in collect_type_reference_names_from_java_type(
                 field.java_type
             ):
-                if referenced_type in known_type_names:
+                if referenced_type in known_type_import_paths:
                     continue
-                import_path = _resolve_global_import_path(
-                    repo_root,
-                    referenced_type,
-                )
-                if import_path is not None:
-                    additional_imports.add(import_path)
+                if _resolve_import_path_with_nested(repo_root, referenced_type) is None:
+                    continue
+                additional_imports.add(referenced_type)
     return additional_imports
 
 
@@ -282,23 +287,6 @@ def collect_type_reference_names(type_node: object | None) -> set[str]:
             else:
                 names.update(collect_type_reference_names(argument))
     return names
-
-
-def collect_type_reference_names_from_java_type(java_type: str) -> set[str]:
-    if java_type in BUILTIN_REFERENCE_TYPES | {"Any"}:
-        return set()
-    if java_type.endswith("[]"):
-        return collect_type_reference_names_from_java_type(java_type[:-2])
-    generic_start = java_type.find("<")
-    if generic_start != -1 and java_type.endswith(">"):
-        base_type = java_type[:generic_start]
-        names = collect_type_reference_names_from_java_type(base_type)
-        for inner_type in _split_top_level_generic_types(
-            java_type[generic_start + 1 : -1]
-        ):
-            names.update(collect_type_reference_names_from_java_type(inner_type))
-        return names
-    return {java_type}
 
 
 def looks_like_request_dto_import(import_path: str) -> bool:
@@ -346,19 +334,25 @@ def _extract_dto_spec(
     model_imports: set[str] = set()
     enum_imports: set[str] = set()
     nested_type_names = _collect_nested_type_names(type_declaration)
-    extends_name = (
+    declared_extends_name = (
         _render_reference_name(type_declaration.extends)
         if type_declaration.extends is not None
         else None
     )
-    if extends_name is not None:
+    extends_name = declared_extends_name
+    if declared_extends_name is not None:
         parent_import_path = _resolve_referenced_import_path(
             repo_root,
-            extends_name,
-            import_map,
-            package_name,
+            declared_extends_name,
+            SourceResolutionScope(
+                import_map,
+                package_name,
+                import_path,
+                frozenset(nested_type_names),
+            ),
         )
         if parent_import_path is not None:
+            extends_name = parent_import_path
             (
                 parent_spec,
                 parent_dto_imports,
@@ -382,11 +376,20 @@ def _extract_dto_spec(
     for field in type_declaration.fields:
         if not _is_instance_field(field):
             continue
+        field_spec = _extract_dto_field_spec(field)
         fields.append(
-            _qualify_field_spec_nested_types(
-                _extract_dto_field_spec(field),
-                import_path,
-                nested_type_names,
+            replace(
+                field_spec,
+                java_type=_qualify_java_type_references(
+                    repo_root,
+                    field_spec.java_type,
+                    SourceResolutionScope(
+                        import_map,
+                        package_name,
+                        import_path,
+                        frozenset(nested_type_names),
+                    ),
+                ),
             )
         )
         field_dto_imports, field_model_imports, field_enum_imports = (
@@ -465,19 +468,25 @@ def _extract_model_spec(
     model_imports: set[str] = set()
     enum_imports: set[str] = set()
     nested_type_names = _collect_nested_type_names(type_declaration)
-    extends_name = (
+    declared_extends_name = (
         _render_reference_name(type_declaration.extends)
         if type_declaration.extends is not None
         else None
     )
-    if extends_name is not None:
+    extends_name = declared_extends_name
+    if declared_extends_name is not None:
         parent_import_path = _resolve_referenced_import_path(
             repo_root,
-            extends_name,
-            import_map,
-            package_name,
+            declared_extends_name,
+            SourceResolutionScope(
+                import_map,
+                package_name,
+                import_path,
+                frozenset(nested_type_names),
+            ),
         )
         if parent_import_path is not None:
+            extends_name = parent_import_path
             parent_spec, parent_model_imports, parent_enum_imports = (
                 _extract_model_spec(
                     repo_root,
@@ -497,11 +506,20 @@ def _extract_model_spec(
     for field in type_declaration.fields:
         if not _is_instance_field(field):
             continue
+        field_spec = _extract_field_spec(field)
         fields.append(
-            _qualify_field_spec_nested_types(
-                _extract_field_spec(field),
-                import_path,
-                nested_type_names,
+            replace(
+                field_spec,
+                java_type=_qualify_java_type_references(
+                    repo_root,
+                    field_spec.java_type,
+                    SourceResolutionScope(
+                        import_map,
+                        package_name,
+                        import_path,
+                        frozenset(nested_type_names),
+                    ),
+                ),
             )
         )
         field_dto_imports, field_model_imports, field_enum_imports = (
@@ -528,6 +546,7 @@ def _extract_model_spec(
     )
     fields.extend(synthetic_fields)
     enum_imports.update(synthetic_enum_imports)
+    fields = project_model_wire_fields(repo_root, import_path, fields)
     fields = _normalize_model_fields(import_path, fields)
 
     model_spec = ModelSpec(
@@ -551,19 +570,18 @@ def _synthetic_model_fields(
     package_name: str | None,
     existing_fields: list[DtoFieldSpec],
 ) -> tuple[list[DtoFieldSpec], set[str]]:
-    if import_path != _BASE_DATASOURCE_PARAM_DTO_IMPORT:
+    if import_path not in _BASE_DATASOURCE_PARAM_DTO_IMPORTS:
         return [], set()
     if any(field.wire_name == "type" for field in existing_fields):
         return [], set()
     db_type_import_path = _resolve_referenced_import_path(
         repo_root,
         "DbType",
-        import_map,
-        package_name,
+        SourceResolutionScope(import_map, package_name, import_path),
     )
     synthetic_field = DtoFieldSpec(
         name="type",
-        java_type="DbType",
+        java_type=db_type_import_path or "DbType",
         wire_name="type",
         required=False,
         default_value=None,
@@ -606,8 +624,11 @@ def _extract_dto_field_spec(field: javalang.tree.FieldDeclaration) -> DtoFieldSp
 
 def _extract_field_spec(field: javalang.tree.FieldDeclaration) -> DtoFieldSpec:
     declarator = field.declarators[0]
+    json_property_values = _find_annotation_values(field.annotations, "JsonProperty")
     schema_values = _find_annotation_values(field.annotations, "Schema")
-    explicit_wire_name = _get_string_value(schema_values, "name")
+    explicit_wire_name = _get_string_value(json_property_values, "value") or (
+        _get_string_value(schema_values, "name")
+    )
     wire_name = explicit_wire_name or _default_field_wire_name(field, declarator.name)
     default_value = _get_string_value(schema_values, "defaultValue")
     if default_value is None and declarator.initializer is not None:
@@ -847,38 +868,6 @@ def _collect_nested_type_names(
     return nested_names
 
 
-def _qualify_field_spec_nested_types(
-    field_spec: DtoFieldSpec,
-    owner_import_path: str,
-    nested_type_names: set[str],
-) -> DtoFieldSpec:
-    if not nested_type_names:
-        return field_spec
-    owner_logical_name = _logical_type_name(owner_import_path)
-    qualified_java_type = field_spec.java_type
-    for nested_type_name in sorted(nested_type_names):
-        qualified_java_type = re.sub(
-            rf"\b{re.escape(nested_type_name)}\b",
-            f"{owner_logical_name}.{nested_type_name}",
-            qualified_java_type,
-        )
-    if qualified_java_type == field_spec.java_type:
-        return field_spec
-    return DtoFieldSpec(
-        name=field_spec.name,
-        java_type=qualified_java_type,
-        wire_name=field_spec.wire_name,
-        required=field_spec.required,
-        default_value=field_spec.default_value,
-        nullable=field_spec.nullable,
-        default_factory=field_spec.default_factory,
-        description=field_spec.description,
-        example=field_spec.example,
-        allowable_values=field_spec.allowable_values,
-        documentation=field_spec.documentation,
-    )
-
-
 def _field_is_nullable(field: javalang.tree.FieldDeclaration) -> bool:
     if isinstance(field.type, javalang.tree.BasicType):
         return False
@@ -984,10 +973,12 @@ def _collect_field_dependency_imports(
         import_path = _resolve_referenced_import_path(
             repo_root,
             referenced_type,
-            import_map,
-            package_name,
-            owner_import_path,
-            nested_type_names or set(),
+            SourceResolutionScope(
+                import_map,
+                package_name,
+                owner_import_path,
+                frozenset(nested_type_names or ()),
+            ),
         )
         if import_path is None:
             continue
@@ -1008,24 +999,6 @@ def _collect_field_dependency_imports(
     return dto_imports, model_imports, enum_imports
 
 
-def _split_top_level_generic_types(value: str) -> list[str]:
-    parts: list[str] = []
-    start = 0
-    depth = 0
-    for index, char in enumerate(value):
-        if char == "<":
-            depth += 1
-        elif char == ">":
-            depth -= 1
-        elif char == "," and depth == 0:
-            parts.append(value[start:index].strip())
-            start = index + 1
-    tail = value[start:].strip()
-    if tail:
-        parts.append(tail)
-    return parts
-
-
 def _declaration_kind_from_import_path(
     repo_root: Path,
     import_path: str,
@@ -1038,11 +1011,22 @@ def _declaration_kind_from_import_path(
     if resolved is None:
         declaration_kind_cache[import_path] = None
         return None
-    declaration_file, nested_names = resolved
+    declaration_file, declaration_names = resolved
     source = declaration_file.read_text()
     compilation_unit = _parse_java_compilation_unit(source)
-    type_declaration = compilation_unit.types[0]
-    nested_declaration = _find_nested_type_declaration(type_declaration, nested_names)
+    type_declaration = next(
+        (
+            declaration
+            for declaration in compilation_unit.types
+            if declaration.name == declaration_names[0]
+        ),
+        None,
+    )
+    nested_declaration = (
+        _find_nested_type_declaration(type_declaration, declaration_names[1:])
+        if type_declaration is not None
+        else None
+    )
     if isinstance(nested_declaration, javalang.tree.EnumDeclaration):
         declaration_kind_cache[import_path] = "enum"
         return "enum"

@@ -5,27 +5,26 @@ from typing import TypeAlias
 from dsctl.cli_surface import AUDIT_RESOURCE
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult, require_json_object
-from dsctl.services._serialization import (
-    AuditData,
-    optional_text,
-    serialize_audit_log,
-    serialize_audit_model_type,
-    serialize_audit_operation_type,
-)
+from dsctl.services._page_result import paged_command_result
 from dsctl.services._validation import (
     optional_ds_datetime,
     require_positive_int,
     validate_ds_datetime_range,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
+from dsctl.upstream.observability import AUDIT_DOMAIN, AuditDomain
+from dsctl.upstream.pagination import DEFAULT_PAGE_SIZE
+from dsctl.upstream.serialization import (
+    optional_text,
+    serialize_audit_log,
+    serialize_audit_model_type,
+    serialize_audit_operation_type,
+)
 
-AuditPageData: TypeAlias = PageData[AuditData]
+AuditServiceRuntime: TypeAlias = BoundDomainServiceRuntime[AuditDomain]
 
 
 def list_audit_logs_result(
@@ -50,8 +49,9 @@ def list_audit_logs_result(
     normalized_start = optional_ds_datetime(start, label="start")
     normalized_end = optional_ds_datetime(end, label="end")
     validate_ds_datetime_range(normalized_start, normalized_end)
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        AUDIT_DOMAIN,
         _list_audit_logs_result,
         model_types=normalized_model_types,
         operation_types=normalized_operation_types,
@@ -70,7 +70,11 @@ def list_audit_model_types_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Return the DS audit model-type tree."""
-    return run_with_service_runtime(env_file, _list_audit_model_types_result)
+    return run_with_bound_domain_service_runtime(
+        env_file,
+        AUDIT_DOMAIN,
+        _list_audit_model_types_result,
+    )
 
 
 def list_audit_operation_types_result(
@@ -78,11 +82,15 @@ def list_audit_operation_types_result(
     env_file: str | None = None,
 ) -> CommandResult:
     """Return the DS audit operation-type list."""
-    return run_with_service_runtime(env_file, _list_audit_operation_types_result)
+    return run_with_bound_domain_service_runtime(
+        env_file,
+        AUDIT_DOMAIN,
+        _list_audit_operation_types_result,
+    )
 
 
 def _list_audit_logs_result(
-    runtime: ServiceRuntime,
+    runtime: AuditServiceRuntime,
     *,
     model_types: tuple[str, ...],
     operation_types: tuple[str, ...],
@@ -94,11 +102,11 @@ def _list_audit_logs_result(
     page_size: int,
     all_pages: bool,
 ) -> CommandResult:
-    data: AuditPageData = requested_page_data(
+    return paged_command_result(
         # DS audit-log list uses one generic query wrapper code here rather
         # than stable domain-specific result codes, so raw upstream errors
         # are kept intentionally.
-        lambda current_page_no, current_page_size: runtime.upstream.audits.list(
+        lambda current_page_no, current_page_size: runtime.domain.audits.list(
             page_no=current_page_no,
             page_size=current_page_size,
             model_types=model_types or None,
@@ -113,10 +121,6 @@ def _list_audit_logs_result(
         all_pages=all_pages,
         serialize_item=serialize_audit_log,
         resource=AUDIT_RESOURCE,
-        max_pages=MAX_AUTO_EXHAUST_PAGES,
-    )
-    return CommandResult(
-        data=require_json_object(data, label="audit list data"),
         resolved={
             "modelTypes": list(model_types),
             "operationTypes": list(operation_types),
@@ -124,20 +128,17 @@ def _list_audit_logs_result(
             "end": end,
             "userName": user_name,
             "modelName": model_name,
-            "page_no": page_no,
-            "page_size": page_size,
-            "all": all_pages,
         },
     )
 
 
-def _list_audit_model_types_result(runtime: ServiceRuntime) -> CommandResult:
+def _list_audit_model_types_result(runtime: AuditServiceRuntime) -> CommandResult:
     payload = [
         require_json_object(
             serialize_audit_model_type(item),
             label="audit model-type data item",
         )
-        for item in runtime.upstream.audits.list_model_types()
+        for item in runtime.domain.audits.list_model_types()
     ]
     return CommandResult(
         data=payload,
@@ -145,13 +146,13 @@ def _list_audit_model_types_result(runtime: ServiceRuntime) -> CommandResult:
     )
 
 
-def _list_audit_operation_types_result(runtime: ServiceRuntime) -> CommandResult:
+def _list_audit_operation_types_result(runtime: AuditServiceRuntime) -> CommandResult:
     payload = [
         require_json_object(
             serialize_audit_operation_type(item),
             label="audit operation-type data item",
         )
-        for item in runtime.upstream.audits.list_operation_types()
+        for item in runtime.domain.audits.list_operation_types()
     ]
     return CommandResult(
         data=payload,

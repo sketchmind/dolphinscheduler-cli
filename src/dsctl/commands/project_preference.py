@@ -1,9 +1,9 @@
 from pathlib import Path
-from typing import Annotated
 
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.project_preference import (
     disable_project_preference_result,
     enable_project_preference_result,
@@ -26,21 +26,12 @@ def register_project_preference_commands(app: typer.Typer) -> None:
 
 
 @project_preference_app.command("get")
+@bind_command("project-preference.get")
 def get_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Get the singleton project preference default source for one selected project."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -53,40 +44,14 @@ def get_command(
 
 
 @project_preference_app.command("update")
+@bind_command("project-preference.update")
 def update_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
-    preferences_json: Annotated[
-        str | None,
-        typer.Option(
-            "--preferences-json",
-            help="Inline JSON object used as the DS project preference payload.",
-        ),
-    ] = None,
-    file: Annotated[
-        Path | None,
-        typer.Option(
-            "--file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help="Path to one JSON object file for the DS project preference payload.",
-            readable=True,
-            resolve_path=True,
-        ),
-    ] = None,
+    project: str | None,
+    preferences_json: str | None,
+    file: Path | None,
 ) -> None:
-    """Create or update the selected project-level default-value source."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -101,21 +66,12 @@ def update_command(
 
 
 @project_preference_app.command("enable")
+@bind_command("project-preference.enable")
 def enable_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Enable the selected project preference default-value source."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -128,21 +84,12 @@ def enable_command(
 
 
 @project_preference_app.command("disable")
+@bind_command("project-preference.disable")
 def disable_command(
     ctx: typer.Context,
     *,
-    project: Annotated[
-        str | None,
-        typer.Option(
-            "--project",
-            help=(
-                "Project name or code. Run `dsctl project list` to discover "
-                "values; falls back to stored project context."
-            ),
-        ),
-    ] = None,
+    project: str | None,
 ) -> None:
-    """Disable the selected project preference default-value source."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

@@ -4,12 +4,15 @@ import pytest
 from typer.testing import CliRunner
 
 from dsctl.app import app
-from dsctl.services import runtime as runtime_service
+from dsctl.services import alert_group as alert_group_service
+from dsctl.upstream.alert_groups import (
+    ALERT_GROUP_DOMAIN,
+    AlertGroupDomain,
+)
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
     FakeAlertGroup,
     FakeAlertGroupAdapter,
-    FakeProjectAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
 
@@ -45,14 +48,14 @@ def patch_alert_group_service(
     monkeypatch: pytest.MonkeyPatch,
     fake_alert_group_adapter: FakeAlertGroupAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            alert_group_adapter=fake_alert_group_adapter,
-            profile=make_profile(),
-        ),
+    domain = AlertGroupDomain(alert_groups=fake_alert_group_adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        alert_group_service,
+        expected_domain=ALERT_GROUP_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
 
 
@@ -114,6 +117,7 @@ def test_alert_group_create_help_points_to_alert_plugin_list() -> None:
 
     assert result.exit_code == 0
     assert "alert-plugin list" in result.stdout
+    assert "--group-type" in result.stdout
 
 
 def test_alert_group_update_command_returns_updated_group() -> None:
@@ -148,7 +152,7 @@ def test_alert_group_update_command_requires_one_change_suggestion() -> None:
     assert payload["error"]["type"] == "user_input_error"
     assert payload["error"]["suggestion"] == (
         "Pass at least one update flag such as --name, --description, "
-        "--clear-description, --instance-id, or --clear-instance-ids."
+        "--clear-description, --instance-id, --clear-instance-ids, or --group-type."
     )
 
 

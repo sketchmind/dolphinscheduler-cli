@@ -1,43 +1,43 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 import pytest
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
-    FakeProjectAdapter,
     FakeWorkerGroup,
     FakeWorkerGroupAdapter,
-    fake_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
-from dsctl.errors import ConflictError, InvalidStateError, UserInputError
-from dsctl.services import runtime as runtime_service
+from dsctl.errors import (
+    ConflictError,
+    InvalidStateError,
+    UnsupportedFeatureError,
+    UserInputError,
+)
 from dsctl.services import worker_group as worker_group_service
+from dsctl.upstream.worker_groups import (
+    WORKER_GROUP_DOMAIN,
+    WorkerGroupDomain,
+)
 
 
 def _install_worker_group_service_fakes(
     monkeypatch: pytest.MonkeyPatch,
     adapter: FakeWorkerGroupAdapter,
+    *,
+    ds_version: str = "3.4.1",
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            worker_group_adapter=adapter,
-            profile=make_profile(),
-        ),
+    domain = WorkerGroupDomain(worker_groups=adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        worker_group_service,
+        expected_domain=WORKER_GROUP_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=lambda: make_profile(ds_version=ds_version),
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 def test_list_worker_groups_result_returns_first_page_by_default(
@@ -222,6 +222,82 @@ def test_update_worker_group_result_preserves_omitted_fields(
     assert data["name"] == "default"
     assert data["addrList"] == "worker-b:1234"
     assert data["description"] == "primary worker group"
+
+
+@pytest.mark.parametrize("ds_version", ["3.1.0", "3.1.1"])
+@pytest.mark.parametrize(
+    "update_kwargs",
+    [
+        {"description": "new"},
+        {"description": None},
+        {"addresses": ["worker-b:1234"]},
+    ],
+)
+def test_legacy_same_name_update_rejected_before_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    ds_version: str,
+    update_kwargs: dict[str, object],
+) -> None:
+    adapter = FakeWorkerGroupAdapter(
+        worker_groups=[
+            FakeWorkerGroup(
+                id=7,
+                name="analytics",
+                addr_list_value="worker-a:1234",
+                description="old",
+            )
+        ]
+    )
+    _install_worker_group_service_fakes(monkeypatch, adapter, ds_version=ds_version)
+    mutation_calls = 0
+
+    def unexpected_mutation(**kwargs: object) -> FakeWorkerGroup:
+        nonlocal mutation_calls
+        mutation_calls += 1
+        message = f"unexpected update: {kwargs}"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(adapter, "update", unexpected_mutation)
+    with pytest.raises(UnsupportedFeatureError) as exc_info:
+        worker_group_service.update_worker_group_result(
+            "analytics",
+            **update_kwargs,  # type: ignore[arg-type]
+        )
+    assert mutation_calls == 0
+    assert exc_info.value.details["reason"] == (
+        "upstream_same_name_update_self_collision"
+    )
+    assert exc_info.value.details["selected_version"] == ds_version
+    assert "3.1.2" in str(exc_info.value.suggestion)
+
+
+@pytest.mark.parametrize("ds_version", ["3.1.0", "3.1.1", "3.1.2"])
+def test_legacy_rename_with_description_remains_available(
+    monkeypatch: pytest.MonkeyPatch, ds_version: str
+) -> None:
+    adapter = FakeWorkerGroupAdapter(
+        worker_groups=[FakeWorkerGroup(id=7, name="analytics", description="old")]
+    )
+    _install_worker_group_service_fakes(monkeypatch, adapter, ds_version=ds_version)
+    result = worker_group_service.update_worker_group_result(
+        "analytics", name="analytics-renamed", description="new"
+    )
+    data = _mapping(result.data)
+    assert data["name"] == "analytics-renamed"
+    assert data["description"] == "new"
+
+
+def test_312_same_name_description_update_remains_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = FakeWorkerGroupAdapter(
+        worker_groups=[FakeWorkerGroup(id=7, name="analytics", description="old")]
+    )
+    _install_worker_group_service_fakes(monkeypatch, adapter, ds_version="3.1.2")
+    result = worker_group_service.update_worker_group_result(
+        "analytics", description="new"
+    )
+    assert _mapping(result.data)["description"] == "new"
 
 
 def test_update_worker_group_result_rejects_config_rows(

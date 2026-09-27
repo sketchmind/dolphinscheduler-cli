@@ -1,4 +1,3 @@
-from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -7,14 +6,20 @@ from tests.fakes import (
     FakeProjectAdapter,
     FakeProjectPreference,
     FakeProjectPreferenceAdapter,
-    fake_service_runtime,
+    fake_bound_domain_service_runtime,
+    fake_project_definitions,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
 
-from dsctl.context import SessionContext
 from dsctl.errors import UserInputError
 from dsctl.services import project_preference as project_preference_service
 from dsctl.services import runtime as runtime_service
+from dsctl.services.selection import ResourceDefaults
+from dsctl.upstream.project_preferences import (
+    PROJECT_PREFERENCE_DOMAIN,
+    ProjectPreferenceDomain,
+)
 
 
 def _install_project_preference_service_fakes(
@@ -22,23 +27,30 @@ def _install_project_preference_service_fakes(
     *,
     project_adapter: FakeProjectAdapter,
     project_preference_adapter: FakeProjectPreferenceAdapter,
-    context: SessionContext | None = None,
+    context: ResourceDefaults | None = None,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            project_preference_adapter=project_preference_adapter,
+    def bound_runtime_factory(
+        domain: object,
+        *,
+        env_file: str | None = None,
+        cwd: object = None,
+    ) -> object:
+        del env_file, cwd
+        assert domain is PROJECT_PREFERENCE_DOMAIN
+        return fake_bound_domain_service_runtime(
+            ProjectPreferenceDomain(
+                definitions=fake_project_definitions(project_adapter),
+                preferences=project_preference_adapter,
+            ),
             profile=make_profile(),
             context=context,
-        ),
+        )
+
+    monkeypatch.setattr(
+        runtime_service,
+        "open_bound_domain_service_runtime",
+        bound_runtime_factory,
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
 
 
 @pytest.fixture
@@ -78,7 +90,7 @@ def test_get_project_preference_result_returns_payload(
         monkeypatch,
         project_adapter=fake_project_adapter,
         project_preference_adapter=fake_project_preference_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = project_preference_service.get_project_preference_result()

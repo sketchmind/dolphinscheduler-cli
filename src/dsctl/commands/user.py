@@ -1,8 +1,10 @@
-from typing import Annotated
+from pathlib import Path
 
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
+from dsctl.commands._secret_input import read_password
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult
 from dsctl.services.user import (
@@ -35,8 +37,6 @@ user_revoke_app = typer.Typer(
     no_args_is_help=True,
 )
 
-USER_HELP = "User name or numeric id. Run `dsctl user list` to discover values."
-
 
 def register_user_commands(app: typer.Typer) -> None:
     """Register the `user` command group."""
@@ -46,41 +46,15 @@ def register_user_commands(app: typer.Typer) -> None:
 
 
 @user_app.command("list")
+@bind_command("user.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter users by user name using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List users with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -96,14 +70,11 @@ def list_command(
 
 
 @user_app.command("get")
+@bind_command("user.get")
 def get_command(
     ctx: typer.Context,
-    user: Annotated[
-        str,
-        typer.Argument(help=USER_HELP),
-    ],
+    user: str,
 ) -> None:
-    """Get one user by name or id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -113,74 +84,26 @@ def get_command(
 
 
 @user_app.command("create")
+@bind_command("user.create")
 def create_command(
     ctx: typer.Context,
     *,
-    user_name: Annotated[
-        str,
-        typer.Option(
-            "--user-name",
-            help="User name.",
-        ),
-    ],
-    password: Annotated[
-        str,
-        typer.Option(
-            "--password",
-            help="Plain-text user password.",
-        ),
-    ],
-    email: Annotated[
-        str,
-        typer.Option(
-            "--email",
-            help="User email.",
-        ),
-    ],
-    tenant: Annotated[
-        str,
-        typer.Option(
-            "--tenant",
-            help=(
-                "Tenant code or numeric id. Run `dsctl tenant list` to discover values."
-            ),
-        ),
-    ],
-    state_value: Annotated[
-        int,
-        typer.Option(
-            "--state",
-            min=0,
-            max=1,
-            help="User state. Use 1 for enabled and 0 for disabled.",
-        ),
-    ],
-    phone: Annotated[
-        str | None,
-        typer.Option(
-            "--phone",
-            help="Optional user phone.",
-        ),
-    ] = None,
-    queue: Annotated[
-        str | None,
-        typer.Option(
-            "--queue",
-            help=(
-                "Optional queue-name override stored on the user. Run "
-                "`dsctl queue list` to discover queue names."
-            ),
-        ),
-    ] = None,
+    user_name: str,
+    password: str | None,
+    password_file: Path | None,
+    email: str,
+    tenant: str,
+    state_value: int,
+    phone: str | None,
+    queue: str | None,
 ) -> None:
-    """Create one user."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
         "user.create",
         lambda: create_user_result(
             user_name=user_name,
-            password=password,
+            password=read_password(password, password_file, required=True),
             email=email,
             tenant=tenant,
             state=state_value,
@@ -192,93 +115,23 @@ def create_command(
 
 
 @user_app.command("update")
+@bind_command("user.update")
 def update_command(
     ctx: typer.Context,
-    user: Annotated[
-        str,
-        typer.Argument(help=USER_HELP),
-    ],
+    user: str,
     *,
-    user_name: Annotated[
-        str | None,
-        typer.Option(
-            "--user-name",
-            help="Updated user name.",
-        ),
-    ] = None,
-    password: Annotated[
-        str | None,
-        typer.Option(
-            "--password",
-            help="Updated plain-text user password.",
-        ),
-    ] = None,
-    email: Annotated[
-        str | None,
-        typer.Option(
-            "--email",
-            help="Updated user email.",
-        ),
-    ] = None,
-    tenant: Annotated[
-        str | None,
-        typer.Option(
-            "--tenant",
-            help=(
-                "Updated tenant code or numeric id. Run `dsctl tenant list` to "
-                "discover values."
-            ),
-        ),
-    ] = None,
-    state_value: Annotated[
-        int | None,
-        typer.Option(
-            "--state",
-            min=0,
-            max=1,
-            help="Updated user state. Use 1 for enabled and 0 for disabled.",
-        ),
-    ] = None,
-    phone: Annotated[
-        str | None,
-        typer.Option(
-            "--phone",
-            help="Updated user phone.",
-        ),
-    ] = None,
-    clear_phone: Annotated[
-        bool,
-        typer.Option(
-            "--clear-phone",
-            help="Clear the stored user phone.",
-        ),
-    ] = False,
-    queue: Annotated[
-        str | None,
-        typer.Option(
-            "--queue",
-            help=(
-                "Updated queue-name override stored on the user. Run "
-                "`dsctl queue list` to discover queue names."
-            ),
-        ),
-    ] = None,
-    clear_queue: Annotated[
-        bool,
-        typer.Option(
-            "--clear-queue",
-            help="Clear the stored queue-name override.",
-        ),
-    ] = False,
-    time_zone: Annotated[
-        str | None,
-        typer.Option(
-            "--time-zone",
-            help="Updated IANA time zone.",
-        ),
-    ] = None,
+    user_name: str | None,
+    password: str | None,
+    password_file: Path | None,
+    email: str | None,
+    tenant: str | None,
+    state_value: int | None,
+    phone: str | None,
+    clear_phone: bool,
+    queue: str | None,
+    clear_queue: bool,
+    time_zone: str | None,
 ) -> None:
-    """Update one user."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
@@ -310,7 +163,7 @@ def update_command(
         return update_user_result(
             user,
             user_name=user_name,
-            password=password,
+            password=read_password(password, password_file, required=False),
             email=email,
             tenant=tenant,
             state=state_value,
@@ -324,22 +177,13 @@ def update_command(
 
 
 @user_app.command("delete")
+@bind_command("user.delete")
 def delete_command(
     ctx: typer.Context,
-    user: Annotated[
-        str,
-        typer.Argument(help=USER_HELP),
-    ],
+    user: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm user deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one user."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -353,23 +197,12 @@ def delete_command(
 
 
 @user_grant_app.command("project")
+@bind_command("user.grant.project")
 def grant_project_command(
     ctx: typer.Context,
-    user: Annotated[
-        str,
-        typer.Argument(help=USER_HELP),
-    ],
-    project: Annotated[
-        str,
-        typer.Argument(
-            help=(
-                "Project name or numeric code. Run `dsctl project list` "
-                "to discover values."
-            )
-        ),
-    ],
+    user: str,
+    project: str,
 ) -> None:
-    """Grant one project to one user with write permission."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -383,25 +216,13 @@ def grant_project_command(
 
 
 @user_grant_app.command("datasource")
+@bind_command("user.grant.datasource")
 def grant_datasource_command(
     ctx: typer.Context,
-    user: Annotated[
-        str,
-        typer.Argument(help=USER_HELP),
-    ],
+    user: str,
     *,
-    datasource: Annotated[
-        list[str],
-        typer.Option(
-            "--datasource",
-            help=(
-                "Datasource name or numeric id. Repeat to grant multiple "
-                "datasources; run `dsctl datasource list` to discover values."
-            ),
-        ),
-    ],
+    datasource: list[str],
 ) -> None:
-    """Grant one or more datasources to one user."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -415,25 +236,13 @@ def grant_datasource_command(
 
 
 @user_grant_app.command("namespace")
+@bind_command("user.grant.namespace")
 def grant_namespace_command(
     ctx: typer.Context,
-    user: Annotated[
-        str,
-        typer.Argument(help=USER_HELP),
-    ],
+    user: str,
     *,
-    namespace: Annotated[
-        list[str],
-        typer.Option(
-            "--namespace",
-            help=(
-                "Namespace name or numeric id. Repeat to grant multiple "
-                "namespaces; run `dsctl namespace list` to discover values."
-            ),
-        ),
-    ],
+    namespace: list[str],
 ) -> None:
-    """Grant one or more namespaces to one user."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -447,23 +256,12 @@ def grant_namespace_command(
 
 
 @user_revoke_app.command("project")
+@bind_command("user.revoke.project")
 def revoke_project_command(
     ctx: typer.Context,
-    user: Annotated[
-        str,
-        typer.Argument(help=USER_HELP),
-    ],
-    project: Annotated[
-        str,
-        typer.Argument(
-            help=(
-                "Project name or numeric code. Run `dsctl project list` "
-                "to discover values."
-            )
-        ),
-    ],
+    user: str,
+    project: str,
 ) -> None:
-    """Revoke one project from one user."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -477,25 +275,13 @@ def revoke_project_command(
 
 
 @user_revoke_app.command("datasource")
+@bind_command("user.revoke.datasource")
 def revoke_datasource_command(
     ctx: typer.Context,
-    user: Annotated[
-        str,
-        typer.Argument(help=USER_HELP),
-    ],
+    user: str,
     *,
-    datasource: Annotated[
-        list[str],
-        typer.Option(
-            "--datasource",
-            help=(
-                "Datasource name or numeric id. Repeat to revoke multiple "
-                "datasources; run `dsctl datasource list` to discover values."
-            ),
-        ),
-    ],
+    datasource: list[str],
 ) -> None:
-    """Revoke one or more datasources from one user."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -509,25 +295,13 @@ def revoke_datasource_command(
 
 
 @user_revoke_app.command("namespace")
+@bind_command("user.revoke.namespace")
 def revoke_namespace_command(
     ctx: typer.Context,
-    user: Annotated[
-        str,
-        typer.Argument(help=USER_HELP),
-    ],
+    user: str,
     *,
-    namespace: Annotated[
-        list[str],
-        typer.Option(
-            "--namespace",
-            help=(
-                "Namespace name or numeric id. Repeat to revoke multiple "
-                "namespaces; run `dsctl namespace list` to discover values."
-            ),
-        ),
-    ],
+    namespace: list[str],
 ) -> None:
-    """Revoke one or more namespaces from one user."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

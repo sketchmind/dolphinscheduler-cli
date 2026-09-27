@@ -1,23 +1,81 @@
 from __future__ import annotations
 
 import json
+from shlex import quote, split
 from textwrap import dedent
 from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
+from dsctl.command_contract import COMMAND_CATALOG
+from dsctl.command_references import project_command_references
 from dsctl.errors import UserInputError
-from dsctl.models.common import DataType, Direct
 from dsctl.models.task_spec import canonical_task_type
+from dsctl.models.workflow_spec import WorkflowMetadataSpec
 from dsctl.output import CommandResult, require_json_object
 from dsctl.services import _task_templates
+from dsctl.services._discovery_commands import render_discovery_command
+from dsctl.services._workflow.authoring import (
+    load_selected_task_authoring_catalog,
+)
 from dsctl.services.datasource_payload import (
     datasource_template_data,
     datasource_template_index_data,
     require_datasource_payload_type,
     supported_datasource_template_types,
 )
+from dsctl.services.enums import supported_enum_member_values
+from dsctl.services.task_authoring import task_type_schema_result
+from dsctl.services.task_authoring_catalog.parameter_guidance import (
+    nested_workflow_parameter_rules,
+)
+from dsctl.services.version_resolution import resolve_version, selected_target_globals
+from dsctl.services.workflow_examples import (
+    normalize_workflow_example,
+    workflow_example_yaml,
+)
+from dsctl.upstream.parameter_semantics import (
+    ParameterSemanticsProfile,
+    get_parameter_semantics,
+)
+from dsctl.upstream.schedules import schedule_contract_features
+from dsctl.upstream.task_profiles import task_authoring_profile
+from dsctl.upstream.workflows import supports_workflow_execution_type
+from dsctl.versioning import DEFAULT_DS_VERSION
 
 if TYPE_CHECKING:
     from dsctl.services._task_templates import TaskTemplateMetadata
+    from dsctl.services.task_authoring_catalog import TaskAuthoringCatalog
+    from dsctl.support.yaml_io import JsonObject, JsonValue
+
+
+def _template_result_data(value: object, *, label: str) -> JsonObject:
+    """Project canonical command-pattern fields into template metadata."""
+    data = project_command_references(value)
+    return require_json_object(_target_template_references(data), label=label)
+
+
+def _target_template_references(
+    value: JsonValue, *, command_field: bool = False
+) -> JsonValue:
+    """Bind structured command references without rewriting artifacts or prose."""
+    if isinstance(value, dict):
+        return {
+            key: _target_template_references(
+                item,
+                command_field=key == "command"
+                or key.endswith(
+                    ("_command", "_commands", "_command_pattern", "_command_patterns")
+                ),
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _target_template_references(item, command_field=command_field)
+            for item in value
+        ]
+    if command_field and isinstance(value, str) and value.startswith("dsctl "):
+        return _targeted_template_hint(value)
+    return value
 
 
 class TaskTemplateTypesData(TypedDict):
@@ -116,6 +174,7 @@ class ParameterOutputTopicDetails(TypedDict):
     output_syntax: list[ParameterOutputData]
     sql_rules: list[str]
     examples: dict[str, str]
+    rules: list[str]
 
 
 ParameterTopicDetails: TypeAlias = (
@@ -157,13 +216,6 @@ class ClusterConfigFieldData(TypedDict):
     description: str
 
 
-class TextLineData(TypedDict):
-    """One rendered text-template line for table and tsv output."""
-
-    line_no: int
-    line: str
-
-
 class TextTemplateArtifactData(TypedDict):
     """Stable metadata for one emitted text template."""
 
@@ -178,8 +230,7 @@ class WorkflowPatchTemplateData(TypedDict):
 
     artifact: TextTemplateArtifactData
     yaml: str
-    lines: list[TextLineData]
-    related_commands: list[str]
+    related_command_patterns: list[str]
     rules: list[str]
 
 
@@ -189,7 +240,7 @@ class EnvironmentConfigTemplateData(TypedDict):
     filename: str
     config: str
     lines: list[EnvironmentConfigLineData]
-    target_commands: list[str]
+    target_command_patterns: list[str]
     source_options: list[str]
     upstream_request_shape: str
     rules: list[str]
@@ -203,7 +254,7 @@ class ClusterConfigTemplateData(TypedDict):
     payload: dict[str, str]
     fields: list[ClusterConfigFieldData]
     rows: list[ClusterConfigFieldData]
-    target_commands: list[str]
+    target_command_patterns: list[str]
     source_options: list[str]
     upstream_request_shape: str
     upstream_ui_shape: str
@@ -215,7 +266,7 @@ class ClusterConfigTemplateCapabilityData(TypedDict):
 
     command: str
     source_options: list[str]
-    target_commands: list[str]
+    target_command_patterns: list[str]
 
 
 class TaskTemplateTypeRowData(TypedDict):
@@ -224,7 +275,6 @@ class TaskTemplateTypeRowData(TypedDict):
     task_type: str
     kind: str
     category: str
-    default_variant: str
     variants: list[str]
     next_command: str
 
@@ -297,7 +347,10 @@ def parameter_syntax_index_data() -> ParameterSyntaxIndexData:
         ],
         "recommended_flow": [
             "Run `dsctl template params` first and select only the needed topic.",
-            "Run `dsctl template task TYPE --variant params` for task-specific YAML.",
+            (
+                "Run `dsctl template task TYPE` for the main task YAML "
+                "and optional parameter examples."
+            ),
             "Run `dsctl task-type schema TYPE` for bounded task field rules.",
             "Run `dsctl lint workflow FILE` before sending the workflow to DS.",
             "Run `dsctl workflow create --file FILE --dry-run` before mutation.",
@@ -312,12 +365,14 @@ def parameter_syntax_index_data() -> ParameterSyntaxIndexData:
 
 def parameter_syntax_data(
     topic: str = "overview",
+    *,
+    ds_version: str = DEFAULT_DS_VERSION,
 ) -> ParameterSyntaxIndexData | ParameterSyntaxTopicData:
     """Return DS parameter syntax metadata for workflow YAML authoring."""
     normalized_topic = _normalize_parameter_syntax_topic(topic)
     if normalized_topic == "overview":
         return parameter_syntax_index_data()
-    topic_data = _parameter_syntax_topics_data()
+    topic_data = _parameter_syntax_topics_data(ds_version=ds_version)
     if normalized_topic == "all":
         all_details: ParameterAllTopicDetails = {"topics": topic_data}
         return {
@@ -334,22 +389,34 @@ def parameter_syntax_data(
     }
 
 
-def parameter_syntax_result(topic: str | None = None) -> CommandResult:
+def parameter_syntax_result(
+    topic: str | None = None,
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+    env_file: str | None = None,
+) -> CommandResult:
     """Return stable DS parameter syntax metadata and examples."""
+    selected_catalog = _selected_task_catalog(catalog, env_file=env_file)
     normalized_topic = _normalize_parameter_syntax_topic(topic or "overview")
     return CommandResult(
-        data=require_json_object(
-            parameter_syntax_data(normalized_topic),
+        data=_template_result_data(
+            parameter_syntax_data(
+                normalized_topic,
+                ds_version=selected_catalog.profile_version,
+            ),
             label="parameter syntax data",
         ),
         resolved={
             "topic": normalized_topic,
+            "ds_version": selected_catalog.profile_version,
             "available_topics": list(supported_parameter_syntax_topics()),
             "ds_model": "Property",
             "template_variants": [
                 task_type
-                for task_type, metadata in task_template_metadata().items()
-                if "params" in metadata["variants"]
+                for task_type, metadata in task_template_metadata(
+                    catalog=selected_catalog
+                ).items()
+                if metadata["parameter_fields"]
             ],
         },
     )
@@ -389,22 +456,33 @@ def _parameter_syntax_next_topics(topic: str) -> list[str]:
     return []
 
 
-def _parameter_syntax_topics_data() -> dict[str, ParameterTopicDetails]:
+def _parameter_syntax_topics_data(
+    *,
+    ds_version: str,
+) -> dict[str, ParameterTopicDetails]:
+    semantics = get_parameter_semantics(ds_version)
     return {
-        "property": _parameter_property_topic_data(),
+        "property": _parameter_property_topic_data(ds_version=ds_version),
         "built-in": _parameter_built_in_topic_data(),
         "time": _parameter_time_topic_data(),
-        "context": _parameter_context_topic_data(),
-        "output": _parameter_output_topic_data(),
+        "context": _parameter_context_topic_data(semantics=semantics),
+        "output": _parameter_output_topic_data(semantics=semantics),
     }
 
 
-def _parameter_property_topic_data() -> ParameterPropertyTopicDetails:
+def _parameter_property_topic_data(
+    *,
+    ds_version: str,
+) -> ParameterPropertyTopicDetails:
     return {
         "ds_model": "Property",
         "property_fields": _parameter_property_fields(),
-        "direct_values": [value.value for value in Direct],
-        "type_values": [value.value for value in DataType],
+        "direct_values": list(
+            supported_enum_member_values("direct", ds_version=ds_version)
+        ),
+        "type_values": list(
+            supported_enum_member_values("data-type", ds_version=ds_version)
+        ),
         "scopes": {
             "workflow.global_params": (
                 "Workflow-level parameters. A mapping is shorthand for IN "
@@ -566,54 +644,85 @@ def _parameter_time_topic_data() -> ParameterTimeTopicDetails:
     }
 
 
-def _parameter_context_topic_data() -> ParameterContextTopicDetails:
+def _parameter_context_topic_data(
+    *,
+    semantics: ParameterSemanticsProfile,
+) -> ParameterContextTopicDetails:
+    scopes = {
+        "workflow.global_params": "Workflow-wide parameters.",
+        "task_params.localParams": "Task-local parameters.",
+    }
+    if semantics.startup.wire != "absent":
+        scopes["startup"] = "Runtime parameters passed when starting a workflow."
+    if semantics.resolution.project_parameters:
+        scopes["project"] = "Project parameters are managed by `project-parameter`."
+    if semantics.output.var_pool_transport:
+        scopes["upstream_output"] = "OUT parameters passed from upstream dependencies."
+
+    priority_names = {
+        "context": "Upstream Output / VarPool",
+        "startup": "Startup Parameter",
+        "local": "Local Parameter",
+        "global": "Global Parameter",
+        "project": "Project Parameter",
+        "builtin": "Built-in Parameter",
+    }
+    rules: list[str] = []
+    if semantics.output.var_pool_transport:
+        rules.append("Upstream-to-downstream passing is one-way along dependencies.")
+        rules.append(
+            "If no dependency path exists, local parameters are not passed upstream."
+        )
+    if semantics.output.downstream_binding == "declared-in-only":
+        rules.append(
+            "Downstream tasks must declare an IN parameter with the same prop "
+            "to consume an upstream OUT value; the upstream varPool value "
+            "then overrides its local fallback."
+        )
+    rules.append(
+        "A self-referential local value such as prop=label and value=${label} "
+        "shadows the same-name global and can create a circular placeholder; "
+        "omit it to consume the global directly."
+    )
+    rules.extend(nested_workflow_parameter_rules(semantics))
     return {
-        "scopes": {
-            "project": "Project parameters are managed by `project-parameter`.",
-            "workflow.global_params": "Workflow-wide parameters.",
-            "task_params.localParams": "Task-local parameters.",
-            "upstream_output": "OUT parameters passed from upstream dependencies.",
-            "startup": "Runtime parameters passed when starting a workflow.",
-        },
+        "scopes": scopes,
         "priority": [
-            "Upstream Output / VarPool",
-            "Startup Parameter",
-            "Local Parameter",
-            "Global Parameter",
-            "Project Parameter",
-            "Built-in Parameter",
+            priority_names[source]
+            for source in semantics.resolution.effective_precedence
         ],
-        "rules": [
-            "Upstream-to-downstream passing is one-way along dependencies.",
-            (
-                "For DS 3.3+ behavior, downstream tasks should declare an IN "
-                "parameter with the same prop to consume an upstream OUT value; "
-                "the upstream varPool value then overrides its local fallback."
-            ),
-            ("If no dependency path exists, local parameters are not passed upstream."),
-            (
-                "A self-referential local value such as prop=label and "
-                "value=${label} shadows the same-name global and can create a "
-                "circular placeholder; omit it to consume the global directly."
-            ),
-            (
-                "A child workflow automatically receives parent workflow globals, "
-                "startup parameters, and the parent workflow-instance varPool as "
-                "child startup parameters; matching child global defaults are "
-                "overridden."
-            ),
-            (
-                "SUB_WORKFLOW localParams do not become child inputs in DS 3.4.1; "
-                "set values supplied by a parent on that parent workflow or pass "
-                "them when starting it. Keep standalone defaults on the child."
-            ),
-        ],
+        "rules": rules,
     }
 
 
-def _parameter_output_topic_data() -> ParameterOutputTopicDetails:
+def _parameter_output_topic_data(
+    *,
+    semantics: ParameterSemanticsProfile,
+) -> ParameterOutputTopicDetails:
+    output = semantics.output
+    if output.set_value_parser == "absent":
+        return {
+            "output_syntax": [],
+            "sql_rules": [],
+            "examples": {},
+            "rules": [
+                (
+                    f"DolphinScheduler {semantics.version} has no varPool-backed "
+                    "task output publication for script-like or SQL tasks."
+                )
+            ],
+        }
+
+    supports_hash_syntax = output.set_value_parser != "dollar-line-start"
+    accepts_inline_tokens = output.set_value_parser == "dollar-or-hash-stream"
+    task_types = task_authoring_profile(semantics.version)["task_types"]
+    supports_remote_shell = "REMOTESHELL" in task_types
     return {
-        "output_syntax": _parameter_output_syntax(),
+        "output_syntax": _parameter_output_syntax(
+            supports_hash_syntax=supports_hash_syntax,
+            accepts_inline_tokens=accepts_inline_tokens,
+            supports_remote_shell=supports_remote_shell,
+        ),
         "sql_rules": [
             (
                 "For one-row SQL results, OUT prop values are matched by result "
@@ -623,10 +732,21 @@ def _parameter_output_topic_data() -> ParameterOutputTopicDetails:
         ],
         "examples": {
             "shell_constant": "echo '${setValue(row_count=42)}'",
-            "shell_variable": 'echo "#{setValue(row_count=${lines_num})}"',
+            "shell_variable": (
+                'echo "#{setValue(row_count=${lines_num})}"'
+                if supports_hash_syntax
+                else 'echo "${setValue(row_count=${lines_num})}"'
+            ),
             "python": "print('${setValue(row_count=%s)}' % value)",
             "sql": "select count(*) as row_count from source_table",
         },
+        "rules": [
+            (
+                "Script-like output tokens may appear anywhere in a task log line."
+                if accepts_inline_tokens
+                else "Script-like output tokens must begin a task log line."
+            )
+        ],
     }
 
 
@@ -679,22 +799,41 @@ def _parameter_reference_syntax() -> list[ParameterReferenceData]:
     ]
 
 
-def _parameter_output_syntax() -> list[ParameterOutputData]:
-    return [
+def _parameter_output_syntax(
+    *,
+    supports_hash_syntax: bool,
+    accepts_inline_tokens: bool,
+    supports_remote_shell: bool,
+) -> list[ParameterOutputData]:
+    task_types = ["SHELL", "PYTHON"]
+    if supports_remote_shell:
+        task_types.append("REMOTESHELL")
+    placement = (
+        "anywhere in a task log line"
+        if accepts_inline_tokens
+        else "at the beginning of a task log line"
+    )
+    output_syntax: list[ParameterOutputData] = [
         {
-            "task_types": ["SHELL", "PYTHON", "REMOTESHELL"],
+            "task_types": task_types,
             "syntax": "${setValue(name=value)}",
             "description": (
-                "Write this token to task logs to publish one OUT parameter."
+                f"Write this token {placement} to publish one OUT parameter."
             ),
         },
-        {
-            "task_types": ["SHELL", "PYTHON", "REMOTESHELL"],
-            "syntax": "#{setValue(name=value)}",
-            "description": (
-                "Alternative output token parsed from script-like task logs."
-            ),
-        },
+    ]
+    if supports_hash_syntax:
+        output_syntax.append(
+            {
+                "task_types": task_types,
+                "syntax": "#{setValue(name=value)}",
+                "description": (
+                    f"Write this alternative token {placement} to publish one "
+                    "OUT parameter."
+                ),
+            }
+        )
+    output_syntax.append(
         {
             "task_types": ["SQL"],
             "syntax": "result column named like an OUT prop",
@@ -703,80 +842,143 @@ def _parameter_output_syntax() -> list[ParameterOutputData]:
                 "parameter prop values."
             ),
         },
-    ]
+    )
+    return output_syntax
 
 
-def supported_task_template_variants() -> tuple[str, ...]:
+def supported_task_template_variants(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> tuple[str, ...]:
     """Return every supported task template variant name."""
-    return _task_templates.all_task_template_variants()
+    return _task_templates.all_task_template_variants(catalog=catalog)
 
 
-def supported_task_template_types() -> tuple[str, ...]:
-    """Return the supported stable task template types."""
-    return _task_templates.supported_task_template_types()
+def supported_task_template_types(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> tuple[str, ...]:
+    """Return task types present in one exact profile."""
+    return _task_templates.supported_task_template_types(catalog=catalog)
 
 
-def supported_datasource_types() -> tuple[str, ...]:
+def supported_datasource_types(
+    ds_version: str = DEFAULT_DS_VERSION,
+) -> tuple[str, ...]:
     """Return datasource types supported by local payload templates."""
-    return supported_datasource_template_types()
+    return supported_datasource_template_types(ds_version)
 
 
-def typed_task_template_types() -> tuple[str, ...]:
-    """Return task types backed by typed `task_params` models."""
-    return _task_templates.typed_task_template_types()
+def typed_task_template_types(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> tuple[str, ...]:
+    """Return source-reviewed typed task types for one exact profile."""
+    return _task_templates.typed_task_template_types(catalog=catalog)
 
 
-def generic_task_template_types() -> tuple[str, ...]:
-    """Return task types that currently emit generic raw `task_params` templates."""
-    return _task_templates.generic_task_template_types()
+def generic_task_template_types(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> tuple[str, ...]:
+    """Return exact task types using unvalidated opaque templates."""
+    return _task_templates.generic_task_template_types(catalog=catalog)
 
 
-def task_template_metadata() -> dict[str, TaskTemplateMetadata]:
-    """Return task template metadata for all supported task types."""
-    return _task_templates.task_template_metadata()
+def task_template_metadata(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+) -> dict[str, TaskTemplateMetadata]:
+    """Return exact-profile task template metadata."""
+    return _task_templates.task_template_metadata(catalog=catalog)
 
 
-def workflow_template_result(*, with_schedule: bool = False) -> CommandResult:
-    """Return the stable workflow YAML template."""
-    yaml_text = _workflow_template_yaml(with_schedule=with_schedule)
+def workflow_template_result(
+    *,
+    with_schedule: bool = False,
+    example: str | None = None,
+    catalog: TaskAuthoringCatalog | None = None,
+    env_file: str | None = None,
+) -> CommandResult:
+    """Return a workflow YAML template for the selected exact profile."""
+    selected_catalog = _selected_task_catalog(catalog, env_file=env_file)
+    selected_example = normalize_workflow_example(example)
+    commands = _workflow_template_commands(
+        with_schedule=with_schedule, env_file=env_file, example=selected_example
+    )
+    yaml_text = _workflow_template_yaml(
+        with_schedule=with_schedule, catalog=selected_catalog, commands=commands
+    )
+    if selected_example != "basic":
+        yaml_text = workflow_example_yaml(
+            selected_example, yaml_text, catalog=selected_catalog, commands=commands
+        )
+    resolved: JsonObject = {
+        "with_schedule": with_schedule,
+        "ds_version": selected_catalog.profile_version,
+    }
+    if selected_example != "basic":
+        resolved["example"] = selected_example
     return CommandResult(
-        data=require_json_object(
+        data=_template_result_data(
             {
                 "artifact": {
                     "kind": "workflow-template",
                     "format": "yaml",
-                    "raw_command": _workflow_raw_command(
-                        with_schedule=with_schedule,
-                    ),
-                    "target_command": "dsctl workflow create --file FILE",
+                    "raw_command": commands["raw"],
+                    "target_command": commands["target"],
                 },
                 "yaml": yaml_text,
-                "lines": _text_lines(yaml_text),
+                "related_command_patterns": [
+                    command
+                    for name, command in commands.items()
+                    if name not in {"raw", "target"}
+                ],
             },
             label="workflow template data",
         ),
-        resolved={"with_schedule": with_schedule},
+        resolved=resolved,
     )
+
+
+def _targeted_template_hint(command: str) -> str:
+    tokens = split(command)
+    if any(
+        token in {"--context", "--env-file"}
+        or token.startswith(("--context=", "--env-file="))
+        for token in tokens
+    ):
+        return command
+    target_options = "".join(
+        f" --{name} {quote(value)}" for name, value in selected_target_globals().items()
+    )
+    return command.replace("dsctl ", f"dsctl{target_options} ", 1)
 
 
 def workflow_patch_template_result() -> CommandResult:
     """Return the stable workflow edit patch YAML template."""
     yaml_text = _workflow_patch_template_yaml()
     return CommandResult(
-        data=require_json_object(
+        data=_template_result_data(
             WorkflowPatchTemplateData(
                 artifact=TextTemplateArtifactData(
                     kind="workflow-patch-template",
                     format="yaml",
-                    raw_command="dsctl template workflow-patch --raw",
-                    target_command="dsctl workflow edit WORKFLOW --patch FILE",
+                    raw_command=_targeted_template_hint(
+                        "dsctl template workflow-patch --raw"
+                    ),
+                    target_command=_targeted_template_hint(
+                        "dsctl workflow edit WORKFLOW --patch FILE"
+                    ),
                 ),
                 yaml=yaml_text,
-                lines=_text_lines(yaml_text),
-                related_commands=[
-                    "dsctl workflow edit WORKFLOW --patch FILE --dry-run",
-                    "dsctl template task TYPE --raw",
-                    "dsctl task-type schema TYPE",
+                related_command_patterns=[
+                    _targeted_template_hint(command)
+                    for command in [
+                        "dsctl workflow edit WORKFLOW --patch FILE --dry-run",
+                        "dsctl template task TYPE --raw",
+                        "dsctl task-type schema TYPE",
+                    ]
                 ],
                 rules=[
                     "Patch YAML is rooted at `patch:`.",
@@ -803,26 +1005,34 @@ def workflow_instance_patch_template_result() -> CommandResult:
     """Return the stable workflow-instance edit patch YAML template."""
     yaml_text = _workflow_instance_patch_template_yaml()
     return CommandResult(
-        data=require_json_object(
+        data=_template_result_data(
             WorkflowPatchTemplateData(
                 artifact=TextTemplateArtifactData(
                     kind="workflow-instance-patch-template",
                     format="yaml",
-                    raw_command="dsctl template workflow-instance-patch --raw",
-                    target_command=(
-                        "dsctl workflow-instance edit WORKFLOW_INSTANCE --patch FILE"
+                    raw_command=_targeted_template_hint(
+                        "dsctl template workflow-instance-patch --raw"
+                    ),
+                    target_command=_targeted_template_hint(
+                        "dsctl workflow-instance edit WORKFLOW_INSTANCE --project "
+                        "PROJECT --patch FILE"
                     ),
                 ),
                 yaml=yaml_text,
-                lines=_text_lines(yaml_text),
-                related_commands=[
-                    (
-                        "dsctl workflow-instance edit WORKFLOW_INSTANCE "
-                        "--patch FILE --dry-run"
-                    ),
-                    "dsctl workflow-instance edit WORKFLOW_INSTANCE --sync-definition",
-                    "dsctl template task TYPE --raw",
-                    "dsctl task-type schema TYPE",
+                related_command_patterns=[
+                    _targeted_template_hint(command)
+                    for command in [
+                        (
+                            "dsctl workflow-instance edit WORKFLOW_INSTANCE "
+                            "--project PROJECT --patch FILE --dry-run"
+                        ),
+                        (
+                            "dsctl workflow-instance edit WORKFLOW_INSTANCE "
+                            "--project PROJECT --patch FILE --sync-definition"
+                        ),
+                        "dsctl template task TYPE --raw",
+                        "dsctl task-type schema TYPE",
+                    ]
                 ],
                 rules=[
                     "Patch YAML is rooted at `patch:`.",
@@ -881,16 +1091,16 @@ def environment_config_template_result() -> CommandResult:
     ]
     config = "\n".join(item["line"] for item in lines) + "\n"
     return CommandResult(
-        data=require_json_object(
+        data=_template_result_data(
             EnvironmentConfigTemplateData(
                 filename="env.sh",
                 config=config,
                 lines=lines,
-                target_commands=[
+                target_command_patterns=[
                     "dsctl environment create --name NAME --config-file env.sh",
                     "dsctl environment update ENVIRONMENT --config-file env.sh",
                 ],
-                source_options=["--config TEXT", "--config-file PATH"],
+                source_options=["--config CONFIG", "--config-file CONFIG_FILE"],
                 upstream_request_shape=(
                     "EnvironmentController form field `config` stores raw "
                     "shell/export text."
@@ -909,11 +1119,36 @@ def environment_config_template_result() -> CommandResult:
     )
 
 
-def _workflow_raw_command(*, with_schedule: bool) -> str:
-    command = "dsctl template workflow"
-    if with_schedule:
-        command += " --with-schedule"
-    return f"{command} --raw"
+def _workflow_template_commands(
+    *, with_schedule: bool, env_file: str | None, example: str = "basic"
+) -> dict[str, str]:
+    requests: dict[str, tuple[str, dict[str, str | bool]]] = {
+        "raw": ("template.workflow", {"with-schedule": with_schedule, "raw": True}),
+        "target": ("workflow.create", {"file": "FILE"}),
+        "fields": ("schema", {"command": "workflow.create"}),
+        "tasks": ("template.task", {"task_type": "TYPE", "raw": True}),
+        "parameters": ("template.params", {"topic": "context"}),
+        "lint": ("lint.workflow", {"file": "FILE"}),
+        "preview": ("workflow.create", {"file": "FILE", "dry-run": True}),
+    }
+    if example != "basic":
+        requests["raw"][1]["example"] = example
+        requests.update(
+            {
+                "outputs": ("template.params", {"topic": "output"}),
+                "basic": ("template.workflow", {"example": "basic", "raw": True}),
+                "workflows": ("workflow.list", {"project": "PROJECT"}),
+                "dependent_schema": ("task-type.schema", {"task_type": "DEPENDENT"}),
+            }
+        )
+    return {
+        name: COMMAND_CATALOG.render(
+            action,
+            values=values,
+            global_values=selected_target_globals(env_file),
+        )
+        for name, (action, values) in requests.items()
+    }
 
 
 def cluster_config_template_result() -> CommandResult:
@@ -943,21 +1178,21 @@ def cluster_config_template_result() -> CommandResult:
         ),
     ]
     return CommandResult(
-        data=require_json_object(
+        data=_template_result_data(
             ClusterConfigTemplateData(
                 filename="cluster-config.json",
                 config=_cluster_config_json(payload),
                 payload=payload,
                 fields=fields,
                 rows=fields,
-                target_commands=[
+                target_command_patterns=[
                     (
                         "dsctl cluster create --name NAME "
                         "--config-file cluster-config.json"
                     ),
                     "dsctl cluster update CLUSTER --config-file cluster-config.json",
                 ],
-                source_options=["--config TEXT", "--config-file PATH"],
+                source_options=["--config CONFIG", "--config-file CONFIG_FILE"],
                 upstream_request_shape=(
                     "ClusterController form field `config` stores a raw string; "
                     "DS 3.4.1 expects a JSON object for cluster config usage."
@@ -983,41 +1218,60 @@ def cluster_config_template_capability_data() -> ClusterConfigTemplateCapability
     """Return compact capability metadata for cluster config templates."""
     return {
         "command": "dsctl template cluster",
-        "source_options": ["--config TEXT", "--config-file PATH"],
-        "target_commands": [
+        "source_options": ["--config CONFIG", "--config-file CONFIG_FILE"],
+        "target_command_patterns": [
             "dsctl cluster create --name NAME --config-file cluster-config.json",
             "dsctl cluster update CLUSTER --config-file cluster-config.json",
         ],
     }
 
 
-def datasource_template_result(datasource_type: str | None = None) -> CommandResult:
+def datasource_template_result(
+    datasource_type: str | None = None,
+    *,
+    ds_version: str | None = None,
+    env_file: str | None = None,
+) -> CommandResult:
     """Return datasource payload-template discovery or one JSON template."""
+    selected_version = (
+        resolve_version(env_file, mode="local").version
+        if ds_version is None
+        else ds_version
+    )
     if datasource_type is None:
-        index_data = datasource_template_index_data()
+        index_data = datasource_template_index_data(version=selected_version)
         data = dict(index_data)
         data["rows"] = [
             {
                 "type": datasource_type_name,
                 "template_command": (
-                    f"dsctl template datasource --type {datasource_type_name}"
+                    _datasource_template_command(
+                        datasource_type_name,
+                        selected_version,
+                    )
                 ),
             }
             for datasource_type_name in index_data["supported_types"]
         ]
         return CommandResult(
-            data=require_json_object(
+            data=_template_result_data(
                 data,
                 label="datasource template index data",
             ),
             resolved={"view": "list"},
         )
-    normalized_type = require_datasource_payload_type(datasource_type)
-    template_data = datasource_template_data(normalized_type)
+    normalized_type = require_datasource_payload_type(
+        datasource_type,
+        version=selected_version,
+    )
+    template_data = datasource_template_data(
+        normalized_type,
+        version=selected_version,
+    )
     data = dict(template_data)
     data["rows"] = template_data["fields"]
     return CommandResult(
-        data=require_json_object(
+        data=_template_result_data(
             data,
             label="datasource template data",
         ),
@@ -1028,74 +1282,217 @@ def datasource_template_result(datasource_type: str | None = None) -> CommandRes
     )
 
 
+def _datasource_template_command(datasource_type: str, ds_version: str) -> str:
+    return (
+        f"dsctl template datasource --ds-version {ds_version} --type {datasource_type}"
+    )
+
+
+def _task_template_commands(
+    task_type: str, variant: str | None, *, env_file: str | None
+) -> dict[str, str]:
+    raw_values: dict[str, str | bool] = {"task_type": task_type, "raw": True}
+    if variant is not None:
+        raw_values["variant"] = variant
+    requests: dict[str, tuple[str, dict[str, str | bool]]] = {
+        "raw": (
+            "template.task",
+            raw_values,
+        ),
+        "schema": ("task-type.schema", {"task_type": task_type}),
+        "summary": ("task-type.get", {"task_type": task_type}),
+        "index": ("template.task", {}),
+        "parameters": ("template.params", {"topic": "context"}),
+        "outputs": ("template.params", {"topic": "output"}),
+    }
+    return {
+        name: COMMAND_CATALOG.render(
+            action,
+            values=values,
+            global_values=selected_target_globals(env_file),
+        )
+        for name, (action, values) in requests.items()
+    }
+
+
+def _metadata_has_outputs(task_type: str, catalog: TaskAuthoringCatalog) -> bool:
+    """Choose the installed output combination only where output transport exists."""
+    return task_type in {"SHELL", "PYTHON", "REMOTESHELL", "SQL"} and bool(
+        catalog.parameter_semantics.output.var_pool_transport
+    )
+
+
+def _task_template_navigation(
+    task_type: str,
+    yaml_text: str,
+    *,
+    catalog: TaskAuthoringCatalog,
+    commands: dict[str, str],
+    env_file: str | None,
+) -> str:
+    header = f"# Schema and value discovery: {commands['schema']}\n"
+    example = {
+        "SWITCH": "branch",
+        "CONDITIONS": "branch",
+        "SUB_WORKFLOW": "child",
+        "DEPENDENT": "dependent",
+    }.get(task_type, "output" if _metadata_has_outputs(task_type, catalog) else "basic")
+    if example == "branch" and not catalog.supports_typed_authoring("SWITCH"):
+        example = "basic"
+    combination = COMMAND_CATALOG.render(
+        "template.workflow",
+        values={"example": example, "raw": True},
+        global_values=selected_target_globals(env_file),
+    )
+    header += f"# Complete workflow example: {combination}\n"
+    metadata = _task_templates.task_template_metadata(catalog=catalog)[task_type]
+    if metadata["parameter_fields"] or task_type == "SUB_WORKFLOW":
+        header += (
+            f"# Parameter scopes: {commands['parameters']}\n"
+            f"# OUT to downstream IN: {commands['outputs']}\n"
+        )
+    data = task_type_schema_result(task_type, catalog=catalog).data
+    fields = data.get("fields", []) if isinstance(data, dict) else []
+    choices: dict[str, list[str]] = {}
+    for field in fields if isinstance(fields, list) else []:
+        if not isinstance(field, dict):
+            continue
+        if not str(field.get("path", "")).startswith(("task_params.", "resources")):
+            continue
+        source = field.get("choice_source")
+        if (
+            not isinstance(source, str)
+            or not source.startswith("dsctl ")
+            or "enum list" in source
+        ):
+            continue
+        # Keep the schema's reference chain; fields identify id/code/name/fullName.
+        value = field.get("choice_value", "value")
+        choices.setdefault(source, []).append(f"{field['path']}={value}")
+    target_options = "".join(
+        f" --{name} {quote(value)}"
+        for name, value in selected_target_globals(env_file).items()
+    )
+    for source, paths in choices.items():
+        command = (
+            source
+            if {"--context", "--env-file"} & set(split(source))
+            else source.replace("dsctl ", f"dsctl{target_options} ", 1)
+        )
+        header += f"# Discover {', '.join(paths)}: {command}\n"
+    return header + yaml_text
+
+
 def task_template_result(
     task_type: str,
     *,
     variant: str | None = None,
+    catalog: TaskAuthoringCatalog | None = None,
+    env_file: str | None = None,
 ) -> CommandResult:
     """Return one task YAML template for the requested task type."""
-    normalized = _normalize_task_type(task_type)
-    normalized_variant = _normalize_task_template_variant(normalized, variant)
-    template_kind = _task_templates.task_template_kind(normalized)
+    selected_catalog = _selected_task_catalog(catalog, env_file=env_file)
+    normalized = _normalize_task_type(task_type, catalog=selected_catalog)
+    normalized_variant = _normalize_task_template_variant(
+        normalized,
+        variant,
+        catalog=selected_catalog,
+        env_file=env_file,
+    )
+    template_kind = _task_templates.task_template_kind(
+        normalized,
+        catalog=selected_catalog,
+    )
     yaml_text = _task_templates.task_template_yaml(
         normalized,
         variant=normalized_variant,
+        catalog=selected_catalog,
+    )
+    metadata = _task_templates.task_template_metadata(catalog=selected_catalog)[
+        normalized
+    ]
+    commands = _task_template_commands(
+        normalized, normalized_variant, env_file=env_file
+    )
+    yaml_text = _task_template_navigation(
+        normalized,
+        yaml_text,
+        catalog=selected_catalog,
+        commands=commands,
+        env_file=env_file,
     )
     return CommandResult(
-        data=require_json_object(
+        data=_template_result_data(
             {
                 "artifact": {
                     "kind": "task-fragment",
                     "format": "yaml",
                     "paste_into": "workflow YAML tasks[]",
-                    "raw_command": (
-                        f"dsctl template task {normalized} "
-                        f"--variant {normalized_variant} --raw"
-                    ),
+                    "raw_command": commands["raw"],
                 },
                 "yaml": yaml_text,
-                "rows": _text_lines(yaml_text),
                 "template": {
                     "task_type": normalized,
-                    "category": _task_templates.task_template_category(normalized),
-                    "kind": template_kind,
-                    "variant": normalized_variant,
-                    "variants": list(
-                        _task_templates.task_template_variants(normalized)
+                    "category": _task_templates.task_template_category(
+                        normalized,
+                        catalog=selected_catalog,
                     ),
-                    "schema_command": f"dsctl task-type schema {normalized}",
-                    "summary_command": f"dsctl task-type get {normalized}",
-                    "index_command": "dsctl template task",
+                    "kind": template_kind,
+                    **(
+                        {"variant": normalized_variant}
+                        if normalized_variant is not None
+                        else {}
+                    ),
+                    "variants": metadata["variants"],
+                    "schema_command": commands["schema"],
+                    "summary_command": commands["summary"],
+                    "index_command": commands["index"],
                 },
             },
             label="task template data",
         ),
         resolved={
             "task_type": normalized,
-            "task_category": _task_templates.task_template_category(normalized),
+            "task_category": _task_templates.task_template_category(
+                normalized,
+                catalog=selected_catalog,
+            ),
             "template_kind": template_kind,
-            "variant": normalized_variant,
+            **(
+                {"variant": normalized_variant}
+                if normalized_variant is not None
+                else {}
+            ),
         },
     )
 
 
-def task_template_types_result() -> CommandResult:
-    """Return the supported stable task template types."""
-    task_types = list(supported_task_template_types())
-    typed_task_types = list(typed_task_template_types())
-    generic_task_types = list(generic_task_template_types())
+def task_template_types_result(
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+    env_file: str | None = None,
+) -> CommandResult:
+    """Return exact-profile typed and opaque task template types."""
+    selected_catalog = _selected_task_catalog(catalog, env_file=env_file)
+    task_types = list(supported_task_template_types(catalog=selected_catalog))
+    typed_task_types = list(typed_task_template_types(catalog=selected_catalog))
+    generic_task_types = list(generic_task_template_types(catalog=selected_catalog))
     task_types_by_category = {
         category: list(task_types)
-        for category, task_types in _task_template_types_by_category().items()
+        for category, task_types in _task_template_types_by_category(
+            catalog=selected_catalog
+        ).items()
     }
     return CommandResult(
-        data=require_json_object(
+        data=_template_result_data(
             _task_template_types_data(
                 task_types=task_types,
                 typed_task_types=typed_task_types,
                 generic_task_types=generic_task_types,
                 task_types_by_category=task_types_by_category,
-                rows=_task_template_type_rows(),
+                rows=_task_template_type_rows(
+                    catalog=selected_catalog, env_file=env_file
+                ),
             ),
             label="task template types data",
         ),
@@ -1103,53 +1500,73 @@ def task_template_types_result() -> CommandResult:
     )
 
 
-def _normalize_task_type(task_type: str) -> str:
+def _normalize_task_type(
+    task_type: str,
+    *,
+    catalog: TaskAuthoringCatalog,
+) -> str:
     normalized = canonical_task_type(task_type)
+    supported_task_types = supported_task_template_types(catalog=catalog)
     suggestion = "Run `dsctl template task` to inspect supported task types."
     if not normalized:
         message = "TASK_TYPE is required."
         raise UserInputError(
             message,
             details={
-                "available_task_types_count": len(_SUPPORTED_TASK_TEMPLATE_TYPES),
+                "available_task_types_count": len(supported_task_types),
                 "discovery_command": "dsctl template task",
             },
             suggestion=suggestion,
         )
-    if normalized in _SUPPORTED_TASK_TEMPLATE_TYPES:
+    if normalized in supported_task_types:
         return normalized
     message = f"Unsupported task template type '{task_type}'."
     raise UserInputError(
         message,
         details={
             "task_type": task_type,
-            "available_task_types_count": len(_SUPPORTED_TASK_TEMPLATE_TYPES),
+            "available_task_types_count": len(supported_task_types),
             "discovery_command": "dsctl template task",
         },
         suggestion=suggestion,
     )
 
 
-def _normalize_task_template_variant(task_type: str, variant: str | None) -> str:
+def _normalize_task_template_variant(
+    task_type: str,
+    variant: str | None,
+    *,
+    catalog: TaskAuthoringCatalog | None = None,
+    env_file: str | None = None,
+) -> str | None:
     if variant is None:
-        return _task_templates.task_template_variants(task_type)[0]
+        return None
     normalized = variant.strip().lower().replace("_", "-")
-    supported_variants = _task_templates.task_template_variants(task_type)
+    supported_variants = _task_templates.task_template_variants(
+        task_type,
+        catalog=catalog,
+    )
     if normalized in supported_variants:
         return normalized
     message = (
         f"Unsupported task template variant '{variant}' for task type '{task_type}'."
+    )
+    discovery = render_discovery_command(
+        "task-type.get", values={"task_type": task_type}, env_file=env_file
     )
     raise UserInputError(
         message,
         details={
             "task_type": task_type,
             "variant": variant,
-            "available_variants": list(supported_variants),
-            "discovery_command": f"dsctl task-type get {task_type}",
+            "available_variants": _task_templates.task_template_metadata(
+                catalog=catalog
+            )[task_type]["variants"],
+            "discovery_command": discovery,
         },
         suggestion=(
-            f"Run `dsctl task-type get {task_type}` to inspect supported variants."
+            f"Omit --variant for the default template, or run `{discovery}` "
+            "to inspect independently useful scenarios."
         ),
     )
 
@@ -1219,15 +1636,16 @@ def _parameter_time_yaml() -> str:
 
 
 def _workflow_patch_template_yaml() -> str:
-    return dedent(
+    command = _targeted_template_hint("dsctl workflow edit WORKFLOW --patch FILE")
+    header = f"# Workflow patch YAML template for `{command}`\n"
+    return header + dedent(
         """\
-        # Workflow patch YAML template for `dsctl workflow edit WORKFLOW --patch ...`
         # Keep the root key as `patch:`. Remove unused operation blocks before use.
         patch:
           workflow:
             set:
               description: Updated workflow description
-              timeout: 3600
+              # timeout: 60  # Optional workflow timeout in minutes.
 
           # Uncomment task operations as needed.
           #
@@ -1258,18 +1676,27 @@ def _workflow_patch_template_yaml() -> str:
 
 
 def _workflow_instance_patch_template_yaml() -> str:
-    return dedent(
+    command = _targeted_template_hint(
+        "dsctl workflow-instance edit WORKFLOW_INSTANCE --project PROJECT --patch FILE"
+    )
+    header = f"# Workflow-instance patch YAML template for:\n# `{command}`\n"
+    return header + dedent(
         """\
-        # Workflow-instance patch YAML template for:
-        # `dsctl workflow-instance edit ID --patch ...`
         # Keep the root key as `patch:`. Remove unused operation blocks before use.
         # Only workflow.set.global_params and workflow.set.timeout are accepted.
         patch:
-          workflow:
-            set:
-              timeout: 3600
-              global_params:
-                repair_note: manual-repair
+          # workflow:
+          #   set:
+          #     timeout: 60  # Optional minutes; do not change unrelated fields.
+          #     global_params:
+          #       repair_note: manual-repair
+          tasks:
+            update:
+              - match:
+                  name: failed-step
+                set:
+                  command: |
+                    echo "patched failed step"
 
           # Uncomment task operations as needed.
           #
@@ -1299,77 +1726,75 @@ def _workflow_instance_patch_template_yaml() -> str:
     )
 
 
-def _workflow_template_yaml(*, with_schedule: bool) -> str:
-    release_state = "ONLINE" if with_schedule else "OFFLINE"
-    base = dedent(
+def _workflow_template_yaml(
+    *,
+    with_schedule: bool,
+    catalog: TaskAuthoringCatalog,
+    commands: dict[str, str],
+) -> str:
+    metadata = WorkflowMetadataSpec(name="example-workflow", project="example-project")
+    release_state = "ONLINE" if with_schedule else metadata.release_state.value
+    workflow = dedent(
         f"""\
-        # Workflow YAML template for `dsctl workflow create --file ...`
+        # Workflow YAML template for `{commands["target"]}`
+        # Replace names/project; the project must exist. Task names must be unique.
+        # depends_on lists upstream task names in this file; extract -> load below.
+        # YAML fields and tenant/run/schedule settings: {commands["fields"]}
+        # Task fragments and runtime controls (replace TYPE): {commands["tasks"]}
+        # Parameter scope and precedence: {commands["parameters"]}
+        # Check locally: {commands["lint"]}
+        # Preview against the target without creating: {commands["preview"]}
         workflow:
-          name: example-workflow
-          project: example-project
-          description: Example workflow definition
-          timeout: 0
+          name: {metadata.name}
+          project: {metadata.project}
+          # description: Example workflow definition
+          # timeout: {metadata.timeout}  # Minutes; 0 disables the workflow timeout.
+          # Shared by both tasks; task-only parameters belong in task_params.localParams
+          # For localParams, replace command with the task's native task_params form.
+          # Remove example globals for tasks that require a parameter-free workflow.
           global_params:
             bizdate: "${{system.biz.date}}"
-          execution_type: PARALLEL
-          release_state: {release_state}
-        tasks:
-          - name: extract
-            type: SHELL
-            command: |
-              echo "extract step"
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            # Optional task runtime controls:
-            # flag: NO
-            # environment_code: 42
-            # task_group_id: 12
-            # task_group_priority: 0
-            # timeout_notify_strategy: WARN
-            # cpu_quota: 50
-            # memory_max: 1024
-            delay: 0
-            depends_on: []
-          - name: load
-            type: SHELL
-            command: |
-              echo "load step"
-            worker_group: default
-            priority: MEDIUM
-            retry:
-              times: 0
-              interval: 0
-            timeout: 0
-            # Optional task runtime controls:
-            # flag: NO
-            # environment_code: 42
-            # task_group_id: 12
-            # task_group_priority: 0
-            # timeout_notify_strategy: WARN
-            # cpu_quota: 50
-            # memory_max: 1024
-            delay: 0
-            depends_on:
-              - extract
         """
     )
+    if supports_workflow_execution_type(catalog.profile_version):
+        workflow += f"  # execution_type: {metadata.execution_type.value}\n"
+    if with_schedule:
+        workflow += "  # ONLINE is required before creating the attached schedule.\n"
+    workflow += f"  release_state: {release_state}\ntasks:\n"
+    for name, dependencies in (("extract", "[]"), ("load", "[extract]")):
+        workflow += (
+            f"  - name: {name}\n"
+            "    type: SHELL\n"
+            "    command: |\n"
+            f'      echo "{name} ${{bizdate}}"\n'
+            f"    depends_on: {dependencies}\n"
+        )
     if not with_schedule:
-        return base
-    schedule = dedent(
-        """\
-        schedule:
-          cron: "0 0 2 * * ?"
-          timezone: Asia/Shanghai
-          start: "2026-01-01 00:00:00"
-          end: "2026-12-31 23:59:59"
-          enabled: false
-        """
+        return workflow
+    schedule_features = schedule_contract_features(catalog.profile_version)
+    timezone_line = (
+        "  timezone: Asia/Shanghai\n"
+        if schedule_features.timezone
+        else "  # Uses the DolphinScheduler server-local timezone.\n"
     )
-    return f"{base}{schedule}"
+    missed_fire_line = (
+        "  # Missed fires: omission uses the native create default; "
+        "update omission preserves it.\n"
+        f"  # missed_fire_policy: {schedule_features.missed_fire_policy_default}\n"
+        if schedule_features.missed_fire_policy
+        else ""
+    )
+    schedule = (
+        "schedule:\n"
+        '  cron: "0 0 2 * * ?"  # Quartz cron: daily at 02:00.\n'
+        f"{timezone_line}"
+        f"{missed_fire_line}"
+        "  # Replace this example date range with the required scheduling window.\n"
+        '  start: "2026-01-01 00:00:00"\n'
+        '  end: "2026-12-31 23:59:59"\n'
+        "  enabled: false  # Keep the schedule offline until ready.\n"
+    )
+    return f"{workflow}{schedule}"
 
 
 def _cluster_k8s_config_placeholder() -> str:
@@ -1421,35 +1846,48 @@ def _task_template_types_data(
     }
 
 
-def _task_template_type_rows() -> list[TaskTemplateTypeRowData]:
-    metadata = task_template_metadata()
+def _task_template_type_rows(
+    *,
+    catalog: TaskAuthoringCatalog,
+    env_file: str | None = None,
+) -> list[TaskTemplateTypeRowData]:
+    metadata = task_template_metadata(catalog=catalog)
     return [
         TaskTemplateTypeRowData(
             task_type=task_type,
             kind=metadata[task_type]["kind"],
             category=metadata[task_type]["category"],
-            default_variant=metadata[task_type]["default_variant"],
             variants=metadata[task_type]["variants"],
-            next_command=f"dsctl task-type get {task_type}",
+            next_command=render_discovery_command(
+                "task-type.get", values={"task_type": task_type}, env_file=env_file
+            ),
         )
-        for task_type in supported_task_template_types()
+        for task_type in supported_task_template_types(catalog=catalog)
     ]
 
 
-def _task_template_types_by_category() -> dict[str, tuple[str, ...]]:
-    metadata = task_template_metadata()
+def _task_template_types_by_category(
+    *,
+    catalog: TaskAuthoringCatalog,
+) -> dict[str, tuple[str, ...]]:
+    metadata = task_template_metadata(catalog=catalog)
     categories: dict[str, list[str]] = {}
-    for task_type in supported_task_template_types():
+    for task_type in supported_task_template_types(catalog=catalog):
         category = metadata[task_type]["category"]
         categories.setdefault(category, []).append(task_type)
     return {category: tuple(task_types) for category, task_types in categories.items()}
 
 
-def _text_lines(text: str) -> list[TextLineData]:
-    return [
-        TextLineData(line_no=index, line=line)
-        for index, line in enumerate(text.splitlines(), start=1)
-    ]
+def _selected_task_catalog(
+    catalog: TaskAuthoringCatalog | None,
+    *,
+    env_file: str | None,
+) -> TaskAuthoringCatalog:
+    if catalog is not None:
+        return catalog
+    if env_file is not None:
+        return load_selected_task_authoring_catalog(env_file)
+    return load_selected_task_authoring_catalog(None)
 
 
 _PARAMETER_SYNTAX_TOPICS = (
@@ -1461,4 +1899,3 @@ _PARAMETER_SYNTAX_TOPICS = (
     "output",
     "all",
 )
-_SUPPORTED_TASK_TEMPLATE_TYPES = supported_task_template_types()

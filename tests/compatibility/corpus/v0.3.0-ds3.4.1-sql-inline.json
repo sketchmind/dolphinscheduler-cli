@@ -1,0 +1,1099 @@
+{
+  "schema_version": 1,
+  "source_cli": {
+    "kind": "git_tag",
+    "tag": "v0.3.0",
+    "package_version": "0.3.0",
+    "commit": "bf7a1174b4a726f68f36d341e67d4132b68e65e8",
+    "artifact_origin": "local_rebuild_from_git_tag",
+    "reconstructed_wheel_sha256": "1966fe1bee4b86396b1f2fb29fca0d0a4f8f311b719ae7dbb9cf073dd19051f2",
+    "source_manifest_sha256": "c0d0ec9dd6df7619c2fc446ab8562b4915559bb4f99c29b6fae0df80f4dda2a0"
+  },
+  "ds_profile": "3.4.1",
+  "task_type": "SQL",
+  "facet": "inline_script",
+  "authoring": {
+    "kind": "typed",
+    "required_paths": [
+      "name",
+      "type",
+      "task_params",
+      "task_params.type",
+      "task_params.datasource",
+      "task_params.sql",
+      "task_params.sqlType"
+    ],
+    "variants": [
+      "minimal",
+      "params",
+      "pre-post-statements"
+    ],
+    "state_rules": [
+      {
+        "when": "task_params.sqlType == 0",
+        "active_paths": [
+          "task_params.sendEmail",
+          "task_params.displayRows",
+          "task_params.showType",
+          "task_params.groupId",
+          "task_params.title"
+        ]
+      },
+      {
+        "when": "task_params.sqlType == 1",
+        "active_paths": [
+          "task_params.preStatements",
+          "task_params.postStatements"
+        ],
+        "inactive_paths": [
+          "task_params.displayRows",
+          "task_params.showType",
+          "task_params.groupId",
+          "task_params.title"
+        ]
+      }
+    ]
+  },
+  "normalized_task_params": {
+    "type": "MYSQL",
+    "datasource": 1,
+    "sql": "select 1",
+    "sqlType": 0,
+    "preStatements": [],
+    "postStatements": [],
+    "localParams": [],
+    "varPool": []
+  },
+  "semantics": {
+    "input": {
+      "workflow": {
+        "name": "published-sql-corpus",
+        "project": "etl-prod"
+      },
+      "tasks": [
+        {
+          "name": "query",
+          "type": "SQL",
+          "task_params": {
+            "type": "MYSQL",
+            "datasource": 1,
+            "sql": "select 1",
+            "sqlType": 0
+          }
+        }
+      ]
+    },
+    "schema_fields": [
+      {
+        "path": "name",
+        "type": "string",
+        "required": true,
+        "compile_path": "taskDefinitionJson[].name"
+      },
+      {
+        "path": "type",
+        "type": "string",
+        "required": true,
+        "default": "SQL",
+        "choices": [
+          "SQL"
+        ],
+        "compile_path": "taskDefinitionJson[].taskType"
+      },
+      {
+        "path": "description",
+        "type": "string",
+        "required": false,
+        "default": "",
+        "compile_path": "taskDefinitionJson[].description"
+      },
+      {
+        "path": "task_params",
+        "type": "object",
+        "required": true,
+        "compile_path": "taskDefinitionJson[].taskParams"
+      },
+      {
+        "path": "flag",
+        "type": "enum",
+        "required": false,
+        "default": "YES",
+        "choices": [
+          "YES",
+          "NO"
+        ],
+        "compile_path": "taskDefinitionJson[].flag"
+      },
+      {
+        "path": "worker_group",
+        "type": "string",
+        "required": false,
+        "default": "default",
+        "compile_path": "taskDefinitionJson[].workerGroup"
+      },
+      {
+        "path": "environment_code",
+        "type": "integer",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].environmentCode"
+      },
+      {
+        "path": "task_group_id",
+        "type": "integer",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].taskGroupId"
+      },
+      {
+        "path": "task_group_priority",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].taskGroupPriority"
+      },
+      {
+        "path": "priority",
+        "type": "enum",
+        "required": false,
+        "default": "MEDIUM",
+        "choices": [
+          "HIGHEST",
+          "HIGH",
+          "MEDIUM",
+          "LOW",
+          "LOWEST"
+        ],
+        "compile_path": "taskDefinitionJson[].taskPriority"
+      },
+      {
+        "path": "retry.times",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].failRetryTimes"
+      },
+      {
+        "path": "retry.interval",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].failRetryInterval"
+      },
+      {
+        "path": "timeout",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].timeout"
+      },
+      {
+        "path": "timeout_notify_strategy",
+        "type": "enum",
+        "required": false,
+        "choices": [
+          "WARN",
+          "FAILED",
+          "WARNFAILED"
+        ],
+        "compile_path": "taskDefinitionJson[].timeoutNotifyStrategy"
+      },
+      {
+        "path": "delay",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].delayTime"
+      },
+      {
+        "path": "cpu_quota",
+        "type": "integer",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].cpuQuota"
+      },
+      {
+        "path": "memory_max",
+        "type": "integer",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].memoryMax"
+      },
+      {
+        "path": "depends_on[]",
+        "type": "string",
+        "required": false,
+        "default": [],
+        "compile_path": "workflowTaskRelationList"
+      },
+      {
+        "path": "task_params.type",
+        "type": "enum",
+        "required": true,
+        "default": "MYSQL",
+        "compile_path": "taskDefinitionJson[].taskParams.type"
+      },
+      {
+        "path": "task_params.datasource",
+        "type": "integer",
+        "required": true,
+        "compile_path": "taskDefinitionJson[].taskParams.datasource"
+      },
+      {
+        "path": "task_params.sql",
+        "type": "string",
+        "required": true,
+        "compile_path": "taskDefinitionJson[].taskParams.sql"
+      },
+      {
+        "path": "task_params.sqlType",
+        "type": "integer",
+        "required": true,
+        "default": 0,
+        "choices": [
+          "0",
+          "1"
+        ],
+        "compile_path": "taskDefinitionJson[].taskParams.sqlType"
+      },
+      {
+        "path": "task_params.sendEmail",
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "compile_path": "taskDefinitionJson[].taskParams.sendEmail"
+      },
+      {
+        "path": "task_params.displayRows",
+        "type": "integer",
+        "required": false,
+        "default": 10,
+        "compile_path": "taskDefinitionJson[].taskParams.displayRows"
+      },
+      {
+        "path": "task_params.showType",
+        "type": "string",
+        "required": false,
+        "default": "TABLE",
+        "compile_path": "taskDefinitionJson[].taskParams.showType"
+      },
+      {
+        "path": "task_params.connParams",
+        "type": "string",
+        "required": false,
+        "default": "",
+        "compile_path": "taskDefinitionJson[].taskParams.connParams"
+      },
+      {
+        "path": "task_params.preStatements[]",
+        "type": "string",
+        "required": false,
+        "default": [],
+        "compile_path": "taskDefinitionJson[].taskParams.preStatements"
+      },
+      {
+        "path": "task_params.postStatements[]",
+        "type": "string",
+        "required": false,
+        "default": [],
+        "compile_path": "taskDefinitionJson[].taskParams.postStatements"
+      },
+      {
+        "path": "task_params.groupId",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].taskParams.groupId"
+      },
+      {
+        "path": "task_params.title",
+        "type": "string",
+        "required": false,
+        "default": "",
+        "compile_path": "taskDefinitionJson[].taskParams.title"
+      },
+      {
+        "path": "task_params.limit",
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "compile_path": "taskDefinitionJson[].taskParams.limit"
+      },
+      {
+        "path": "task_params.localParams[]",
+        "type": "object",
+        "required": false,
+        "default": [],
+        "compile_path": "taskDefinitionJson[].taskParams.localParams"
+      },
+      {
+        "path": "task_params.localParams[].prop",
+        "type": "string",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].taskParams.localParams[].prop"
+      },
+      {
+        "path": "task_params.localParams[].direct",
+        "type": "enum",
+        "required": false,
+        "choices": [
+          "IN",
+          "OUT"
+        ],
+        "compile_path": "taskDefinitionJson[].taskParams.localParams[].direct"
+      },
+      {
+        "path": "task_params.localParams[].type",
+        "type": "enum",
+        "required": false,
+        "choices": [
+          "VARCHAR",
+          "INTEGER",
+          "LONG",
+          "FLOAT",
+          "DOUBLE",
+          "DATE",
+          "TIME",
+          "TIMESTAMP",
+          "BOOLEAN",
+          "LIST",
+          "FILE"
+        ],
+        "compile_path": "taskDefinitionJson[].taskParams.localParams[].type"
+      },
+      {
+        "path": "task_params.localParams[].value",
+        "type": "string",
+        "required": false,
+        "compile_path": "taskDefinitionJson[].taskParams.localParams[].value"
+      },
+      {
+        "path": "task_params.varPool[]",
+        "type": "object",
+        "required": false,
+        "default": [],
+        "compile_path": "taskDefinitionJson[].taskParams.varPool"
+      }
+    ],
+    "json_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "const": "SQL",
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        },
+        "flag": {
+          "type": "string",
+          "enum": [
+            "YES",
+            "NO"
+          ],
+          "default": "YES"
+        },
+        "worker_group": {
+          "type": "string",
+          "default": "default"
+        },
+        "environment_code": {
+          "type": "integer"
+        },
+        "task_group_id": {
+          "type": "integer"
+        },
+        "task_group_priority": {
+          "type": "integer",
+          "default": 0
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "HIGHEST",
+            "HIGH",
+            "MEDIUM",
+            "LOW",
+            "LOWEST"
+          ],
+          "default": "MEDIUM"
+        },
+        "retry": {
+          "type": "object",
+          "properties": {
+            "times": {
+              "type": "integer",
+              "default": 0
+            },
+            "interval": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        },
+        "timeout": {
+          "type": "integer",
+          "default": 0
+        },
+        "timeout_notify_strategy": {
+          "type": "string",
+          "enum": [
+            "WARN",
+            "FAILED",
+            "WARNFAILED"
+          ]
+        },
+        "delay": {
+          "type": "integer",
+          "default": 0
+        },
+        "cpu_quota": {
+          "type": "integer"
+        },
+        "memory_max": {
+          "type": "integer"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "task_params": {
+          "$ref": "#/$defs/task_params"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "task_params"
+      ],
+      "$defs": {
+        "task_params": {
+          "$defs": {
+            "DataType": {
+              "enum": [
+                "VARCHAR",
+                "INTEGER",
+                "LONG",
+                "FLOAT",
+                "DOUBLE",
+                "DATE",
+                "TIME",
+                "TIMESTAMP",
+                "BOOLEAN",
+                "LIST",
+                "FILE"
+              ],
+              "type": "string"
+            },
+            "Direct": {
+              "enum": [
+                "IN",
+                "OUT"
+              ],
+              "type": "string"
+            },
+            "GlobalParamSpec": {
+              "additionalProperties": false,
+              "properties": {
+                "prop": {
+                  "type": "string"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "direct": {
+                  "$ref": "#/$defs/task_params/$defs/Direct",
+                  "default": "IN"
+                },
+                "type": {
+                  "$ref": "#/$defs/task_params/$defs/DataType",
+                  "default": "VARCHAR"
+                }
+              },
+              "required": [
+                "prop"
+              ],
+              "type": "object"
+            }
+          },
+          "additionalProperties": true,
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "datasource": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "sql": {
+              "type": "string"
+            },
+            "sqlType": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sendEmail": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "displayRows": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "showType": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "connParams": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "preStatements": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "postStatements": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "groupId": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "limit": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "localParams": {
+              "items": {
+                "$ref": "#/$defs/task_params/$defs/GlobalParamSpec"
+              },
+              "type": "array"
+            },
+            "varPool": {
+              "items": {
+                "$ref": "#/$defs/task_params/$defs/GlobalParamSpec"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "type",
+            "datasource",
+            "sql",
+            "sqlType"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "input_semantics": {
+      "normalized_task_params": {
+        "type": "MYSQL",
+        "datasource": 1,
+        "sql": "select 1",
+        "sqlType": 0,
+        "preStatements": [],
+        "postStatements": [],
+        "localParams": [],
+        "varPool": []
+      },
+      "compiled_task": {
+        "code": 7001,
+        "version": 1,
+        "name": "query",
+        "description": "",
+        "taskType": "SQL",
+        "taskParams": {
+          "type": "MYSQL",
+          "datasource": 1,
+          "sql": "select 1",
+          "sqlType": 0,
+          "preStatements": [],
+          "postStatements": [],
+          "localParams": [],
+          "varPool": []
+        },
+        "flag": "YES",
+        "taskPriority": "MEDIUM",
+        "workerGroup": "default",
+        "environmentCode": -1,
+        "taskGroupId": 0,
+        "taskGroupPriority": 0,
+        "failRetryTimes": 0,
+        "failRetryInterval": 0,
+        "timeoutFlag": "CLOSE",
+        "timeoutNotifyStrategy": null,
+        "timeout": 0,
+        "delayTime": 0,
+        "resourceIds": "",
+        "cpuQuota": -1,
+        "memoryMax": -1,
+        "taskExecuteType": "BATCH"
+      }
+    },
+    "template": {
+      "task": {
+        "name": "sql-task",
+        "type": "SQL",
+        "description": "Example SQL task",
+        "task_params": {
+          "type": "MYSQL",
+          "datasource": 1,
+          "sql": "select 1;\n",
+          "sqlType": 0,
+          "sendEmail": false,
+          "displayRows": 10,
+          "showType": "TABLE",
+          "connParams": "",
+          "preStatements": [],
+          "postStatements": [],
+          "groupId": 0,
+          "title": "",
+          "limit": 0,
+          "localParams": [],
+          "varPool": []
+        },
+        "worker_group": "default",
+        "priority": "MEDIUM",
+        "retry": {
+          "times": 0,
+          "interval": 0
+        },
+        "timeout": 0,
+        "delay": 0,
+        "depends_on": []
+      },
+      "normalized_task_params": {
+        "type": "MYSQL",
+        "datasource": 1,
+        "sql": "select 1;",
+        "sqlType": 0,
+        "sendEmail": false,
+        "displayRows": 10,
+        "showType": "TABLE",
+        "connParams": "",
+        "preStatements": [],
+        "postStatements": [],
+        "groupId": 0,
+        "title": "",
+        "limit": 0,
+        "localParams": [],
+        "varPool": []
+      },
+      "compiled_task": {
+        "code": 7001,
+        "version": 1,
+        "name": "sql-task",
+        "description": "Example SQL task",
+        "taskType": "SQL",
+        "taskParams": {
+          "type": "MYSQL",
+          "datasource": 1,
+          "sql": "select 1;",
+          "sqlType": 0,
+          "sendEmail": false,
+          "displayRows": 10,
+          "showType": "TABLE",
+          "connParams": "",
+          "preStatements": [],
+          "postStatements": [],
+          "groupId": 0,
+          "title": "",
+          "limit": 0,
+          "localParams": [],
+          "varPool": []
+        },
+        "flag": "YES",
+        "taskPriority": "MEDIUM",
+        "workerGroup": "default",
+        "environmentCode": -1,
+        "taskGroupId": 0,
+        "taskGroupPriority": 0,
+        "failRetryTimes": 0,
+        "failRetryInterval": 0,
+        "timeoutFlag": "CLOSE",
+        "timeoutNotifyStrategy": null,
+        "timeout": 0,
+        "delayTime": 0,
+        "resourceIds": "",
+        "cpuQuota": -1,
+        "memoryMax": -1,
+        "taskExecuteType": "BATCH"
+      }
+    },
+    "lint": {
+      "kind": "workflow",
+      "valid": true,
+      "summary": {
+        "name": "published-sql-corpus",
+        "project": "etl-prod",
+        "releaseState": "OFFLINE",
+        "executionType": "PARALLEL",
+        "taskCount": 1,
+        "edgeCount": 0,
+        "taskTypeCounts": {
+          "SQL": 1
+        },
+        "rootTasks": [
+          "query"
+        ],
+        "leafTasks": [
+          "query"
+        ],
+        "hasSchedule": false
+      },
+      "compilation": {
+        "taskDefinitionCount": 1,
+        "taskRelationCount": 1,
+        "globalParamCount": 0
+      },
+      "checks": [
+        {
+          "code": "workflow_spec_model_valid",
+          "status": "pass"
+        },
+        {
+          "code": "workflow_schedule_contract_valid",
+          "status": "pass"
+        },
+        {
+          "code": "workflow_compiles_for_create",
+          "status": "pass"
+        }
+      ]
+    },
+    "missing_sql_error": {
+      "type": "user_input_error",
+      "details_keys": [
+        "file"
+      ],
+      "suggestion_present": true
+    },
+    "dry_run": {
+      "form": {
+        "description": null,
+        "executionType": "PARALLEL",
+        "globalParams": [],
+        "name": "published-sql-corpus",
+        "taskDefinitionJson": [
+          {
+            "code": 7001,
+            "cpuQuota": -1,
+            "delayTime": 0,
+            "description": "",
+            "environmentCode": -1,
+            "failRetryInterval": 0,
+            "failRetryTimes": 0,
+            "flag": "YES",
+            "memoryMax": -1,
+            "name": "query",
+            "resourceIds": "",
+            "taskExecuteType": "BATCH",
+            "taskGroupId": 0,
+            "taskGroupPriority": 0,
+            "taskParams": {
+              "datasource": 1,
+              "localParams": [],
+              "postStatements": [],
+              "preStatements": [],
+              "sql": "select 1",
+              "sqlType": 0,
+              "type": "MYSQL",
+              "varPool": []
+            },
+            "taskPriority": "MEDIUM",
+            "taskType": "SQL",
+            "timeout": 0,
+            "timeoutFlag": "CLOSE",
+            "timeoutNotifyStrategy": null,
+            "version": 1,
+            "workerGroup": "default"
+          }
+        ],
+        "taskRelationJson": [
+          {
+            "conditionParams": "{}",
+            "conditionType": 0,
+            "name": "",
+            "postTaskCode": 7001,
+            "postTaskVersion": 1,
+            "preTaskCode": 0,
+            "preTaskVersion": 0
+          }
+        ],
+        "timeout": 0
+      },
+      "method": "POST",
+      "path": "/projects/7/workflow-definition"
+    },
+    "round_trip": {
+      "edited_yaml_document": {
+        "tasks": [
+          {
+            "delay": 0,
+            "description": "Synthetic native SQL task",
+            "name": "query",
+            "priority": "HIGH",
+            "retry": {
+              "interval": 0,
+              "times": 0
+            },
+            "task_params": {
+              "datasource": 1,
+              "legacyOpaque": {
+                "syntheticMarker": "retained?"
+              },
+              "sql": "select 1",
+              "sqlType": 0,
+              "type": "MYSQL"
+            },
+            "timeout": 0,
+            "type": "SQL"
+          }
+        ],
+        "workflow": {
+          "description": "Synthetic updated workflow",
+          "execution_type": "PARALLEL",
+          "name": "published-sql-corpus",
+          "project": "etl-prod",
+          "release_state": "OFFLINE",
+          "timeout": 0
+        }
+      },
+      "no_change": false,
+      "rendered_yaml_document": {
+        "tasks": [
+          {
+            "delay": 0,
+            "description": "Synthetic native SQL task",
+            "name": "query",
+            "priority": "HIGH",
+            "retry": {
+              "interval": 0,
+              "times": 0
+            },
+            "task_params": {
+              "datasource": 1,
+              "legacyOpaque": {
+                "syntheticMarker": "retained?"
+              },
+              "sql": "select 1",
+              "sqlType": 0,
+              "type": "MYSQL"
+            },
+            "timeout": 0,
+            "type": "SQL"
+          }
+        ],
+        "workflow": {
+          "description": "Synthetic native workflow",
+          "execution_type": "PARALLEL",
+          "name": "published-sql-corpus",
+          "project": "etl-prod",
+          "release_state": "OFFLINE",
+          "timeout": 0
+        }
+      },
+      "reparsed_task_params": {
+        "datasource": 1,
+        "legacyOpaque": {
+          "syntheticMarker": "retained?"
+        },
+        "localParams": [],
+        "postStatements": [],
+        "preStatements": [],
+        "sql": "select 1",
+        "sqlType": 0,
+        "type": "MYSQL",
+        "varPool": []
+      },
+      "unknown_task_param_retained_in_update": true,
+      "unmodeled_native_task_field_rendered": false,
+      "update_dry_run": {
+        "form": {
+          "description": "Synthetic updated workflow",
+          "executionType": "PARALLEL",
+          "globalParams": [],
+          "name": "published-sql-corpus",
+          "releaseState": "OFFLINE",
+          "taskDefinitionJson": [
+            {
+              "code": 410,
+              "cpuQuota": -1,
+              "delayTime": 0,
+              "description": "Synthetic native SQL task",
+              "environmentCode": -1,
+              "failRetryInterval": 0,
+              "failRetryTimes": 0,
+              "flag": "YES",
+              "memoryMax": -1,
+              "name": "query",
+              "resourceIds": "",
+              "taskExecuteType": "BATCH",
+              "taskGroupId": 0,
+              "taskGroupPriority": 0,
+              "taskParams": {
+                "datasource": 1,
+                "legacyOpaque": {
+                  "syntheticMarker": "retained?"
+                },
+                "localParams": [],
+                "postStatements": [],
+                "preStatements": [],
+                "sql": "select 1",
+                "sqlType": 0,
+                "type": "MYSQL",
+                "varPool": []
+              },
+              "taskPriority": "HIGH",
+              "taskType": "SQL",
+              "timeout": 0,
+              "timeoutFlag": "CLOSE",
+              "timeoutNotifyStrategy": null,
+              "version": 1,
+              "workerGroup": "default"
+            }
+          ],
+          "taskRelationJson": [
+            {
+              "conditionParams": "{}",
+              "conditionType": 0,
+              "name": "",
+              "postTaskCode": 410,
+              "postTaskVersion": 1,
+              "preTaskCode": 0,
+              "preTaskVersion": 0
+            }
+          ],
+          "timeout": 0
+        },
+        "method": "PUT",
+        "path": "/projects/7/workflow-definition/301"
+      },
+      "native_dag_input": {
+        "native_unmodeled_marker": "synthetic-only",
+        "task_code": 410,
+        "task_name": "query",
+        "task_params": {
+          "datasource": 1,
+          "legacyOpaque": {
+            "syntheticMarker": "retained?"
+          },
+          "sql": "select 1",
+          "sqlType": 0,
+          "type": "MYSQL"
+        },
+        "workflow_name": "published-sql-corpus"
+      }
+    },
+    "create_missing_sql_error": {
+      "type": "user_input_error",
+      "details_keys": [
+        "file"
+      ],
+      "suggestion_present": true
+    }
+  },
+  "evidence_scope": {
+    "source": "Installed local wheel rebuilt from the exact release tag; package source bytes independently matched to that commit. This is not the original public distribution artifact.",
+    "cases": "One exact DS 3.4.1 SQL inline facet using synthetic workflow/DAG input; no remote calls or mutation.",
+    "projection": "Parsed YAML and schema validation fields, normalized compilation/request forms, lint checks and stable error shape. Prose, YAML formatting, key order, preview container layout and generated canvas positions are excluded.",
+    "historical_limit": "The old exporter retained unknown SQL task_params but omitted unmodeled native task fields; this does not establish whole-native-object losslessness."
+  },
+  "compatibility_changes": {
+    "lint_missing_sql": {
+      "historical": "user_input_error raised by lint",
+      "current": "valid=false with a structured missing-field diagnostic; workflow.create still raises user_input_error",
+      "reason": "Lint accumulates local issues so one invocation can report multiple fixes."
+    },
+    "datasource_selection": {
+      "historical": "positive integer datasource ID",
+      "current": "positive integer ID or nonblank datasource name",
+      "reason": "Name references extend authoring without removing the integer form."
+    },
+    "create_empty_description": {
+      "historical": "The create preview included description=null when the author omitted it.",
+      "current": "The create request may omit that unset optional field.",
+      "reason": "Compare the authored meaning without freezing the old preview representation."
+    },
+    "native_parameter_preservation": {
+      "historical": "Export/reparse/edit inserted four empty default arrays: localParams, varPool, preStatements and postStatements.",
+      "current": "Existing-baseline compilation preserves the original native SQL parameter object without inserting those absent keys.",
+      "reason": "The captured unknown parameter remains intact; stricter preservation must not be regressed to reproduce old default insertion."
+    }
+  }
+}

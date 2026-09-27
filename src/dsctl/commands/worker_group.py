@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult
 from dsctl.services.worker_group import (
@@ -21,10 +20,6 @@ worker_group_app = typer.Typer(
     no_args_is_help=True,
 )
 
-WORKER_GROUP_HELP = (
-    "Worker-group name or numeric id. Run `dsctl worker-group list` to discover values."
-)
-
 
 def register_worker_group_commands(app: typer.Typer) -> None:
     """Register the `worker-group` command group."""
@@ -32,41 +27,15 @@ def register_worker_group_commands(app: typer.Typer) -> None:
 
 
 @worker_group_app.command("list")
+@bind_command("worker-group.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help=("Filter UI worker groups by name using the upstream search value."),
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List worker groups with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -82,14 +51,11 @@ def list_command(
 
 
 @worker_group_app.command("get")
+@bind_command("worker-group.get")
 def get_command(
     ctx: typer.Context,
-    worker_group: Annotated[
-        str,
-        typer.Argument(help=WORKER_GROUP_HELP),
-    ],
+    worker_group: str,
 ) -> None:
-    """Get one worker group by name or id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -99,35 +65,14 @@ def get_command(
 
 
 @worker_group_app.command("create")
+@bind_command("worker-group.create")
 def create_command(
     ctx: typer.Context,
     *,
-    name: Annotated[
-        str,
-        typer.Option(
-            "--name",
-            help="Worker-group name.",
-        ),
-    ],
-    addresses: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--addr",
-            help=(
-                "Worker server address to include in addrList. Repeat as needed; "
-                "run `dsctl monitor server worker` to discover workers."
-            ),
-        ),
-    ] = None,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Optional worker-group description.",
-        ),
-    ] = None,
+    name: str,
+    addresses: list[str] | None,
+    description: str | None,
 ) -> None:
-    """Create one worker group."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -142,54 +87,17 @@ def create_command(
 
 
 @worker_group_app.command("update")
+@bind_command("worker-group.update")
 def update_command(
     ctx: typer.Context,
-    worker_group: Annotated[
-        str,
-        typer.Argument(help=WORKER_GROUP_HELP),
-    ],
+    worker_group: str,
     *,
-    name: Annotated[
-        str | None,
-        typer.Option(
-            "--name",
-            help="Updated worker-group name. Omit to keep the current name.",
-        ),
-    ] = None,
-    addresses: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--addr",
-            help=(
-                "Replacement worker address list. Repeat as needed. Omit to keep "
-                "the current addrList; run `dsctl monitor server worker` to "
-                "discover workers."
-            ),
-        ),
-    ] = None,
-    clear_addrs: Annotated[
-        bool,
-        typer.Option(
-            "--clear-addrs",
-            help="Clear the current addrList.",
-        ),
-    ] = False,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Updated worker-group description.",
-        ),
-    ] = None,
-    clear_description: Annotated[
-        bool,
-        typer.Option(
-            "--clear-description",
-            help="Clear the current worker-group description.",
-        ),
-    ] = False,
+    name: str | None,
+    addresses: list[str] | None,
+    clear_addrs: bool,
+    description: str | None,
+    clear_description: bool,
 ) -> None:
-    """Update one worker group."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
@@ -229,22 +137,13 @@ def update_command(
 
 
 @worker_group_app.command("delete")
+@bind_command("worker-group.delete")
 def delete_command(
     ctx: typer.Context,
-    worker_group: Annotated[
-        str,
-        typer.Argument(help=WORKER_GROUP_HELP),
-    ],
+    worker_group: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm worker-group deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one worker group."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

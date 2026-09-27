@@ -1,10 +1,9 @@
 from pathlib import Path
-from typing import Annotated
 
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
-from dsctl.services.pagination import DEFAULT_PAGE_SIZE
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.resource import (
     create_resource_result,
     delete_resource_result,
@@ -27,51 +26,16 @@ def register_resource_commands(app: typer.Typer) -> None:
 
 
 @resource_app.command("list")
+@bind_command("resource.list")
 def list_command(
     ctx: typer.Context,
     *,
-    directory: Annotated[
-        str | None,
-        typer.Option(
-            "--dir",
-            help=(
-                "DS directory fullName path. Defaults to the upstream base "
-                "directory; run `dsctl resource list` to discover paths."
-            ),
-        ),
-    ] = None,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter resource names by the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = DEFAULT_PAGE_SIZE,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    directory: str | None,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List resources inside one DS directory."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -88,36 +52,14 @@ def list_command(
 
 
 @resource_app.command("view")
+@bind_command("resource.view")
 def view_command(
     ctx: typer.Context,
-    resource: Annotated[
-        str,
-        typer.Argument(
-            help=(
-                "DS resource fullName path. Run `dsctl resource list --dir DIR` "
-                "to discover paths."
-            ),
-        ),
-    ],
+    resource: str,
     *,
-    skip_line_num: Annotated[
-        int,
-        typer.Option(
-            "--skip-line-num",
-            min=0,
-            help="Number of lines to skip before returning content.",
-        ),
-    ] = 0,
-    limit: Annotated[
-        int,
-        typer.Option(
-            "--limit",
-            min=1,
-            help="Maximum number of lines to fetch.",
-        ),
-    ] = 100,
+    skip_line_num: int,
+    limit: int,
 ) -> None:
-    """View one text content window for one resource file."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -132,41 +74,14 @@ def view_command(
 
 
 @resource_app.command("upload")
+@bind_command("resource.upload")
 def upload_command(
     ctx: typer.Context,
     *,
-    file: Annotated[
-        Path,
-        typer.Option(
-            "--file",
-            dir_okay=False,
-            exists=True,
-            file_okay=True,
-            help="Local file path to upload.",
-            readable=True,
-            resolve_path=True,
-        ),
-    ],
-    directory: Annotated[
-        str | None,
-        typer.Option(
-            "--dir",
-            help=(
-                "Destination DS directory fullName path. Defaults to the "
-                "upstream base directory; run `dsctl resource list` to "
-                "discover paths."
-            ),
-        ),
-    ] = None,
-    name: Annotated[
-        str | None,
-        typer.Option(
-            "--name",
-            help="Override the remote leaf file name. Defaults to the local file name.",
-        ),
-    ] = None,
+    file: Path,
+    directory: str | None,
+    name: str | None,
 ) -> None:
-    """Upload one local file into one DS directory."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -181,39 +96,14 @@ def upload_command(
 
 
 @resource_app.command("create")
+@bind_command("resource.create")
 def create_command(
     ctx: typer.Context,
     *,
-    name: Annotated[
-        str,
-        typer.Option(
-            "--name",
-            help="Remote leaf file name, including the file extension.",
-        ),
-    ],
-    content: Annotated[
-        str,
-        typer.Option(
-            "--content",
-            help=(
-                "Inline text content to write into the remote resource file. "
-                "For local files, use `dsctl resource upload --file PATH`."
-            ),
-        ),
-    ],
-    directory: Annotated[
-        str | None,
-        typer.Option(
-            "--dir",
-            help=(
-                "Destination DS directory fullName path. Defaults to the "
-                "upstream base directory; run `dsctl resource list` to "
-                "discover paths."
-            ),
-        ),
-    ] = None,
+    name: str,
+    content: str,
+    directory: str | None,
 ) -> None:
-    """Create one text resource from inline content."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -228,25 +118,13 @@ def create_command(
 
 
 @resource_app.command("mkdir")
+@bind_command("resource.mkdir")
 def mkdir_command(
     ctx: typer.Context,
-    name: Annotated[
-        str,
-        typer.Argument(help="Leaf directory name to create."),
-    ],
+    name: str,
     *,
-    directory: Annotated[
-        str | None,
-        typer.Option(
-            "--dir",
-            help=(
-                "Parent DS directory fullName path. Defaults to the upstream "
-                "base directory; run `dsctl resource list` to discover paths."
-            ),
-        ),
-    ] = None,
+    directory: str | None,
 ) -> None:
-    """Create one directory inside one DS resource directory."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -260,40 +138,14 @@ def mkdir_command(
 
 
 @resource_app.command("download")
+@bind_command("resource.download")
 def download_command(
     ctx: typer.Context,
-    resource: Annotated[
-        str,
-        typer.Argument(
-            help=(
-                "DS resource fullName path. Run `dsctl resource list --dir DIR` "
-                "to discover paths."
-            ),
-        ),
-    ],
+    resource: str,
     *,
-    output: Annotated[
-        Path | None,
-        typer.Option(
-            "--output",
-            file_okay=True,
-            dir_okay=True,
-            help=(
-                "Local output file path or existing directory. Defaults to the "
-                "current working directory plus the remote leaf name."
-            ),
-            resolve_path=True,
-        ),
-    ] = None,
-    overwrite: Annotated[
-        bool,
-        typer.Option(
-            "--overwrite",
-            help="Replace an existing local output file.",
-        ),
-    ] = False,
+    output: Path | None,
+    overwrite: bool,
 ) -> None:
-    """Download one remote resource to one local file path."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -308,27 +160,13 @@ def download_command(
 
 
 @resource_app.command("delete")
+@bind_command("resource.delete")
 def delete_command(
     ctx: typer.Context,
-    resource: Annotated[
-        str,
-        typer.Argument(
-            help=(
-                "DS resource fullName path. Run `dsctl resource list --dir DIR` "
-                "to discover paths."
-            ),
-        ),
-    ],
+    resource: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm resource deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one resource."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

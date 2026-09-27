@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.capabilities import (
     CAPABILITIES_SECTION_CHOICES,
     get_capabilities_result,
@@ -20,32 +19,15 @@ def register_capabilities_commands(app: typer.Typer) -> None:
     app.command("capabilities")(capabilities_command)
 
 
+@bind_command("capabilities")
 def capabilities_command(
     ctx: typer.Context,
     *,
-    summary: Annotated[
-        bool,
-        typer.Option(
-            "--summary",
-            help="Return the bounded default capability summary explicitly.",
-        ),
-    ] = False,
-    section: Annotated[
-        str | None,
-        typer.Option(
-            "--section",
-            help=CAPABILITIES_SECTION_HELP,
-        ),
-    ] = None,
-    full: Annotated[
-        bool,
-        typer.Option(
-            "--full",
-            help="Return the complete expanded capability inventory.",
-        ),
-    ] = False,
+    summary: bool,
+    section: str | None,
+    action: str | None,
+    full: bool,
 ) -> None:
-    """Discover supported features and versions; use schema for command syntax."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -55,5 +37,6 @@ def capabilities_command(
             summary=summary,
             section=section,
             full=full,
+            action=action,
         ),
     )

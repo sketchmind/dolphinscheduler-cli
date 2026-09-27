@@ -1,5 +1,5 @@
-from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from functools import partial
 
 import pytest
 from tests.fakes import (
@@ -14,22 +14,207 @@ from tests.fakes import (
     FakeUserAdapter,
     FakeWorkflow,
     FakeWorkflowAdapter,
-    fake_service_runtime,
 )
+from tests.schedule_domain_fakes import install_schedule_domain_runtime
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
 from dsctl.config import ClusterProfile
-from dsctl.context import SessionContext
 from dsctl.errors import (
     ApiResultError,
     ConfirmationRequiredError,
     ConflictError,
     InvalidStateError,
     NotFoundError,
+    UnsupportedFeatureError,
     UserInputError,
 )
-from dsctl.services import runtime as runtime_service
 from dsctl.services import schedule as schedule_service
+from dsctl.services.selection import ResourceDefaults
+
+
+@pytest.mark.parametrize("action", ["create", "explain"])
+@pytest.mark.parametrize("environment_source", ["flag", "preference"])
+def test_legacy_schedule_positive_environment_rejected_before_create(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+    action: str,
+    environment_source: str,
+) -> None:
+    preferences = (
+        FakeProjectPreferenceAdapter(
+            project_preferences=[
+                FakeProjectPreference(
+                    id=8,
+                    code=8,
+                    project_code_value=7,
+                    state=1,
+                    preferences_value='{"environmentCode":99}',
+                )
+            ]
+        )
+        if environment_source == "preference"
+        else None
+    )
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        profile=make_profile(ds_version="3.2.1"),
+        context=ResourceDefaults(project="etl-prod"),
+        project_preference_adapter=preferences,
+    )
+    initial_schedules = list(fake_schedule_adapter.schedules)
+    environment_code = 99 if environment_source == "flag" else None
+
+    def invoke() -> object:
+        if action == "create":
+            return schedule_service.create_schedule_result(
+                workflow="daily-sync",
+                cron="0 0 4 * * ?",
+                start="2024-01-01 00:00:00",
+                end="2025-01-01 00:00:00",
+                timezone="Asia/Shanghai",
+                environment_code=environment_code,
+            )
+        return schedule_service.explain_schedule_result(
+            workflow="daily-sync",
+            cron="0 0 4 * * ?",
+            start="2024-01-01 00:00:00",
+            end="2025-01-01 00:00:00",
+            timezone="Asia/Shanghai",
+            environment_code=environment_code,
+        )
+
+    with pytest.raises(UnsupportedFeatureError) as caught:
+        invoke()
+
+    assert caught.value.suggestion is not None
+    assert "environment_code" in caught.value.suggestion
+    assert "--environment-code 0" in caught.value.suggestion
+    assert fake_schedule_adapter.schedules == initial_schedules
+
+
+def test_legacy_schedule_existing_environment_can_be_preserved_and_warned(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    fake_schedule_adapter.schedules[0] = replace(
+        fake_schedule_adapter.schedules[0], environment_code_value=99
+    )
+    fake_schedule_adapter.schedules[1] = replace(
+        fake_schedule_adapter.schedules[1], environment_code_value=88
+    )
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        profile=make_profile(ds_version="3.2.1"),
+    )
+
+    listing = schedule_service.list_schedules_result(project="etl-prod")
+    assert len(listing.warning_details) == 1
+    assert listing.warning_details[0]["code"] == "schedule_environment_not_inherited"
+    assert len(schedule_service.get_schedule_result(1).warnings) == 1
+    assert len(schedule_service.preview_schedule_result(schedule_id=1).warnings) == 1
+    explained = schedule_service.explain_schedule_result(
+        schedule_id=1, cron="0 0 6 * * ?"
+    )
+    assert len(explained.warnings) == 1
+    updated = schedule_service.update_schedule_result(1, cron="0 0 6 * * ?")
+    assert _mapping(updated.data)["environmentCode"] == 99
+    assert len(updated.warnings) == 1
+    assert len(schedule_service.online_schedule_result(1).warnings) == 1
+    assert len(schedule_service.offline_schedule_result(1).warnings) == 1
+    deleted = schedule_service.delete_schedule_result(1, force=True)
+    assert _mapping(deleted.data)["deleted"] is True
+
+
+def test_legacy_schedule_new_positive_update_rejected_but_zero_clears(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        profile=make_profile(ds_version="3.2.1"),
+    )
+    with pytest.raises(UnsupportedFeatureError):
+        schedule_service.update_schedule_result(1, environment_code=99)
+    assert fake_schedule_adapter.schedules[0].environmentCode is None
+    cleared = schedule_service.update_schedule_result(1, environment_code=0)
+    assert _mapping(cleared.data)["environmentCode"] is None
+    assert cleared.warnings == []
+
+
+@pytest.mark.parametrize("action", ["update", "explain"])
+def test_legacy_schedule_explicit_existing_positive_environment_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+    action: str,
+) -> None:
+    fake_schedule_adapter.schedules[0] = replace(
+        fake_schedule_adapter.schedules[0], environment_code_value=99
+    )
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        profile=make_profile(ds_version="3.2.1"),
+    )
+    initial_schedule = fake_schedule_adapter.schedules[0]
+
+    def invoke() -> object:
+        if action == "update":
+            return schedule_service.update_schedule_result(1, environment_code=99)
+        return schedule_service.explain_schedule_result(
+            schedule_id=1, environment_code=99
+        )
+
+    with pytest.raises(UnsupportedFeatureError):
+        invoke()
+
+    assert fake_schedule_adapter.schedules[0] == initial_schedule
+
+
+def test_schedule_environment_inheritance_supported_from_322(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        profile=make_profile(ds_version="3.2.2"),
+        context=ResourceDefaults(project="etl-prod"),
+    )
+    result = schedule_service.create_schedule_result(
+        workflow="daily-sync",
+        cron="0 0 4 * * ?",
+        start="2024-01-01 00:00:00",
+        end="2025-01-01 00:00:00",
+        timezone="Asia/Shanghai",
+        environment_code=99,
+    )
+    assert _mapping(result.data)["environmentCode"] == 99
+    assert result.warnings == []
 
 
 def _install_schedule_service_fakes(
@@ -39,36 +224,22 @@ def _install_schedule_service_fakes(
     workflow_adapter: FakeWorkflowAdapter,
     schedule_adapter: FakeScheduleAdapter,
     user_adapter: FakeUserAdapter | None = None,
-    context: SessionContext | None = None,
+    context: ResourceDefaults | None = None,
     profile: ClusterProfile | None = None,
     project_preference_adapter: FakeProjectPreferenceAdapter | None = None,
     environment_adapter: FakeEnvironmentAdapter | None = None,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter,
-            profile=make_profile() if profile is None else profile,
-            context=context,
-            workflow_adapter=workflow_adapter,
-            schedule_adapter=schedule_adapter,
-            user_adapter=user_adapter,
-            project_preference_adapter=project_preference_adapter,
-            environment_adapter=environment_adapter,
-        ),
+    install_schedule_domain_runtime(
+        monkeypatch,
+        project_adapter=project_adapter,
+        profile=make_profile() if profile is None else profile,
+        context=context,
+        workflow_adapter=workflow_adapter,
+        schedule_adapter=schedule_adapter,
+        user_adapter=user_adapter,
+        project_preference_adapter=project_preference_adapter,
+        environment_adapter=environment_adapter,
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 @pytest.fixture
@@ -128,6 +299,28 @@ def fake_schedule_adapter() -> FakeScheduleAdapter:
     )
 
 
+def test_342_schedule_list_uses_read_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        profile=make_profile(ds_version="3.4.2"),
+        context=ResourceDefaults(project="etl-prod"),
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+    )
+
+    result = schedule_service.list_schedules_result(page_size=1)
+
+    data = _mapping(result.data)
+    assert data["total"] == 2
+    assert _mapping(_sequence(data["totalList"])[0])["id"] == 1
+
+
 def test_list_schedules_result_returns_project_page(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -139,7 +332,7 @@ def test_list_schedules_result_returns_project_page(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = schedule_service.list_schedules_result(page_size=1)
@@ -163,7 +356,7 @@ def test_list_schedules_result_can_filter_by_workflow(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = schedule_service.list_schedules_result(workflow="daily-sync")
@@ -196,6 +389,81 @@ def test_get_schedule_result_returns_one_schedule(
     assert data["crontab"] == "0 0 2 * * ?"
 
 
+@pytest.mark.parametrize(
+    "operation",
+    ["get", "preview", "explain", "update", "delete", "online", "offline"],
+)
+def test_schedule_id_operations_honor_context_project_scope(
+    operation: str,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    fake_project_adapter.projects.append(FakeProject(code=8, name="other-project"))
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        context=ResourceDefaults(project="other-project"),
+    )
+
+    if operation == "get":
+        call = partial(schedule_service.get_schedule_result, 1)
+    elif operation == "preview":
+        call = partial(schedule_service.preview_schedule_result, schedule_id=1)
+    elif operation == "explain":
+        call = partial(
+            schedule_service.explain_schedule_result,
+            schedule_id=1,
+            cron="0 0 6 * * ?",
+        )
+    elif operation == "update":
+        call = partial(
+            schedule_service.update_schedule_result,
+            1,
+            cron="0 0 6 * * ?",
+        )
+    elif operation == "delete":
+        call = partial(schedule_service.delete_schedule_result, 1, force=True)
+    elif operation == "online":
+        call = partial(schedule_service.online_schedule_result, 1)
+    else:
+        call = partial(schedule_service.offline_schedule_result, 1)
+
+    with pytest.raises(NotFoundError, match="Schedule 1 does not exist"):
+        call()
+
+    assert [schedule.id for schedule in fake_schedule_adapter.schedules] == [1, 2]
+    assert fake_schedule_adapter.schedules[0].crontab == "0 0 2 * * ?"
+    assert fake_schedule_adapter.schedules[0].releaseState is None
+
+
+def test_explicit_project_overrides_context_for_schedule_id_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+) -> None:
+    fake_project_adapter.projects.append(FakeProject(code=8, name="other-project"))
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        context=ResourceDefaults(project="other-project"),
+    )
+
+    result = schedule_service.get_schedule_result(1, project="etl-prod")
+
+    assert _mapping(result.data)["id"] == 1
+    assert _mapping(result.resolved["project"]) == {
+        "value": "etl-prod",
+        "source": "flag",
+    }
+
+
 def test_preview_schedule_result_returns_times_and_analysis(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
@@ -207,7 +475,7 @@ def test_preview_schedule_result_returns_times_and_analysis(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = schedule_service.preview_schedule_result(
@@ -237,7 +505,7 @@ def test_preview_schedule_result_rejects_five_field_cron(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     with pytest.raises(UserInputError, match="Quartz cron expression") as exc_info:
@@ -271,7 +539,7 @@ def test_list_schedules_result_rejects_workflow_and_search_together(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     with pytest.raises(
@@ -300,12 +568,12 @@ def test_preview_schedule_result_rejects_mixing_id_and_schedule_fields(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     with pytest.raises(
         UserInputError,
-        match="schedule id preview does not accept project or schedule fields",
+        match="schedule id preview does not accept schedule fields",
     ) as exc_info:
         schedule_service.preview_schedule_result(
             schedule_id=1,
@@ -313,9 +581,9 @@ def test_preview_schedule_result_rejects_mixing_id_and_schedule_fields(
         )
 
     assert exc_info.value.suggestion == (
-        "Pass only the schedule id to preview an existing schedule, or omit "
-        "the id and pass `--project`, `--cron`, `--start`, `--end`, and "
-        "`--timezone` for an ad hoc preview."
+        "Pass only the schedule id and optional `--project` to preview an "
+        "existing schedule, or omit the id and pass `--project`, `--cron`, "
+        "`--start`, and `--end` (plus `--timezone` where supported)."
     )
 
 
@@ -330,11 +598,11 @@ def test_explain_schedule_result_describes_safe_create_mutation(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = schedule_service.explain_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 0 4 * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -350,7 +618,7 @@ def test_explain_schedule_result_describes_safe_create_mutation(
     assert confirmation["required"] is False
     assert confirmation["nextAction"] == "apply"
     assert confirmation["token"] is None
-    assert _mapping(result.resolved["workflow"])["source"] == "context"
+    assert _mapping(result.resolved["workflow"])["source"] == "flag"
     assert _mapping(result.resolved["tenant"]) == {
         "value": "default",
         "source": "default",
@@ -379,11 +647,11 @@ def test_explain_schedule_result_uses_current_user_tenant_for_create_mutation(
                 )
             ]
         ),
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = schedule_service.explain_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 0 4 * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -409,7 +677,7 @@ def test_explain_schedule_result_uses_enabled_project_preference_defaults(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
         project_preference_adapter=FakeProjectPreferenceAdapter(
             project_preferences=[
                 FakeProjectPreference(
@@ -433,7 +701,7 @@ def test_explain_schedule_result_uses_enabled_project_preference_defaults(
     )
 
     result = schedule_service.explain_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 0 4 * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -481,12 +749,12 @@ def test_create_schedule_result_requires_confirmation_for_high_frequency_preview
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     with pytest.raises(ConfirmationRequiredError) as captured:
         schedule_service.create_schedule_result(
-            workflow=None,
+            workflow="daily-sync",
             cron="0 */5 * * * ?",
             start="2024-01-01 00:00:00",
             end="2025-01-01 00:00:00",
@@ -518,11 +786,11 @@ def test_explain_schedule_result_matches_create_confirmation_token(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     explain_result = schedule_service.explain_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 */5 * * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -530,9 +798,17 @@ def test_explain_schedule_result_matches_create_confirmation_token(
     )
     explain_token = _mapping(_mapping(explain_result.data)["confirmation"])["token"]
 
+    fake_schedule_adapter.preview_times_value = [
+        "2024-01-01 00:05:00",
+        "2024-01-01 00:10:00",
+        "2024-01-01 00:15:00",
+        "2024-01-01 00:20:00",
+        "2024-01-01 00:25:00",
+    ]
+
     with pytest.raises(ConfirmationRequiredError) as captured:
         schedule_service.create_schedule_result(
-            workflow=None,
+            workflow="daily-sync",
             cron="0 */5 * * * ?",
             start="2024-01-01 00:00:00",
             end="2025-01-01 00:00:00",
@@ -561,12 +837,12 @@ def test_create_schedule_result_accepts_matching_confirmation_token(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     with pytest.raises(ConfirmationRequiredError) as captured:
         schedule_service.create_schedule_result(
-            workflow=None,
+            workflow="daily-sync",
             cron="0 */5 * * * ?",
             start="2024-01-01 00:00:00",
             end="2025-01-01 00:00:00",
@@ -576,8 +852,16 @@ def test_create_schedule_result_accepts_matching_confirmation_token(
     confirmation = _mapping(captured.value.details)["confirmation_token"]
     assert isinstance(confirmation, str)
 
+    fake_schedule_adapter.preview_times_value = [
+        "2024-01-01 00:05:00",
+        "2024-01-01 00:10:00",
+        "2024-01-01 00:15:00",
+        "2024-01-01 00:20:00",
+        "2024-01-01 00:25:00",
+    ]
+
     result = schedule_service.create_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 */5 * * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -654,6 +938,14 @@ def test_explain_schedule_result_matches_update_confirmation_token(
         "projectCode": 7,
     }
 
+    fake_schedule_adapter.preview_times_value = [
+        "2024-01-01 00:05:00",
+        "2024-01-01 00:10:00",
+        "2024-01-01 00:15:00",
+        "2024-01-01 00:20:00",
+        "2024-01-01 00:25:00",
+    ]
+
     with pytest.raises(ConfirmationRequiredError) as captured:
         schedule_service.update_schedule_result(
             1,
@@ -664,13 +956,13 @@ def test_explain_schedule_result_matches_update_confirmation_token(
     assert explain_token == update_token
 
 
-def test_explain_schedule_result_translates_missing_bound_workflow(
+def test_explain_schedule_update_does_not_require_a_bound_workflow_read(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
     fake_schedule_adapter: FakeScheduleAdapter,
 ) -> None:
     class MissingBoundWorkflowAdapter(FakeWorkflowAdapter):
-        def get(self, *, code: int) -> FakeWorkflow:
+        def get(self, *, project_code: int, code: int) -> FakeWorkflow:
             raise ApiResultError(
                 result_code=50003,
                 result_message=f"workflow code {code} not found",
@@ -696,24 +988,17 @@ def test_explain_schedule_result_translates_missing_bound_workflow(
         schedule_adapter=fake_schedule_adapter,
     )
 
-    with pytest.raises(NotFoundError) as exc_info:
-        schedule_service.explain_schedule_result(
-            schedule_id=1,
-            cron="0 */5 * * * ?",
-        )
-
-    assert exc_info.value.message == (
-        "The workflow bound to this schedule does not exist."
+    result = schedule_service.explain_schedule_result(
+        schedule_id=1,
+        cron="0 */5 * * * ?",
     )
-    assert exc_info.value.details == {
-        "resource": "schedule",
-        "operation": "explain",
-        "schedule_id": 1,
-        "workflow_code": 404,
-    }
+
+    assert _mapping(_mapping(result.data)["proposedSchedule"])["crontab"] == (
+        "0 */5 * * * ?"
+    )
 
 
-def test_create_schedule_result_uses_workflow_context(
+def test_create_schedule_result_uses_project_default_and_explicit_workflow(
     monkeypatch: pytest.MonkeyPatch,
     fake_project_adapter: FakeProjectAdapter,
     fake_workflow_adapter: FakeWorkflowAdapter,
@@ -724,11 +1009,11 @@ def test_create_schedule_result_uses_workflow_context(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = schedule_service.create_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 0 4 * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -736,7 +1021,7 @@ def test_create_schedule_result_uses_workflow_context(
     )
     data = _mapping(result.data)
 
-    assert _mapping(result.resolved["workflow"])["source"] == "context"
+    assert _mapping(result.resolved["workflow"])["source"] == "flag"
     assert _mapping(result.resolved["tenant"]) == {
         "value": "default",
         "source": "default",
@@ -757,11 +1042,11 @@ def test_create_schedule_result_normalizes_zero_environment_to_absent(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     result = schedule_service.create_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 0 4 * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -769,7 +1054,7 @@ def test_create_schedule_result_normalizes_zero_environment_to_absent(
         environment_code=0,
     )
 
-    assert _mapping(result.data)["environmentCode"] == -1
+    assert _mapping(result.data)["environmentCode"] is None
 
 
 def test_create_schedule_zero_environment_bypasses_project_preference(
@@ -783,7 +1068,7 @@ def test_create_schedule_zero_environment_bypasses_project_preference(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
         project_preference_adapter=FakeProjectPreferenceAdapter(
             project_preferences=[
                 FakeProjectPreference(
@@ -798,7 +1083,7 @@ def test_create_schedule_zero_environment_bypasses_project_preference(
     )
 
     result = schedule_service.create_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 0 4 * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -806,7 +1091,7 @@ def test_create_schedule_zero_environment_bypasses_project_preference(
         environment_code=0,
     )
 
-    assert _mapping(result.data)["environmentCode"] == -1
+    assert _mapping(result.data)["environmentCode"] is None
     assert "project_preference" not in result.resolved
 
 
@@ -821,7 +1106,7 @@ def test_create_schedule_result_prefers_explicit_tenant_over_current_user(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
         user_adapter=FakeUserAdapter(
             users=[
                 FakeUser(
@@ -836,7 +1121,7 @@ def test_create_schedule_result_prefers_explicit_tenant_over_current_user(
     )
 
     result = schedule_service.create_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 0 4 * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -851,7 +1136,7 @@ def test_create_schedule_result_prefers_explicit_tenant_over_current_user(
     }
 
     explicit = schedule_service.create_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 0 5 * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -877,7 +1162,7 @@ def test_create_schedule_result_uses_current_user_tenant_selection(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
         user_adapter=FakeUserAdapter(
             users=[
                 FakeUser(
@@ -892,7 +1177,7 @@ def test_create_schedule_result_uses_current_user_tenant_selection(
     )
 
     result = schedule_service.create_schedule_result(
-        workflow=None,
+        workflow="daily-sync",
         cron="0 0 4 * * ?",
         start="2024-01-01 00:00:00",
         end="2025-01-01 00:00:00",
@@ -951,7 +1236,7 @@ def test_update_schedule_result_normalizes_zero_environment_to_clear(
     result = schedule_service.update_schedule_result(1, environment_code=0)
     data = _mapping(result.data)
 
-    assert data["environmentCode"] == -1
+    assert data["environmentCode"] is None
     assert data["tenantCode"] == "tenant-current"
 
 
@@ -1023,13 +1308,13 @@ def test_list_schedules_result_requires_project_selection(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(),
+        context=ResourceDefaults(),
     )
 
     with pytest.raises(UserInputError, match="Project is required") as exc_info:
         schedule_service.list_schedules_result()
     assert exc_info.value.suggestion == (
-        "Pass --project NAME or run `dsctl use project NAME`."
+        "Pass --project NAME, or configure a project in the selected context."
     )
 
 
@@ -1044,7 +1329,7 @@ def test_create_schedule_result_requires_workflow_selection(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     with pytest.raises(UserInputError, match="Workflow is required") as exc_info:
@@ -1055,9 +1340,7 @@ def test_create_schedule_result_requires_workflow_selection(
             end="2025-01-01 00:00:00",
             timezone="Asia/Shanghai",
         )
-    assert exc_info.value.suggestion == (
-        "Pass --workflow NAME or run `dsctl use workflow NAME`."
-    )
+    assert exc_info.value.suggestion == "Pass --workflow NAME."
 
 
 def test_get_schedule_result_reports_missing_schedules(
@@ -1105,7 +1388,7 @@ def test_create_schedule_result_maps_duplicate_schedule_to_conflict(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     def fail_create(**_: object) -> FakeSchedule:
@@ -1120,7 +1403,7 @@ def test_create_schedule_result_maps_duplicate_schedule_to_conflict(
 
     with pytest.raises(ConflictError, match="already has a schedule"):
         schedule_service.create_schedule_result(
-            workflow=None,
+            workflow="daily-sync",
             cron="0 0 4 * * ?",
             start="2024-01-01 00:00:00",
             end="2025-01-01 00:00:00",
@@ -1139,7 +1422,7 @@ def test_create_schedule_result_maps_offline_workflow_to_invalid_state(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     def fail_create(**_: object) -> FakeSchedule:
@@ -1154,7 +1437,7 @@ def test_create_schedule_result_maps_offline_workflow_to_invalid_state(
 
     with pytest.raises(InvalidStateError, match="workflow must be online") as exc_info:
         schedule_service.create_schedule_result(
-            workflow=None,
+            workflow="daily-sync",
             cron="0 0 4 * * ?",
             start="2024-01-01 00:00:00",
             end="2025-01-01 00:00:00",
@@ -1163,6 +1446,56 @@ def test_create_schedule_result_maps_offline_workflow_to_invalid_state(
 
     assert exc_info.value.suggestion == (
         "Bring the owning workflow online, then retry the schedule operation."
+    )
+
+
+@pytest.mark.parametrize("operation", ["create", "update", "online"])
+def test_schedule_rejected_past_start_is_actionable_user_input_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_project_adapter: FakeProjectAdapter,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    fake_schedule_adapter: FakeScheduleAdapter,
+    operation: str,
+) -> None:
+    _install_schedule_service_fakes(
+        monkeypatch,
+        project_adapter=fake_project_adapter,
+        workflow_adapter=fake_workflow_adapter,
+        schedule_adapter=fake_schedule_adapter,
+        context=ResourceDefaults(project="etl-prod"),
+    )
+
+    def reject_past_start(**_: object) -> FakeSchedule:
+        raise ApiResultError(
+            result_code=80004,
+            result_message="start time before current time error",
+        )
+
+    monkeypatch.setattr(fake_schedule_adapter, operation, reject_past_start)
+    calls = {
+        "create": partial(
+            schedule_service.create_schedule_result,
+            workflow="daily-sync",
+            cron="0 0 4 * * ?",
+            start="2024-01-01 00:00:00",
+            end="2025-01-01 00:00:00",
+            timezone="Asia/Shanghai",
+        ),
+        "update": partial(
+            schedule_service.update_schedule_result, 1, cron="0 0 6 * * ?"
+        ),
+        "online": partial(schedule_service.online_schedule_result, 1),
+    }
+    call = calls[operation]
+    with pytest.raises(UserInputError, match="server's current time") as exc:
+        call()
+
+    assert exc.value.details is not None
+    assert exc.value.details["operation"] == operation
+    assert exc.value.suggestion == (
+        "Set `--start` to a future time and keep `--end` later than "
+        "`--start`. For an existing schedule, update it before retrying "
+        "`schedule online`."
     )
 
 
@@ -1177,7 +1510,7 @@ def test_create_schedule_result_maps_missing_environment_to_not_found(
         project_adapter=fake_project_adapter,
         workflow_adapter=fake_workflow_adapter,
         schedule_adapter=fake_schedule_adapter,
-        context=SessionContext(project="etl-prod", workflow="daily-sync"),
+        context=ResourceDefaults(project="etl-prod"),
     )
 
     def fail_create(**_: object) -> FakeSchedule:
@@ -1192,7 +1525,7 @@ def test_create_schedule_result_maps_missing_environment_to_not_found(
         NotFoundError, match="Environment code 404 does not exist"
     ) as exc:
         schedule_service.create_schedule_result(
-            workflow=None,
+            workflow="daily-sync",
             cron="0 0 4 * * ?",
             start="2024-01-01 00:00:00",
             end="2025-01-01 00:00:00",
@@ -1305,6 +1638,18 @@ def test_update_schedule_result_rejects_five_field_cron(
         "expected_field_counts": [6, 7],
         "field_count": 5,
     }
+
+
+def test_update_schedule_result_rejects_empty_enum_with_exact_choices() -> None:
+    with pytest.raises(
+        UserInputError,
+        match="failure_strategy must not be empty",
+    ) as exc:
+        schedule_service.update_schedule_result(1, failure_strategy="")
+
+    assert exc.value.suggestion == (
+        "Pass `--failure-strategy` as one of: CONTINUE, END."
+    )
 
 
 def test_delete_schedule_result_maps_online_constraint_to_invalid_state(

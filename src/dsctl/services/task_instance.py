@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import shlex
 import time
-from collections import deque
 from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 from dsctl.cli_surface import TASK_INSTANCE_RESOURCE
 from dsctl.errors import (
     ApiResultError,
+    ExecutionFailedError,
     InvalidStateError,
     NotFoundError,
     PermissionDeniedError,
@@ -14,41 +15,31 @@ from dsctl.errors import (
     UserInputError,
     WaitTimeoutError,
 )
-from dsctl.output import CommandResult, require_json_object
-from dsctl.services._runtime_support import (
-    get_workflow_instance,
-    require_workflow_instance_project_code,
-)
-from dsctl.services._serialization import (
-    TaskInstanceData,
-    TaskLogData,
-    enum_value,
-    optional_text,
-    serialize_task_instance,
-)
+from dsctl.execution_states import TASK_EXECUTION_SUCCESS_STATES
+from dsctl.output import CommandResult, JsonObject, require_json_object
 from dsctl.services._validation import (
     optional_ds_datetime,
     require_non_negative_int,
     require_positive_int,
     validate_ds_datetime_range,
 )
-from dsctl.services.pagination import (
-    DEFAULT_PAGE_SIZE,
-    MAX_AUTO_EXHAUST_PAGES,
-    PageData,
-    requested_page_data,
+from dsctl.services.runtime import (
+    BoundDomainServiceRuntime,
+    run_with_bound_domain_service_runtime,
 )
-from dsctl.services.resolver import (
-    ResolvedProject,
-    ResolvedWorkflow,
-)
-from dsctl.services.resolver import project as resolve_project
-from dsctl.services.resolver import workflow as resolve_workflow
-from dsctl.services.runtime import ServiceRuntime, run_with_service_runtime
 from dsctl.services.selection import (
     SelectedValue,
     require_project_selection,
     with_selection_source,
+)
+from dsctl.upstream.definition_models import NativeCode
+from dsctl.upstream.instance_time_filters import instance_time_filter_contract
+from dsctl.upstream.pagination import (
+    DEFAULT_PAGE_SIZE,
+    MAX_AUTO_EXHAUST_PAGES,
+    PageData,
+    observation_time,
+    requested_page_data,
 )
 from dsctl.upstream.runtime_enums import (
     TASK_EXECUTION_FINISHED_STATES,
@@ -57,18 +48,29 @@ from dsctl.upstream.runtime_enums import (
     task_execution_status_value,
     workflow_execution_status_is_final,
 )
+from dsctl.upstream.runtime_instances import (
+    RUNTIME_INSTANCE_DOMAIN,
+    LocatedTaskInstance,
+    RuntimeInstanceDomain,
+    TaskInstanceListing,
+    TaskInstanceSnapshot,
+)
+from dsctl.upstream.serialization import (
+    TaskLogData,
+    enum_value,
+    optional_text,
+)
 
 if TYPE_CHECKING:
-    from dsctl.upstream.protocol import TaskInstanceRecord, WorkflowInstanceRecord
+    from dsctl.upstream.definition_models import ProjectRef
 
 ResolvedMetadataValue: TypeAlias = int | str | None
 ResolvedMetadata: TypeAlias = dict[str, ResolvedMetadataValue]
 TaskInstanceListResolvedValue: TypeAlias = int | str | bool | None | ResolvedMetadata
 TaskInstanceListResolvedData: TypeAlias = dict[str, TaskInstanceListResolvedValue]
+RuntimeInstanceServiceRuntime = BoundDomainServiceRuntime[RuntimeInstanceDomain]
 
 
-LOG_CHUNK_SIZE = 1000
-MAX_LOG_CHUNKS = 200
 DEFAULT_TASK_INSTANCE_WATCH_INTERVAL_SECONDS = 5
 DEFAULT_TASK_INSTANCE_WATCH_TIMEOUT_SECONDS = 600
 TASK_INSTANCE_NOT_FOUND = 10008
@@ -86,16 +88,48 @@ USER_NO_OPERATION_PROJECT_PERM = 30002
 def _task_instance_get_command(
     *,
     task_instance_id: int,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
+    project_selector: str,
 ) -> str:
-    return (
-        "dsctl task-instance get "
-        f"{task_instance_id} --workflow-instance {workflow_instance_id}"
+    parts = [
+        "dsctl",
+        "task-instance",
+        "get",
+        str(task_instance_id),
+        "--project",
+        project_selector,
+    ]
+    if workflow_instance_id is not None:
+        parts.extend(("--workflow-instance", str(workflow_instance_id)))
+    return shlex.join(parts)
+
+
+def _workflow_instance_get_command(
+    workflow_instance_id: int,
+    *,
+    project_selector: str,
+) -> str:
+    return shlex.join(
+        (
+            "dsctl",
+            "workflow-instance",
+            "get",
+            str(workflow_instance_id),
+            "--project",
+            project_selector,
+        )
     )
 
 
-def _workflow_instance_get_command(workflow_instance_id: int) -> str:
-    return f"dsctl workflow-instance get {workflow_instance_id}"
+def _task_instance_list_command(
+    *,
+    workflow_instance_id: int | None,
+    project_selector: str,
+) -> str:
+    parts = ["dsctl", "task-instance", "list", "--project", project_selector]
+    if workflow_instance_id is not None:
+        parts.extend(("--workflow-instance", str(workflow_instance_id)))
+    return shlex.join(parts)
 
 
 def _unsupported_task_instance_workflow_filter(
@@ -115,9 +149,9 @@ def _unsupported_task_instance_workflow_filter(
             "in DolphinScheduler 3.4.1"
         )
         suggestion = (
-            "Run `dsctl workflow-instance list --project <project> --workflow "
-            f"{workflow}` to find workflow instance ids, then run `dsctl "
-            "task-instance list --workflow-instance <workflow_instance_id>`."
+            "Use `dsctl workflow-instance list` in the selected project to find "
+            f"an instance of workflow {workflow!r}, then pass its id to "
+            "`dsctl task-instance list --workflow-instance`."
         )
     return UserInputError(
         message,
@@ -151,7 +185,7 @@ class TaskInstanceActionData(TypedDict):
     """CLI task-instance action payload with a refreshed task snapshot."""
 
     requested: bool
-    taskInstance: TaskInstanceData
+    taskInstance: JsonObject
 
 
 class TaskInstanceSubWorkflowData(TypedDict):
@@ -160,7 +194,7 @@ class TaskInstanceSubWorkflowData(TypedDict):
     subWorkflowInstanceId: int
 
 
-TaskInstancePageData = PageData[TaskInstanceData]
+TaskInstancePageData = PageData[JsonObject]
 
 
 def list_task_instances_result(
@@ -216,8 +250,9 @@ def list_task_instances_result(
     normalized_end = optional_ds_datetime(end, label="end")
     validate_ds_datetime_range(normalized_start, normalized_end)
     normalized_execute_type = _normalized_task_execute_type(execute_type)
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RUNTIME_INSTANCE_DOMAIN,
         _list_task_instances_result,
         workflow_instance_id=normalized_workflow_instance,
         project=normalized_project,
@@ -241,32 +276,38 @@ def list_task_instances_result(
 def get_task_instance_result(
     task_instance: int,
     *,
-    workflow_instance: int,
+    workflow_instance: int | None = None,
+    project: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
-    """Get one task instance by id within one workflow instance."""
+    """Get one task instance by id within one selected project."""
     normalized_task_instance = require_positive_int(
         task_instance,
         label="task_instance",
     )
-    normalized_workflow_instance = require_positive_int(
-        workflow_instance,
-        label="workflow_instance",
+    normalized_workflow_instance = (
+        None
+        if workflow_instance is None
+        else require_positive_int(workflow_instance, label="workflow_instance")
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RUNTIME_INSTANCE_DOMAIN,
         _get_task_instance_result,
         task_instance_id=normalized_task_instance,
         workflow_instance_id=normalized_workflow_instance,
+        project=optional_text(project),
     )
 
 
 def watch_task_instance_result(
     task_instance: int,
     *,
-    workflow_instance: int,
+    workflow_instance: int | None = None,
+    project: str | None = None,
     interval_seconds: int = DEFAULT_TASK_INSTANCE_WATCH_INTERVAL_SECONDS,
     timeout_seconds: int = DEFAULT_TASK_INSTANCE_WATCH_TIMEOUT_SECONDS,
+    exit_status: bool = False,
     env_file: str | None = None,
 ) -> CommandResult:
     """Poll one task instance until it reaches a finished state."""
@@ -274,9 +315,10 @@ def watch_task_instance_result(
         task_instance,
         label="task_instance",
     )
-    normalized_workflow_instance = require_positive_int(
-        workflow_instance,
-        label="workflow_instance",
+    normalized_workflow_instance = (
+        None
+        if workflow_instance is None
+        else require_positive_int(workflow_instance, label="workflow_instance")
     )
     normalized_interval_seconds = require_positive_int(
         interval_seconds,
@@ -288,13 +330,16 @@ def watch_task_instance_result(
         label="timeout_seconds",
         input_hint="--timeout-seconds",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RUNTIME_INSTANCE_DOMAIN,
         _watch_task_instance_result,
         task_instance_id=normalized_task_instance,
         workflow_instance_id=normalized_workflow_instance,
+        project=optional_text(project),
         interval_seconds=normalized_interval_seconds,
         timeout_seconds=normalized_timeout_seconds,
+        exit_status=exit_status,
     )
 
 
@@ -302,6 +347,7 @@ def get_sub_workflow_instance_result(
     task_instance: int,
     *,
     workflow_instance: int,
+    project: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
     """Return the child workflow instance for one SUB_WORKFLOW task instance."""
@@ -313,35 +359,57 @@ def get_sub_workflow_instance_result(
         workflow_instance,
         label="workflow_instance",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RUNTIME_INSTANCE_DOMAIN,
         _get_sub_workflow_instance_result,
         task_instance_id=normalized_task_instance,
         workflow_instance_id=normalized_workflow_instance,
+        project=optional_text(project),
     )
 
 
 def get_task_instance_log_result(
     task_instance: int,
     *,
-    tail: int = 200,
+    tail: int | None = None,
+    start_line: int | None = None,
+    limit: int | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
-    """Fetch the tail of one task-instance log using chunked log reads."""
+    """Fetch a bounded tail of one task-instance log."""
     normalized_task_instance = require_positive_int(
         task_instance,
         label="task_instance",
     )
+    window_mode = start_line is not None or limit is not None
+    if window_mode and tail is not None:
+        message = "--tail cannot be combined with --start-line or --limit"
+        raise UserInputError(
+            message,
+            suggestion="Choose either --tail or a --start-line/--limit window.",
+        )
+    normalized_start = require_positive_int(
+        start_line if start_line is not None else 1,
+        label="start_line",
+        input_hint="--start-line",
+    )
+    normalized_limit = require_positive_int(
+        limit if limit is not None else 200, label="limit", input_hint="--limit"
+    )
     normalized_tail = require_positive_int(
-        tail,
+        tail if tail is not None else 200,
         label="tail",
         input_hint="--tail",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RUNTIME_INSTANCE_DOMAIN,
         _get_task_instance_log_result,
         task_instance_id=normalized_task_instance,
         tail=normalized_tail,
+        start_line=normalized_start if window_mode else None,
+        limit=normalized_limit,
     )
 
 
@@ -349,6 +417,7 @@ def force_success_task_instance_result(
     task_instance: int,
     *,
     workflow_instance: int,
+    project: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
     """Force one failed task instance into FORCED_SUCCESS."""
@@ -360,18 +429,21 @@ def force_success_task_instance_result(
         workflow_instance,
         label="workflow_instance",
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RUNTIME_INSTANCE_DOMAIN,
         _force_success_task_instance_result,
         task_instance_id=normalized_task_instance,
         workflow_instance_id=normalized_workflow_instance,
+        project=optional_text(project),
     )
 
 
 def savepoint_task_instance_result(
     task_instance: int,
     *,
-    workflow_instance: int,
+    workflow_instance: int | None = None,
+    project: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
     """Request one savepoint for a running task instance."""
@@ -379,22 +451,26 @@ def savepoint_task_instance_result(
         task_instance,
         label="task_instance",
     )
-    normalized_workflow_instance = require_positive_int(
-        workflow_instance,
-        label="workflow_instance",
+    normalized_workflow_instance = (
+        None
+        if workflow_instance is None
+        else require_positive_int(workflow_instance, label="workflow_instance")
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RUNTIME_INSTANCE_DOMAIN,
         _savepoint_task_instance_result,
         task_instance_id=normalized_task_instance,
         workflow_instance_id=normalized_workflow_instance,
+        project=optional_text(project),
     )
 
 
 def stop_task_instance_result(
     task_instance: int,
     *,
-    workflow_instance: int,
+    workflow_instance: int | None = None,
+    project: str | None = None,
     env_file: str | None = None,
 ) -> CommandResult:
     """Request stop for one task instance."""
@@ -402,20 +478,23 @@ def stop_task_instance_result(
         task_instance,
         label="task_instance",
     )
-    normalized_workflow_instance = require_positive_int(
-        workflow_instance,
-        label="workflow_instance",
+    normalized_workflow_instance = (
+        None
+        if workflow_instance is None
+        else require_positive_int(workflow_instance, label="workflow_instance")
     )
-    return run_with_service_runtime(
+    return run_with_bound_domain_service_runtime(
         env_file,
+        RUNTIME_INSTANCE_DOMAIN,
         _stop_task_instance_result,
         task_instance_id=normalized_task_instance,
         workflow_instance_id=normalized_workflow_instance,
+        project=optional_text(project),
     )
 
 
 def _list_task_instances_result(
-    runtime: ServiceRuntime,
+    runtime: RuntimeInstanceServiceRuntime,
     *,
     workflow_instance_id: int | None,
     project: str | None,
@@ -434,151 +513,123 @@ def _list_task_instances_result(
     end: str | None,
     execute_type: str | None,
 ) -> CommandResult:
-    resolved_project, selected_project, resolved_workflow = (
-        _resolve_task_instance_list_scope(
-            runtime,
+    time_filter = instance_time_filter_contract(
+        runtime.profile.ds_version, "task-instance.list"
+    )
+    time_filter.validate(start=start, end=end)
+    del workflow
+    selected_project = require_project_selection(project, runtime=runtime)
+
+    instances = runtime.domain.instances
+
+    def load(current_page_no: int, current_page_size: int) -> TaskInstanceListing:
+        return instances.list_task_instances(
+            project_selector=selected_project.value,
             workflow_instance_id=workflow_instance_id,
-            project=project,
-            workflow=workflow,
+            workflow_instance_name=workflow_instance_name,
+            page_no=current_page_no,
+            page_size=current_page_size,
+            search=search,
+            task_name=task,
+            task_code=task_code,
+            executor=executor,
+            state=state,
+            host=host,
+            start_time=start,
+            end_time=end,
+            task_execute_type=execute_type,
         )
-    )
-    workflow_definition_name = (
-        None if resolved_workflow is None else resolved_workflow.name
-    )
+
+    observation_started_at = observation_time()
+    try:
+        initial = load(page_no, page_size)
+    except ApiResultError as exc:
+        raise _task_instance_list_error(
+            exc,
+            project=selected_project.value,
+            workflow_instance_id=workflow_instance_id,
+        ) from exc
+
     data = require_json_object(
         requested_page_data(
             lambda current_page_no, current_page_size: (
-                runtime.upstream.task_instances.list(
-                    project_code=resolved_project.code,
-                    workflow_instance_id=workflow_instance_id,
-                    workflow_instance_name=workflow_instance_name,
-                    workflow_definition_name=workflow_definition_name,
-                    page_no=current_page_no,
-                    page_size=current_page_size,
-                    search=search,
-                    task_name=task,
-                    task_code=task_code,
-                    executor=executor,
-                    state=state,
-                    host=host,
-                    start_time=start,
-                    end_time=end,
-                    task_execute_type=execute_type,
-                )
+                initial.page
+                if current_page_no == page_no and current_page_size == page_size
+                else load(current_page_no, current_page_size).page
             ),
             page_no=page_no,
             page_size=page_size,
             all_pages=all_pages,
+            observation_started_at=observation_started_at,
             resource=TASK_INSTANCE_RESOURCE,
-            serialize_item=serialize_task_instance,
+            serialize_item=lambda item: item.to_data(),
             max_pages=MAX_AUTO_EXHAUST_PAGES,
+            translate_error=lambda exc: _task_instance_list_error(
+                exc,
+                project=selected_project.value,
+                workflow_instance_id=workflow_instance_id,
+            ),
         ),
         label="task-instance list data",
     )
     return CommandResult(
         data=data,
         resolved=require_json_object(
-            _task_instance_list_resolved(
-                resolved_project=resolved_project,
-                selected_project=selected_project,
-                resolved_workflow=resolved_workflow,
-                workflow_instance_id=workflow_instance_id,
-                workflow_instance_name=workflow_instance_name,
-                page_no=page_no,
-                page_size=page_size,
-                all_pages=all_pages,
-                search=search,
-                task=task,
-                task_code=task_code,
-                executor=executor,
-                state=state,
-                host=host,
-                start=start,
-                end=end,
-                execute_type=execute_type,
-            ),
+            {
+                "time_filter": time_filter.to_data(),
+                **_task_instance_list_resolved(
+                    resolved_project=initial.project,
+                    selected_project=selected_project,
+                    workflow_instance_id=workflow_instance_id,
+                    workflow_instance_name=workflow_instance_name,
+                    page_no=page_no,
+                    page_size=page_size,
+                    all_pages=all_pages,
+                    search=search,
+                    task=task,
+                    task_code=task_code,
+                    executor=executor,
+                    state=state,
+                    host=host,
+                    start=start,
+                    end=end,
+                    execute_type=execute_type,
+                ),
+            },
             label="task-instance list resolved",
         ),
     )
 
 
-def _resolve_task_instance_list_scope(
-    runtime: ServiceRuntime,
+def _task_instance_list_error(
+    error: ApiResultError,
     *,
-    workflow_instance_id: int | None,
     project: str | None,
-    workflow: str | None,
-) -> tuple[ResolvedProject, SelectedValue | None, ResolvedWorkflow | None]:
-    if workflow_instance_id is not None:
-        workflow_instance = get_workflow_instance(
-            runtime,
-            workflow_instance_id=workflow_instance_id,
-        )
-        project_code = require_workflow_instance_project_code(
-            workflow_instance.projectCode,
-        )
-        resolved_project = resolve_project(
-            str(project_code),
-            adapter=runtime.upstream.projects,
-        )
-        selected_project: SelectedValue | None = None
-        if project is not None:
-            explicit_project = resolve_project(
-                project,
-                adapter=runtime.upstream.projects,
-            )
-            if explicit_project.code != project_code:
-                message = (
-                    "Selected project does not match the workflow instance project"
-                )
-                raise UserInputError(
-                    message,
-                    details={
-                        "project": project,
-                        "project_code": explicit_project.code,
-                        "workflow_instance_id": workflow_instance_id,
-                        "workflow_instance_project_code": project_code,
-                    },
-                    suggestion=(
-                        "Use the project that owns the workflow instance, or omit "
-                        "--project when --workflow-instance is already provided."
-                    ),
-                )
-            resolved_project = explicit_project
-            selected_project = SelectedValue(value=project, source="flag")
-        resolved_workflow = (
-            None
-            if workflow is None
-            else resolve_workflow(
-                workflow,
-                adapter=runtime.upstream.workflows,
-                project_code=resolved_project.code,
-            )
-        )
-        return resolved_project, selected_project, resolved_workflow
-
-    selected_project = require_project_selection(project, runtime=runtime)
-    resolved_project = resolve_project(
-        selected_project.value,
-        adapter=runtime.upstream.projects,
+    workflow_instance_id: int | None,
+) -> ApiResultError | PermissionDeniedError:
+    if error.result_code not in {
+        USER_NO_OPERATION_PERM,
+        USER_NO_OPERATION_PROJECT_PERM,
+    }:
+        return error
+    return PermissionDeniedError(
+        "The current user does not have permission to list task instances.",
+        details={
+            "resource": TASK_INSTANCE_RESOURCE,
+            "project": project,
+            "workflow_instance_id": workflow_instance_id,
+        },
+        suggestion=(
+            "Ask a DolphinScheduler administrator to grant access to the selected "
+            "project, then retry."
+        ),
     )
-    resolved_workflow = (
-        None
-        if workflow is None
-        else resolve_workflow(
-            workflow,
-            adapter=runtime.upstream.workflows,
-            project_code=resolved_project.code,
-        )
-    )
-    return resolved_project, selected_project, resolved_workflow
 
 
 def _task_instance_list_resolved(
     *,
-    resolved_project: ResolvedProject,
-    selected_project: SelectedValue | None,
-    resolved_workflow: ResolvedWorkflow | None,
+    resolved_project: ProjectRef,
+    selected_project: SelectedValue,
     workflow_instance_id: int | None,
     workflow_instance_name: str | None,
     page_no: int,
@@ -595,8 +646,7 @@ def _task_instance_list_resolved(
     execute_type: str | None,
 ) -> TaskInstanceListResolvedData:
     project_data = _project_metadata(resolved_project)
-    if selected_project is not None:
-        project_data = dict(with_selection_source(project_data, selected_project))
+    project_data = dict(with_selection_source(project_data, selected_project))
     resolved: TaskInstanceListResolvedData = {
         "project": project_data,
         "page_no": page_no,
@@ -606,9 +656,6 @@ def _task_instance_list_resolved(
     optional_fields: dict[str, TaskInstanceListResolvedValue] = {
         "workflow_instance": workflow_instance_id,
         "workflow_instance_name": workflow_instance_name,
-        "workflow": (
-            None if resolved_workflow is None else _workflow_metadata(resolved_workflow)
-        ),
         "search": search,
         "task": task,
         "task_code": task_code,
@@ -625,97 +672,89 @@ def _task_instance_list_resolved(
     return resolved
 
 
-def _project_metadata(project: ResolvedProject) -> ResolvedMetadata:
+def _project_metadata(project: ProjectRef) -> ResolvedMetadata:
+    identity = "code" if isinstance(project.native, NativeCode) else "id"
     return {
-        "code": project.code,
+        identity: project.native.value,
         "name": project.name,
         "description": project.description,
     }
 
 
-def _workflow_metadata(workflow: ResolvedWorkflow) -> ResolvedMetadata:
-    return {
-        "code": workflow.code,
-        "name": workflow.name,
-        "version": workflow.version,
-    }
-
-
 def _get_task_instance_result(
-    runtime: ServiceRuntime,
+    runtime: RuntimeInstanceServiceRuntime,
     *,
     task_instance_id: int,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
+    project: str | None,
 ) -> CommandResult:
-    _, payload = _task_instance_context(
+    selected_project, located = _selected_task_instance_context(
         runtime,
+        project=project,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
     )
     return CommandResult(
         data=require_json_object(
-            serialize_task_instance(payload),
+            located.task.to_data(),
             label="task-instance data",
         ),
         resolved=require_json_object(
-            {
-                "workflowInstance": WorkflowInstanceSelectionData(
-                    id=workflow_instance_id
-                ),
-                "taskInstance": TaskInstanceSelectionData(id=task_instance_id),
-            },
+            _task_instance_resolved(
+                task_instance_id=task_instance_id,
+                workflow_instance_id=workflow_instance_id,
+                project=located.project,
+                selected_project=selected_project,
+            ),
             label="task-instance get resolved",
         ),
     )
 
 
 def _watch_task_instance_result(
-    runtime: ServiceRuntime,
+    runtime: RuntimeInstanceServiceRuntime,
     *,
     task_instance_id: int,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
+    project: str | None,
     interval_seconds: int,
     timeout_seconds: int,
+    exit_status: bool = False,
 ) -> CommandResult:
-    workflow_instance = get_workflow_instance(
-        runtime,
-        workflow_instance_id=workflow_instance_id,
-    )
-    project_code = require_workflow_instance_project_code(workflow_instance.projectCode)
+    selected_project = require_project_selection(project, runtime=runtime)
     started_at = time.monotonic()
     while True:
-        try:
-            payload = runtime.upstream.task_instances.get(
-                project_code=project_code,
-                task_instance_id=task_instance_id,
-            )
-        except ApiResultError as exc:
-            translated = _task_instance_read_error(
-                exc,
-                task_instance_id=task_instance_id,
-                workflow_instance_id=workflow_instance_id,
-            )
-            if translated is exc:
-                raise
-            raise translated from exc
-        if payload is None or payload.workflowInstanceId != workflow_instance_id:
-            raise _task_instance_not_found(
-                task_instance_id=task_instance_id,
-                workflow_instance_id=workflow_instance_id,
-            )
+        located = _task_instance_context(
+            runtime,
+            project_selector=selected_project.value,
+            task_instance_id=task_instance_id,
+            workflow_instance_id=workflow_instance_id,
+        )
+        payload = located.task
         state_name = enum_value(payload.state)
         if _task_instance_is_finished(state_name):
             return CommandResult(
                 data=require_json_object(
-                    serialize_task_instance(payload),
+                    payload.to_data(),
                     label="task-instance data",
                 ),
                 resolved=require_json_object(
                     _task_instance_resolved(
                         task_instance_id=task_instance_id,
                         workflow_instance_id=workflow_instance_id,
+                        project=located.project,
+                        selected_project=selected_project,
                     ),
                     label="task-instance watch resolved",
+                ),
+                failure=(
+                    ExecutionFailedError(
+                        f"Task instance {task_instance_id} finished in {state_name}.",
+                        details={"state": state_name, "id": task_instance_id},
+                        suggestion="Inspect the task log before retrying its workflow.",
+                    )
+                    if exit_status and state_name not in TASK_EXECUTION_SUCCESS_STATES
+                    else None
                 ),
             )
         if timeout_seconds > 0 and (time.monotonic() - started_at) >= timeout_seconds:
@@ -725,16 +764,19 @@ def _watch_task_instance_result(
             inspect_command = _task_instance_get_command(
                 task_instance_id=task_instance_id,
                 workflow_instance_id=workflow_instance_id,
+                project_selector=selected_project.value,
             )
+            timeout_details: JsonObject = {
+                "resource": TASK_INSTANCE_RESOURCE,
+                "id": task_instance_id,
+                "last_state": state_name,
+                "timeout_seconds": timeout_seconds,
+            }
+            if workflow_instance_id is not None:
+                timeout_details["workflow_instance_id"] = workflow_instance_id
             raise WaitTimeoutError(
                 message,
-                details={
-                    "resource": TASK_INSTANCE_RESOURCE,
-                    "id": task_instance_id,
-                    "workflow_instance_id": workflow_instance_id,
-                    "last_state": state_name,
-                    "timeout_seconds": timeout_seconds,
-                },
+                details=timeout_details,
                 suggestion=(
                     "Retry with a larger --timeout-seconds value or inspect the "
                     f"current state with `{inspect_command}`."
@@ -744,28 +786,29 @@ def _watch_task_instance_result(
 
 
 def _get_sub_workflow_instance_result(
-    runtime: ServiceRuntime,
+    runtime: RuntimeInstanceServiceRuntime,
     *,
     task_instance_id: int,
     workflow_instance_id: int,
+    project: str | None,
 ) -> CommandResult:
-    project_code, _ = _task_instance_context(
+    selected_project, located = _selected_task_instance_context(
         runtime,
+        project=project,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
     )
     try:
-        relation = runtime.upstream.workflow_instances.sub_workflow_instance_by_task(
-            project_code=project_code,
-            task_instance_id=task_instance_id,
+        sub_workflow_instance_id = runtime.domain.instances.sub_workflow_instance_id(
+            located
         )
     except ApiResultError as exc:
         raise _task_instance_sub_workflow_error(
             exc,
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
+            project_selector=selected_project.value,
         ) from exc
-    sub_workflow_instance_id = relation.subWorkflowInstanceId
     if not isinstance(sub_workflow_instance_id, int) or sub_workflow_instance_id <= 0:
         raise _task_sub_workflow_not_found(
             task_instance_id=task_instance_id,
@@ -780,6 +823,8 @@ def _get_sub_workflow_instance_result(
             _task_instance_resolved(
                 task_instance_id=task_instance_id,
                 workflow_instance_id=workflow_instance_id,
+                project=located.project,
+                selected_project=selected_project,
             ),
             label="task-instance sub-workflow resolved",
         ),
@@ -787,57 +832,47 @@ def _get_sub_workflow_instance_result(
 
 
 def _get_task_instance_log_result(
-    runtime: ServiceRuntime,
+    runtime: RuntimeInstanceServiceRuntime,
     *,
     task_instance_id: int,
     tail: int,
+    start_line: int | None = None,
+    limit: int = 200,
 ) -> CommandResult:
-    lines: deque[str] = deque(maxlen=tail)
-    skip_line_num = 0
-    for _ in range(MAX_LOG_CHUNKS):
-        try:
-            chunk = runtime.upstream.task_instances.log_chunk(
-                task_instance_id=task_instance_id,
-                skip_line_num=skip_line_num,
-                limit=LOG_CHUNK_SIZE,
+    try:
+        if start_line is None:
+            log_tail = runtime.domain.instances.tail_task_log(
+                task_instance_id=task_instance_id, max_lines=tail
             )
-        except ApiResultError as exc:
-            raise _task_instance_log_error(
-                exc,
-                task_instance_id=task_instance_id,
-            ) from exc
-        chunk_lines = (chunk.message or "").splitlines()
-        lines.extend(chunk_lines)
-        if chunk.lineNum < LOG_CHUNK_SIZE:
-            break
-        skip_line_num += chunk.lineNum
-    else:
-        message = "Refusing to fetch more task log chunks than the safety limit"
-        raise UserInputError(
-            message,
-            details={
-                "task_instance_id": task_instance_id,
-                "max_chunks": MAX_LOG_CHUNKS,
-            },
-            suggestion=(
-                "Inspect the task log in the DS UI or worker log storage if you "
-                "need more output than the CLI safety limit allows."
-            ),
-        )
+        else:
+            log_tail = runtime.domain.instances.window_task_log(
+                task_instance_id=task_instance_id, start_line=start_line, limit=limit
+            )
+    except ApiResultError as exc:
+        raise _task_instance_log_error(
+            exc,
+            task_instance_id=task_instance_id,
+        ) from exc
 
     data = require_json_object(
         TaskLogData(
-            text="\n".join(lines),
-            lineCount=len(lines),
+            text=log_tail.text,
+            lineCount=log_tail.line_count,
         ),
         label="task-instance log data",
     )
+    if log_tail.window is not None:
+        data["window"] = require_json_object(log_tail.window, label="task log window")
     return CommandResult(
         data=data,
         resolved=require_json_object(
             {
                 "taskInstance": TaskInstanceSelectionData(id=task_instance_id),
-                "tail": tail,
+                **(
+                    {"tail": tail}
+                    if start_line is None
+                    else {"start_line": start_line, "limit": limit}
+                ),
             },
             label="task-instance log resolved",
         ),
@@ -845,17 +880,28 @@ def _get_task_instance_log_result(
 
 
 def _force_success_task_instance_result(
-    runtime: ServiceRuntime,
+    runtime: RuntimeInstanceServiceRuntime,
     *,
     task_instance_id: int,
     workflow_instance_id: int,
+    project: str | None,
 ) -> CommandResult:
-    workflow_instance = get_workflow_instance(
+    selected_project, located = _selected_task_instance_context(
         runtime,
+        project=project,
+        task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
     )
-    workflow_state = enum_value(workflow_instance.state)
+    workflow = located.workflow_instance
+    if workflow is None:
+        message = "Force-success requires an owning workflow instance."
+        raise InvalidStateError(message)
+    workflow_state = enum_value(workflow.state)
     if not _workflow_instance_is_final(workflow_state):
+        workflow_get_command = _workflow_instance_get_command(
+            workflow_instance_id,
+            project_selector=selected_project.value,
+        )
         message = "Force-success requires the owning workflow instance to be finished."
         raise InvalidStateError(
             message,
@@ -866,26 +912,21 @@ def _force_success_task_instance_result(
                 "workflow_state": workflow_state,
             },
             suggestion=(
-                f"Run `{_workflow_instance_get_command(workflow_instance_id)}` to "
+                f"Run `{workflow_get_command}` to "
                 "inspect the owning workflow instance. Wait for it to reach a "
                 "final state, then retry `task-instance force-success`."
             ),
         )
-    project_code, task_instance = _task_instance_context(
-        runtime,
-        task_instance_id=task_instance_id,
-        workflow_instance_id=workflow_instance_id,
-        workflow_instance=workflow_instance,
-    )
     _require_task_instance_force_success_state(
-        task_instance,
+        located.task,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
+        project_selector=selected_project.value,
     )
     try:
-        runtime.upstream.task_instances.force_success(
-            project_code=project_code,
-            task_instance_id=task_instance_id,
+        runtime.domain.instances.task_action(
+            located,
+            action="force-success",
         )
     except ApiResultError as exc:
         raise _task_instance_action_error(
@@ -893,22 +934,25 @@ def _force_success_task_instance_result(
             action="force-success",
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
+            project_selector=selected_project.value,
         ) from exc
-    _, refreshed_payload = _task_instance_context(
+    refreshed = _task_instance_context(
         runtime,
+        project_selector=selected_project.value,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
-        workflow_instance=workflow_instance,
     )
     return CommandResult(
         data=require_json_object(
-            serialize_task_instance(refreshed_payload),
+            refreshed.task.to_data(),
             label="task-instance data",
         ),
         resolved=require_json_object(
             _task_instance_resolved(
                 task_instance_id=task_instance_id,
                 workflow_instance_id=workflow_instance_id,
+                project=refreshed.project,
+                selected_project=selected_project,
             ),
             label="task-instance force-success resolved",
         ),
@@ -916,26 +960,29 @@ def _force_success_task_instance_result(
 
 
 def _savepoint_task_instance_result(
-    runtime: ServiceRuntime,
+    runtime: RuntimeInstanceServiceRuntime,
     *,
     task_instance_id: int,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
+    project: str | None,
 ) -> CommandResult:
-    project_code, task_instance = _task_instance_context(
+    selected_project, located = _selected_task_instance_context(
         runtime,
+        project=project,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
     )
     _require_task_instance_active(
-        task_instance,
+        located.task,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
         action="savepoint",
+        project_selector=selected_project.value,
     )
     try:
-        runtime.upstream.task_instances.savepoint(
-            project_code=project_code,
-            task_instance_id=task_instance_id,
+        runtime.domain.instances.task_action(
+            located,
+            action="savepoint",
         )
     except ApiResultError as exc:
         raise _task_instance_action_error(
@@ -943,9 +990,11 @@ def _savepoint_task_instance_result(
             action="savepoint",
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
+            project_selector=selected_project.value,
         ) from exc
-    _, refreshed_payload = _task_instance_context(
+    refreshed = _task_instance_context(
         runtime,
+        project_selector=selected_project.value,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
     )
@@ -953,7 +1002,7 @@ def _savepoint_task_instance_result(
         data=require_json_object(
             TaskInstanceActionData(
                 requested=True,
-                taskInstance=serialize_task_instance(refreshed_payload),
+                taskInstance=refreshed.task.to_data(),
             ),
             label="task-instance savepoint data",
         ),
@@ -961,6 +1010,8 @@ def _savepoint_task_instance_result(
             _task_instance_resolved(
                 task_instance_id=task_instance_id,
                 workflow_instance_id=workflow_instance_id,
+                project=refreshed.project,
+                selected_project=selected_project,
             ),
             label="task-instance savepoint resolved",
         ),
@@ -968,26 +1019,29 @@ def _savepoint_task_instance_result(
 
 
 def _stop_task_instance_result(
-    runtime: ServiceRuntime,
+    runtime: RuntimeInstanceServiceRuntime,
     *,
     task_instance_id: int,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
+    project: str | None,
 ) -> CommandResult:
-    project_code, task_instance = _task_instance_context(
+    selected_project, located = _selected_task_instance_context(
         runtime,
+        project=project,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
     )
     _require_task_instance_active(
-        task_instance,
+        located.task,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
         action="stop",
+        project_selector=selected_project.value,
     )
     try:
-        runtime.upstream.task_instances.stop(
-            project_code=project_code,
-            task_instance_id=task_instance_id,
+        runtime.domain.instances.task_action(
+            located,
+            action="stop",
         )
     except ApiResultError as exc:
         raise _task_instance_action_error(
@@ -995,9 +1049,11 @@ def _stop_task_instance_result(
             action="stop",
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
+            project_selector=selected_project.value,
         ) from exc
-    _, refreshed_payload = _task_instance_context(
+    refreshed = _task_instance_context(
         runtime,
+        project_selector=selected_project.value,
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
     )
@@ -1005,7 +1061,7 @@ def _stop_task_instance_result(
         data=require_json_object(
             TaskInstanceActionData(
                 requested=True,
-                taskInstance=serialize_task_instance(refreshed_payload),
+                taskInstance=refreshed.task.to_data(),
             ),
             label="task-instance stop data",
         ),
@@ -1013,6 +1069,8 @@ def _stop_task_instance_result(
             _task_instance_resolved(
                 task_instance_id=task_instance_id,
                 workflow_instance_id=workflow_instance_id,
+                project=refreshed.project,
+                selected_project=selected_project,
             ),
             label="task-instance stop resolved",
         ),
@@ -1058,65 +1116,82 @@ def _normalized_task_execute_type(value: str | None) -> str | None:
 
 
 def _task_instance_context(
-    runtime: ServiceRuntime,
+    runtime: RuntimeInstanceServiceRuntime,
     *,
+    project_selector: str,
     task_instance_id: int,
-    workflow_instance_id: int,
-    workflow_instance: WorkflowInstanceRecord | None = None,
-) -> tuple[int, TaskInstanceRecord]:
-    owning_workflow_instance = (
-        workflow_instance
-        if workflow_instance is not None
-        else get_workflow_instance(
-            runtime,
-            workflow_instance_id=workflow_instance_id,
-        )
-    )
-    project_code = require_workflow_instance_project_code(
-        owning_workflow_instance.projectCode
-    )
+    workflow_instance_id: int | None,
+) -> LocatedTaskInstance:
     try:
-        payload = runtime.upstream.task_instances.get(
-            project_code=project_code,
+        return runtime.domain.instances.get_task_instance(
+            project_selector=project_selector,
             task_instance_id=task_instance_id,
+            workflow_instance_id=workflow_instance_id,
         )
     except ApiResultError as exc:
         translated = _task_instance_read_error(
             exc,
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
+            project_selector=project_selector,
         )
         if translated is exc:
             raise
         raise translated from exc
-    if payload is None or payload.workflowInstanceId != workflow_instance_id:
-        raise _task_instance_not_found(
-            task_instance_id=task_instance_id,
-            workflow_instance_id=workflow_instance_id,
-        )
-    return project_code, payload
+
+
+def _selected_task_instance_context(
+    runtime: RuntimeInstanceServiceRuntime,
+    *,
+    project: str | None,
+    task_instance_id: int,
+    workflow_instance_id: int | None,
+) -> tuple[SelectedValue, LocatedTaskInstance]:
+    """Resolve project selection before one direct project-scoped read."""
+    selected_project = require_project_selection(project, runtime=runtime)
+    return selected_project, _task_instance_context(
+        runtime,
+        project_selector=selected_project.value,
+        task_instance_id=task_instance_id,
+        workflow_instance_id=workflow_instance_id,
+    )
 
 
 def _task_instance_not_found(
     *,
     task_instance_id: int,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
+    project_selector: str,
 ) -> NotFoundError:
-    message = (
-        f"Task instance id {task_instance_id} was not found in workflow instance"
-        f" {workflow_instance_id}"
+    list_command = _task_instance_list_command(
+        workflow_instance_id=workflow_instance_id,
+        project_selector=project_selector,
     )
+    details: JsonObject = {
+        "resource": TASK_INSTANCE_RESOURCE,
+        "id": task_instance_id,
+    }
+    if workflow_instance_id is None:
+        message = (
+            f"Task instance id {task_instance_id} was not found in project "
+            f"{project_selector!r}"
+        )
+        suggestion = (
+            f"Run `{list_command}` to inspect BATCH task instances. On versions "
+            f"with standalone STREAM tasks, also run `{list_command} "
+            "--execute-type STREAM`."
+        )
+    else:
+        message = (
+            f"Task instance id {task_instance_id} was not found in workflow instance"
+            f" {workflow_instance_id}"
+        )
+        details["workflow_instance_id"] = workflow_instance_id
+        suggestion = f"Run `{list_command}` to inspect available task instance ids."
     return NotFoundError(
         message,
-        details={
-            "resource": TASK_INSTANCE_RESOURCE,
-            "id": task_instance_id,
-            "workflow_instance_id": workflow_instance_id,
-        },
-        suggestion=(
-            "Run `dsctl task-instance list --workflow-instance "
-            f"{workflow_instance_id}` to inspect available task instance ids."
-        ),
+        details=details,
+        suggestion=suggestion,
     )
 
 
@@ -1124,28 +1199,32 @@ def _task_instance_read_error(
     error: ApiResultError,
     *,
     task_instance_id: int,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
+    project_selector: str,
 ) -> ApiResultError | NotFoundError | PermissionDeniedError:
     """Translate only unambiguous task-instance read failures."""
     if error.result_code == TASK_INSTANCE_NOT_FOUND:
         return _task_instance_not_found(
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
+            project_selector=project_selector,
         )
     if error.result_code in {
         USER_NO_OPERATION_PERM,
         USER_NO_OPERATION_PROJECT_PERM,
     }:
+        details: JsonObject = {
+            "resource": TASK_INSTANCE_RESOURCE,
+            "id": task_instance_id,
+        }
+        if workflow_instance_id is not None:
+            details["workflow_instance_id"] = workflow_instance_id
         return PermissionDeniedError(
             "The current user does not have permission to access this task instance.",
-            details={
-                "resource": TASK_INSTANCE_RESOURCE,
-                "id": task_instance_id,
-                "workflow_instance_id": workflow_instance_id,
-            },
+            details=details,
             suggestion=(
                 "Ask a DolphinScheduler administrator to grant access to the "
-                "workflow instance's project, then retry."
+                "selected project, then retry."
             ),
         )
     return error
@@ -1154,12 +1233,26 @@ def _task_instance_read_error(
 def _task_instance_resolved(
     *,
     task_instance_id: int,
-    workflow_instance_id: int,
-) -> dict[str, WorkflowInstanceSelectionData | TaskInstanceSelectionData]:
-    return {
-        "workflowInstance": WorkflowInstanceSelectionData(id=workflow_instance_id),
-        "taskInstance": TaskInstanceSelectionData(id=task_instance_id),
+    workflow_instance_id: int | None,
+    project: ProjectRef,
+    selected_project: SelectedValue,
+) -> JsonObject:
+    project_data: JsonObject = {
+        (
+            "code" if isinstance(project.native, NativeCode) else "id"
+        ): project.native.value,
+        "name": project.name,
+        "description": project.description,
+        "source": selected_project.source,
     }
+    task_instance: JsonObject = {"id": task_instance_id}
+    resolved: JsonObject = {
+        "taskInstance": task_instance,
+        "project": project_data,
+    }
+    if workflow_instance_id is not None:
+        resolved["workflowInstance"] = {"id": workflow_instance_id}
+    return resolved
 
 
 def _task_sub_workflow_not_found(
@@ -1191,10 +1284,11 @@ def _task_instance_is_finished(state_name: str | None) -> bool:
 
 
 def _require_task_instance_force_success_state(
-    task_instance: TaskInstanceRecord,
+    task_instance: TaskInstanceSnapshot,
     *,
     task_instance_id: int,
     workflow_instance_id: int,
+    project_selector: str,
 ) -> None:
     state_name = enum_value(task_instance.state)
     if state_name in TASK_EXECUTION_FORCE_SUCCESS_ALLOWED_STATES:
@@ -1202,6 +1296,7 @@ def _require_task_instance_force_success_state(
     command = _task_instance_get_command(
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
+        project_selector=project_selector,
     )
     message = (
         "Force-success requires the task instance to be in FAILURE, "
@@ -1224,11 +1319,12 @@ def _require_task_instance_force_success_state(
 
 
 def _require_task_instance_active(
-    task_instance: TaskInstanceRecord,
+    task_instance: TaskInstanceSnapshot,
     *,
     task_instance_id: int,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
     action: str,
+    project_selector: str,
 ) -> None:
     state_name = enum_value(task_instance.state)
     if state_name not in TASK_EXECUTION_FINISHED_STATES:
@@ -1236,16 +1332,19 @@ def _require_task_instance_active(
     command = _task_instance_get_command(
         task_instance_id=task_instance_id,
         workflow_instance_id=workflow_instance_id,
+        project_selector=project_selector,
     )
     message = f"Task-instance {action} requires the task instance to still be running."
+    details: JsonObject = {
+        "resource": TASK_INSTANCE_RESOURCE,
+        "id": task_instance_id,
+        "state": state_name,
+    }
+    if workflow_instance_id is not None:
+        details["workflow_instance_id"] = workflow_instance_id
     raise InvalidStateError(
         message,
-        details={
-            "resource": TASK_INSTANCE_RESOURCE,
-            "id": task_instance_id,
-            "workflow_instance_id": workflow_instance_id,
-            "state": state_name,
-        },
+        details=details,
         suggestion=(
             f"Run `{command}` "
             "to inspect the current task state. `task-instance "
@@ -1259,27 +1358,42 @@ def _task_instance_action_error(
     *,
     action: str,
     task_instance_id: int,
-    workflow_instance_id: int,
+    workflow_instance_id: int | None,
+    project_selector: str,
 ) -> ApiResultError | InvalidStateError | NotFoundError | PermissionDeniedError:
     details: dict[str, object] = {
         "resource": TASK_INSTANCE_RESOURCE,
         "id": task_instance_id,
-        "workflow_instance_id": workflow_instance_id,
         "action": action,
     }
+    if workflow_instance_id is not None:
+        details["workflow_instance_id"] = workflow_instance_id
     if error.result_code == TASK_INSTANCE_NOT_FOUND:
+        list_command = _task_instance_list_command(
+            workflow_instance_id=workflow_instance_id,
+            project_selector=project_selector,
+        )
         message = (
-            f"Task instance id {task_instance_id} was not found in workflow "
-            f"instance {workflow_instance_id}"
+            f"Task instance id {task_instance_id} was not found in project "
+            f"{project_selector!r}"
+            if workflow_instance_id is None
+            else (
+                f"Task instance id {task_instance_id} was not found in workflow "
+                f"instance {workflow_instance_id}"
+            )
+        )
+        suggestion = (
+            f"Run `{list_command}` to inspect BATCH task instances. On versions "
+            f"with standalone STREAM tasks, also run `{list_command} "
+            "--execute-type STREAM`."
+            if workflow_instance_id is None
+            else f"Run `{list_command}` to inspect available task instance ids."
         )
         return NotFoundError(
             message,
             details=details,
             source=error.source,
-            suggestion=(
-                "Run `dsctl task-instance list --workflow-instance "
-                f"{workflow_instance_id}` to inspect available task instance ids."
-            ),
+            suggestion=suggestion,
         )
     if error.result_code in {
         USER_NO_OPERATION_PERM,
@@ -1294,6 +1408,7 @@ def _task_instance_action_error(
         command = _task_instance_get_command(
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
+            project_selector=project_selector,
         )
         if action == "force-success":
             suggestion = (
@@ -1334,9 +1449,9 @@ def _task_instance_log_error(
             },
             source=error.source,
             suggestion=(
-                "Run `dsctl workflow-instance list` to find the owning workflow "
-                "instance id, then run `dsctl task-instance list "
-                "--workflow-instance ID`."
+                "Use `dsctl workflow-instance list` in the relevant project to "
+                "find the owning workflow instance, then inspect it with "
+                "`dsctl task-instance list --workflow-instance`."
             ),
         )
     if (
@@ -1352,9 +1467,9 @@ def _task_instance_log_error(
         },
         source=error.source,
         suggestion=(
-            "Run `dsctl workflow-instance list` to find the owning workflow "
-            "instance id, then inspect its tasks with `dsctl task-instance list "
-            "--workflow-instance ID`."
+            "Use `dsctl workflow-instance list` in the relevant project to find "
+            "the owning workflow instance, then inspect it with "
+            "`dsctl task-instance list --workflow-instance`."
         ),
     )
 
@@ -1364,16 +1479,19 @@ def _task_instance_sub_workflow_error(
     *,
     task_instance_id: int,
     workflow_instance_id: int,
+    project_selector: str,
 ) -> ApiResultError | InvalidStateError | NotFoundError:
     if error.result_code == TASK_INSTANCE_NOT_FOUND:
         return _task_instance_not_found(
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
+            project_selector=project_selector,
         )
     if error.result_code == TASK_INSTANCE_NOT_SUB_WORKFLOW_INSTANCE:
         command = _task_instance_get_command(
             task_instance_id=task_instance_id,
             workflow_instance_id=workflow_instance_id,
+            project_selector=project_selector,
         )
         return InvalidStateError(
             f"Task instance id {task_instance_id} is not a SUB_WORKFLOW task instance.",

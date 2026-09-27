@@ -5,8 +5,12 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from types import ModuleType
+
+    from tests.codegen.exact_contract_corpus import ExactContractCorpus
 
 
 def _ensure_tools_on_path() -> None:
@@ -50,10 +54,13 @@ def test_extract_status_entries_parses_multiline_enum_entries() -> None:
     ]
 
 
-def test_build_inventory_finds_known_upstream_anomalies() -> None:
+@pytest.mark.source_contract
+def test_build_inventory_finds_known_upstream_anomalies(
+    exact_contract_corpus: ExactContractCorpus,
+) -> None:
     inventory = _load_module()
 
-    report = inventory.build_inventory()
+    report = inventory.build_inventory(exact_contract_corpus.source_root("3.4.1"))
 
     assert len(report.status_entries) >= 400
     assert any(

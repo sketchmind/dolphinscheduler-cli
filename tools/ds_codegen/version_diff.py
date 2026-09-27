@@ -3,25 +3,30 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from ds_codegen.extract import build_contract_snapshot
-from ds_codegen.ir import (
-    ContractSnapshot,
-    DtoFieldSpec,
-    DtoSpec,
-    EnumFieldSpec,
-    EnumSpec,
-    EnumValueSpec,
-    ModelSpec,
-    OperationSpec,
-    ParameterSpec,
+from ds_codegen.contract_inputs import (
+    build_contract_snapshot_from_source,
+    load_contract_snapshot,
 )
-from ds_codegen.source import codegen_repo_root_for_ds_source
+from ds_codegen.contract_inputs import (
+    snapshot_from_json as _snapshot_from_json,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from ds_codegen.ir import (
+        ContractSnapshot,
+        DtoFieldSpec,
+        DtoSpec,
+        EnumFieldSpec,
+        EnumSpec,
+        EnumValueSpec,
+        ModelSpec,
+        OperationSpec,
+        ParameterSpec,
+    )
 
 JsonObject = dict[str, Any]
 
@@ -68,99 +73,17 @@ ENUM_FIELD_FIELDS = ("java_type",)
 
 def build_snapshot_from_ds_source(ds_source_root: Path) -> ContractSnapshot:
     """Build a contract snapshot from one checked-out DolphinScheduler tree."""
-    with codegen_repo_root_for_ds_source(ds_source_root) as repo_root:
-        return build_contract_snapshot(repo_root)
+    return build_contract_snapshot_from_source(ds_source_root)
 
 
 def load_snapshot(path: Path) -> ContractSnapshot:
     """Load a JSON contract snapshot emitted by ``generate_ds_contract.py``."""
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        message = f"Snapshot file must contain a JSON object: {path}"
-        raise TypeError(message)
-    return snapshot_from_json(payload)
+    return load_contract_snapshot(path)
 
 
 def snapshot_from_json(payload: JsonObject) -> ContractSnapshot:
     """Deserialize one JSON snapshot into the codegen IR dataclasses."""
-    operations = [
-        OperationSpec(
-            **{
-                **_require_mapping(item, label="operation"),
-                "parameters": [
-                    ParameterSpec(**_require_mapping(parameter, label="parameter"))
-                    for parameter in _require_list(
-                        _require_mapping(item, label="operation").get("parameters"),
-                        label="operation.parameters",
-                    )
-                ],
-            }
-        )
-        for item in _require_list(payload.get("operations"), label="operations")
-    ]
-    enums = [
-        EnumSpec(
-            **{
-                **_require_mapping(item, label="enum"),
-                "fields": [
-                    EnumFieldSpec(**_require_mapping(field, label="enum field"))
-                    for field in _require_list(
-                        _require_mapping(item, label="enum").get("fields"),
-                        label="enum.fields",
-                    )
-                ],
-                "values": [
-                    EnumValueSpec(**_require_mapping(value, label="enum value"))
-                    for value in _require_list(
-                        _require_mapping(item, label="enum").get("values"),
-                        label="enum.values",
-                    )
-                ],
-            }
-        )
-        for item in _require_list(payload.get("enums"), label="enums")
-    ]
-    dtos = [
-        DtoSpec(
-            **{
-                **_require_mapping(item, label="dto"),
-                "fields": [
-                    DtoFieldSpec(**_require_mapping(field, label="dto field"))
-                    for field in _require_list(
-                        _require_mapping(item, label="dto").get("fields"),
-                        label="dto.fields",
-                    )
-                ],
-            }
-        )
-        for item in _require_list(payload.get("dtos"), label="dtos")
-    ]
-    models = [
-        ModelSpec(
-            **{
-                **_require_mapping(item, label="model"),
-                "fields": [
-                    DtoFieldSpec(**_require_mapping(field, label="model field"))
-                    for field in _require_list(
-                        _require_mapping(item, label="model").get("fields"),
-                        label="model.fields",
-                    )
-                ],
-            }
-        )
-        for item in _require_list(payload.get("models"), label="models")
-    ]
-    return ContractSnapshot(
-        ds_version=str(payload["ds_version"]),
-        operation_count=int(payload["operation_count"]),
-        enum_count=int(payload["enum_count"]),
-        dto_count=int(payload["dto_count"]),
-        model_count=int(payload["model_count"]),
-        operations=operations,
-        enums=enums,
-        dtos=dtos,
-        models=models,
-    )
+    return _snapshot_from_json(payload)
 
 
 def compare_contract_snapshots(
@@ -213,13 +136,23 @@ def render_markdown_report(report: JsonObject, *, max_items: int = 50) -> str:
         "| Surface | Added | Removed | Changed |",
         "| --- | ---: | ---: | ---: |",
     ]
-    for name in ("operations", "dtos", "models", "enums"):
+    for name in (
+        "operations",
+        "dtos",
+        "models",
+        "enums",
+    ):
         item = _require_mapping(summary.get(name), label=f"summary.{name}")
         lines.append(
             f"| {name} | {item['added']} | {item['removed']} | {item['changed']} |"
         )
-    for name in ("operations", "dtos", "models", "enums"):
-        lines.extend(["", f"## {name.title()}", ""])
+    for name in (
+        "operations",
+        "dtos",
+        "models",
+        "enums",
+    ):
+        lines.extend(["", f"## {name.replace('_', ' ').title()}", ""])
         lines.extend(_render_collection(report[name], max_items=max_items))
     return "\n".join(lines).rstrip() + "\n"
 
@@ -246,7 +179,7 @@ def _compare_structured_types(
     return _compare_named_collection(
         base_items,
         target_items,
-        key_fn=lambda item: item.name,
+        key_fn=lambda item: item.import_path,
         summary_fn=_structured_type_summary,
         change_fn=lambda base, target: _structured_type_change(
             base,
@@ -263,7 +196,7 @@ def _compare_enums(
     return _compare_named_collection(
         base_items,
         target_items,
-        key_fn=lambda item: item.name,
+        key_fn=lambda item: item.import_path,
         summary_fn=_enum_summary,
         change_fn=_enum_change,
     )
@@ -352,6 +285,14 @@ def _enum_change(base: EnumSpec, target: EnumSpec) -> JsonObject:
         },
     )
     change: JsonObject = {"changes": _attribute_changes(base, target, ENUM_FIELDS)}
+    # Constructor position binds each constant argument to its field, including
+    # the field that supplies the serialized @JsonValue.
+    base_order = [field.name for field in base.fields]
+    target_order = [field.name for field in target.fields]
+    if base_order != target_order:
+        change["changes"].append(
+            {"field": "field_order", "before": base_order, "after": target_order}
+        )
     if _has_change(value_diff):
         change["values"] = value_diff
     if _has_change(field_diff):
@@ -408,7 +349,7 @@ def _parameter_summary(item: ParameterSpec) -> JsonObject:
 
 def _structured_type_summary(item: DtoSpec | ModelSpec) -> JsonObject:
     details: JsonObject = {
-        "key": item.name,
+        "key": item.import_path,
         "import_path": item.import_path,
         "field_count": len(item.fields),
     }
@@ -432,7 +373,7 @@ def _structured_field_summary(item: DtoFieldSpec) -> JsonObject:
 
 def _enum_summary(item: EnumSpec) -> JsonObject:
     return {
-        "key": item.name,
+        "key": item.import_path,
         "import_path": item.import_path,
         "value_count": len(item.values),
     }
@@ -556,4 +497,9 @@ def report_to_json_text(report: JsonObject) -> str:
 
 def snapshot_to_json_text(snapshot: ContractSnapshot) -> str:
     """Serialize a snapshot using the same shape as the generator output."""
-    return json.dumps(asdict(snapshot), indent=2, ensure_ascii=True, sort_keys=True)
+    return json.dumps(
+        snapshot.to_json_dict(),
+        indent=2,
+        ensure_ascii=True,
+        sort_keys=True,
+    )

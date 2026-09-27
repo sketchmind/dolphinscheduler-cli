@@ -6,11 +6,12 @@ from typing import TYPE_CHECKING, TypedDict
 
 from dsctl.errors import UserInputError
 from dsctl.upstream import (
-    DATASOURCE_CONTRACT_VERSION,
     datasource_base_payload_fields,
+    datasource_payload_field_names,
     datasource_type_names,
     normalize_datasource_type,
 )
+from dsctl.versioning import DEFAULT_DS_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -23,23 +24,24 @@ DEFAULT_DATASOURCE_TEMPLATE_TYPE = "MYSQL"
 DATASOURCE_TEMPLATE_DISCOVERY_COMMAND = "dsctl template datasource"
 DATASOURCE_TEMPLATE_COMMAND = "dsctl template datasource --type MYSQL"
 DATASOURCE_TEMPLATE_COMMAND_PATTERN = "dsctl template datasource --type TYPE"
-DATASOURCE_TEMPLATE_TARGET_COMMANDS = (
+DATASOURCE_TEMPLATE_TARGET_COMMAND_PATTERNS = (
     "dsctl datasource create --file FILE",
     "dsctl datasource update DATASOURCE --file FILE",
 )
 DATASOURCE_TYPE_DISCOVERY_COMMAND = f"dsctl enum list {DATASOURCE_TYPE_ENUM}"
 DATASOURCE_PAYLOAD_REVIEW_SUGGESTION = (
-    "Review the DS-native JSON payload, or run `dsctl template datasource` "
-    "to choose a type and `dsctl template datasource --type TYPE` to generate "
-    "a skeleton."
+    "Review the DS-native JSON payload, or run `dsctl template datasource "
+    "--ds-version VERSION` to choose a type and add `--type TYPE` to generate "
+    "a skeleton for the target cluster version."
 )
 
 
 class DataSourcePayloadTemplateData(TypedDict):
     """One concrete datasource payload template."""
 
+    ds_version: str
     type: str
-    target_commands: list[str]
+    target_command_patterns: list[str]
     source_option: str
     payload: JsonObject
     json: str
@@ -50,10 +52,11 @@ class DataSourcePayloadTemplateData(TypedDict):
 class DataSourcePayloadTemplateIndexData(TypedDict):
     """Compact datasource payload-template discovery."""
 
+    ds_version: str
     default_type: str
     template_command: str
     template_command_pattern: str
-    target_commands: list[str]
+    target_command_patterns: list[str]
     type_enum: str
     type_discovery_command: str
     supported_types: list[str]
@@ -79,22 +82,32 @@ class _DataSourceTypeExtraField:
         return data
 
 
-def supported_datasource_template_types() -> tuple[str, ...]:
+def supported_datasource_template_types(
+    version: str = DEFAULT_DS_VERSION,
+) -> tuple[str, ...]:
     """Return datasource types supported by local payload templates."""
-    return datasource_type_names(DATASOURCE_CONTRACT_VERSION)
+    return datasource_type_names(version)
 
 
-def normalize_datasource_payload_type(datasource_type: str) -> str | None:
+def normalize_datasource_payload_type(
+    datasource_type: str,
+    *,
+    version: str = DEFAULT_DS_VERSION,
+) -> str | None:
     """Normalize one user-provided datasource type against generated DbType."""
-    return normalize_datasource_type(DATASOURCE_CONTRACT_VERSION, datasource_type)
+    return normalize_datasource_type(version, datasource_type)
 
 
-def require_datasource_payload_type(datasource_type: str) -> str:
+def require_datasource_payload_type(
+    datasource_type: str,
+    *,
+    version: str = DEFAULT_DS_VERSION,
+) -> str:
     """Normalize one datasource type or raise a stable user-input error."""
-    normalized = normalize_datasource_payload_type(datasource_type)
+    normalized = normalize_datasource_payload_type(datasource_type, version=version)
     if normalized is not None:
         return normalized
-    supported = list(supported_datasource_template_types())
+    supported = list(supported_datasource_template_types(version))
     message = f"Unsupported datasource type {datasource_type!r}"
     raise UserInputError(
         message,
@@ -103,8 +116,8 @@ def require_datasource_payload_type(datasource_type: str) -> str:
             "supported_types": supported,
         },
         suggestion=(
-            "Run `dsctl template datasource` to choose a supported datasource "
-            "type, then `dsctl template datasource --type TYPE`."
+            f"Run `dsctl template datasource --ds-version {version}` to choose "
+            "a supported datasource type, then add `--type TYPE`."
         ),
     )
 
@@ -113,45 +126,62 @@ def datasource_payload_command_data() -> JsonObject:
     """Return compact datasource payload metadata for command schema."""
     return {
         "format": "json",
+        "runtime_contract_selection": "configured_cluster_ds_version",
+        "template_default_ds_version": DEFAULT_DS_VERSION,
         "source_option": "--file",
-        "target_commands": list(DATASOURCE_TEMPLATE_TARGET_COMMANDS),
+        "target_command_patterns": list(DATASOURCE_TEMPLATE_TARGET_COMMAND_PATTERNS),
         "ds_model": "BaseDataSourceParamDTO",
-        "upstream_request_shape": "DataSourceController request body String jsonStr",
+        "upstream_request_shape": (
+            "Exact-version DataSourceController form or request-body contract"
+        ),
         "template_command": DATASOURCE_TEMPLATE_COMMAND,
         "template_command_pattern": DATASOURCE_TEMPLATE_COMMAND_PATTERN,
         "template_discovery_command": DATASOURCE_TEMPLATE_DISCOVERY_COMMAND,
         "template_json_path": "data.json",
         "template_payload_path": "data.payload",
         "type_enum": DATASOURCE_TYPE_ENUM,
-        "type_discovery_command": DATASOURCE_TYPE_DISCOVERY_COMMAND,
+        "type_discovery_command": DATASOURCE_TEMPLATE_DISCOVERY_COMMAND,
         "rules": datasource_payload_rules(),
     }
 
 
-def datasource_template_index_data() -> DataSourcePayloadTemplateIndexData:
+def datasource_template_index_data(
+    *,
+    version: str = DEFAULT_DS_VERSION,
+) -> DataSourcePayloadTemplateIndexData:
     """Return compact datasource template discovery metadata."""
+    template_command = _template_command(DEFAULT_DATASOURCE_TEMPLATE_TYPE, version)
     return DataSourcePayloadTemplateIndexData(
+        ds_version=version,
         default_type=DEFAULT_DATASOURCE_TEMPLATE_TYPE,
-        template_command=DATASOURCE_TEMPLATE_COMMAND,
-        template_command_pattern=DATASOURCE_TEMPLATE_COMMAND_PATTERN,
-        target_commands=list(DATASOURCE_TEMPLATE_TARGET_COMMANDS),
+        template_command=template_command,
+        template_command_pattern=_template_command("TYPE", version),
+        target_command_patterns=list(DATASOURCE_TEMPLATE_TARGET_COMMAND_PATTERNS),
         type_enum=DATASOURCE_TYPE_ENUM,
-        type_discovery_command=DATASOURCE_TYPE_DISCOVERY_COMMAND,
-        supported_types=list(supported_datasource_template_types()),
+        type_discovery_command=_template_discovery_command(version),
+        supported_types=list(supported_datasource_template_types(version)),
     )
 
 
-def datasource_template_data(datasource_type: str) -> DataSourcePayloadTemplateData:
+def datasource_template_data(
+    datasource_type: str,
+    *,
+    version: str = DEFAULT_DS_VERSION,
+) -> DataSourcePayloadTemplateData:
     """Return one DS-native datasource JSON payload template."""
-    normalized_type = require_datasource_payload_type(datasource_type)
-    payload = _datasource_payload_template(normalized_type)
+    normalized_type = require_datasource_payload_type(
+        datasource_type,
+        version=version,
+    )
+    payload = _datasource_payload_template(normalized_type, version=version)
     return DataSourcePayloadTemplateData(
+        ds_version=version,
         type=normalized_type,
-        target_commands=list(DATASOURCE_TEMPLATE_TARGET_COMMANDS),
+        target_command_patterns=list(DATASOURCE_TEMPLATE_TARGET_COMMAND_PATTERNS),
         source_option="--file",
         payload=payload,
         json=json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-        fields=_payload_fields_for_type(normalized_type),
+        fields=_payload_fields_for_type(normalized_type, version=version),
         rules=datasource_payload_rules(),
     )
 
@@ -161,36 +191,46 @@ def datasource_payload_rules() -> list[str]:
     return [
         "Create payloads must not include id; DS assigns it.",
         "Update payloads may omit id or set it to the selected datasource id.",
-        "Create payloads must include the real password when the type uses one.",
+        "Create payloads must include real values for every secret the type uses.",
         (
-            "Update payloads may use the masked password ****** to preserve "
-            "the stored password."
+            "Update payloads may omit secrets or use ****** to preserve stored "
+            "values when upstream exposes a safe preservation path."
         ),
+        "Fields and datasource types are validated against the exact DS version.",
         "Use DS-native field names exactly, including userName and type.",
         "Use `dsctl datasource test DATASOURCE` after create or update.",
     ]
 
 
-def _base_payload_fields_data() -> list[JsonObject]:
-    return [
-        field.to_data()
-        for field in datasource_base_payload_fields(DATASOURCE_CONTRACT_VERSION)
-    ]
+def _base_payload_fields_data(version: str) -> list[JsonObject]:
+    return [field.to_data() for field in datasource_base_payload_fields(version)]
 
 
-def _payload_fields_for_type(datasource_type: str) -> list[JsonObject]:
-    fields = _base_payload_fields_data()
+def _payload_fields_for_type(
+    datasource_type: str,
+    *,
+    version: str,
+) -> list[JsonObject]:
+    fields = _base_payload_fields_data(version)
     for field in fields:
         if field.get("name") == "type":
             field.pop("choices", None)
+    base_names = {str(field["name"]) for field in fields}
+    accepted_names = set(datasource_payload_field_names(version, datasource_type))
     fields.extend(
-        field.to_data() for field in _EXTRA_FIELDS_BY_TYPE.get(datasource_type, ())
+        field.to_data()
+        for field in _EXTRA_FIELDS_BY_TYPE.get(datasource_type, ())
+        if field.name in accepted_names and field.name not in base_names
     )
     return fields
 
 
-def _datasource_payload_template(datasource_type: str) -> JsonObject:
-    profile = _TEMPLATE_PROFILES.get(datasource_type)
+def _datasource_payload_template(
+    datasource_type: str,
+    *,
+    version: str,
+) -> JsonObject:
+    profile = _template_profile(datasource_type, version=version)
     if profile is not None:
         return dict(profile)
 
@@ -205,7 +245,7 @@ def _datasource_payload_template(datasource_type: str) -> JsonObject:
         "password": "change-me",
         "other": _default_other_params(datasource_type),
     }
-    payload.update(_extra_payload_defaults(datasource_type))
+    payload.update(_extra_payload_defaults(datasource_type, version=version))
     return payload
 
 
@@ -215,10 +255,12 @@ def _default_other_params(datasource_type: str) -> dict[str, str]:
     return {}
 
 
-def _extra_payload_defaults(datasource_type: str) -> JsonObject:
+def _extra_payload_defaults(datasource_type: str, *, version: str) -> JsonObject:
+    accepted_names = set(datasource_payload_field_names(version, datasource_type))
     return {
         field.name: field.example
         for field in _EXTRA_FIELDS_BY_TYPE.get(datasource_type, ())
+        if field.name in accepted_names
     }
 
 
@@ -235,11 +277,19 @@ def _profile_payload(
     return base
 
 
+def _template_command(datasource_type: str, version: str) -> str:
+    return f"{_template_discovery_command(version)} --type {datasource_type}"
+
+
+def _template_discovery_command(version: str) -> str:
+    return f"dsctl template datasource --ds-version {version}"
+
+
 _DEFAULT_PORT_BY_TYPE: dict[str, int] = {
     "MYSQL": 3306,
     "POSTGRESQL": 5432,
     "HIVE": 10000,
-    "SPARK": 10000,
+    "SPARK": 10015,
     "CLICKHOUSE": 8123,
     "ORACLE": 1521,
     "SQLSERVER": 1433,
@@ -253,9 +303,9 @@ _DEFAULT_PORT_BY_TYPE: dict[str, int] = {
     "DAMENG": 5236,
     "OCEANBASE": 2881,
     "SSH": 22,
-    "KYUUBI": 10009,
+    "KYUUBI": 10000,
     "DATABEND": 8000,
-    "SNOWFLAKE": 443,
+    "SNOWFLAKE": 3306,
     "VERTICA": 5433,
     "HANA": 30015,
     "DORIS": 9030,
@@ -407,6 +457,12 @@ _EXTRA_FIELDS_BY_TYPE: dict[str, tuple[_DataSourceTypeExtraField, ...]] = {
     "SPARK": _HDFS_EXTRA_FIELDS,
     "SSH": (
         _DataSourceTypeExtraField(
+            "publicKey",
+            "string",
+            "Legacy SSH private-key content carried in DS field publicKey.",
+            "",
+        ),
+        _DataSourceTypeExtraField(
             "privateKey",
             "string",
             "Optional SSH private key content.",
@@ -422,51 +478,43 @@ _EXTRA_FIELDS_BY_TYPE: dict[str, tuple[_DataSourceTypeExtraField, ...]] = {
         ),
     ),
 }
-_TEMPLATE_PROFILES: dict[str, JsonObject] = {
-    "ALIYUN_SERVERLESS_SPARK": _profile_payload(
-        "ALIYUN_SERVERLESS_SPARK",
-        _extra_payload_defaults("ALIYUN_SERVERLESS_SPARK"),
-    ),
-    "ATHENA": _profile_payload(
-        "ATHENA",
-        {
-            "database": "default",
-            "userName": "access-key-id",
-            "password": "secret-access-key",
-            **_extra_payload_defaults("ATHENA"),
-        },
-    ),
-    "K8S": _profile_payload(
-        "K8S",
-        _extra_payload_defaults("K8S"),
-    ),
-    "SAGEMAKER": _profile_payload(
-        "SAGEMAKER",
-        {
-            "userName": "access-key-id",
-            "password": "secret-access-key",
-            **_extra_payload_defaults("SAGEMAKER"),
-        },
-    ),
-    "SSH": _profile_payload(
-        "SSH",
-        {
-            "host": "ssh.example.com",
-            "port": _DEFAULT_PORT_BY_TYPE["SSH"],
-            "userName": "user",
-            "password": "change-me",
-            **_extra_payload_defaults("SSH"),
-        },
-    ),
-    "ZEPPELIN": _profile_payload(
-        "ZEPPELIN",
-        {
-            "userName": "user",
-            "password": "change-me",
-            **_extra_payload_defaults("ZEPPELIN"),
-        },
-    ),
-}
+
+
+def _template_profile(datasource_type: str, *, version: str) -> JsonObject | None:
+    extras = _extra_payload_defaults(datasource_type, version=version)
+    if datasource_type in {"ALIYUN_SERVERLESS_SPARK", "K8S"}:
+        return _profile_payload(datasource_type, extras)
+    if datasource_type in {"ATHENA", "SAGEMAKER"}:
+        return _profile_payload(
+            datasource_type,
+            {
+                "database": "default",
+                "userName": "access-key-id",
+                "password": "secret-access-key",
+                **extras,
+            },
+        )
+    if datasource_type == "SSH":
+        return _profile_payload(
+            datasource_type,
+            {
+                "host": "ssh.example.com",
+                "port": _DEFAULT_PORT_BY_TYPE["SSH"],
+                "userName": "user",
+                "password": "change-me",
+                **extras,
+            },
+        )
+    if datasource_type == "ZEPPELIN":
+        return _profile_payload(
+            datasource_type,
+            {
+                "userName": "user",
+                "password": "change-me",
+                **extras,
+            },
+        )
+    return None
 
 
 __all__ = [
@@ -474,7 +522,7 @@ __all__ = [
     "DATASOURCE_TEMPLATE_COMMAND",
     "DATASOURCE_TEMPLATE_COMMAND_PATTERN",
     "DATASOURCE_TEMPLATE_DISCOVERY_COMMAND",
-    "DATASOURCE_TEMPLATE_TARGET_COMMANDS",
+    "DATASOURCE_TEMPLATE_TARGET_COMMAND_PATTERNS",
     "DATASOURCE_TYPE_DISCOVERY_COMMAND",
     "DATASOURCE_TYPE_ENUM",
     "DEFAULT_DATASOURCE_TEMPLATE_TYPE",

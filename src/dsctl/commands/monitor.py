@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.monitor import (
     get_database_result,
     get_health_result,
@@ -21,8 +20,8 @@ def register_monitor_commands(app: typer.Typer) -> None:
 
 
 @monitor_app.command("health")
+@bind_command("monitor.health")
 def health_command(ctx: typer.Context) -> None:
-    """Get the API server actuator health payload."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -32,17 +31,11 @@ def health_command(ctx: typer.Context) -> None:
 
 
 @monitor_app.command("server")
+@bind_command("monitor.server")
 def server_command(
     ctx: typer.Context,
-    node_type: Annotated[
-        str,
-        typer.Argument(
-            help="Server node type: master, worker, or alert-server.",
-            metavar="TYPE",
-        ),
-    ],
+    node_type: str,
 ) -> None:
-    """List registry-backed servers for one node type."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -52,8 +45,8 @@ def server_command(
 
 
 @monitor_app.command("database")
+@bind_command("monitor.database")
 def database_command(ctx: typer.Context) -> None:
-    """List database health metrics reported by the monitor API."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

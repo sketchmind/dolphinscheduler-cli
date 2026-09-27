@@ -105,8 +105,10 @@ Desktop.ini
 # Local assistant, agent, and workspace settings.
 /.claude/
 /.codex/
+/.agents/
 /AGENTS.md
 /CLAUDE.md
+/localdevdocs/
 
 # Local upstream source checkouts and generated scratch output.
 /references/

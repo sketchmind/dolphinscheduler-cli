@@ -1,44 +1,33 @@
-from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
+from tests.bound_domain_fakes import patch_bound_domain_service_runtime
 from tests.fakes import (
-    FakeProjectAdapter,
     FakeResourceAdapter,
     FakeResourceItem,
-    fake_service_runtime,
 )
 from tests.support import make_profile
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
 from dsctl.errors import NotFoundError, UserInputError
 from dsctl.services import resource as resource_service
-from dsctl.services import runtime as runtime_service
+from dsctl.upstream.resources import RESOURCE_DOMAIN, ResourceDomain
 
 
 def _install_resource_service_fakes(
     monkeypatch: pytest.MonkeyPatch,
     adapter: FakeResourceAdapter,
 ) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            FakeProjectAdapter(projects=[]),
-            resource_adapter=adapter,
-            profile=make_profile(),
-        ),
+    domain = ResourceDomain(resources=adapter)
+
+    patch_bound_domain_service_runtime(
+        monkeypatch,
+        resource_service,
+        expected_domain=RESOURCE_DOMAIN,
+        runtime_domain=domain,
+        profile_factory=make_profile,
     )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 def _resource_adapter() -> FakeResourceAdapter:

@@ -3,15 +3,19 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import json
-import re
 import sys
 from collections import Counter
 from pathlib import Path
-from types import ModuleType
-from typing import Any, NoReturn, cast
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    from tests.codegen.exact_contract_corpus import ExactContractCorpus
 
 
 class _FakeSession:
@@ -74,14 +78,165 @@ def _load_codegen_module() -> ModuleType:
     return module
 
 
-def _load_python_module(module_name: str, module_path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+def test_contract_generator_entrypoint_is_not_tied_to_one_ds_release() -> None:
+    module = _load_codegen_module()
+
+    parser = module._build_parser()
+    args = parser.parse_args([])
+
+    assert "3.4.1" not in parser.description
+    assert args.output == Path("build/ds_contract/ds_raw_contract.json")
+
+
+def test_contract_generator_accepts_one_exact_source_runtime_slice() -> None:
+    module = _load_codegen_module()
+
+    args = module._build_parser().parse_args(
+        [
+            "--ds-source",
+            "3.2.2=build/upstream/ds-3.2.2",
+            "--runtime-slice",
+        ]
+    )
+
+    assert args.ds_source == "3.2.2=build/upstream/ds-3.2.2"
+    assert args.runtime_slice is True
+
+
+def test_rendered_multiline_docstrings_have_blank_lines_without_whitespace() -> None:
+    _load_codegen_module()
+    render_support = importlib.import_module("ds_codegen.render.package.render_support")
+
+    lines = render_support.render_docstring_lines(
+        "Summary\n\nDetails",
+        indent="    ",
+    )
+
+    assert lines == ['    """', "    Summary", "", "    Details", '    """']
+
+
+@pytest.mark.parametrize(
+    ("java_package", "python_package"),
+    [
+        pytest.param(
+            "org.apache.dolphinscheduler.extract.master.dto",
+            ("extract", "master", "dto"),
+            id="workflow-executor-dto",
+        ),
+        pytest.param(
+            "org.apache.dolphinscheduler.task.executor.dto",
+            ("task", "executor", "dto"),
+            id="task-executor-dto",
+        ),
+        pytest.param(
+            "org.apache.dolphinscheduler.common.process",
+            ("common", "process"),
+            id="legacy-common-process",
+        ),
+        pytest.param(
+            "org.apache.dolphinscheduler.remote.dto",
+            ("remote", "dto"),
+            id="legacy-remote-dto",
+        ),
+        pytest.param(
+            "org.springframework.core.io",
+            ("external", "springframework", "core", "io"),
+            id="spring-resource",
+        ),
+        pytest.param(
+            "org.apache.dolphinscheduler.dao.vo",
+            ("dao", "views"),
+            id="legacy-dao-view",
+        ),
+    ],
+)
+def test_package_planner_maps_new_runtime_model_namespaces(
+    java_package: str,
+    python_package: tuple[str, ...],
+) -> None:
+    _load_codegen_module()
+    planner = importlib.import_module("ds_codegen.render.package.planner")
+
+    assert planner._map_package_parts(java_package.split(".")) == python_package
+
+
+def test_contract_generator_exposes_only_snapshot_and_package_outputs() -> None:
+    module = _load_codegen_module()
+    help_text = module._build_parser().format_help()
+
+    assert "--output" in help_text
+    assert "--package-output" in help_text
+    assert "--python-output" not in help_text
+    assert "--requests-example-output" not in help_text
+    assert "--requests-client-output" not in help_text
+    assert "--requests-package-output" not in help_text
+
+
+def test_contract_generator_keeps_modern_package_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_codegen_module()
+    snapshot = SimpleNamespace(
+        operation_count=1,
+        dto_count=2,
+        model_count=3,
+        enum_count=4,
+    )
+    snapshot_outputs: list[tuple[object, Path, object]] = []
+    package_outputs: list[tuple[object, Path]] = []
+    monkeypatch.setattr(module, "build_contract_snapshot", lambda _root: snapshot)
+    monkeypatch.setattr(
+        module,
+        "write_contract_snapshot",
+        lambda item, path, *, provenance: snapshot_outputs.append(
+            (item, path, provenance)
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "write_generated_package",
+        lambda item, path: package_outputs.append((item, path)),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate_ds_contract.py",
+            "--repo-root",
+            str(tmp_path),
+            "--package-output",
+            "generated-output",
+        ],
+    )
+
+    module.main()
+
+    assert snapshot_outputs == [
+        (
+            snapshot,
+            tmp_path / "build" / "ds_contract" / "ds_raw_contract.json",
+            None,
+        )
+    ]
+    assert package_outputs == [(snapshot, tmp_path / "generated-output")]
+
+
+def test_package_renderer_does_not_import_retired_renderers() -> None:
+    _load_codegen_module()
+    package_root = (
+        Path(__file__).resolve().parents[2]
+        / "tools"
+        / "ds_codegen"
+        / "render"
+        / "package"
+    )
+
+    rendered_source = "\n".join(
+        path.read_text() for path in sorted(package_root.glob("*.py"))
+    )
+    assert "ds_codegen.render.requests_client" not in rendered_source
+    assert "ds_codegen.render.requests_example" not in rendered_source
 
 
 def test_java_literal_helpers_preserve_numeric_semantics() -> None:
@@ -104,14 +259,16 @@ def test_java_literal_helpers_preserve_numeric_semantics() -> None:
     assert java_literals_module.infer_java_literal_type("0.0d") == "Double"
 
 
-def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -> None:
+@pytest.mark.source_rebuild
+def test_contract_codegen_extracts_executor_operation_and_enum(
+    tmp_path: Path,
+    exact_contract_corpus: ExactContractCorpus,
+) -> None:
     module = _load_codegen_module()
-    analysis_module = importlib.import_module("ds_codegen.analysis")
     extract_pipeline_module = importlib.import_module("ds_codegen.extract.pipeline")
 
-    repo_root = Path(__file__).resolve().parents[2]
-
-    snapshot = module.build_contract_snapshot(repo_root)
+    with exact_contract_corpus.codegen_repo_root("3.4.1") as source_repo_root:
+        snapshot = module.build_contract_snapshot(source_repo_root)
 
     assert snapshot.operation_count > 20
     assert max(Counter(op.operation_id for op in snapshot.operations).values()) == 1
@@ -179,21 +336,27 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         if operation.operation_id == "DataSourceController.getTables"
     )
     assert get_tables_operation.return_type == "Result<Object>"
-    assert get_tables_operation.inferred_return_type == "List<ParamsOptions>"
+    assert get_tables_operation.inferred_return_type == (
+        "List<org.apache.dolphinscheduler.spi.params.base.ParamsOptions>"
+    )
     get_table_columns_operation = next(
         operation
         for operation in snapshot.operations
         if operation.operation_id == "DataSourceController.getTableColumns"
     )
     assert get_table_columns_operation.return_type == "Result<Object>"
-    assert get_table_columns_operation.inferred_return_type == "List<ParamsOptions>"
+    assert get_table_columns_operation.inferred_return_type == (
+        "List<org.apache.dolphinscheduler.spi.params.base.ParamsOptions>"
+    )
     get_databases_operation = next(
         operation
         for operation in snapshot.operations
         if operation.operation_id == "DataSourceController.getDatabases"
     )
     assert get_databases_operation.return_type == "Result<Object>"
-    assert get_databases_operation.inferred_return_type == "List<ParamsOptions>"
+    assert get_databases_operation.inferred_return_type == (
+        "List<org.apache.dolphinscheduler.spi.params.base.ParamsOptions>"
+    )
 
     environment_query_by_code_operation = next(
         operation
@@ -201,7 +364,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         if operation.operation_id == "EnvironmentController.queryEnvironmentByCode"
     )
     assert environment_query_by_code_operation.return_type == "Result"
-    assert environment_query_by_code_operation.inferred_return_type == "EnvironmentDto"
+    assert environment_query_by_code_operation.inferred_return_type == (
+        "org.apache.dolphinscheduler.api.dto.EnvironmentDto"
+    )
 
     project_list_paging_operation = next(
         operation
@@ -209,8 +374,14 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         if operation.operation_id == "ProjectController.queryProjectListPaging"
     )
     assert project_list_paging_operation.return_type == "Result"
-    assert project_list_paging_operation.inferred_return_type == "PageInfo<Project>"
-    assert project_list_paging_operation.logical_return_type == "PageInfo<Project>"
+    assert project_list_paging_operation.inferred_return_type == (
+        "org.apache.dolphinscheduler.api.utils.PageInfo<"
+        "org.apache.dolphinscheduler.dao.entity.Project>"
+    )
+    assert project_list_paging_operation.logical_return_type == (
+        "org.apache.dolphinscheduler.api.utils.PageInfo<"
+        "org.apache.dolphinscheduler.dao.entity.Project>"
+    )
     assert project_list_paging_operation.response_projection == "direct"
 
     queue_list_paging_operation = next(
@@ -219,7 +390,10 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         if operation.operation_id == "QueueController.queryQueueListPaging"
     )
     assert queue_list_paging_operation.return_type == "Result<PageInfo<Queue>>"
-    assert queue_list_paging_operation.logical_return_type == "PageInfo<Queue>"
+    assert queue_list_paging_operation.logical_return_type == (
+        "org.apache.dolphinscheduler.api.utils.PageInfo<"
+        "org.apache.dolphinscheduler.dao.entity.Queue>"
+    )
 
     queue_v2_list_paging_operation = next(
         operation
@@ -227,7 +401,10 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         if operation.operation_id == "QueueV2Controller.queryQueueListPaging"
     )
     assert queue_v2_list_paging_operation.return_type == "Result<PageInfo<Queue>>"
-    assert queue_v2_list_paging_operation.logical_return_type == "PageInfo<Queue>"
+    assert queue_v2_list_paging_operation.logical_return_type == (
+        "org.apache.dolphinscheduler.api.utils.PageInfo<"
+        "org.apache.dolphinscheduler.dao.entity.Queue>"
+    )
 
     datasource_list_paging_operation = next(
         operation
@@ -236,7 +413,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     )
     assert datasource_list_paging_operation.return_type == "Result<Object>"
     assert (
-        datasource_list_paging_operation.logical_return_type == "PageInfo<DataSource>"
+        datasource_list_paging_operation.logical_return_type
+        == "org.apache.dolphinscheduler.api.utils.PageInfo<"
+        "org.apache.dolphinscheduler.dao.entity.DataSource>"
     )
 
     datasource_query_operation = next(
@@ -245,7 +424,10 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         if operation.operation_id == "DataSourceController.queryDataSource"
     )
     assert datasource_query_operation.return_type == "Result<Object>"
-    assert datasource_query_operation.logical_return_type == "BaseDataSourceParamDTO"
+    assert datasource_query_operation.logical_return_type == (
+        "org.apache.dolphinscheduler.plugin.datasource.api.datasource."
+        "BaseDataSourceParamDTO"
+    )
 
     worker_group_list_operation = next(
         operation
@@ -262,7 +444,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     )
     assert project_v2_create_operation.return_type == "ProjectCreateResponse"
     assert project_v2_create_operation.inferred_return_type is None
-    assert project_v2_create_operation.logical_return_type == "Project"
+    assert project_v2_create_operation.logical_return_type == (
+        "org.apache.dolphinscheduler.dao.entity.Project"
+    )
 
     login_operation = next(
         operation
@@ -368,7 +552,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         if operation.operation_id == "SchedulerController.updateSchedule"
     )
     assert scheduler_update_schedule_operation.return_type == "Result"
-    assert scheduler_update_schedule_operation.inferred_return_type == "Schedule"
+    assert scheduler_update_schedule_operation.inferred_return_type == (
+        "org.apache.dolphinscheduler.dao.entity.Schedule"
+    )
 
     scheduler_create_schedule_operation = next(
         operation
@@ -376,7 +562,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         if operation.operation_id == "SchedulerController.createSchedule"
     )
     assert scheduler_create_schedule_operation.return_type == "Result"
-    assert scheduler_create_schedule_operation.logical_return_type == "Schedule"
+    assert scheduler_create_schedule_operation.logical_return_type == (
+        "org.apache.dolphinscheduler.dao.entity.Schedule"
+    )
 
     gen_task_code_list_operation = next(
         operation
@@ -395,7 +583,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         )
     )
     assert task_definition_detail_operation.return_type == "Result"
-    assert task_definition_detail_operation.inferred_return_type == "TaskDefinitionVO"
+    assert task_definition_detail_operation.inferred_return_type == (
+        "org.apache.dolphinscheduler.api.vo.TaskDefinitionVO"
+    )
 
     release_task_definition_operation = next(
         operation
@@ -414,7 +604,8 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert task_definition_versions_operation.return_type == "Result"
     assert (
         task_definition_versions_operation.inferred_return_type
-        == "PageInfo<TaskDefinitionLog>"
+        == "org.apache.dolphinscheduler.api.utils.PageInfo<"
+        "org.apache.dolphinscheduler.dao.entity.TaskDefinitionLog>"
     )
 
     delete_task_definition_version_operation = next(
@@ -442,6 +633,7 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     )
     assert update_task_with_upstream_operation.return_type == "Result"
     assert update_task_with_upstream_operation.inferred_return_type == "long"
+    assert update_task_with_upstream_operation.logical_return_type == "Optional<long>"
 
     download_log_operation = next(
         operation
@@ -469,7 +661,7 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert workflow_instance_v2_query_by_id_operation.return_type == "Result"
     assert (
         workflow_instance_v2_query_by_id_operation.inferred_return_type
-        == "WorkflowInstance"
+        == "org.apache.dolphinscheduler.dao.entity.WorkflowInstance"
     )
     project_v2_query_list_operation = next(
         operation
@@ -520,7 +712,7 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert query_assigned_worker_groups_operation.return_type == "Map<String, Object>"
     assert (
         query_assigned_worker_groups_operation.logical_return_type
-        == "List<ProjectWorkerGroup>"
+        == "List<org.apache.dolphinscheduler.dao.entity.ProjectWorkerGroup>"
     )
     assert query_assigned_worker_groups_operation.response_projection == "status_data"
 
@@ -548,6 +740,20 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     )
     assert query_dependent_tasks_operation.response_projection == "single_data"
 
+    for operation_id in (
+        "WorkflowDefinitionController.createWorkflowDefinition",
+        "WorkflowDefinitionController.updateWorkflowDefinition",
+    ):
+        workflow_write_operation = next(
+            operation
+            for operation in snapshot.operations
+            if operation.operation_id == operation_id
+        )
+        assert workflow_write_operation.logical_return_type == (
+            "org.apache.dolphinscheduler.dao.entity.WorkflowDefinition"
+        )
+        assert workflow_write_operation.response_projection == "direct"
+
     run_mode_enum = next(
         enum_spec for enum_spec in snapshot.enums if enum_spec.name == "RunMode"
     )
@@ -563,7 +769,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     task_instance_query_request = next(
         dto for dto in snapshot.dtos if dto.name == "TaskInstanceQueryRequest"
     )
-    assert task_instance_query_request.extends == "PageQueryDto"
+    assert task_instance_query_request.extends == (
+        "org.apache.dolphinscheduler.api.dto.PageQueryDto"
+    )
     assert [field.name for field in task_instance_query_request.fields[:2]] == [
         "pageSize",
         "pageNo",
@@ -583,7 +791,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         if model.name == "TaskInstanceSuccessResponse"
     )
     assert task_instance_success_response.kind == "api_dto"
-    assert task_instance_success_response.extends == "Result"
+    assert task_instance_success_response.extends == (
+        "org.apache.dolphinscheduler.api.utils.Result"
+    )
 
     task_instance_model = next(
         model for model in snapshot.models if model.name == "TaskInstance"
@@ -598,13 +808,17 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         for field in workflow_instance_model.fields
         if field.name == "stateDescList"
     )
-    assert state_desc_list.java_type == "List<WorkflowInstance.StateDesc>"
+    assert state_desc_list.java_type == (
+        "List<org.apache.dolphinscheduler.dao.entity.WorkflowInstance.StateDesc>"
+    )
 
     workflow_instance_state_desc_model = next(
         model for model in snapshot.models if model.name == "WorkflowInstance.StateDesc"
     )
     assert any(
-        field.name == "state" and field.java_type == "WorkflowExecutionStatus"
+        field.name == "state"
+        and field.java_type
+        == "org.apache.dolphinscheduler.common.enums.WorkflowExecutionStatus"
         for field in workflow_instance_state_desc_model.fields
     )
     resource_type_enum = next(
@@ -614,14 +828,15 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert [field.name for field in resource_type_enum.fields] == ["code", "desc"]
     assert resource_type_enum.json_value_field is None
 
-    additional_enums = extract_pipeline_module._extract_enum_specs(
-        repo_root,
-        {
-            "org.apache.dolphinscheduler.spi.params.base.FormType",
-            "org.apache.dolphinscheduler.plugin.task.api.enums.dp.DataType",
-        },
-        {},
-    )
+    with exact_contract_corpus.codegen_repo_root("3.4.1") as source_repo_root:
+        additional_enums = extract_pipeline_module._extract_enum_specs(
+            source_repo_root,
+            {
+                "org.apache.dolphinscheduler.spi.params.base.FormType",
+                "org.apache.dolphinscheduler.plugin.task.api.enums.dp.DataType",
+            },
+            {},
+        )
     form_type_enum = next(
         enum_spec for enum_spec in additional_enums if enum_spec.name == "FormType"
     )
@@ -636,7 +851,8 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         model for model in snapshot.models if model.name == "ResourceComponent"
     )
     assert any(
-        field.name == "type" and field.java_type == "ResourceType"
+        field.name == "type"
+        and field.java_type == "org.apache.dolphinscheduler.spi.enums.ResourceType"
         for field in resource_component_model.fields
     )
     environment_dto_model = next(
@@ -721,9 +937,6 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         name: count for name, count in duplicate_model_names.items() if count > 1
     } == {}
 
-    analysis = analysis_module.build_contract_analysis(snapshot)
-    assert analysis["any_returns"]["count"] == 0
-
     output_path = tmp_path / "contract.json"
     module.write_contract_snapshot(snapshot, output_path)
     payload = json.loads(output_path.read_text())
@@ -732,323 +945,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert payload["dto_count"] == snapshot.dto_count
     assert payload["model_count"] == snapshot.model_count
 
-    registry_path = tmp_path / "registry.py"
-    module.write_python_registry(snapshot, registry_path)
-    registry_module = _load_python_module(
-        "generated_ds_contract_registry",
-        registry_path,
-    )
-    assert snapshot.operation_count == registry_module.OPERATION_COUNT
-    assert snapshot.dto_count == registry_module.DTO_COUNT
-    assert snapshot.model_count == registry_module.MODEL_COUNT
-    assert (
-        registry_module.OPERATIONS_BY_ID[
-            "ExecutorController.triggerWorkflowDefinition"
-        ]["path"]
-        == "projects/{projectCode}/executors/start-workflow-instance"
-    )
-    assert len(registry_module.OPERATIONS_BY_ID) == snapshot.operation_count
-    assert (
-        registry_module.DTOS_BY_NAME["TaskInstanceQueryRequest"]["fields"][0]["name"]
-        == "pageSize"
-    )
-
-    requests_example_path = tmp_path / "requests_example.py"
-    module.write_requests_example(snapshot, requests_example_path)
-    requests_example_text = requests_example_path.read_text()
-    assert "workflowInstancePriority: NotRequired[Priority]" in requests_example_text
-    assert (
-        "def query_workflow_instance_by_id("
-        "self, workflow_instance_id: int"
-        ") -> WorkflowInstance:" in requests_example_text
-    )
-    assert (
-        "def execute(self, workflow_instance_id: int, execute_type: ExecuteType)"
-        in requests_example_text
-    )
-    assert "-> None:" in requests_example_text
-
-    requests_client_path = tmp_path / "requests_client.py"
-    module.write_requests_client(snapshot, requests_client_path)
-    requests_client_text = requests_client_path.read_text()
-    compile(
-        requests_client_text,
-        str(requests_client_path),
-        "exec",
-    )
-    assert "class ResourceType(TypedDict" not in requests_client_text
-    assert "class ResourceType(StrEnum):" in requests_client_text
-    assert "    code: int" in requests_client_text
-    assert "    desc: str" in requests_client_text
-    assert (
-        '    def from_code(cls, code: int) -> "ResourceType":' in requests_client_text
-    )
-    assert "class Priority(StrEnum):" in requests_client_text
-    assert "    descp: str" in requests_client_text
-    assert '    def from_code(cls, code: int) -> "Priority":' in requests_client_text
-    assert "class RunMode(StrEnum):" in requests_client_text
-    assert "    code: int" in requests_client_text
-    assert "    descp: str" in requests_client_text
-    assert '    def from_code(cls, code: int) -> "RunMode":' in requests_client_text
-    assert "name_field: str" in requests_client_text
-    assert "class DS341RequestsClient:" in requests_client_text
-    assert (
-        "def executor_controller_trigger_workflow_definition(" in requests_client_text
-    )
-    assert "def workflow_instance_v2_controller_execute(" in requests_client_text
-    assert (
-        "def executor_controller_execute_task(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        form: ExecutorController_executeTaskParams\n"
-        "    ) -> None:" in requests_client_text
-    )
-    assert (
-        "def logger_controller_download_task_log_get_log_download_log("
-        in requests_client_text
-    )
-    assert (
-        "def logger_controller_download_task_log_get_log_download_log(\n"
-        "        self,\n"
-        "        params: "
-        "LoggerController_downloadTaskLog_get_log_download_logParams\n"
-        "    ) -> bytes:" in requests_client_text
-    )
-    assert (
-        "def cloud_controller_list_data_factory(\n"
-        "        self\n"
-        "    ) -> list[str]:" in requests_client_text
-    )
-    assert "def login_controller_login(" in requests_client_text
-    assert (
-        "def login_controller_login(\n"
-        "        self,\n"
-        "        form: LoginController_loginParams\n"
-        "    ) -> dict[str, str]:" in requests_client_text
-    )
-    assert (
-        "def task_instance_v2_controller_force_task_success(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        id: int\n"
-        "    ) -> None:" in requests_client_text
-    )
-    assert (
-        "def environment_controller_query_environment_by_code(\n"
-        "        self,\n"
-        "        params: "
-        "EnvironmentController_queryEnvironmentByCodeParams\n"
-        "    ) -> EnvironmentDto:" in requests_client_text
-    )
-    assert (
-        "def data_source_controller_get_kerberos_startup_state(\n"
-        "        self\n"
-        "    ) -> bool:" in requests_client_text
-    )
-    assert (
-        "def data_source_controller_get_tables(\n"
-        "        self,\n"
-        "        params: DataSourceController_getTablesParams\n"
-        "    ) -> list[ParamsOptions]:" in requests_client_text
-    )
-    assert (
-        "def data_source_controller_get_table_columns(\n"
-        "        self,\n"
-        "        params: DataSourceController_getTableColumnsParams\n"
-        "    ) -> list[ParamsOptions]:" in requests_client_text
-    )
-    assert (
-        "def data_source_controller_get_databases(\n"
-        "        self,\n"
-        "        params: DataSourceController_getDatabasesParams\n"
-        "    ) -> list[ParamsOptions]:" in requests_client_text
-    )
-    assert (
-        "def workflow_instance_v2_controller_query_workflow_instance_by_id(\n"
-        "        self,\n"
-        "        workflow_instance_id: int\n"
-        "    ) -> WorkflowInstance:" in requests_client_text
-    )
-    assert (
-        "def scheduler_controller_update_schedule(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        id: int,\n"
-        "        form: SchedulerController_updateScheduleParams\n"
-        "    ) -> Schedule:" in requests_client_text
-    )
-    assert (
-        "def task_definition_controller_gen_task_code_list(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        params: "
-        "TaskDefinitionController_genTaskCodeListParams\n"
-        "    ) -> list[int]:" in requests_client_text
-    )
-    assert (
-        "def task_definition_controller_query_task_definition_detail(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        code: int\n"
-        "    ) -> TaskDefinitionVO:" in requests_client_text
-    )
-    assert (
-        "def task_definition_controller_release_task_definition(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        code: int,\n"
-        "        form: TaskDefinitionController_releaseTaskDefinitionParams\n"
-        "    ) -> None:" in requests_client_text
-    )
-    assert (
-        "def task_definition_controller_query_task_definition_versions(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        code: int,\n"
-        "        params: "
-        "TaskDefinitionController_queryTaskDefinitionVersionsParams\n"
-        "    ) -> PageInfo_TaskDefinitionLog:" in requests_client_text
-    )
-    assert (
-        "def task_definition_controller_delete_task_definition_version(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        code: int,\n"
-        "        version: int\n"
-        "    ) -> None:" in requests_client_text
-    )
-    assert (
-        "def task_definition_controller_switch_task_definition_version(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        code: int,\n"
-        "        version: int\n"
-        "    ) -> None:" in requests_client_text
-    )
-    assert (
-        "def task_definition_controller_update_task_with_upstream(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        code: int,\n"
-        "        form: TaskDefinitionController_updateTaskWithUpstreamParams\n"
-        "    ) -> int:" in requests_client_text
-    )
-    assert (
-        "def workflow_definition_controller_query_workflow_definition_simple_list(\n"
-        "        self,\n"
-        "        project_code: int\n"
-        "    ) -> list[WorkflowDefinitionServiceImpl_"
-        "queryWorkflowDefinitionSimpleList_arrayNodeItem]:" in requests_client_text
-    )
-    assert "UploadFileLike: TypeAlias = (" in requests_client_text
-    assert '"file": UploadFileLike,' in requests_client_text
-    assert '"file": NotRequired[UploadFileLike],' in requests_client_text
-    assert (
-        "def workflow_definition_controller_copy_workflow_definition(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        form: "
-        "WorkflowDefinitionController_copyWorkflowDefinitionParams\n"
-        "    ) -> WorkflowDefinition:" in requests_client_text
-    )
-    assert (
-        "def workflow_definition_controller_move_workflow_definition(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        form: "
-        "WorkflowDefinitionController_moveWorkflowDefinitionParams\n"
-        "    ) -> WorkflowDefinition:" in requests_client_text
-    )
-    assert (
-        "def workflow_definition_controller_view_tree(\n"
-        "        self,\n"
-        "        project_code: int,\n"
-        "        code: int,\n"
-        "        params: WorkflowDefinitionController_viewTreeParams\n"
-        "    ) -> TreeViewDto:" in requests_client_text
-    )
-    assert (
-        "def login_controller_sso_login(\n"
-        "        self\n"
-        "    ) -> str | None:" in requests_client_text
-    )
-    assert (
-        "def k8s_namespace_controller_verify_namespace(\n"
-        "        self,\n"
-        "        form: K8sNamespaceController_verifyNamespaceParams\n"
-        "    ) -> None:" in requests_client_text
-    )
-    assert (
-        "def users_controller_verify_user_name(\n"
-        "        self,\n"
-        "        params: UsersController_verifyUserNameParams\n"
-        "    ) -> None:" in requests_client_text
-    )
-    assert "SecurityConfig = TypedDict(" not in requests_client_text
-    assert "AbstractSsoAuthenticator = TypedDict(" not in requests_client_text
-    assert "AccessTokenServiceImpl_PageInfo_created" not in requests_client_text
-    assert "QueueServiceImpl_PageInfo_created" not in requests_client_text
-    assert "DataSourceServiceImpl_PageInfo_created" not in requests_client_text
-    assert "DataSourceServiceImpl_ParamsOptions_created" not in requests_client_text
-    assert "PaginationWindow" not in requests_client_text
-    assert "DataSourceOption" not in requests_client_text
-    assert (
-        "def worker_group_controller_query_worker_address_list(\n"
-        "        self\n"
-        "    ) -> list[str]:" in requests_client_text
-    )
-    unexpected_any_lines = [
-        line
-        for line in requests_client_text.splitlines()
-        if "Any" in line
-        and "from typing import IO, Any, NotRequired, TypeAlias, TypedDict" not in line
-        and "values: dict[str, Any]" not in line
-        and ") -> dict[str, Any]" not in line
-        and "def _request(" not in line
-        and "**kwargs: Any" not in line
-        and ") -> Any" not in line
-    ]
-    assert unexpected_any_lines == []
-    unexpected_object_lines = [
-        line
-        for line in requests_client_text.splitlines()
-        if "object" in line and line.strip() != '"value": NotRequired[object],'
-    ]
-    assert unexpected_object_lines == []
-
-    requests_stub = ModuleType("requests")
-    requests_stub.__dict__["Session"] = type("Session", (), {})
-    sys.modules["requests"] = requests_stub
-    enum_prefix_match = re.search(
-        r"^[A-Z][A-Za-z0-9_]+ = TypedDict\(",
-        requests_client_text,
-        re.MULTILINE,
-    )
-    assert enum_prefix_match is not None
-    enum_namespace: dict[str, object] = {}
-    exec(  # noqa: S102
-        requests_client_text[: enum_prefix_match.start()],
-        enum_namespace,
-    )
-    priority_enum = cast("Any", enum_namespace["Priority"])
-    resource_type_enum = cast("Any", enum_namespace["ResourceType"])
-    run_mode_enum_type = cast("Any", enum_namespace["RunMode"])
-    assert str(priority_enum.HIGH) == "HIGH"
-    assert priority_enum.HIGH.code == 1
-    assert priority_enum.HIGH.descp == "high"
-    assert priority_enum.from_code(1) is priority_enum.HIGH
-    assert str(resource_type_enum.FILE) == "FILE"
-    assert resource_type_enum.FILE.code == 0
-    assert resource_type_enum.FILE.desc == "file"
-    assert resource_type_enum.from_code(0) is resource_type_enum.FILE
-    assert run_mode_enum_type.RUN_MODE_SERIAL.code == 0
-    assert run_mode_enum_type.RUN_MODE_SERIAL.descp == "serial run"
-    assert run_mode_enum_type.from_code(0) is run_mode_enum_type.RUN_MODE_SERIAL
-
     package_output_root = tmp_path / "package"
-    module.write_requests_package(repo_root, snapshot, package_output_root)
+    module.write_generated_package(snapshot, package_output_root)
     version_root = package_output_root / "generated" / "versions" / "ds_3_4_1"
-    upstream_root = package_output_root / "upstream"
     assert (version_root / "client.py").exists()
     assert (version_root / "api" / "operations" / "executor.py").exists()
     assert (version_root / "common" / "enums" / "priority.py").exists()
@@ -1059,9 +958,6 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     ).exists()
     assert (version_root / "api" / "views" / "workflow_definition.py").exists()
     assert not (version_root / "api" / "views" / "pagination.py").exists()
-    assert (upstream_root / "protocol.py").exists()
-    assert (upstream_root / "registry.py").exists()
-    assert (upstream_root / "adapters" / "ds_3_4_1.py").exists()
 
     task_definition_vo_text = (
         version_root / "api" / "views" / "task_definition.py"
@@ -1097,6 +993,9 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     ).read_text()
     environment_operations_text = (
         version_root / "api" / "operations" / "environment.py"
+    ).read_text()
+    logger_operations_text = (
+        version_root / "api" / "operations" / "logger.py"
     ).read_text()
     result_contract_text = (
         version_root / "api" / "contracts" / "result.py"
@@ -1398,10 +1297,7 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert "JsonScalar: TypeAlias = str | int | float | bool | None" in (
         base_operations_text
     )
-    assert (
-        'JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | '
-        'dict[str, "JsonValue"]' in base_operations_text
-    )
+    assert "    JsonValue as JsonValue," in base_operations_text
     assert "class RequestKwargs(TypedDict, total=False):" in base_operations_text
     assert "class ClientRequestKwargs(RequestKwargs, total=False):" in (
         base_operations_text
@@ -1435,6 +1331,18 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert "def _require_request_mapping(" in base_operations_text
     assert "class ApiResultError(RuntimeError):" in base_operations_text
     assert "class ApiPayloadValidationError(RuntimeError):" in base_operations_text
+    assert "class BinaryPayload(Protocol):" in base_operations_text
+    assert (
+        "class BinaryPayload(Protocol):\n"
+        "    @property\n"
+        "    def content(self) -> bytes: ...\n\n"
+        "    @property\n"
+        "    def headers(self) -> dict[str, str]: ...\n\n"
+        "    @property\n"
+        "    def content_type(self) -> str | None: ..."
+    ) in base_operations_text
+    assert "def request_binary(" in base_operations_text
+    assert "def _request_binary(" in base_operations_text
     assert "class ResponseLike(" not in base_operations_text
     assert "class _RequestsSessionAdapter:" in base_operations_text
     assert "session = _RequestsSessionAdapter()" in base_operations_text
@@ -1472,6 +1380,7 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert "self._session.raise_payload_error(" in base_operations_text
     assert "headers.update(extra_headers)" in base_operations_text
     assert "return self._session.request(" in base_operations_text
+    assert "return self._session.request_binary(" in base_operations_text
     assert "_require_json_value(" in base_operations_text
     assert 'label="response body"' in base_operations_text
     assert "_require_json_object(" in base_operations_text
@@ -1482,7 +1391,12 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         task_definition_operations_text
     )
     assert "TypeAdapter(list[StrictInt])" in task_definition_operations_text
+    assert "TypeAdapter(StrictInt | None)" in task_definition_operations_text
     assert "TypeAdapter(list[int])" in executor_operations_text
+    assert "def download_task_log_get_log_download_log(" in logger_operations_text
+    assert ") -> BinaryPayload:" in logger_operations_text
+    assert "return self._request_binary(" in logger_operations_text
+    assert "TypeAdapter(bytes)" not in logger_operations_text
     assert "ApiPayloadValidationError, ApiResultError" in operations_init_text
     assert "query_params=query_params" not in project_v2_operations_text
     assert "params=query_params" in project_v2_operations_text
@@ -1516,16 +1430,6 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
     assert "self._validate_payload(payload, TypeAdapter(EnvironmentDto))" in (
         environment_operations_text
     )
-    upstream_registry_text = (upstream_root / "registry.py").read_text()
-    assert (
-        "SUPPORTED_VERSIONS = tuple(sorted(_ADAPTERS_BY_VERSION))"
-        in upstream_registry_text
-    )
-    assert 'normalized = normalized.replace("_", ".")' in upstream_registry_text
-    adapter_text = (upstream_root / "adapters" / "ds_3_4_1.py").read_text()
-    assert "class DS341Adapter(UpstreamAdapter[DS341Client]):" in adapter_text
-    assert 'version_slug: str = "ds_3_4_1"' in adapter_text
-
     sys.path.insert(0, str(package_output_root))
     try:
         package_client_module = importlib.import_module(
@@ -1574,9 +1478,6 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
         package_operations_module = importlib.import_module(
             "generated.versions.ds_3_4_1.api.operations"
         )
-        upstream_protocol_module = importlib.import_module("upstream.protocol")
-        upstream_registry_module = importlib.import_module("upstream.registry")
-        upstream_adapter_module = importlib.import_module("upstream.adapters.ds_3_4_1")
         assert hasattr(package_client_module, "DS341Client")
         assert package_priority_module.Priority.HIGH.code == 1
         assert (
@@ -1594,12 +1495,8 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
             package_operations_module.ApiResultError
             is package_base_operations_module.ApiResultError
         )
-        assert hasattr(upstream_protocol_module, "UpstreamAdapter")
-        assert upstream_registry_module.SUPPORTED_VERSIONS == ("3.4.1",)
-        adapter = upstream_registry_module.get_adapter("ds_3_4_1")
-        assert isinstance(adapter, upstream_adapter_module.DS341Adapter)
         issued_token = "-".join(["example", "token"])
-        client = adapter.create_client(
+        client = package_client_module.DS341Client(
             "http://example.test/dolphinscheduler",
             issued_token,
             session=object(),
@@ -1624,6 +1521,43 @@ def test_contract_codegen_extracts_executor_operation_and_enum(tmp_path: Path) -
                     package_task_definition_operations_module.GenTaskCodeListParams(
                         genNum=1
                     ),
+                )
+            assert isinstance(exc_info.value.__cause__, ValidationError)
+
+        task_update_form = (
+            package_task_definition_operations_module.UpdateTaskWithUpstreamParams(
+                taskDefinitionJsonObj="{}"
+            )
+        )
+        for valid_update_result in (1001, None):
+            task_update_client = package_client_module.DS341Client(
+                "http://example.test/dolphinscheduler",
+                issued_token,
+                session=_FakeSession(valid_update_result),
+            )
+            assert (
+                task_update_client.task_definition.update_task_with_upstream(
+                    7,
+                    1001,
+                    task_update_form,
+                )
+                is valid_update_result
+            )
+
+        for invalid_update_result in (True, "1001", 1001.0):
+            task_update_client = package_client_module.DS341Client(
+                "http://example.test/dolphinscheduler",
+                issued_token,
+                session=_FakeSession(invalid_update_result),
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="Response payload did not match generated API contract",
+            ) as exc_info:
+                task_update_client.task_definition.update_task_with_upstream(
+                    7,
+                    1001,
+                    task_update_form,
                 )
             assert isinstance(exc_info.value.__cause__, ValidationError)
 

@@ -10,14 +10,23 @@ import javalang
 from ds_codegen.java_source import (
     JavaParseCache,
     LoadedTypeDeclaration,
+    SourceResolutionScope,
     build_import_map,
     load_type_declaration,
+    qualify_java_type_references,
     resolve_referenced_import_path,
     try_parse_java_compilation_unit,
 )
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+def clear_type_lookup_caches() -> None:
+    """Release declaration and service indexes at the extraction boundary."""
+    _load_cached_type_declaration.cache_clear()
+    _resolve_service_impl_import_path.cache_clear()
+    _build_service_impl_index.cache_clear()
 
 
 def _render_reference_name(type_node: javalang.tree.ReferenceType) -> str:
@@ -99,13 +108,6 @@ def _find_method_declaration(
     return None
 
 
-def _score_method_argument_match(
-    method: javalang.tree.MethodDeclaration,
-    argument_types: list[str | None],
-) -> int | None:
-    return _score_parameter_argument_match(method.parameters, argument_types)
-
-
 def _score_parameter_argument_match(
     parameters: list[javalang.tree.FormalParameter],
     argument_types: list[str | None],
@@ -119,8 +121,8 @@ def _score_parameter_argument_match(
             continue
         if argument_type == "Void":
             continue
-        normalized_parameter_type = _normalize_java_type_for_matching(parameter_type)
-        normalized_argument_type = _normalize_java_type_for_matching(argument_type)
+        normalized_parameter_type = normalize_java_type_for_matching(parameter_type)
+        normalized_argument_type = normalize_java_type_for_matching(argument_type)
         if normalized_parameter_type == normalized_argument_type:
             score += 2
             continue
@@ -133,7 +135,8 @@ def _score_parameter_argument_match(
     return score
 
 
-def _normalize_java_type_for_matching(java_type: str) -> str:
+def normalize_java_type_for_matching(java_type: str) -> str:
+    """Normalize Java primitive spellings recursively for fact comparison."""
     primitive_aliases = {
         "boolean": "Boolean",
         "byte": "Byte",
@@ -145,12 +148,12 @@ def _normalize_java_type_for_matching(java_type: str) -> str:
         "void": "Void",
     }
     if java_type.endswith("[]"):
-        return f"{_normalize_java_type_for_matching(java_type[:-2])}[]"
+        return f"{normalize_java_type_for_matching(java_type[:-2])}[]"
     base_type = _java_generic_base_type(java_type)
     if "<" not in java_type:
         return primitive_aliases.get(base_type, java_type)
     inner_types = ", ".join(
-        _normalize_java_type_for_matching(inner_type)
+        normalize_java_type_for_matching(inner_type)
         for inner_type in _java_generic_inner_types(java_type)
     )
     normalized_base = primitive_aliases.get(base_type, base_type)
@@ -253,8 +256,11 @@ def _build_service_impl_index(repo_root: Path) -> tuple[tuple[str, str], ...]:
             interface_import_path = resolve_referenced_import_path(
                 repo_root,
                 _render_reference_name(interface_type),
-                import_map,
-                package_name,
+                SourceResolutionScope(
+                    import_map,
+                    package_name,
+                    impl_import_path,
+                ),
             )
             if interface_import_path is None:
                 continue
@@ -269,15 +275,31 @@ def _load_java_type_context(
     import_map: dict[str, str],
     package_name: str | None,
 ) -> LoadedTypeDeclaration | None:
+    resolved = _resolve_java_type_context(
+        repo_root=repo_root,
+        java_type=java_type,
+        import_map=import_map,
+        package_name=package_name,
+    )
+    return resolved[1] if resolved is not None else None
+
+
+def _resolve_java_type_context(
+    *,
+    repo_root: Path,
+    java_type: str,
+    import_map: dict[str, str],
+    package_name: str | None,
+) -> tuple[str, LoadedTypeDeclaration] | None:
     type_import_path = resolve_referenced_import_path(
         repo_root,
         _java_generic_base_type(java_type),
-        import_map,
-        package_name,
+        SourceResolutionScope(import_map, package_name),
     )
     if type_import_path is None:
         return None
-    return _load_cached_type_declaration(repo_root, type_import_path)
+    loaded = _load_cached_type_declaration(repo_root, type_import_path)
+    return (type_import_path, loaded) if loaded is not None else None
 
 
 def _infer_imported_type_method_return_type(
@@ -290,14 +312,15 @@ def _infer_imported_type_method_return_type(
     import_map: dict[str, str],
     package_name: str | None,
 ) -> str | None:
-    loaded_type = _load_java_type_context(
+    resolved_type = _resolve_java_type_context(
         repo_root=repo_root,
         java_type=type_name,
         import_map=import_map,
         package_name=package_name,
     )
-    if loaded_type is None:
+    if resolved_type is None:
         return None
+    type_import_path, loaded_type = resolved_type
     _, type_declaration, type_import_map, type_package_name = loaded_type
     method_declaration = _find_method_declaration(
         type_declaration.methods,
@@ -306,9 +329,17 @@ def _infer_imported_type_method_return_type(
         argument_types=argument_types,
     )
     if method_declaration is not None:
-        return _render_method_return_type(
-            method_declaration,
-            argument_types=argument_types,
+        return qualify_java_type_references(
+            repo_root,
+            _render_method_return_type(
+                method_declaration,
+                argument_types=argument_types,
+            ),
+            SourceResolutionScope(
+                type_import_map,
+                type_package_name,
+                type_import_path,
+            ),
         )
     return _infer_accessor_field_type(
         repo_root=repo_root,
@@ -317,6 +348,7 @@ def _infer_imported_type_method_return_type(
         method_arity=method_arity,
         import_map=type_import_map,
         package_name=type_package_name,
+        owner_import_path=type_import_path,
     )
 
 
@@ -330,17 +362,23 @@ def _infer_instance_method_return_type(
     import_map: dict[str, str],
     package_name: str | None,
 ) -> str | None:
-    loaded_type = _load_java_type_context(
+    resolved_type = _resolve_java_type_context(
         repo_root=repo_root,
         java_type=instance_java_type,
         import_map=import_map,
         package_name=package_name,
     )
-    if loaded_type is None:
+    if resolved_type is None:
         return None
+    type_import_path, loaded_type = resolved_type
     _, type_declaration, type_import_map, type_package_name = loaded_type
+    qualified_instance_java_type = qualify_java_type_references(
+        repo_root,
+        instance_java_type,
+        SourceResolutionScope(import_map, package_name),
+    )
     receiver_substitutions = _infer_receiver_type_parameter_substitutions(
-        instance_java_type=instance_java_type,
+        instance_java_type=qualified_instance_java_type,
         type_declaration=type_declaration,
     )
     method_declaration = _find_method_declaration(
@@ -350,10 +388,18 @@ def _infer_instance_method_return_type(
         argument_types=argument_types,
     )
     if method_declaration is not None:
-        return _render_instance_method_return_type(
-            method_declaration=method_declaration,
-            argument_types=argument_types,
-            receiver_substitutions=receiver_substitutions,
+        return qualify_java_type_references(
+            repo_root,
+            _render_instance_method_return_type(
+                method_declaration=method_declaration,
+                argument_types=argument_types,
+                receiver_substitutions=receiver_substitutions,
+            ),
+            SourceResolutionScope(
+                type_import_map,
+                type_package_name,
+                type_import_path,
+            ),
         )
     return _infer_accessor_field_type(
         repo_root=repo_root,
@@ -362,6 +408,7 @@ def _infer_instance_method_return_type(
         method_arity=method_arity,
         import_map=type_import_map,
         package_name=type_package_name,
+        owner_import_path=type_import_path,
     )
 
 
@@ -505,6 +552,7 @@ def _infer_accessor_field_type(
     method_arity: int,
     import_map: dict[str, str],
     package_name: str | None,
+    owner_import_path: str,
 ) -> str | None:
     if method_arity != 0:
         return None
@@ -519,6 +567,7 @@ def _infer_accessor_field_type(
             type_declaration=type_declaration,
             import_map=import_map,
             package_name=package_name,
+            owner_import_path=owner_import_path,
             field_name=candidate_field_name,
         )
         if field_type is not None:
@@ -551,12 +600,17 @@ def _find_field_type_declaration_in_hierarchy(
     type_declaration: javalang.tree.TypeDeclaration,
     import_map: dict[str, str],
     package_name: str | None,
+    owner_import_path: str | None,
     field_name: str,
     active_import_paths: tuple[str, ...] = (),
 ) -> str | None:
     direct_field_type = _find_field_type_declaration(type_declaration, field_name)
     if direct_field_type is not None:
-        return direct_field_type
+        return qualify_java_type_references(
+            repo_root,
+            direct_field_type,
+            SourceResolutionScope(import_map, package_name, owner_import_path),
+        )
     if not isinstance(type_declaration, javalang.tree.ClassDeclaration):
         return None
     if type_declaration.extends is None:
@@ -564,8 +618,7 @@ def _find_field_type_declaration_in_hierarchy(
     parent_import_path = resolve_referenced_import_path(
         repo_root,
         _render_reference_name(type_declaration.extends),
-        import_map,
-        package_name,
+        SourceResolutionScope(import_map, package_name, owner_import_path),
     )
     if parent_import_path is None or parent_import_path in active_import_paths:
         return None
@@ -580,6 +633,7 @@ def _find_field_type_declaration_in_hierarchy(
         type_declaration=parent_type_declaration,
         import_map=parent_import_map,
         package_name=parent_package_name,
+        owner_import_path=parent_import_path,
         field_name=field_name,
         active_import_paths=(*active_import_paths, parent_import_path),
     )

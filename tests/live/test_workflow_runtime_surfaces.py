@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import pytest
 import yaml
 
+from tests.live.execution_support import _execution_instance_id
 from tests.live.support import (
     DsctlCommandResult,
     require_error_payload,
@@ -26,6 +27,7 @@ from tests.live.workflow_support import (
     write_sub_workflow_parent_spec,
     write_workflow_patch,
 )
+from tests.request_assertions import first_dry_run_request
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -33,6 +35,46 @@ if TYPE_CHECKING:
 
 
 pytestmark = [pytest.mark.live, pytest.mark.destructive]
+
+# DS 3.3.1 checks processDefinitionCode although its task model writes
+# workflowDefinitionCode; 3.3.2 fixes the guard's constant.
+_SUB_WORKFLOW_ONLINE_GUARD_VERSIONS = frozenset(
+    {
+        "3.2.1",
+        "3.2.2",
+        "3.3.2",
+        "3.4.0",
+        "3.4.1",
+        "3.4.2",
+        "3.4.3",
+    }
+)
+_SUB_WORKFLOW_NATIVE_TASK_TYPE_VERSIONS = frozenset(
+    {
+        "3.3.1",
+        "3.3.2",
+        "3.4.0",
+        "3.4.1",
+        "3.4.2",
+        "3.4.3",
+    }
+)
+# TaskInstanceController first accepts taskExecuteType in DS 3.1.0.
+_TASK_EXECUTE_TYPE_FILTER_VERSIONS = frozenset(
+    {
+        *(f"3.1.{patch}" for patch in range(10)),
+        "3.2.0",
+        "3.2.1",
+        "3.2.2",
+        "3.3.1",
+        "3.3.2",
+        "3.4.0",
+        "3.4.1",
+        "3.4.2",
+        "3.4.3",
+    }
+)
+_INSTANCE_DAG_EDIT_REQUIRES_SYNC_VERSIONS = frozenset({"2.0.0", "2.0.1", "2.0.2"})
 
 
 def _task_log_contains(
@@ -112,9 +154,89 @@ def _task_rows_by_name(task_rows: list[object]) -> dict[str, dict[str, object]]:
     return rows_by_name
 
 
+def _exported_instance_task_names(
+    repo_root: Path,
+    env_file: Path,
+    *,
+    project: str,
+    instance_id: int,
+) -> set[str]:
+    result = run_dsctl_raw(
+        repo_root,
+        ["workflow-instance", "export", str(instance_id), "--project", project],
+        env_file=env_file,
+    )
+    assert result.exit_code == 0, result.stderr
+    document = require_mapping(
+        yaml.safe_load(result.stdout), label="workflow-instance export document"
+    )
+    tasks = require_list(document.get("tasks"), label="workflow-instance export tasks")
+    return {
+        require_text_value(
+            require_mapping(task, label="workflow-instance export task").get("name"),
+            label="workflow-instance export task name",
+        )
+        for task in tasks
+    }
+
+
+def _workflow_definition_version(
+    repo_root: Path,
+    env_file: Path,
+    *,
+    project: str,
+    workflow: str,
+) -> int:
+    payload = require_ok_payload(
+        run_dsctl(
+            repo_root,
+            ["workflow", "get", workflow, "--project", project],
+            env_file=env_file,
+        ),
+        expected_action="workflow.get",
+        label="workflow definition version read",
+    )
+    data = require_mapping(payload["data"], label="workflow definition version data")
+    return require_int_value(data.get("version"), label="workflow definition version")
+
+
+def _assert_workflow_version_after_update(
+    *,
+    ds_version: str | None,
+    before: int,
+    after: int,
+    change: Literal["task_update", "workflow_edit", "instance_sync"],
+) -> None:
+    # 2.0.0-2.0.2 compare definition metadata (including locations) but not
+    # task/relation content when deciding whether to save a new version.
+    # 2.0.3 also considers changed tasks and its instance edit always saves.
+    if ds_version == "1.3.9" or (
+        change in {"task_update", "instance_sync"}
+        and ds_version in _INSTANCE_DAG_EDIT_REQUIRES_SYNC_VERSIONS
+    ):
+        assert after == before
+    else:
+        assert after > before
+
+
+def _native_definition_identity(
+    data: dict[str, object],
+    *,
+    ds_version: str | None,
+    label: str,
+) -> int:
+    field = "id" if ds_version == "1.3.9" else "code"
+    return require_int_value(data.get(field), label=f"{label} {field}")
+
+
+def _project_identity_field(ds_version: str | None) -> str:
+    return "projectId" if ds_version == "1.3.9" else "projectCode"
+
+
 def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
     live_repo_root: Path,
     live_etl_env_file: Path,
+    live_etl_ds_version: str | None,
     live_name_factory: Callable[[str], str],
     tmp_path: Path,
 ) -> None:
@@ -156,9 +278,10 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             project_create_payload["data"],
             label="project create data",
         )
-        project_code = require_int_value(
-            project_create_data.get("code"),
-            label="project code",
+        project_identity = _native_definition_identity(
+            project_create_data,
+            ds_version=live_etl_ds_version,
+            label="project",
         )
         project_created = True
 
@@ -170,6 +293,8 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                     "create",
                     "--file",
                     str(workflow_spec),
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
             ),
@@ -180,12 +305,16 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             workflow_create_payload["data"],
             label="workflow create data",
         )
-        workflow_code = require_int_value(
-            workflow_create_data.get("code"),
-            label="workflow code",
+        workflow_identity = _native_definition_identity(
+            workflow_create_data,
+            ds_version=live_etl_ds_version,
+            label="workflow",
         )
         assert workflow_create_data["name"] == workflow_name
-        assert workflow_create_data["projectCode"] == project_code
+        assert (
+            workflow_create_data[_project_identity_field(live_etl_ds_version)]
+            == project_identity
+        )
         assert workflow_create_data["releaseState"] == "OFFLINE"
         workflow_created = True
 
@@ -208,7 +337,14 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             workflow_get_payload["data"],
             label="workflow get data",
         )
-        assert workflow_get_data["code"] == workflow_code
+        assert (
+            _native_definition_identity(
+                workflow_get_data,
+                ds_version=live_etl_ds_version,
+                label="workflow get",
+            )
+            == workflow_identity
+        )
         assert workflow_get_data["releaseState"] == "OFFLINE"
         initial_workflow_version = require_int_value(
             workflow_get_data.get("version"),
@@ -240,7 +376,12 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             label="workflow list rows",
         )
         assert any(
-            require_mapping(item, label="workflow row").get("code") == workflow_code
+            _native_definition_identity(
+                require_mapping(item, label="workflow row"),
+                ds_version=live_etl_ds_version,
+                label="workflow row",
+            )
+            == workflow_identity
             for item in workflow_rows
         )
 
@@ -272,26 +413,40 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             label="workflow describe relations",
         )
         assert len(described_tasks) == 2
-        root_relations = [
-            require_mapping(item, label="workflow describe root relation")
-            for item in described_relations
-            if require_mapping(
-                item,
-                label="workflow describe relation",
-            ).get("preTaskCode")
-            == 0
-        ]
-        explicit_relations = [
-            require_mapping(item, label="workflow describe explicit relation")
-            for item in described_relations
-            if require_mapping(
-                item,
-                label="workflow describe relation",
-            ).get("preTaskCode")
-            != 0
-        ]
-        assert len(root_relations) == 1
-        assert len(explicit_relations) == 1
+        if live_etl_ds_version == "1.3.9":
+            described_tasks_by_name = _task_rows_by_name(described_tasks)
+            assert len(described_relations) == 1
+            relation = require_mapping(
+                described_relations[0],
+                label="legacy workflow describe relation",
+            )
+            assert relation["preTaskName"] == "extract"
+            assert relation["postTaskName"] == "load"
+            assert relation["preTaskId"] == described_tasks_by_name["extract"]["id"]
+            assert relation["postTaskId"] == described_tasks_by_name["load"]["id"]
+            assert "preTaskCode" not in relation
+            assert "postTaskCode" not in relation
+        else:
+            root_relations = [
+                require_mapping(item, label="workflow describe root relation")
+                for item in described_relations
+                if require_mapping(
+                    item,
+                    label="workflow describe relation",
+                ).get("preTaskCode")
+                == 0
+            ]
+            explicit_relations = [
+                require_mapping(item, label="workflow describe explicit relation")
+                for item in described_relations
+                if require_mapping(
+                    item,
+                    label="workflow describe relation",
+                ).get("preTaskCode")
+                != 0
+            ]
+            assert len(root_relations) == 1
+            assert len(explicit_relations) == 1
 
         workflow_digest_payload = require_ok_payload(
             run_dsctl(
@@ -355,24 +510,38 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
         task_rows = require_list(task_list_payload["data"], label="task list data")
         task_rows_by_name = _task_rows_by_name(task_rows)
         assert set(task_rows_by_name) == {"extract", "load"}
-        extract_task_code = require_int_value(
-            task_rows_by_name["extract"].get("code"),
-            label="extract task code",
-        )
-        extract_task_version = require_int_value(
-            task_rows_by_name["extract"].get("version"),
-            label="extract task version",
-        )
-        load_task_code = require_int_value(
-            task_rows_by_name["load"].get("code"),
-            label="load task code",
-        )
-        load_task_version = require_int_value(
-            task_rows_by_name["load"].get("version"),
-            label="load task version",
-        )
-        assert extract_task_version >= 1
-        assert load_task_version >= 1
+        if live_etl_ds_version == "1.3.9":
+            extract_task_id = require_text_value(
+                task_rows_by_name["extract"].get("id"),
+                label="extract task id",
+            )
+            load_task_id = require_text_value(
+                task_rows_by_name["load"].get("id"),
+                label="load task id",
+            )
+            assert "code" not in task_rows_by_name["extract"]
+            assert "version" not in task_rows_by_name["extract"]
+            assert "code" not in task_rows_by_name["load"]
+            assert "version" not in task_rows_by_name["load"]
+        else:
+            extract_task_code = require_int_value(
+                task_rows_by_name["extract"].get("code"),
+                label="extract task code",
+            )
+            extract_task_version = require_int_value(
+                task_rows_by_name["extract"].get("version"),
+                label="extract task version",
+            )
+            load_task_code = require_int_value(
+                task_rows_by_name["load"].get("code"),
+                label="load task code",
+            )
+            load_task_version = require_int_value(
+                task_rows_by_name["load"].get("version"),
+                label="load task version",
+            )
+            assert extract_task_version >= 1
+            assert load_task_version >= 1
 
         task_get_payload = require_ok_payload(
             run_dsctl(
@@ -434,11 +603,15 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             updated_task_params.get("rawScript"),
             label="task update rawScript",
         )
-        updated_load_version = require_int_value(
-            task_update_data.get("version"),
-            label="task update version",
-        )
-        assert updated_load_version > load_task_version
+        if live_etl_ds_version == "1.3.9":
+            assert "code" not in task_update_data
+            assert "version" not in task_update_data
+        else:
+            updated_load_version = require_int_value(
+                task_update_data.get("version"),
+                label="task update version",
+            )
+            assert updated_load_version > load_task_version
 
         workflow_get_after_task_update_payload = require_ok_payload(
             run_dsctl(
@@ -463,7 +636,12 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             workflow_get_after_task_update_data.get("version"),
             label="workflow version after task update",
         )
-        assert workflow_version_after_task_update > initial_workflow_version
+        _assert_workflow_version_after_update(
+            ds_version=live_etl_ds_version,
+            before=initial_workflow_version,
+            after=workflow_version_after_task_update,
+            change="task_update",
+        )
 
         workflow_patch = write_workflow_patch(
             tmp_path / f"{workflow_name}.patch.yaml",
@@ -499,7 +677,12 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             workflow_edit_data.get("version"),
             label="workflow version after edit",
         )
-        assert workflow_version_after_edit > workflow_version_after_task_update
+        _assert_workflow_version_after_update(
+            ds_version=live_etl_ds_version,
+            before=workflow_version_after_task_update,
+            after=workflow_version_after_edit,
+            change="workflow_edit",
+        )
 
         renamed_task_list_payload = require_ok_payload(
             run_dsctl(
@@ -523,32 +706,52 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
         )
         renamed_task_rows_by_name = _task_rows_by_name(renamed_task_rows)
         assert set(renamed_task_rows_by_name) == {"extract", "load-stage"}
-        assert (
-            require_int_value(
-                renamed_task_rows_by_name["extract"].get("code"),
-                label="extract task code after workflow edit",
+        if live_etl_ds_version == "1.3.9":
+            assert (
+                require_text_value(
+                    renamed_task_rows_by_name["extract"].get("id"),
+                    label="extract task id after workflow edit",
+                )
+                == extract_task_id
             )
-            == extract_task_code
-        )
-        assert (
-            require_int_value(
-                renamed_task_rows_by_name["extract"].get("version"),
-                label="extract task version after workflow edit",
+            assert (
+                require_text_value(
+                    renamed_task_rows_by_name["load-stage"].get("id"),
+                    label="renamed load task id",
+                )
+                == load_task_id
             )
-            == extract_task_version
-        )
-        assert (
-            require_int_value(
-                renamed_task_rows_by_name["load-stage"].get("code"),
-                label="renamed load task code",
+            assert "code" not in renamed_task_rows_by_name["extract"]
+            assert "version" not in renamed_task_rows_by_name["extract"]
+            assert "code" not in renamed_task_rows_by_name["load-stage"]
+            assert "version" not in renamed_task_rows_by_name["load-stage"]
+        else:
+            assert (
+                require_int_value(
+                    renamed_task_rows_by_name["extract"].get("code"),
+                    label="extract task code after workflow edit",
+                )
+                == extract_task_code
             )
-            == load_task_code
-        )
-        renamed_load_version = require_int_value(
-            renamed_task_rows_by_name["load-stage"].get("version"),
-            label="renamed load task version",
-        )
-        assert renamed_load_version > updated_load_version
+            assert (
+                require_int_value(
+                    renamed_task_rows_by_name["extract"].get("version"),
+                    label="extract task version after workflow edit",
+                )
+                == extract_task_version
+            )
+            assert (
+                require_int_value(
+                    renamed_task_rows_by_name["load-stage"].get("code"),
+                    label="renamed load task code",
+                )
+                == load_task_code
+            )
+            renamed_load_version = require_int_value(
+                renamed_task_rows_by_name["load-stage"].get("version"),
+                label="renamed load task version",
+            )
+            assert renamed_load_version > updated_load_version
 
         renamed_task_get_payload = require_ok_payload(
             run_dsctl(
@@ -681,6 +884,8 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                     "--task",
                     "extract",
                     "--dry-run",
+                    "--columns",
+                    "*",
                 ],
                 env_file=live_etl_env_file,
             ),
@@ -692,7 +897,7 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             label="workflow run-task dry-run data",
         )
         workflow_run_task_dry_run_request = require_mapping(
-            workflow_run_task_dry_run_data["request"],
+            first_dry_run_request(workflow_run_task_dry_run_data),
             label="workflow run-task dry-run request",
         )
         workflow_run_task_dry_run_form = require_mapping(
@@ -717,6 +922,8 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                     "--end",
                     "2026-04-02 00:00:00",
                     "--dry-run",
+                    "--columns",
+                    "*",
                 ],
                 env_file=live_etl_env_file,
             ),
@@ -728,7 +935,7 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             label="workflow backfill dry-run data",
         )
         workflow_backfill_dry_run_request = require_mapping(
-            workflow_backfill_dry_run_data["request"],
+            first_dry_run_request(workflow_backfill_dry_run_data),
             label="workflow backfill dry-run request",
         )
         workflow_backfill_dry_run_form = require_mapping(
@@ -757,13 +964,13 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             workflow_run_payload["data"],
             label="workflow run data",
         )
-        workflow_instance_ids = require_list(
-            workflow_run_data["workflowInstanceIds"],
-            label="workflow instance ids",
-        )
-        workflow_instance_id = require_int_value(
-            workflow_instance_ids[0],
-            label="workflow instance id",
+        workflow_instance_id = _execution_instance_id(
+            workflow_run_data,
+            repo_root=live_repo_root,
+            env_file=live_etl_env_file,
+            project=project_name,
+            fresh_workflow=workflow_name,
+            label="workflow run",
         )
 
         workflow_watch_payload = require_ok_payload(
@@ -777,6 +984,8 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                     "2",
                     "--timeout-seconds",
                     "180",
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
             ),
@@ -793,7 +1002,13 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
         workflow_instance_get_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
-                ["workflow-instance", "get", str(workflow_instance_id)],
+                [
+                    "workflow-instance",
+                    "get",
+                    str(workflow_instance_id),
+                    "--project",
+                    project_name,
+                ],
                 env_file=live_etl_env_file,
             ),
             expected_action="workflow-instance.get",
@@ -803,12 +1018,25 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
             workflow_instance_get_payload["data"],
             label="workflow-instance get data",
         )
-        assert workflow_instance_get_data["workflowDefinitionCode"] == workflow_code
+        instance_definition_field = (
+            "workflowDefinitionId"
+            if live_etl_ds_version == "1.3.9"
+            else "workflowDefinitionCode"
+        )
+        assert (
+            workflow_instance_get_data[instance_definition_field] == workflow_identity
+        )
         assert workflow_instance_get_data["state"] == "SUCCESS"
 
         workflow_instance_yaml_result = run_dsctl_raw(
             live_repo_root,
-            ["workflow-instance", "export", str(workflow_instance_id)],
+            [
+                "workflow-instance",
+                "export",
+                str(workflow_instance_id),
+                "--project",
+                project_name,
+            ],
             env_file=live_etl_env_file,
         )
         assert workflow_instance_yaml_result.exit_code == 0
@@ -817,7 +1045,13 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
 
         workflow_instance_digest_result = wait_for_result(
             live_repo_root,
-            ["workflow-instance", "digest", str(workflow_instance_id)],
+            [
+                "workflow-instance",
+                "digest",
+                str(workflow_instance_id),
+                "--project",
+                project_name,
+            ],
             env_file=live_etl_env_file,
             timeout_seconds=20.0,
             interval_seconds=2.0,
@@ -884,6 +1118,8 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                 str(workflow_instance_id),
                 "--page-size",
                 "20",
+                "--project",
+                project_name,
             ],
             env_file=live_etl_env_file,
             timeout_seconds=20.0,
@@ -930,8 +1166,11 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                 "extract",
                 "--state",
                 "SUCCESS",
-                "--execute-type",
-                "BATCH",
+                *(
+                    ["--execute-type", "BATCH"]
+                    if live_etl_ds_version in _TASK_EXECUTE_TYPE_FILTER_VERSIONS
+                    else []
+                ),
                 "--start",
                 "2020-01-01 00:00:00",
                 "--end",
@@ -979,6 +1218,8 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                     "2",
                     "--timeout-seconds",
                     "60",
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
                 timeout_seconds=70.0,
@@ -1002,6 +1243,8 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                     str(extract_task_instance_id),
                     "--workflow-instance",
                     str(workflow_instance_id),
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
             ),
@@ -1098,7 +1341,7 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
         assert workflow_delete_data["deleted"] is True
         workflow_deleted = True
     finally:
-        if workflow_instance_id is not None:
+        if workflow_instance_id is not None and not workflow_deleted:
             run_dsctl(
                 live_repo_root,
                 [
@@ -1109,6 +1352,8 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
                     "2",
                     "--timeout-seconds",
                     "180",
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
                 timeout_seconds=200.0,
@@ -1131,6 +1376,7 @@ def test_etl_workflow_definition_and_runtime_surfaces_round_trip(
 def test_workflow_instance_edit_respects_sync_definition_flag(
     live_repo_root: Path,
     live_etl_env_file: Path,
+    live_etl_ds_version: str | None,
     live_name_factory: Callable[[str], str],
     tmp_path: Path,
 ) -> None:
@@ -1151,7 +1397,14 @@ def test_workflow_instance_edit_respects_sync_definition_flag(
     )
     sync_patch = write_workflow_patch(
         tmp_path / f"{workflow_name}-instance-sync.patch.yaml",
-        renames=[("extract-instance-only", "extract-synced")],
+        renames=[
+            (
+                "extract"
+                if live_etl_ds_version in _INSTANCE_DAG_EDIT_REQUIRES_SYNC_VERSIONS
+                else "extract-instance-only",
+                "extract-synced",
+            )
+        ],
     )
 
     project_created = False
@@ -1245,12 +1498,13 @@ def test_workflow_instance_edit_respects_sync_definition_flag(
             workflow_run_payload["data"],
             label="workflow run data",
         )
-        workflow_instance_id = require_int_value(
-            require_list(
-                workflow_run_data["workflowInstanceIds"],
-                label="workflow instance ids",
-            )[0],
-            label="workflow instance id",
+        workflow_instance_id = _execution_instance_id(
+            workflow_run_data,
+            repo_root=live_repo_root,
+            env_file=live_etl_env_file,
+            project=project_name,
+            fresh_workflow=workflow_name,
+            label="workflow run",
         )
 
         require_ok_payload(
@@ -1264,6 +1518,8 @@ def test_workflow_instance_edit_respects_sync_definition_flag(
                     "2",
                     "--timeout-seconds",
                     "180",
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
             ),
@@ -1271,35 +1527,139 @@ def test_workflow_instance_edit_respects_sync_definition_flag(
             label="workflow-instance watch",
         )
 
-        no_sync_update_payload = require_ok_payload(
-            run_dsctl(
+        initial_instance_tasks = _exported_instance_task_names(
+            live_repo_root,
+            live_etl_env_file,
+            project=project_name,
+            instance_id=workflow_instance_id,
+        )
+        assert initial_instance_tasks == {"extract", "load"}
+        initial_instance_version: int | None = None
+        initial_definition_version: int | None = None
+        if live_etl_ds_version in _INSTANCE_DAG_EDIT_REQUIRES_SYNC_VERSIONS:
+            initial_definition_version = _workflow_definition_version(
                 live_repo_root,
-                [
-                    "workflow-instance",
-                    "edit",
-                    str(workflow_instance_id),
-                    "--patch",
-                    str(no_sync_patch),
-                ],
-                env_file=live_etl_env_file,
-            ),
-            expected_action="workflow-instance.edit",
-            label="workflow-instance edit without sync-definition",
+                live_etl_env_file,
+                project=project_name,
+                workflow=workflow_name,
+            )
+            initial_instance_payload = require_ok_payload(
+                run_dsctl(
+                    live_repo_root,
+                    [
+                        "workflow-instance",
+                        "get",
+                        str(workflow_instance_id),
+                        "--project",
+                        project_name,
+                    ],
+                    env_file=live_etl_env_file,
+                ),
+                expected_action="workflow-instance.get",
+                label="workflow-instance get before rejected edit",
+            )
+            initial_instance_data = require_mapping(
+                initial_instance_payload["data"],
+                label="workflow-instance before rejected edit data",
+            )
+            initial_instance_version = require_int_value(
+                initial_instance_data.get("workflowDefinitionVersion"),
+                label="workflow-instance version before rejected edit",
+            )
+        no_sync_update_result = run_dsctl(
+            live_repo_root,
+            [
+                "workflow-instance",
+                "edit",
+                str(workflow_instance_id),
+                "--patch",
+                str(no_sync_patch),
+                "--project",
+                project_name,
+            ],
+            env_file=live_etl_env_file,
         )
-        no_sync_update_resolved = require_mapping(
-            no_sync_update_payload["resolved"],
-            label="workflow-instance edit resolved",
-        )
-        no_sync_update_data = require_mapping(
-            no_sync_update_payload["data"],
-            label="workflow-instance edit data",
-        )
-        assert no_sync_update_resolved["syncDefine"] is False
-        assert no_sync_update_data["id"] == workflow_instance_id
-        no_sync_version = require_int_value(
-            no_sync_update_data.get("workflowDefinitionVersion"),
-            label="workflow-instance version after no-sync edit",
-        )
+        if live_etl_ds_version in _INSTANCE_DAG_EDIT_REQUIRES_SYNC_VERSIONS:
+            no_sync_error = require_error_payload(
+                no_sync_update_result,
+                expected_action="workflow-instance.edit",
+                expected_type="user_input_error",
+                label="workflow-instance DAG edit without required sync-definition",
+            )
+            no_sync_details = require_mapping(
+                no_sync_error.get("details"), label="no-sync edit error details"
+            )
+            assert no_sync_details["required_option"] == "--sync-definition"
+            assert no_sync_details["ds_version"] == live_etl_ds_version
+            assert no_sync_details["workflow_instance_id"] == workflow_instance_id
+            assert (
+                _exported_instance_task_names(
+                    live_repo_root,
+                    live_etl_env_file,
+                    project=project_name,
+                    instance_id=workflow_instance_id,
+                )
+                == initial_instance_tasks
+            )
+            rejected_instance_payload = require_ok_payload(
+                run_dsctl(
+                    live_repo_root,
+                    [
+                        "workflow-instance",
+                        "get",
+                        str(workflow_instance_id),
+                        "--project",
+                        project_name,
+                    ],
+                    env_file=live_etl_env_file,
+                ),
+                expected_action="workflow-instance.get",
+                label="workflow-instance get after rejected edit",
+            )
+            rejected_instance_data = require_mapping(
+                rejected_instance_payload["data"],
+                label="workflow-instance after rejected edit data",
+            )
+            no_sync_version = require_int_value(
+                rejected_instance_data.get("workflowDefinitionVersion"),
+                label="workflow-instance version after rejected edit",
+            )
+            assert no_sync_version == initial_instance_version
+            assert (
+                _workflow_definition_version(
+                    live_repo_root,
+                    live_etl_env_file,
+                    project=project_name,
+                    workflow=workflow_name,
+                )
+                == initial_definition_version
+            )
+        else:
+            no_sync_update_payload = require_ok_payload(
+                no_sync_update_result,
+                expected_action="workflow-instance.edit",
+                label="workflow-instance edit without sync-definition",
+            )
+            no_sync_update_resolved = require_mapping(
+                no_sync_update_payload["resolved"],
+                label="workflow-instance edit resolved",
+            )
+            no_sync_update_data = require_mapping(
+                no_sync_update_payload["data"],
+                label="workflow-instance edit data",
+            )
+            assert no_sync_update_resolved["syncDefine"] is False
+            assert no_sync_update_data["id"] == workflow_instance_id
+            no_sync_version = require_int_value(
+                no_sync_update_data.get("workflowDefinitionVersion"),
+                label="workflow-instance version after no-sync edit",
+            )
+            assert _exported_instance_task_names(
+                live_repo_root,
+                live_etl_env_file,
+                project=project_name,
+                instance_id=workflow_instance_id,
+            ) == {"extract-instance-only", "load"}
 
         task_list_after_no_sync_payload = require_ok_payload(
             run_dsctl(
@@ -1333,6 +1693,8 @@ def test_workflow_instance_edit_respects_sync_definition_flag(
                     "--patch",
                     str(sync_patch),
                     "--sync-definition",
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
             ),
@@ -1349,12 +1711,15 @@ def test_workflow_instance_edit_respects_sync_definition_flag(
         )
         assert sync_update_resolved["syncDefine"] is True
         assert sync_update_data["id"] == workflow_instance_id
-        assert (
-            require_int_value(
-                sync_update_data.get("workflowDefinitionVersion"),
-                label="workflow-instance version after sync-definition edit",
-            )
-            > no_sync_version
+        sync_version = require_int_value(
+            sync_update_data.get("workflowDefinitionVersion"),
+            label="workflow-instance version after sync-definition edit",
+        )
+        _assert_workflow_version_after_update(
+            ds_version=live_etl_ds_version,
+            before=no_sync_version,
+            after=sync_version,
+            change="instance_sync",
         )
 
         task_list_after_sync_payload = require_ok_payload(
@@ -1381,6 +1746,12 @@ def test_workflow_instance_edit_respects_sync_definition_flag(
             "extract-synced",
             "load",
         }
+        assert _exported_instance_task_names(
+            live_repo_root,
+            live_etl_env_file,
+            project=project_name,
+            instance_id=workflow_instance_id,
+        ) == {"extract-synced", "load"}
     finally:
         if workflow_created and not workflow_deleted:
             delete_workflow_eventually(
@@ -1398,9 +1769,10 @@ def test_workflow_instance_edit_respects_sync_definition_flag(
             )
 
 
-def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
+def test_etl_sub_workflow_runtime_observes_online_guard_and_runs_child_instance(
     live_repo_root: Path,
     live_etl_env_file: Path,
+    live_etl_ds_version: str | None,
     live_name_factory: Callable[[str], str],
     tmp_path: Path,
 ) -> None:
@@ -1447,9 +1819,10 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
             project_create_payload["data"],
             label="project create data",
         )
-        project_code = require_int_value(
-            project_create_data.get("code"),
-            label="project code",
+        project_identity = _native_definition_identity(
+            project_create_data,
+            ds_version=live_etl_ds_version,
+            label="project",
         )
         project_created = True
 
@@ -1466,18 +1839,27 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
             child_workflow_create_payload["data"],
             label="child workflow create data",
         )
-        child_workflow_code = require_int_value(
-            child_workflow_create_data.get("code"),
-            label="child workflow code",
+        child_workflow_identity = _native_definition_identity(
+            child_workflow_create_data,
+            ds_version=live_etl_ds_version,
+            label="child workflow",
         )
-        assert child_workflow_create_data["projectCode"] == project_code
+        assert (
+            child_workflow_create_data[_project_identity_field(live_etl_ds_version)]
+            == project_identity
+        )
         child_workflow_created = True
 
         parent_spec = write_sub_workflow_parent_spec(
             tmp_path / f"{parent_workflow_name}.yaml",
             project_name=project_name,
             workflow_name=parent_workflow_name,
-            child_workflow_code=child_workflow_code,
+            child_workflow_name=(
+                child_workflow_name if live_etl_ds_version == "1.3.9" else None
+            ),
+            child_workflow_code=(
+                None if live_etl_ds_version == "1.3.9" else child_workflow_identity
+            ),
             trailing_marker=trailing_marker,
         )
         parent_workflow_create_payload = require_ok_payload(
@@ -1493,7 +1875,10 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
             parent_workflow_create_payload["data"],
             label="parent workflow create data",
         )
-        assert parent_workflow_create_data["projectCode"] == project_code
+        assert (
+            parent_workflow_create_data[_project_identity_field(live_etl_ds_version)]
+            == project_identity
+        )
         parent_workflow_created = True
 
         parent_online_result = run_dsctl(
@@ -1501,17 +1886,29 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
             ["workflow", "online", parent_workflow_name, "--project", project_name],
             env_file=live_etl_env_file,
         )
-        parent_online_error = require_error_payload(
-            parent_online_result,
-            expected_action="workflow.online",
-            label="parent workflow online before child",
-        )
-        assert result_error_code(parent_online_result) == 10000
-        assert parent_online_error["type"] == "invalid_state"
-        assert "sub-workflows are already online" in require_text_value(
-            parent_online_error.get("message"),
-            label="parent workflow online error message",
-        )
+        if live_etl_ds_version not in _SUB_WORKFLOW_ONLINE_GUARD_VERSIONS:
+            unguarded_parent_online_payload = require_ok_payload(
+                parent_online_result,
+                expected_action="workflow.online",
+                label="unguarded parent workflow online before child",
+            )
+            unguarded_parent_online_data = require_mapping(
+                unguarded_parent_online_payload["data"],
+                label="unguarded parent workflow online data",
+            )
+            assert unguarded_parent_online_data["releaseState"] == "ONLINE"
+        else:
+            parent_online_error = require_error_payload(
+                parent_online_result,
+                expected_action="workflow.online",
+                label="parent workflow online before child",
+            )
+            assert result_error_code(parent_online_result) == 10000
+            assert parent_online_error["type"] == "invalid_state"
+            assert "sub-workflows are already online" in require_text_value(
+                parent_online_error.get("message"),
+                label="parent workflow online error message",
+            )
 
         child_online_payload = require_ok_payload(
             run_dsctl(
@@ -1556,13 +1953,13 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
             parent_run_payload["data"],
             label="parent workflow run data",
         )
-        parent_instance_ids = require_list(
-            parent_run_data["workflowInstanceIds"],
-            label="parent workflow instance ids",
-        )
-        parent_instance_id = require_int_value(
-            parent_instance_ids[0],
-            label="parent workflow instance id",
+        parent_instance_id = _execution_instance_id(
+            parent_run_data,
+            repo_root=live_repo_root,
+            env_file=live_etl_env_file,
+            project=project_name,
+            fresh_workflow=parent_workflow_name,
+            label="parent workflow run",
         )
 
         parent_watch_payload = require_ok_payload(
@@ -1576,6 +1973,8 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
                     "2",
                     "--timeout-seconds",
                     "180",
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
                 timeout_seconds=200.0,
@@ -1598,6 +1997,8 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
                 str(parent_instance_id),
                 "--page-size",
                 "100",
+                "--project",
+                project_name,
             ],
             env_file=live_etl_env_file,
             accept=lambda current: _task_instance_list_has_rows(current, count=2),
@@ -1618,10 +2019,15 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
             label="parent task-instance rows",
         )
         sub_workflow_task_instance_id: int | None = None
+        expected_sub_workflow_task_type = (
+            "SUB_WORKFLOW"
+            if live_etl_ds_version in _SUB_WORKFLOW_NATIVE_TASK_TYPE_VERSIONS
+            else "SUB_PROCESS"
+        )
         for row in parent_task_rows:
             row_data = require_mapping(row, label="parent task-instance row")
             if (
-                row_data.get("taskType") == "SUB_WORKFLOW"
+                row_data.get("taskType") == expected_sub_workflow_task_type
                 and row_data.get("name") == "run-child"
             ):
                 sub_workflow_task_instance_id = require_int_value(
@@ -1641,6 +2047,8 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
                 str(sub_workflow_task_instance_id),
                 "--workflow-instance",
                 str(parent_instance_id),
+                "--project",
+                project_name,
             ],
             env_file=live_etl_env_file,
             accept=_task_instance_sub_workflow_ready,
@@ -1664,7 +2072,13 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
         parent_relation_payload = require_ok_payload(
             run_dsctl(
                 live_repo_root,
-                ["workflow-instance", "parent", str(child_instance_id)],
+                [
+                    "workflow-instance",
+                    "parent",
+                    str(child_instance_id),
+                    "--project",
+                    project_name,
+                ],
                 env_file=live_etl_env_file,
             ),
             expected_action="workflow-instance.parent",
@@ -1687,6 +2101,8 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
                     "2",
                     "--timeout-seconds",
                     "180",
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
                 timeout_seconds=200.0,
@@ -1711,6 +2127,8 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
                     "2",
                     "--timeout-seconds",
                     "180",
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
                 timeout_seconds=200.0,
@@ -1726,6 +2144,8 @@ def test_etl_sub_workflow_runtime_requires_online_child_and_runs_child_instance(
                     "2",
                     "--timeout-seconds",
                     "180",
+                    "--project",
+                    project_name,
                 ],
                 env_file=live_etl_env_file,
                 timeout_seconds=200.0,

@@ -92,6 +92,30 @@ not just:
 - `30001`
 - `50003`
 
+## Local Output Contract Failures
+
+`output_contract_error` is a stable local rendering error when an explicitly
+declared compact business collection has a broken row path or row shape.
+Its suggestion directs the caller to `--format json` to inspect original
+fields. It does not represent an upstream DS status or invalid user input.
+Dotted `--columns` selectors on compact business lists remain
+`user_input_error` and are rejected before service execution. The public
+encoding rules are in [JSON layout](cli-contract.md#json-layout).
+
+## Unknown Mutation Outcomes
+
+`mutation_outcome_unknown` is a stable service error for a dispatched write
+whose returned upstream result cannot distinguish an earlier rejection from an
+already applied mutation. It is narrower than `api_result_error` and does not
+assert a client transport failure. The error preserves `error.source`, carries
+the known resource scope, and sets `mutation_may_have_applied: true` plus
+`request_replay_safe: false`. Its suggestion must name a bounded read or watch
+that reconciles the resource and must prohibit blind replay. Structured
+`next_actions`, when available, retain the selected context or environment
+file. Services may use this type only for an exact operation, release, and
+upstream control path supported by source evidence; a generic result code alone
+is insufficient.
+
 ## Error Envelope Source Facts
 
 The CLI error envelope separates stable CLI semantics from preserved remote

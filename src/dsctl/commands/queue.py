@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.queue import (
     create_queue_result,
     delete_queue_result,
@@ -16,8 +15,6 @@ queue_app = typer.Typer(
     no_args_is_help=True,
 )
 
-QUEUE_HELP = "Queue name or numeric id. Run `dsctl queue list` to discover values."
-
 
 def register_queue_commands(app: typer.Typer) -> None:
     """Register the `queue` command group."""
@@ -25,41 +22,15 @@ def register_queue_commands(app: typer.Typer) -> None:
 
 
 @queue_app.command("list")
+@bind_command("queue.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter queues by queue name using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List queues with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -75,14 +46,11 @@ def list_command(
 
 
 @queue_app.command("get")
+@bind_command("queue.get")
 def get_command(
     ctx: typer.Context,
-    queue: Annotated[
-        str,
-        typer.Argument(help=QUEUE_HELP),
-    ],
+    queue: str,
 ) -> None:
-    """Get one queue by name or id."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -92,25 +60,13 @@ def get_command(
 
 
 @queue_app.command("create")
+@bind_command("queue.create")
 def create_command(
     ctx: typer.Context,
     *,
-    queue_name: Annotated[
-        str,
-        typer.Option(
-            "--queue-name",
-            help="Human-facing DS queue name used as the selector label.",
-        ),
-    ],
-    queue: Annotated[
-        str,
-        typer.Option(
-            "--queue",
-            help="Underlying YARN queue value stored in DolphinScheduler.",
-        ),
-    ],
+    queue_name: str,
+    queue: str,
 ) -> None:
-    """Create one queue."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -124,38 +80,14 @@ def create_command(
 
 
 @queue_app.command("update")
+@bind_command("queue.update")
 def update_command(
     ctx: typer.Context,
-    queue_identifier: Annotated[
-        str,
-        typer.Argument(
-            help=QUEUE_HELP,
-            metavar="QUEUE",
-        ),
-    ],
+    queue_identifier: str,
     *,
-    queue_name: Annotated[
-        str | None,
-        typer.Option(
-            "--queue-name",
-            help=(
-                "Updated human-facing DS queue name. Omit to keep the current "
-                "queue name."
-            ),
-        ),
-    ] = None,
-    queue: Annotated[
-        str | None,
-        typer.Option(
-            "--queue",
-            help=(
-                "Updated underlying YARN queue value. Omit to keep the current "
-                "queue value."
-            ),
-        ),
-    ] = None,
+    queue_name: str | None,
+    queue: str | None,
 ) -> None:
-    """Update one queue."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -170,22 +102,13 @@ def update_command(
 
 
 @queue_app.command("delete")
+@bind_command("queue.delete")
 def delete_command(
     ctx: typer.Context,
-    queue: Annotated[
-        str,
-        typer.Argument(help=QUEUE_HELP),
-    ],
+    queue: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm queue deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete one queue."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

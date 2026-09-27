@@ -1,8 +1,7 @@
-from typing import Annotated
-
 import typer
 
 from dsctl.cli_runtime import emit_result, get_app_state
+from dsctl.commands._contract_adapter import bind_command
 from dsctl.errors import UserInputError
 from dsctl.output import CommandResult
 from dsctl.services.project import (
@@ -20,10 +19,6 @@ project_app = typer.Typer(
     no_args_is_help=True,
 )
 
-PROJECT_HELP = (
-    "Project name or numeric code. Run `dsctl project list` to discover values."
-)
-
 
 def register_project_commands(app: typer.Typer) -> None:
     """Register the `project` command group."""
@@ -31,41 +26,15 @@ def register_project_commands(app: typer.Typer) -> None:
 
 
 @project_app.command("list")
+@bind_command("project.list")
 def list_command(
     ctx: typer.Context,
     *,
-    search: Annotated[
-        str | None,
-        typer.Option(
-            "--search",
-            help="Filter projects by name using the upstream search value.",
-        ),
-    ] = None,
-    page_no: Annotated[
-        int,
-        typer.Option(
-            "--page-no",
-            min=1,
-            help="Page number to fetch when not using --all.",
-        ),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        typer.Option(
-            "--page-size",
-            min=1,
-            help="Page size to request from the upstream API.",
-        ),
-    ] = 100,
-    all_pages: Annotated[
-        bool,
-        typer.Option(
-            "--all",
-            help="Fetch all remaining pages up to the safety limit.",
-        ),
-    ] = False,
+    search: str | None,
+    page_no: int,
+    page_size: int,
+    all_pages: bool,
 ) -> None:
-    """List projects with optional filtering and pagination controls."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -81,14 +50,11 @@ def list_command(
 
 
 @project_app.command("get")
+@bind_command("project.get")
 def get_command(
     ctx: typer.Context,
-    project: Annotated[
-        str,
-        typer.Argument(help=PROJECT_HELP),
-    ],
+    project: str,
 ) -> None:
-    """Get one project by name or code."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -98,25 +64,13 @@ def get_command(
 
 
 @project_app.command("create")
+@bind_command("project.create")
 def create_command(
     ctx: typer.Context,
     *,
-    name: Annotated[
-        str,
-        typer.Option(
-            "--name",
-            help="Project name.",
-        ),
-    ],
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Optional project description.",
-        ),
-    ] = None,
+    name: str,
+    description: str | None,
 ) -> None:
-    """Create a project."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(
@@ -130,36 +84,15 @@ def create_command(
 
 
 @project_app.command("update")
+@bind_command("project.update")
 def update_command(
     ctx: typer.Context,
-    project: Annotated[
-        str,
-        typer.Argument(help=PROJECT_HELP),
-    ],
+    project: str,
     *,
-    name: Annotated[
-        str | None,
-        typer.Option(
-            "--name",
-            help="Updated project name. Omit to keep the current name.",
-        ),
-    ] = None,
-    description: Annotated[
-        str | None,
-        typer.Option(
-            "--description",
-            help="Updated project description.",
-        ),
-    ] = None,
-    clear_description: Annotated[
-        bool,
-        typer.Option(
-            "--clear-description",
-            help="Clear the stored project description.",
-        ),
-    ] = False,
+    name: str | None,
+    description: str | None,
+    clear_description: bool,
 ) -> None:
-    """Update a project."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
 
@@ -193,22 +126,13 @@ def update_command(
 
 
 @project_app.command("delete")
+@bind_command("project.delete")
 def delete_command(
     ctx: typer.Context,
-    project: Annotated[
-        str,
-        typer.Argument(help=PROJECT_HELP),
-    ],
+    project: str,
     *,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Confirm project deletion without prompting.",
-        ),
-    ] = False,
+    force: bool,
 ) -> None:
-    """Delete a project."""
     state = get_app_state(ctx)
     env_file = None if state.env_file is None else str(state.env_file)
     emit_result(

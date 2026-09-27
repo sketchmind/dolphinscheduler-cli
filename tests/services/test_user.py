@@ -1,5 +1,3 @@
-from collections.abc import Mapping, Sequence
-
 import pytest
 from tests.fakes import (
     FakeDataSource,
@@ -13,9 +11,12 @@ from tests.fakes import (
     FakeTenantAdapter,
     FakeUser,
     FakeUserAdapter,
-    fake_service_runtime,
 )
-from tests.support import make_profile
+from tests.security_fakes import (
+    install_user_service_fakes as _install_user_service_fakes,
+)
+from tests.value_shape_assertions import assert_mapping as _mapping
+from tests.value_shape_assertions import assert_sequence as _sequence
 
 from dsctl.errors import (
     ApiResultError,
@@ -24,44 +25,7 @@ from dsctl.errors import (
     PermissionDeniedError,
     UserInputError,
 )
-from dsctl.services import runtime as runtime_service
 from dsctl.services import user as user_service
-
-
-def _install_user_service_fakes(
-    monkeypatch: pytest.MonkeyPatch,
-    user_adapter: FakeUserAdapter,
-    tenant_adapter: FakeTenantAdapter,
-    *,
-    project_adapter: FakeProjectAdapter | None = None,
-    datasource_adapter: FakeDataSourceAdapter | None = None,
-    namespace_adapter: FakeNamespaceAdapter | None = None,
-) -> None:
-    monkeypatch.setattr(
-        runtime_service,
-        "open_service_runtime",
-        lambda env_file=None: fake_service_runtime(
-            project_adapter or FakeProjectAdapter(projects=[]),
-            datasource_adapter=(
-                datasource_adapter or FakeDataSourceAdapter(datasources=[])
-            ),
-            namespace_adapter=namespace_adapter or FakeNamespaceAdapter(namespaces=[]),
-            user_adapter=user_adapter,
-            tenant_adapter=tenant_adapter,
-            profile=make_profile(),
-        ),
-    )
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    assert isinstance(value, Mapping)
-    return value
-
-
-def _sequence(value: object) -> Sequence[object]:
-    assert isinstance(value, Sequence)
-    assert not isinstance(value, (str, bytes, bytearray))
-    return value
 
 
 def _tenants() -> list[FakeTenant]:
@@ -626,6 +590,7 @@ def test_grant_user_project_result_returns_grant_confirmation(
     assert result.data == {
         "granted": True,
         "permission": "write",
+        "verification": "membership_only",
         "user": {
             "id": 7,
             "userName": "alice",

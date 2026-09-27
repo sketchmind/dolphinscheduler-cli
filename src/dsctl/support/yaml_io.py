@@ -8,10 +8,26 @@ import yaml
 from dsctl.support.json_types import JsonObject, JsonValue, is_json_value
 
 
+class _LiteralBlockSafeDumper(yaml.SafeDumper):
+    """Safe dumper that keeps multiline authored text readable and lossless."""
+
+
+def _represent_readable_string(
+    dumper: _LiteralBlockSafeDumper,
+    value: str,
+) -> yaml.nodes.ScalarNode:
+    style = "|" if "\n" in value else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
+
+
+_LiteralBlockSafeDumper.add_representer(str, _represent_readable_string)
+
+
 def dump_yaml_document(data: JsonObject) -> str:
     """Render a JSON-safe object as a YAML document."""
-    return yaml.safe_dump(
+    return yaml.dump(
         data,
+        Dumper=_LiteralBlockSafeDumper,
         sort_keys=False,
         allow_unicode=True,
     )
