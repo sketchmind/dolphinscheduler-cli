@@ -116,6 +116,18 @@ dsctl workflow-instance digest 901 --project etl-prod
 dsctl workflow-instance watch 901 --project etl-prod
 ```
 
+To investigate a failed run, list its task instances:
+
+```bash
+dsctl task-instance list --project etl-prod --workflow-instance 901
+```
+
+Use the failed task instance's ID in place of `902` to read its log:
+
+```bash
+dsctl task-instance log 902 --raw
+```
+
 [Runtime operations](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/runtime.md)
 covers schedules, backfills and execution controls.
 [Operational investigation](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/operational-investigation.md)
