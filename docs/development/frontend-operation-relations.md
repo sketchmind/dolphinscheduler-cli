@@ -1,102 +1,129 @@
-# 前端操作关系与 CLI 设计
+# Frontend operation relations and CLI design
 
-前端操作的身份传递、状态条件、副作用和结果观察是 CLI 设计的审阅线索。
-公共行为以 [CLI 契约](../reference/cli-contract.md) 为准，
-实现所有权以 [架构](architecture.md) 为准。新增 DS action 仍需逐版本源码证据
-和发布门槛；菜单、按钮或 enum 的存在不能批准支持。
+Identity propagation, state conditions, side effects and result observation in
+frontend operations provide review cues for CLI design. The
+[CLI contract](../reference/cli-contract.md) owns public behavior, and
+[Architecture](architecture.md) owns implementation responsibilities. New DS
+actions still require exact-version source evidence and release gates; the
+presence of a menu, button or enum does not authorize support.
 
-## 关系与承载位置
+## Relations and responsibilities
 
-| 关系 | 前端中的例子 | CLI 的合适承载位置 |
+| Relation | Frontend example | Appropriate CLI responsibility |
 | --- | --- | --- |
-| 身份与对象关联 | 定义进入实例列表；任务进入所属实例；父实例进入子实例 | 返回真实标识与作用域；有足够事实时生成 `next_actions` |
-| 输入发现 | 调度选择 worker、环境、租户；namespace 选择集群 | 现有字段 schema、`discovery_command`/`discovery_command_pattern`、模板说明 |
-| 状态前置 | 下线后编辑；终态后执行节点；失败后恢复 | 服务校验及 exact recipe；schema 描述前置条件，导航只作保守提示 |
-| 结果观察 | 控制请求提交后查看新一轮状态；强制入队后观察实际执行 | 接受回执、已解析身份、新轮次基线、`watch`/`digest`/日志 |
-| 副作用与范围 | 定义下线连带调度下线；删除级联；授权整集合替换 | 命令摘要、schema、预览及结构化结果/错误中的影响事实 |
-| 目标分支 | 保存草稿、手动验证、定时投产、恢复失败是不同目的 | 少量有说明的关联命令与按需场景文档/skill，不强制线性执行 |
+| Identity and object relations | Open an instance list from a definition; open a task's containing instance; open a child instance from its parent | Return actual identifiers and scope; generate `next_actions` when sufficient facts are available |
+| Input discovery | Select workers, environments and tenants for schedules; select clusters for namespaces | Existing field schema, `discovery_command`/`discovery_command_pattern`, and template guidance |
+| State preconditions | Edit after taking a definition offline; execute a node after a terminal state; recover after failure | Service validation and exact recipes; schema describes preconditions, while navigation provides conservative hints |
+| Result observation | Observe a new execution round after submitting a control request; observe actual execution after forcing a queue entry | Acceptance receipts, resolved identities, baselines for new execution rounds, `watch`/`digest`/logs |
+| Side effects and scope | Taking a definition offline also takes its schedule offline; cascading deletion; replacing an entire grant set | Command summaries, schema, previews, and effect facts in structured results/errors |
+| Different goals | Saving a draft, manual validation, scheduled production use and recovery from failure serve different purposes | A small set of explained related commands and scenario documentation/skills as needed, without requiring a linear sequence |
 
-按钮的 `loading`、`disabled`、倒计时、选中行和路由切换，还包含界面临时状态。
-它们不能直接进入业务资格判断。按钮可点也不证明权限、worker 条件和全部后端约束满足。
+Button `loading` and `disabled` values, countdowns, selected rows and route changes
+also contain transient UI state. They cannot directly determine business
+eligibility. A clickable button does not prove that permissions, worker
+prerequisites or all backend constraints are satisfied.
 
-## 身份、导航与观察
+## Identity, navigation and observation
 
-导航只使用已经返回的身份、作用域与状态，不发起额外 REST 请求。
-操作的读取或写入属性从 catalog 的 effects 派生；服务仍负责完整验证与授权。
-schema 提供静态命令和输入发现，动态 action_index 按已知行事实分组，
-next_actions 提供少量身份完整的后续命令。缺失身份或目标作用域时不生成可执行命令。
+Navigation uses only identities, scope and state already returned, with no
+additional REST requests. Read/write properties come from catalog effects;
+services retain responsibility for complete validation and authorization.
+Schema provides static command and input discovery, dynamic action_index groups
+known row facts, and next_actions offers a small set of follow-up commands with
+complete identities. Do not generate executable commands when identities or
+target scope are missing.
 
-`targets: "all"` 仅表示本次返回的全部行，要求所有行身份有效、唯一且全部纳入索引。
-截断、重复或非法身份造成的部分覆盖使用明确 ID。字段投影和 JSON 编码不改变逻辑索引范围，
-索引覆盖也不等于远端分页完整性。
+`targets: "all"` covers only every row returned in this response. Every row must
+have a valid, unique identity and be included in the index. Partial coverage
+caused by truncation, duplicate identities or invalid identities uses explicit
+IDs. Field projection and JSON encoding do not change the logical index scope,
+and index coverage does not imply complete remote pagination.
 
-父子实例关系中的目标 ID 不证明目标项目。源项目的 `resolved.project`
-不能复制为子实例作用域；应保留关系读取，在目标项目有证据后才能生成导航。
-同名对象、长整数 ID、旧版字符串 ID 与现代 code 均保留 exact 身份边界。
+The target ID in a parent/child instance relation does not establish the target
+project. Do not copy the source project's `resolved.project` as the child
+instance's scope. Retain the relation read and generate navigation only when the
+target project has supporting evidence. Objects with the same name, large integer
+IDs, legacy string IDs and modern codes retain their exact identity boundaries.
 
-定义与调度分别持有状态；定义下线可能连带调度下线，后续恢复投产应明确检查调度。
-保存草稿、手动运行和配置定时调度是不同目标，不强制上线后立即执行。
-队列 force-start 等控制结果中的 `accepted: true` 只证明请求接受；
-实际执行与完成需要实例、轮次基线、watch、digest 或日志证据。
+Definitions and schedules have separate states. Taking a definition offline may
+also take its schedule offline; explicitly check the schedule when restoring
+production use. Saving a draft, running manually and configuring a schedule are
+different goals; going online does not require immediate execution.
+`accepted: true` in control results such as queue force-start proves only request
+acceptance. Actual execution and completion require evidence from instances,
+execution-round baselines, watch, digest or logs.
 
-JSON 与紧凑 JSON 共享信息契约，compact 只在显式声明的业务集合改变编码。
-警告使用可选的结构化 `warnings`；未知事实、受支持的空值和查询覆盖保持原样。
-table/TSV 投影业务字段，操作索引不成为每行重复文本。
+JSON and compact JSON share the same information contract. Compact changes
+encoding only for explicitly declared business collections. Warnings use optional
+structured `warnings`; unknown facts, supported nulls and query coverage remain
+unchanged. Table/TSV project business fields; action indexes do not become repeated
+text in every row.
 
-## Exact 项目授权边界
+## Exact project authorization boundaries
 
-| Exact 发布集合 | 数量 | `grantProject` 的源码语义 |
+| Exact release set | Count | Source semantics of `grantProject` |
 | --- | ---: | --- |
-| 1.3.9、3.0.0–3.0.6、3.1.0–3.1.9 | 18 | 删除全部关系后写入传入集合；recipe 使用 `replace` |
-| 2.0.0–2.0.9 | 10 | 直接插入传入关系；recipe 使用 `insert` |
-| 3.2.0–3.2.2、3.3.1–3.3.2、3.4.0–3.4.3 | 9 | 只更新目标项目关系；recipe 使用 `upsert` |
+| 1.3.9, 3.0.0–3.0.6, 3.1.0–3.1.9 | 18 | Delete all relations, then write the supplied set; the recipe uses `replace` |
+| 2.0.0–2.0.9 | 10 | Insert the supplied relations directly; the recipe uses `insert` |
+| 3.2.0–3.2.2, 3.3.1–3.3.2, 3.4.0–3.4.3 | 9 | Update only the target project relation; the recipe uses `upsert` |
 
-源方法位于各 exact API 的 `UsersService[Impl].grantProject`；
-`grantProjectWithReadPerm` 从 3.2.0 出现。前两组公共 REST 仅产生写权限。
-reviewed evidence 与 exact action 选择由
-[兼容性编译器](../../tools/ds_codegen/compatibility_impact.py) 和
-[用户领域适配](../../src/dsctl/upstream/users.py) 维护。
+The source method is `UsersService[Impl].grantProject` in each exact API.
+`grantProjectWithReadPerm` first appears in 3.2.0. The public REST APIs in the
+first two groups only grant write permissions. Reviewed evidence and exact action
+selection are maintained by the
+[compatibility compiler](../../tools/ds_codegen/compatibility_impact.py) and
+[user domain adaptation](../../src/dsctl/upstream/users.py).
 
-替换整集合时需保留其他项目关系，同时保留上游并发限制；插入语义需考虑幂等性，
-新版本需区分只读升级。回读的 `verification: "membership_only"`
-只证明关系存在，不证明权限等级或目标用户实际执行。管理员视角不能替代目标身份验证。
+Replacing the entire set must preserve other project relations and the upstream
+concurrency limitations. Insert semantics must account for idempotency; newer
+versions must account separately for upgrading read-only permissions.
+Readback with `verification: "membership_only"` proves only that the relation
+exists, not its permission level or actual execution by the target user.
+An administrator's view cannot replace verification under the target identity.
 
-未来演进需复核是否替换全集合、是否支持只读、查询是否返回 relation perm。
-路由或 DTO 未变不能替代服务语义审阅。
+Future changes must review whether grants replace the entire set, whether
+read-only permissions are supported, and whether queries return relation perm.
+Unchanged routes or DTOs do not replace service-semantics review.
 
-## 任务旅程与验收
+## Task journeys and acceptance
 
-| 用户目标 | 现有命令构成的路径 | 必须保留的决定/证据 |
+| User goal | Path using existing commands | Decisions/evidence to retain |
 | --- | --- | --- |
-| 新建任务流 | template → lint → create dry-run → create | 之后可以仅保存、手动运行或配置调度；不强制 online→run |
-| 修改定时工作流 | export → 修改/预览 → 显式 offline → edit → online → 检查调度 | dry-run 可报告状态阻断；下线的调度是否恢复是独立决定 |
-| 调整调度 | list/get → explain → offline（如需）→ update → preview → online（如需） | schedule id、实际时区/参数、更新未隐式激活、当前 workflow 状态 |
-| 排查失败 | 实例 digest → 任务/日志 → 子实例或节点历史 → 选择修复/恢复 → watch | 真实父子关系、原始版本和参数、本轮基线、查询覆盖范围 |
-| 排查排队 | task-group → queue → task/instance → 调整优先级或请求 force-start → 观察 | 容量池与队列记录不同；接受不等于执行；不存在身份不猜测 |
-| 验证授权 | 管理员查看/修改具体关系与等级 → 回读 → 用户明确选择目标身份验证 | 不自动切身份；成员关系、权限等级、对象可见、实际执行分别证明 |
+| Create a workflow | template → lint → create dry-run → create | Then save only, run manually or configure a schedule; online→run is not mandatory |
+| Edit a scheduled workflow | export → modify/preview → explicit offline → edit → online → check schedule | Dry-run can report state blockers; restoring an offline schedule is a separate decision |
+| Adjust a schedule | list/get → explain → offline (if needed) → update → preview → online (if needed) | Schedule id, actual timezone/parameters, no implicit activation on update, and current workflow state |
+| Investigate failure | instance digest → tasks/logs → child instance or node history → choose repair/recovery → watch | Actual parent/child relations, original version and parameters, current execution-round baseline, and query coverage |
+| Investigate queuing | task-group → queue → task/instance → adjust priority or request force-start → observe | Capacity pools differ from queue records; acceptance is not execution; do not guess missing identities |
+| Verify authorization | Administrator inspects/changes specific relations and permission levels → readback → user explicitly selects the target identity for verification | Do not switch identities automatically; prove membership, permission level, object visibility and actual execution separately |
 
-规则验收覆盖 OFFLINE/ONLINE/缺失/未知状态、权限等级、不可用版本、
-缺失或重复身份、输入不足、跨 context、接受后未启动和新轮次完成。
-导航命令应被真实 parser 接受，且不增加请求；两种 JSON 解码后保持相同事实。
+Acceptance covers OFFLINE/ONLINE/missing/unknown states, permission levels,
+unavailable versions, missing or duplicate identities, insufficient input,
+cross-context cases, accepted requests that have not started, and completion of
+a new execution round. Navigation commands must be accepted by the real parser
+without adding requests; both JSON formats retain the same facts after decoding.
 
-输出方案的比较使用等价任务与业务信息，评估任务正确率、身份和状态错误、
-未经目标授权的写入、CLI/REST 次数、实际用量和用时。
-总字节是辅助指标，不设置牺牲正确性的信息预算。
+Compare output designs using equivalent tasks and business information. Evaluate
+task correctness, identity and state errors, writes without authorization for the
+target, CLI/REST call counts, actual usage and elapsed time. Total bytes are a
+secondary metric; do not impose an information budget that sacrifices correctness.
 
-## 上游审阅线索
+## Upstream review cues
 
-DS 1.3.9 的
-[实例菜单](https://github.com/apache/dolphinscheduler/blob/174c78c4a90a53fdfe7131e9b065edaa38b7936f/dolphinscheduler-ui/src/js/conf/home/pages/projects/pages/instance/pages/list/_source/list.vue#L106-L138)
-用 `disabled` 表达可操作组，而 DS 3.4.1 的
-[实例动作](https://github.com/apache/dolphinscheduler/blob/f19eb8ce7dc4d7c0be9e213610d6812718294333/dolphinscheduler-ui/src/views/projects/workflow/instance/components/table-action.tsx#L119-L261)
-用它禁用按钮。不能直接将变量名称作为业务资格规则。
+The DS 1.3.9
+[instance menu](https://github.com/apache/dolphinscheduler/blob/174c78c4a90a53fdfe7131e9b065edaa38b7936f/dolphinscheduler-ui/src/js/conf/home/pages/projects/pages/instance/pages/list/_source/list.vue#L106-L138)
+uses `disabled` to express groups eligible for operations, while DS 3.4.1
+[instance actions](https://github.com/apache/dolphinscheduler/blob/f19eb8ce7dc4d7c0be9e213610d6812718294333/dolphinscheduler-ui/src/views/projects/workflow/instance/components/table-action.tsx#L119-L261)
+use it to disable buttons. Variable names cannot directly define business
+eligibility rules.
 
-DS 3.2.0 起任务实例入口由 processInstanceId/name 转为 workflowInstanceId/name；
-命名变化仍需 exact wire 适配，不能创造新的对象关系。
-DS 3.4.2 的
-[启动表单](https://github.com/apache/dolphinscheduler/blob/71eb6412f940afa1f171f1097dc0e99ed61d16e2/dolphinscheduler-ui/src/views/projects/workflow/definition/components/use-modal.ts)
-修正参数字段绑定及验证，说明菜单动作未变也可能伴随校验变化。
+From DS 3.2.0, task-instance entry points change from processInstanceId/name to
+workflowInstanceId/name. Naming changes still require exact wire adaptation;
+they do not create new object relations. The DS 3.4.2
+[start form](https://github.com/apache/dolphinscheduler/blob/71eb6412f940afa1f171f1097dc0e99ed61d16e2/dolphinscheduler-ui/src/views/projects/workflow/definition/components/use-modal.ts)
+corrects parameter field binding and validation, showing that validation can
+change even when menu actions remain unchanged.
 
-UI handler、表单和菜单差异应触发所属 controller、service、enum 的源码复核。
-按实际变化的操作重审，不能从任意 Vue/TSX 条件表达式生成通用业务规则，
-也不能把样本审阅推广为全部版本的能力授权。
+Differences in UI handlers, forms and menus should trigger source review of the
+owning controllers, services and enums. Review the operations that actually
+changed. Do not derive generic business rules from arbitrary Vue/TSX conditionals
+or extend a sample review into authorization of capabilities across all versions.

@@ -1,4 +1,4 @@
-# CLI UX convergence
+# CLI Usability and Evaluation
 
 This document records shared CLI usability decisions and their acceptance
 criteria. Public behavior is maintained in the
@@ -79,12 +79,30 @@ combined lane results from a successful complete gate invocation. See
 artifact-bound requirements. Historical receipts do not attest a later
 candidate, and usability checks do not promote a source profile.
 
+## Output Encoding Acceptance
+
+The [JSON layout contract](../reference/cli-contract.md#json-layout) owns the
+encoding rules. The shared output layer must use declared business row paths,
+without command-specific branches, tokenizer-dependent layouts or changes to
+generated upstream contracts. Explicit filters and columns select information;
+format selection only changes its representation.
+
+Regression coverage must prove field-by-field equivalence after decoding
+compact JSON: every declared row path, empty/single/multiple rows, supported
+nulls, mixed types, nested values, literal-dot keys, large integers, duplicate
+identities, index truncation, projections, shape errors and raw bodies.
+Preserve envelope metadata, pagination, warnings and navigation over the same
+logical rows. Do not invent unsupported fields or trim information merely to
+improve size measurements.
+
 ## Usability measurement
 
 Compare CLI-only use with CLI plus the public skill using the same model,
 configuration, task inputs and replayable synthetic REST data. Isolate inherited
 DS/DSCTL selectors and run outside the source checkout. Evaluation permits only
 public CLI commands; review traces for source, credential or direct REST access.
+Reading source, bypassing the CLI with direct REST, or making unauthorized
+changes invalidates the affected result.
 This command protocol boundary does not provide OS confidentiality isolation.
 
 Judge task correctness before efficiency: require correct failure identities,
@@ -92,8 +110,16 @@ actual parent/child relationships, supporting log evidence and explicit partial
 coverage when permissions restrict discovery. Fix command, request and time
 limits before the exercise, and report incomplete attempts as such.
 
-Record CLI invocations, REST requests, official model usage, output bytes and
-wall time. Distinguish cached and uncached input; reasoning tokens included in
+Use reviewable fixed tasks, fixtures and scoring criteria. Retain failed and
+repeated attempts; do not hide reruns to obtain a successful comparison.
+Simulated wrappers and replay alone do not establish production or real-cluster
+acceptance. Exclude authentication headers from reports and keep raw evidence
+private. Per-command cost claims require per-request usage measurements.
+
+Check actual argv, exit statuses and CLI/REST traces independently. Record
+official model usage as separate input, cached-input, output and reasoning
+fields, alongside output bytes and wall time. Distinguish cached and uncached
+input; reasoning tokens included in
 output usage must not be counted twice. Bytes are not tokens, and CLI output is
 only part of model context cost. A single paired sample cannot establish a
 stable improvement percentage or general performance benefit. Keep raw traces,

@@ -69,6 +69,7 @@ _HISTORICAL_SCHEMA_3_RECEIPT = (
     / "docs"
     / "development"
     / "live-evidence"
+    / "external-shell"
     / "3.4.2"
     / "2026-08-04-48c6477c09bb.json"
 )
@@ -1143,13 +1144,22 @@ def test_failed_cleanup_refuses_to_delete_project_without_ownership_marker() -> 
     assert all(call[:2] != ["project", "delete"] for call in calls)
 
 
-def test_historical_exact_342_receipts_remain_auditable() -> None:
+@pytest.mark.parametrize(
+    ("relative_path", "expected_schemas"),
+    [
+        ("external-shell/3.4.2", {3, 4, 6}),
+        ("history/external-shell/3.4.2", {6}),
+    ],
+)
+def test_historical_exact_342_receipts_remain_auditable(
+    relative_path: str, expected_schemas: set[int]
+) -> None:
     evidence_dir = (
         Path(__file__).resolve().parents[2]
         / "docs"
         / "development"
         / "live-evidence"
-        / "3.4.2"
+        / relative_path
     )
     historical = []
     for path in evidence_dir.glob("*.json"):
@@ -1158,8 +1168,8 @@ def test_historical_exact_342_receipts_remain_auditable() -> None:
             validate_exact_profile_evidence_payload(payload, ds_version="3.4.2")
             historical.append(payload["schema_version"])
 
-    assert {3, 4, 6} <= set(historical), (
-        "the historical schema-3, schema-4, and schema-6 receipts must remain auditable"
+    assert set(historical) == expected_schemas, (
+        "the historical receipts must remain auditable in their scenario directory"
     )
 
 

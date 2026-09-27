@@ -2,10 +2,14 @@
 
 Date: 2026-09-08. Product baseline: `e5eea9c`.
 
-This audit fills the source inventory between the 15 selectable exact profiles:
-`2.0.1`–`2.0.8`, `3.0.1`–`3.0.5`, and `3.1.1`–`3.1.8`. Together these cover
-36 final upstream releases from `1.3.9` through `3.4.2`; `3.3.0-alpha` is not a
-final release. Source analysis does not register or promote runtime profiles.
+This historical audit filled the source inventory between the 15 exact profiles
+selectable at that baseline: `2.0.1`–`2.0.8`, `3.0.1`–`3.0.5`, and
+`3.1.1`–`3.1.8`. Its scope, together with those representatives, covered 36 final
+upstream releases from `1.3.9` through `3.4.2`; `3.3.0-alpha` is not a final
+release. These numbers describe the audit scope, not the current inventory.
+The later [final-release admission](stable-release-admission.md) records exact
+profiles through `3.4.3`; [architecture](architecture.md#current-stable-surface)
+owns current counts. Source analysis alone does not register or promote profiles.
 
 The existing implementation is reusable at operation and task-family boundaries.
 An entire intermediate release cannot inherit all behavior and support decisions
@@ -15,14 +19,14 @@ even when the REST contract is unchanged.
 
 ## Method and evidence boundaries
 
-- Read the available local source first. Reuse the 15 existing full contract
-  snapshots after checking their source identity and extractor fingerprint.
-- Keep `references/dolphinscheduler` read-only. Prepare missing official Git tags
-  in `build/compatibility-audit-2026-09-08/source.git`; reuse the existing clean
-  `build/upstream/ds-2.0.5` checkout. All 21 root POM versions match their tags.
-- Extract each new version once with the existing contract generator, using at
-  most two extraction processes. Compare it with both existing representatives
-  in its minor line: `2.0.0`/`2.0.9`, `3.0.0`/`3.0.6`, `3.1.0`/`3.1.9`.
+- Reuse full contract snapshots only after checking their source identity and
+  extractor fingerprint. The audit reused the 15 representative snapshots.
+- Keep mounted reference sources read-only. Verify each official Git tag,
+  commit, tree and root POM version before extraction. All 21 intermediate
+  sources had root POM versions matching their tags.
+- Extract each exact version with the contract generator and compare it with
+  both representatives in its minor line: `2.0.0`/`2.0.9`, `3.0.0`/`3.0.6`,
+  `3.1.0`/`3.1.9`.
 - Separate full controller/type inventory changes from the CLI's reviewed
   operation roots and their transitive type closure. Also compare normalized
   effective HTTP request and response contracts. Java package moves and unused
@@ -38,8 +42,8 @@ No new server instance or worker task was exercised for this audit.
 
 ## Exact source inventory
 
-All 21 snapshots were extracted successfully; 42 comparisons cover both
-same-minor endpoints. Counts below describe the full extracted controller
+The audit extracted all 21 snapshots and compared each with both same-minor
+endpoints. Counts below describe that full extracted controller
 inventory, not supported CLI actions.
 
 | Release | Source commit | Controller operations |
@@ -75,16 +79,17 @@ Several response corrections in
 reviewed versions, so intermediate sources did not receive them in that run.
 
 The `3.0.5`/`3.0.6` pair exposed this directly: its relevant Java source trees
-are identical, but the raw extractor reports three changed response operations:
+are identical, but the audit's raw extractor reported three changed response
+operations:
 
 - resource paging uses a different qualification of `PageInfo<Resource>`;
 - schedule creation retains a synthesized service-map model instead of the
   actual `Schedule` payload;
 - task deletion lacks the reviewed nullable `ProcessDefinition` correction.
 
-These are analyzer coverage gaps, not three newly discovered REST changes.
-The same patterns recur elsewhere; older schedule-preview response corrections
-also require explicit coverage. Keep original snapshots and raw diffs intact.
+These were analyzer coverage gaps, not three newly discovered REST changes.
+The same patterns recurred elsewhere; older schedule-preview response corrections
+also required explicit coverage. Keep original snapshots and raw diffs intact.
 Any derived correction must validate the candidate's actual source against the
 existing guard and retain its exact source identity. A matching version-number
 prefix is not sufficient evidence.
@@ -93,14 +98,14 @@ The derived audit applied existing source guards to the actual candidate source;
 it did not modify snapshots or the generator's version tables. A missing
 `Schedule` model was reused only after its complete class AST and imports
 matched. Schedule-preview correction additionally required matching controller
-and service method ASTs because its existing correction has no structural
+and service method ASTs because the correction then had no structural
 source guard. Failed guards retained their original difference and reason.
 
-After that review, **9 of 21 releases match an existing representative's
-selected static CLI closure**. The other 12 are not proven equal; this is not
-a count of incompatible releases.
+In that audit, **9 of 21 releases matched a representative's selected static
+CLI closure**. The other 12 were not proven equal by that comparison; this was
+not a count of incompatible releases or their final admission result.
 
-| Candidate releases | Comparison result after source-guard review |
+| Candidate releases | Historical comparison after source-guard review |
 | --- | --- |
 | `2.0.8` | Zero selected-closure differences from `2.0.9`. |
 | `3.0.2`–`3.0.5` | Zero selected-closure differences from `3.0.6`. |
@@ -109,7 +114,7 @@ a count of incompatible releases.
 | `2.0.6`–`2.0.7` | No normalized operation differences from `2.0.9`; two explicitly retained SWITCH model fields differ: `nextNode` is `List<String>` instead of `Long`. |
 | `3.0.1` | One remaining difference from `3.0.0`: the schedule-update priority default. |
 | `3.1.3`–`3.1.6` | One remaining difference from `3.1.9`: the task execution-status enum lacks `STOP`. |
-| `2.0.1`–`2.0.5` | Type/resource-response mapping and some operation differences remain; failed source guards and missing type roots are preserved for exact admission review. `2.0.2` also has an optional instance-update `flag`; `2.0.2`/`2.0.3` task-delete inference is `Void` rather than the later nullable entity. No whole-closure equality is asserted. |
+| `2.0.1`–`2.0.5` | Type/resource-response mapping and some operation differences remained; failed source guards and missing type roots were retained for the later exact admission review. `2.0.2` also has an optional instance-update `flag`; `2.0.2`/`2.0.3` task-delete inference was `Void` rather than the later nullable entity. No whole-closure equality was asserted. |
 
 In particular, `3.1.2` appears in the zero-closure group and still has the
 OPENMLDB worker defect below. REST closure equality does not establish task
@@ -179,7 +184,7 @@ cannot establish all intermediate task memberships:
   can repeat those effects. This consequence is conditional on reaching that
   execution path; it is not a live-test result.
 
-Additional transition points were located for future exact reviews:
+The audit also located these transition points for the later exact reviews:
 
 | Surface | First changed release | Evidence to retain |
 | --- | --- | --- |
@@ -197,28 +202,25 @@ and [`3.1.3` returned-value assignment](https://github.com/apache/dolphinschedul
 The final exact task admissions and remaining holes are recorded in
 [task authoring boundaries](task-authoring-boundaries.md).
 
-The task scan covered the 266 existing review evidence paths plus task-plugin,
-worker/master, parameter, registration, and authoring UI surfaces across the
-21 candidates and six endpoints. It inspected 2,216 distinct Git blobs, then
-read selected material changes. The scan did not manually attest every changed
-method or transitive execution dependency. The detailed local task report
-retains the per-version registration inventory, findings, and source anchors.
+The task scan covered existing review evidence plus task-plugin, worker/master,
+parameter, registration and authoring UI surfaces across the 21 candidates and
+six endpoints, then read selected material changes. It did not manually attest
+every changed method or transitive execution dependency.
 
-### Shared implementation follow-up
+### Shared schedule error translation
 
-The source review also exposed a current schedule error-translation gap:
-`START_TIME_BEFORE_CURRENT_TIME_ERROR` (`80004`) appears in `3.0.4` and remains
-in represented `3.0.6`. A direct, network-free call to
-`translate_schedule_api_error` returns the original `ApiResultError` for this
-code. This is a shared existing issue, not a missing intermediate-version
-adapter.
-
-Follow-up: map `80004` to `UserInputError` in
-`src/dsctl/services/_schedule_support.py`, with a suggestion to choose a future
-start time, and cover the create/update error path in
-`tests/services/test_schedule.py`. The source is
+The audit exposed a shared schedule error-translation gap for
+`START_TIME_BEFORE_CURRENT_TIME_ERROR` (`80004`), which appears in `3.0.4` and
+remains in representative `3.0.6`. The source is
 [3.0.4 SchedulerServiceImpl](https://github.com/apache/dolphinscheduler/blob/0a4175261e93ebfe5557fec023ac4b1c2ec950ee/dolphinscheduler-api/src/main/java/org/apache/dolphinscheduler/api/service/impl/SchedulerServiceImpl.java#L169).
-The audit records this work without changing runtime behavior.
+
+This gap is now resolved in
+[_schedule_support.py](../../src/dsctl/services/_schedule_support.py): the code
+maps to `UserInputError`, with a suggestion to choose a future `--start`, keep
+`--end` later, and update an existing schedule before retrying `schedule online`.
+[test_schedule.py](../../tests/services/test_schedule.py) covers the create,
+update and online paths. It is shared error handling, not an intermediate-version
+adapter.
 
 ## Other source surfaces
 
@@ -231,21 +233,25 @@ package relocation is retained as a source difference rather than described as
 a changed user payload.
 
 None of these 21 sources provides the product-info method or the version-bearing
-OpenAPI configuration used by current automatic discovery. The older Swagger
+OpenAPI configuration required for exact metadata discovery. The older Swagger
 configuration, where present, does not set a DS release version in `ApiInfo`.
-Adding exact profiles alone would therefore not make these deployments
-automatically discoverable; they would still need an explicit `DS_VERSION`
-under the current discovery contract.
+Adding exact profiles does not itself identify those deployments automatically.
+The later [contract-read discovery](contract-read-discovery.md) can admit bounded
+reads from observed public API contracts without identifying an exact release;
+operations outside that policy still require an explicit `DS_VERSION`.
 
-The current version resolver was checked directly: it accepts all 15 registered
-versions and rejects all 21 intermediate versions before transport. No network
-request is needed for this check. Selecting a neighboring version is not an
-equivalent substitute for an exact profile.
+At the audit baseline, the resolver accepted only the 15 registered versions
+and rejected these 21 intermediate versions before transport. Their later exact
+admission supersedes that selection limit. Selecting a neighboring version
+remains an invalid substitute for an exact profile.
 
-## Integration direction
+## Admission rules
 
-1. Add exact source identities and reviewed operation/action decisions for the
-   intermediate tags. Reuse existing request/response programs wherever their
+The subsequent admission followed these rules, which also apply to future
+release reviews:
+
+1. Record exact source identities and reviewed operation/action decisions for
+   each tag. Reuse existing request/response programs wherever their
    contracts match; do not create a handwritten adapter per release.
 2. Record task support and preservation boundaries at the actual transition
    versions, including defects present only in an intermediate release. Reuse
@@ -258,64 +264,42 @@ equivalent substitute for an exact profile.
    development and applicable installed-wheel/live gates. Keep release-specific
    verification separate from mechanical reuse and profile promotion.
 
-## Local reproduction
+## Reproduction
 
-Full snapshots, comparison JSON, source identities, scripts, and source diffs
-are kept in `build/compatibility-audit-2026-09-08/`. Large temporary analysis
-artifacts do not enter the runtime package or introduce a permanent framework.
-The existing public tools can repeat any individual extraction and comparison:
+Use the regular [codegen tools](codegen.md#analyze-a-candidate-release) to extract
+an exact source and compare it with a reviewed base. Full snapshots and derived
+comparison reports belong under ignored `build/`, not in the runtime package.
 
-```bash
-.venv/bin/python tools/generate_ds_contract.py \
-  --ds-source 3.1.2=build/compatibility-audit-2026-09-08/sources/ds-3.1.2 \
-  --output build/compatibility-audit-2026-09-08/snapshots/ds-3.1.2-contract.json
+For CLI-consumed comparisons, `--scope cli` applies the base's reviewed roots
+while preserving the target's actual version and source identity. This scope
+requires the current extractor fingerprint. Regenerate stale inputs into new
+artifacts, retaining historical snapshots and reports under their original
+identity. Do not relabel a target snapshot as another supported release.
 
-.venv/bin/python tools/analyze_ds_version_diff.py \
-  --snapshot 3.1.0=build/ds_contract/snapshots-v2/ds-3.1.0-contract.json \
-  --snapshot 3.1.2=build/compatibility-audit-2026-09-08/snapshots/ds-3.1.2-contract.json \
-  --base 3.1.0 --target 3.1.2 --format json \
-  --output build/compatibility-audit-2026-09-08/example-full-diff.json
-```
-
-For the CLI-consumed comparison, add `--scope cli` and choose a separate output
-path. The tool now applies the representative's reviewed roots while preserving
-the candidate's actual version. Regenerate old snapshots before using this
-scope: it requires the current extractor fingerprint. Do not relabel a candidate
-snapshot as a supported release.
-
-The original audit changed documentation only. It did not change generated output,
-support levels, task reviews, version discovery, or the selectable version set.
-
-Validation: all 21 exact-source extractions and discovery-source checks passed;
-all 42 raw and 42 source-reviewed comparison reports are present; 12 focused
-audit checks passed, including failed-guard preservation and leaving original
-snapshots unchanged. The six representative self-comparisons have zero diff.
-Documentation spelling, whitespace, and immutable source-link anchors were
-checked. Product code and generated artifacts did not change, so the full
-development suite was not rerun for this documentation-only audit.
+The original audit changed documentation only. Its source comparisons did not
+change generated output, support levels, task reviews, version discovery or
+runtime membership; those changes belonged to the later admission.
 
 ## Generator Follow-up
 
-The subsequent generator refactor separates source inventory, reviewed profile
-membership, and packaging selection. Named source correction rules and exact
-review membership now have separate modules. Five correction categories have
-reusable source guards for candidate releases; other historical corrections
-remain exact-only. Existing reviewed releases retain their exact correction
-membership, including coordinates deliberately absent from that membership.
+The subsequent generator refactor separated source inventory, reviewed profile
+membership and packaging selection. Named source correction rules and exact
+review membership have separate modules. Candidate-enabled correction rules
+require reusable source guards; other historical corrections remain exact-only.
+Reviewed releases retain their exact correction membership, including
+coordinates deliberately absent from that membership.
 
 Candidate extraction and CLI-closure comparison now use the regular
 [codegen tools](codegen.md#analyze-a-candidate-release); the temporary audit
 adjudicator is not a production dependency. The original snapshots and reports
 remain historical evidence from their original extractor. Static equality
-still does not establish task behavior or runtime admission, and this refactor
-does not add the 21 candidate releases to the selectable runtime inventory.
+still does not establish task behavior or runtime admission. That refactor
+alone did not add the 21 candidates to the selectable inventory; the later
+admission did.
 
-The follow-up re-extracted all 15 reviewed full snapshots with the current
-extractor: every contract and contract digest remained identical. Canonical
-atomic regeneration reproduced all 1,122 tracked runtime files byte for byte.
-Fresh candidate snapshots then exercised the regular CLI comparison:
+The refactor's focused comparisons recorded these outcomes before admission:
 
-| Candidate | Reviewed base | Current CLI-scope assessment |
+| Candidate | Reviewed base | Historical CLI-scope assessment |
 | --- | --- | --- |
 | `2.0.1` | `2.0.9` | `incomplete_evidence`: missing operation/type roots |
 | `2.0.8` | `2.0.9` | `equal` |
@@ -323,12 +307,6 @@ Fresh candidate snapshots then exercised the regular CLI comparison:
 | `3.1.2` | `3.1.0` | `equal`; the task defect above is still a separate fact |
 | `3.1.3` | `3.1.9` | `different`: `TaskExecutionStatus.STOP` is absent |
 
-These are selected static comparisons, not a new all-21 admission result.
-Follow-up snapshots, reports, and artifact comparisons are kept separately in
-`build/codegen-admission-refactor/`.
-
-The complete development quality gate passed after the refactor: 13,639 portable
-tests, 1,047 source-contract tests, and 3 source-rebuild tests. Static, type,
-architecture, generated-freshness, and spelling checks passed in the same run.
-This is development validation; it does not promote a profile or replace
-current-wheel release receipts.
+These are selected historical static comparisons, not current admission
+decisions or release receipts. Preserve the distinction between reproducible
+source evidence, reviewed runtime membership and current-wheel acceptance.

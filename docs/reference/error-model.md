@@ -150,12 +150,16 @@ Implementation rule:
 
 ## Inventory Script
 
-Use the checked-in inventory script to rebuild the upstream baseline:
+Use the checked-in inventory script to rebuild an upstream baseline. It reads
+an exact DolphinScheduler source checkout, which is optional local material and
+is not included in this CLI repository or its packages. Prepare the intended
+release with the [source workflow](../development/codegen.md), then replace the
+path below with that checkout. The script only reads the upstream tree:
 
 ```bash
-python tools/extract_ds_api_error_inventory.py --format summary
-python tools/extract_ds_api_error_inventory.py --format json --output build/ds-api-error-inventory.json
-python tools/extract_ds_api_error_inventory.py --format markdown --output build/ds-api-error-inventory.md
+python tools/extract_ds_api_error_inventory.py --ds-source /path/to/exact-ds-checkout --format summary
+python tools/extract_ds_api_error_inventory.py --ds-source /path/to/exact-ds-checkout --format json --output build/ds-api-error-inventory.json
+python tools/extract_ds_api_error_inventory.py --ds-source /path/to/exact-ds-checkout --format markdown --output build/ds-api-error-inventory.md
 ```
 
 The script extracts:
@@ -171,7 +175,8 @@ still belongs in handwritten `dsctl` service logic.
 ## dsctl Translation Coverage Audit
 
 Use the `dsctl` audit script to inspect current handwritten translation
-coverage:
+coverage. This audit reads the CLI source and does not require an upstream
+checkout:
 
 ```bash
 python tools/audit_dsctl_error_translation.py --format summary

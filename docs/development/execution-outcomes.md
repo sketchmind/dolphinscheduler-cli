@@ -1,6 +1,9 @@
 # Execution receipts and mutation outcomes
 
-This records the execution/mutation part of the CLI convergence work. It does not promote any exact profile or establish new live-server coverage.
+This document explains execution identities, mutation uncertainty and recovery
+observations. The public [CLI contract](../reference/cli-contract.md) owns command
+syntax and output fields. These rules do not promote an exact profile or
+establish live-server coverage.
 
 ## Acceptance and identity
 
@@ -12,7 +15,7 @@ This records the execution/mutation part of the CLI convergence work. It does no
 
 DS 3.2.0, 3.2.1 and 3.2.2 return a scalar **triggerCode**, not a workflow instance ID. The CLI preserves it separately and performs the compiled `instance_trigger` read once. An empty result remains pending; multiple IDs remain multiple IDs. A failed query raises the existing post-mutation error with `mutation_applied: true`, `phase: instance_resolution`, the accepted receipt in `details.execution`, and its project. It does not resubmit the executor request.
 
-The existing command `workflow-instance list --trigger-code CODE --project PROJECT` repeats the query. The exact source endpoint exists from 3.2.0 through 3.4.3. It returns `totalList` identity rows plus trigger and resolution facts; `resolved.query` identifies a non-paginated identity projection. Ordinary list filters, non-default pagination and `--all` cannot be combined with this mode. This new primitive is not automatically added to the separately reviewed candidate-read policy.
+The command `workflow-instance list --trigger-code CODE --project PROJECT` repeats the query. The exact source endpoint exists from 3.2.0 through 3.4.3. It returns `totalList` identity rows plus trigger and resolution facts; `resolved.query` identifies a non-paginated identity projection. Ordinary list filters, non-default pagination and `--all` cannot be combined with this mode. This primitive is not automatically added to the separately reviewed candidate-read policy.
 
 The trigger query is an observation, not a guarantee that a backfill has produced every expected instance or completed every requested date. `resolved` describes available identities, not backfill coverage. Before 3.2.0 the CLI cannot infer an ID from the successful empty reply by matching workflow name or time.
 
@@ -77,12 +80,20 @@ A greater marker proves a later execution of the same instance. Concurrent contr
 
 ## Preview and parameter limits
 
-Dry-run captures the prepared request before mutation. Dependencies and server state can change between preview and a later invocation; applying the same CLI input is not an atomic replay of a reviewed server snapshot. Creation now supplies workflow name, desired release state, task count and task names as semantic preview facts.
+Dry-run captures the prepared request before mutation. Dependencies and server state can change between preview and a later invocation; applying the same CLI input is not an atomic replay of a reviewed server snapshot. Creation supplies workflow name, desired release state, task count and task names as semantic preview facts.
 
-Fresh run/backfill options follow their existing CLI/context/default resolution. They do not automatically inherit worker, tenant or environment from an old schedule/instance. Backfill acceptance, instance discovery and completion of the expected dates are distinct observations. None of these changes roll back external data effects or promise exact restore of native runtime state.
+Fresh run/backfill options follow their existing CLI/context/default resolution. They do not automatically inherit worker, tenant or environment from an old schedule/instance. Backfill acceptance, instance discovery and completion of the expected dates are distinct observations. These operations do not roll back external data effects or promise exact restore of native runtime state.
 
-## Focused validation
+## Regression coverage
 
-- 122 execution/trigger/progress tests passed before the final shared output migration: `test_workflow_execution_rounds.py`, `test_workflow_trigger_resolution.py`, `workflow/test_mutation_progress.py`, and `upstream/test_generated_workflows.py`.
-- The existing execution-preview and workflow-instance suites passed after receipt fixtures and catalog-bound suggestions were updated: 89 tests.
-- Exact packages were atomically generated from all 36 verified snapshots with `generate_ds_runtime_bundles.py --snapshot-mode require`; no full source audit or full repository test run was performed for this work package.
+Execution-round and trigger-resolution tests cover real identities, pending
+receipts, failed post-mutation reads and later-round completion.
+`tests/services/workflow/test_mutation_progress.py` covers completed and uncertain
+stages; execution-preview and workflow-instance tests cover prepared effects,
+known identities and actionable recovery guidance. Generated workflow tests
+retain exact native request and response expectations.
+
+These tests must preserve the distinction between request acceptance, known
+mutation effects and observed runtime completion. Passing development tests or
+regenerating exact packages does not replace artifact-bound server acceptance;
+historical receipts remain attached to their original wheel.

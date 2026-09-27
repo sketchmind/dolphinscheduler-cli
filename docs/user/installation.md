@@ -4,7 +4,7 @@
 
 `dolphinscheduler-cli` currently requires Python 3.11 or newer.
 
-The published package is tested on Python 3.11, 3.12, and 3.13.
+The repository's CI covers Python 3.11, 3.12, and 3.13.
 
 ## Install From PyPI
 
@@ -65,13 +65,19 @@ CLI and selected DS profile report and supports `--format`.
 
 Use source installs for local development or unreleased changes.
 
+If you do not already have a checkout, clone the repository:
+
+```bash
+git clone https://github.com/sketchmind/dolphinscheduler-cli.git
+```
+
 From an existing source checkout:
 
 ```bash
 cd dolphinscheduler-cli
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
+python -m pip install -c tools/lint-constraints.txt -e '.[dev]'
 dsctl version
 ```
 
@@ -81,7 +87,7 @@ changes. After updating the checkout, activate the same virtual environment
 and refresh the install:
 
 ```bash
-python -m pip install -e '.[dev]'
+python -m pip install -c tools/lint-constraints.txt -e '.[dev]'
 python -m pip check
 command -v dsctl
 dsctl --version
@@ -94,8 +100,7 @@ dependencies even when the project's own virtual environment works.
 
 ## Configure A Cluster
 
-`dsctl version` does not require a live DolphinScheduler connection. Commands
-that talk to DolphinScheduler need a DS API URL and token:
+Commands that talk to DolphinScheduler need a DS API URL and token:
 
 ```bash
 export DS_API_URL="https://dolphinscheduler.example.com/dolphinscheduler"

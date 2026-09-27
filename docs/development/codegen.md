@@ -85,9 +85,9 @@ handler on `3.3.1`–`3.4.1`; endpoint-absence decisions still require no bindin
 Terminal completeness means only that every coordinate has an explicit
 decision. It does not collapse the other gates: terminal is not synonymous
 with supported, supported is not synonymous with live-verified, and
-live-verified does not automatically promote a version. `3.4.1` remains the
-stable full/tested runtime target; the other exact profiles remain
-experimental.
+live-verified does not automatically promote a version. See
+[support policy and verification](../user/version-compatibility.md#support-policy-and-verification)
+for the distinction between release labels and artifact-bound evidence.
 
 For every accepted or terminally blocked semantic operation, the compiler
 produces four independent fingerprints: exact source evidence, normalized

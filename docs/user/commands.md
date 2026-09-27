@@ -1,9 +1,8 @@
 # Commands
 
-The stable CLI surface is documented in the
-[CLI Contract](../reference/cli-contract.md). Use that document as the
-machine-readable behavior contract for command names, output envelopes, error
-shape, warnings, and dry-run behavior.
+The [CLI Contract](../reference/cli-contract.md) documents stable command names,
+output envelopes, errors, warnings, and dry-run behavior. Use
+`dsctl schema --command ACTION` for the machine-readable invocation contract.
 
 Command notation uses uppercase semantic metavars: `PROJECT`, `WORKFLOW`,
 `WORKFLOW_INSTANCE`, `FILE`, and similar tokens mean “replace this value”.
@@ -84,7 +83,7 @@ dsctl schema --command datasource.create
 dsctl template datasource --ds-version 3.4.2 --type MYSQL
 dsctl namespace create --namespace etl-prod --cluster-code 9001
 dsctl namespace delete etl-prod --force
-dsctl resource list /
+dsctl resource list
 dsctl worker-group list
 dsctl alert-group list
 dsctl user list
@@ -117,7 +116,7 @@ attempted rename returns a structured input error.
 dsctl template task
 dsctl task-type get SQL
 dsctl task-type schema SQL
-dsctl template task SQL --variant pre-post-statements --raw
+dsctl template task SQL --raw
 dsctl template workflow --raw > workflow.yaml
 dsctl template workflow-patch --raw > patch.yaml
 dsctl lint workflow workflow.yaml

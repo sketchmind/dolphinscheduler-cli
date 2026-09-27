@@ -48,7 +48,7 @@ The runtime resolves one target snapshot used by services, version discovery,
 navigation and output. The command catalog owns syntax, help, schema, local
 mutation classification and constraints. Registry operations require no DS
 controller or wire changes; compatibility inventory changes cover local actions
-only. DS `3.4.1` remains stable, with no profile promotion implied.
+only and do not change profile support policy.
 
 ## Acceptance Journeys
 
@@ -78,7 +78,7 @@ isolation, overrides, incomplete inputs, stale files, endpoint rebinding and
 credential exclusion. Focused foundation and command tests cover file errors,
 locking, schema validation, conflicting inputs and zero-network behavior.
 Runtime tests cover shared snapshot and navigation behavior. Test existence is
-separate from the passing-run evidence recorded below. A remote read smoke, if
+separate from passing-run evidence. A remote read smoke, if
 performed, is separate evidence and requires an explicitly selected authorized
 target.
 
@@ -90,33 +90,18 @@ and `use` references, retaining historical release notes where appropriate.
 Regenerate catalog-derived artifacts atomically; keep historical receipts
 unchanged. Pass focused behavioral tests and the development quality gate.
 
-## Validation
+## Validation Boundaries
 
-The complete development gate passed on 2026-09-14:
-
-```bash
-python tools/check_quality_gate.py --mode development
-```
-
-| Lane | Result |
-| --- | --- |
-| Portable tests | 17,778 passed |
-| Exact source contract tests | 1,482 passed |
-| Source rebuild tests | 3 passed |
-| Strict type checking | 2,961 files passed |
-| Lint, formatting, architecture boundaries, generated freshness, static conformance and governance checks | Passed |
-
-The rebuild lane compares source extraction with verified snapshots and checks
-byte-identical generated runtime packages for all 36 exact releases. Registry
-acceptance includes concurrent writers and consistent read snapshots, fresh
-shells, independent task selectors, token rotation, endpoint rebinding,
+Registry acceptance includes concurrent writers and consistent read snapshots,
+fresh shells, independent task selectors, token rotation, endpoint rebinding,
 malformed paths, and successful default writes with failed effective readback.
 Transport acceptance verifies that pagination retains the original URL and
 token even if the default, connection file or symlink changes during execution.
 Templates and result navigation retain named contexts or explicit file paths.
 
-Process tests used synthetic credentials and loopback REST servers. The final
-gate ran with local loopback listening permitted; no live test lane or real
-cluster was used. Windows file locking is implemented but was not executed on
-Windows in this run. This is development validation, not release-wheel or
-real-cluster acceptance.
+Process tests use synthetic credentials and loopback REST servers. Loopback
+coverage establishes process and transport behavior; it does not establish
+Windows file-lock behavior unless run on Windows. Development tests also do
+not replace installed-wheel or real-cluster acceptance. Record those results
+against their actual platform, target and artifact under the
+[release process](release.md).

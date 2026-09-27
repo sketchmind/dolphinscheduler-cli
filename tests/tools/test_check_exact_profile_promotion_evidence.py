@@ -141,12 +141,15 @@ def test_checker_allows_an_explicit_pre_campaign_full_claim(tmp_path: Path) -> N
     assert summary.receipt is None
 
 
-def test_checker_accepts_one_current_schema_seven_receipt(tmp_path: Path) -> None:
+def test_checker_accepts_one_current_schema_seven_receipt(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     checker = _load_module()
     source_root = _copy_source_root(tmp_path)
     _set_live_actions(source_root, _PROMOTION_ACTIONS)
-    evidence_dir = tmp_path / "evidence"
-    evidence_dir.mkdir()
+    evidence_dir = source_root / "docs/development/live-evidence/external-shell/3.4.2"
+    evidence_dir.mkdir(parents=True)
     receipt_path = _write_schema_seven_receipt(evidence_dir, source_root=source_root)
 
     summary = checker.check_exact_profile_promotion_evidence(
@@ -157,6 +160,12 @@ def test_checker_accepts_one_current_schema_seven_receipt(tmp_path: Path) -> Non
     assert summary.receipt == receipt_path
     assert summary.wheel_filename == "dolphinscheduler_cli-0.4.0-py3-none-any.whl"
     assert summary.wheel_sha256 == "sha256:" + "a" * 64
+
+    result = checker.run_exact_profile_promotion_evidence_cli(
+        ["--version", "3.4.2", "--source-root", str(source_root)]
+    )
+    assert result == 0
+    assert "promotion evidence check passed" in capsys.readouterr().out
 
 
 def test_checker_rejects_pre_campaign_allowance_when_current_receipt_exists(
@@ -220,6 +229,7 @@ def test_checker_keeps_legacy_receipts_audit_only(
             / "docs"
             / "development"
             / "live-evidence"
+            / "external-shell"
             / "3.4.2"
             / "2026-08-04-13b81eedd389.json"
         ).read_text(encoding="utf-8")
@@ -497,6 +507,7 @@ def _write_schema_seven_receipt(
             / "docs"
             / "development"
             / "live-evidence"
+            / "external-shell"
             / "3.4.2"
             / "2026-08-04-13b81eedd389.json"
         ).read_text(encoding="utf-8")

@@ -157,7 +157,8 @@ the whole profile's support level and `tested` status unchanged.
 After an evidence-backed ledger change, atomically regenerate, run the applicable
 development checks, and build a new final wheel from a clean source snapshot.
 Preflight and locally install that wheel before collecting the complete final
-same-wheel read, conformance and exact `3.4.2` receipts. Never relabel preliminary
+same-wheel read, conformance and `external-shell/v1` receipts on the reviewed
+exact `3.4.2` target. Never relabel preliminary
 results with the new wheel hash or rebuild the final wheel during that campaign.
 
 Build from a dedicated clean checkout or isolated source snapshot. Before the
@@ -184,8 +185,8 @@ python tools/check_quality_gate.py --mode release
 ```
 
 The release gate runs the complete development gate plus conformance-bundle,
-exact-profile read, and exact 3.4.2 promotion evidence checks. It rejects portable
-lanes and every skip option. The old evidence skip/allowance options have been
+exact-profile read, and `external-shell/v1` evidence checks on exact `3.4.2`.
+It rejects portable lanes and every skip option. The old evidence skip/allowance options have been
 removed from the quality gate; pre-campaign work uses development mode.
 Individual evidence checkers remain available for campaign diagnosis, including
 `check_exact_profile_promotion_evidence.py --version 3.4.2 --allow-missing-current-receipt`, whose
@@ -196,21 +197,19 @@ Its independent corpus checkers validate their own contracts and wheel
 consistency without receiving the canonical wheel file. The final
 `check_release_artifacts.py` invocation with the wheel/sdist pair binds all
 three evidence families to that wheel's filename, full SHA-256 and source
-snapshot. It also requires an actual current exact `3.4.2` receipt; the
-standalone promotion checker can return `unclaimed` when the expanded mutation
-claim is absent. Publication requires both checks. Neither successful check
-promotes every profile or proves the complete 181-action surface.
+snapshot. It also requires an actual current `external-shell/v1` receipt on
+exact `3.4.2`; the standalone promotion checker can return `unclaimed` when the
+expanded mutation claim is absent. Publication requires both checks.
 
-The `3.4.1` stable designation and the additional `3.4.2` `external-shell/v1`
-gate are reviewed release policies, not special upstream wire inheritance.
-The latter verifies preservation and restoration of a pre-existing SHELL task
-that the generic core scenario does not establish. Retain that obligation
-until an independently reviewed replacement covers it; do not remove it just
-because more versions have passed the core campaign.
+The `external-shell/v1` gate is a reviewed scenario obligation, separate from
+[profile support policy](../user/version-compatibility.md#support-policy-and-verification).
+It verifies preservation and restoration of a pre-existing SHELL task,
+complementing the core lifecycle scenario. A replacement gate must cover the
+same restoration obligations and pass independent review.
 
 If profile fingerprints invalidate existing receipts, retain them as historical
 evidence and rerun all required exact coordinates with the same canonical
-wheel. Development success never makes an old receipt current.
+wheel.
 
 The wheel-only preflight is required before any live gate. It compares the
 complete packaged runtime with `src/dsctl` byte for byte and validates the
@@ -367,8 +366,8 @@ current installed `live_smoke` claim. This checker is also part of the release
 gate; do not commit promoted metadata without the complete governed
 corpus.
 
-A current `3.4.2` mutating claim requires its schema-7 receipt before the release
-gate can pass. If a live DolphinScheduler cluster is available, the development
+A current `external-shell/v1` claim on exact `3.4.2` requires its schema-7
+receipt before the release gate can pass. If a live DolphinScheduler cluster is available, the development
 gate can append the destructive source-tree suite:
 
 ```bash
@@ -383,10 +382,10 @@ Use `.env.example` as the local profile template. The real `.env` file is
 ignored by git and must not be committed. This source-tree suite is a campaign
 check; it does not replace installed-wheel evidence or the release gate.
 
-Every release must run the exact `3.4.2` installed-wheel gate against its
-canonical wheel rather than relying on the source-tree live suite. This gate
-binds live evidence to the exact wheel SHA-256, so it is required even when the
-release does not change the `3.4.2` profile:
+Every release must run the installed-wheel `external-shell/v1` scenario on its
+reviewed exact `3.4.2` target against the canonical wheel. The source-tree live
+suite cannot replace this gate. It binds live evidence to the exact wheel
+SHA-256, so it is required even when the release does not change that profile:
 
 When an active resident-matrix warm lease already owns a REST-verified `3.4.2`
 fixture, project its schema-1 manifests and private ready state into the strict
@@ -425,7 +424,7 @@ python tools/run_exact_profile_live_gate.py \
   --attestation-key-file /secure/ds-3.4.2-attestation.key \
   --cluster-manifest /secure/ds-3.4.2-cluster.json \
   --fixture-manifest /secure/ds-3.4.2-fixture.json \
-  --evidence docs/development/live-evidence/3.4.2/DATE-WHEEL_SHA.json
+  --evidence docs/development/live-evidence/external-shell/3.4.2/DATE-WHEEL_SHA.json
 ```
 
 The requirements and manifest schemas are documented in
@@ -437,24 +436,11 @@ secret-free schema-7 receipt, then rerun
 manifest, package version, and exact wheel bytes. Never commit the profile,
 attestation key, cluster manifest, or fixture manifest.
 
-Historical campaign `promotion-f328d3e2-schema6-r2-20260810` passed this gate
-with wheel SHA-256
-`f328d3e2d6ba261c26f9f74decb12a9229b5d471b6f2efdd2a07d55b116af06f`.
-Its archived schema-6 receipt is
-`docs/development/live-evidence/history/3.4.2/2026-08-10-f328d3e2d6ba.json` and
-records 48 operations: 45 successes and three expected negative paths. All 15
-fixed actions were `live_smoke`; the gate trace and cleanup attestation record
-the real external `SHELL` task update and exact restoration. The post-gate
-matrix describe independently confirmed identity, topology, attached schedule,
-and `OFFLINE` state before cleanup, and the remote matrix then returned clean.
-Current task-update recipe/profile changes invalidate that receipt for release,
-so release readiness requires the new canonical wheel to rerun the gate. `3.4.2` remains experimental with `tested=false`;
-`3.4.1` remains the only stable profile.
-
-An earlier untracked attempt used projection/v1 and was withdrawn before
-promotion because its bare RepoDigest was not bound to the node-local image ID.
-Do not restore or promote that private audit receipt; the tracked r2 receipt is
-the first one satisfying the projection/v2 image-inspection contract.
+Historical schema-3/4/5/6 receipts remain auditable for their recorded artifacts;
+they cannot satisfy the current schema-7 release gate. A passing gate supplies
+only its named per-action evidence, not whole-profile promotion.
+Image provenance must satisfy the current projection contract: a bare
+RepoDigest without its node-local image-ID binding is insufficient.
 
 The expanded task-definition gate is mutating. It must own a dedicated
 `OFFLINE` workflow with one editable `SHELL` task exclusively for the complete
@@ -502,7 +488,8 @@ tar -tf dist/*.tar.gz | sort
 The artifact checker requires exactly one canonical wheel and one sdist. It
 first compares the wheel's runtime payload byte-for-byte with `src/dsctl` and
 validates the sdist. It then validates the complete conformance corpus,
-the complete exact-read corpus and the separate exact-`3.4.2` promotion receipt against the candidate wheel
+the complete exact-read corpus and the separate `external-shell/v1` receipt on
+exact `3.4.2` against the candidate wheel
 basename, full SHA-256, and candidate source root. An old, missing, mixed, or
 wrong-wheel corpus cannot satisfy the full release gate. `--wheel-only` remains
 the pre-campaign payload check and deliberately requires no live evidence. The

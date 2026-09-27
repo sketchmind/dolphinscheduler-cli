@@ -777,15 +777,22 @@ def test_sdist_package_content_check_requires_reviewed_test_inputs(
     assert result.errors == (f"missing required package path: {fixture_path}",)
 
 
-def test_sdist_package_content_check_requires_exact_live_evidence() -> None:
-    evidence = "docs/development/live-evidence/3.4.2/receipt.json"
+@pytest.mark.parametrize("legacy_location", [False, True])
+def test_sdist_package_content_check_requires_exact_live_evidence(
+    *, legacy_location: bool
+) -> None:
+    evidence = "docs/development/live-evidence/external-shell/3.4.2/receipt.json"
+    paths = [name for name in _complete_sdist_fixture_paths() if name != evidence]
+    if legacy_location:
+        paths.append("docs/development/live-evidence/3.4.2/receipt.json")
     result = _check_sdist_paths(
-        [name for name in _complete_sdist_fixture_paths() if name != evidence],
+        paths,
     )
 
     assert not result.ok
     assert (
-        "missing required package path: docs/development/live-evidence/3.4.2/*.json"
+        "missing required package path: "
+        "docs/development/live-evidence/external-shell/3.4.2/*.json"
     ) in result.errors
 
 
@@ -963,7 +970,7 @@ def _complete_sdist_fixture_paths() -> tuple[str, ...]:
         *_tracked_runtime_fixture_paths("src/dsctl"),
         "docs/development/release.md",
         "docs/development/tooling.md",
-        "docs/development/live-evidence/3.4.2/receipt.json",
+        "docs/development/live-evidence/external-shell/3.4.2/receipt.json",
         "tools/check_package_contents.py",
         "tools/analyze_ds_conformance_bundles.py",
         "tools/generate_ds_runtime_bundles.py",

@@ -166,32 +166,29 @@ Done when:
 
 Every exact profile has a complete terminal catalog for all stable CLI
 actions. The [current inventory](architecture.md#current-stable-surface) records
-the profile and supported/upstream-absent coordinate counts. A
-terminal catalog is not a list of live-tested actions: terminal, supported, live-verified, and
-promoted are four independent states. `3.4.1` remains the stable profile; the
-other exact profiles remain experimental.
+the profile and supported/upstream-absent coordinate counts. Catalog completion,
+action availability, live verification and profile promotion are tracked
+separately. The
+[support policy](../user/version-compatibility.md#support-policy-and-verification)
+is separate from these artifact-bound verification scopes.
 
-A live gate deliberately exercises a bounded allowlist. Passing that gate proves
-only the named actions for the immutable artifact and manifest recorded in its
-receipt; it neither narrows the profile catalog nor promotes the whole profile.
-The current `0.4.0` receipt corpus binds all 37 profiles to the same wheel:
-37 [exact-read receipts](live-evidence/exact-read/), 37
-[conformance receipts](live-evidence/conformance-bundles/) using `full_core/v1`,
-and the separate exact `3.4.2` schema-7 external-SHELL receipt. Each receipt
-records its immutable wheel digest and exact contract identities. The
-[compatibility matrix](../user/version-compatibility.md#current-support-matrix)
-separates current support policy from historical admission evidence.
+A live gate exercises a named set of actions. Its receipt binds those actions
+to an immutable artifact and manifest.
+The retained `0.4.0` development candidate corpus binds all 37 profiles to the
+same wheel: 37 four-action [exact-read receipts](live-evidence/exact-read/), 37
+18-action [conformance receipts](live-evidence/conformance-bundles/) using
+`full_core/v1`, and the separate 15-action `external-shell/v1` schema-7 receipt
+on exact `3.4.2`. Each receipt records its immutable wheel digest and exact
+contract identities. This wheel predates the later Typer and DataX runtime
+fixes; a release candidate containing those fixes needs its own acceptance.
 
 The generic read gate covers four remote stable actions: `project.list`,
-`project.get`, `workflow.list`, and `workflow.get`. The stable `3.4.1`
-scenario suite has its own evidence and scope. A promotion-grade generic
-schema-2 corpus sets exactly those four actions to `live_smoke` on every exact
-profile; it does not
-relabel any other coordinate, set a profile's `tested` flag, change its support
-level, or satisfy a conformance or mutation gate. The separate schema-7 gate
-adds current `3.4.2` evidence for its fixed 15-action bundle. That additional
-per-action promotion still leaves `3.4.2` experimental with `tested=false` and
-does not promote the whole profile.
+`project.get`, `workflow.list`, and `workflow.get`. A promotion-grade generic
+schema-2 corpus sets those four actions to `live_smoke` on every exact profile.
+Conformance and mutation scopes have their own gates. The separate schema-7
+`external-shell/v1` gate adds evidence for its fixed 15-action bundle on exact
+`3.4.2`. Its scope is the named actions and artifact; profile support policy and
+the `tested` flag are maintained separately.
 
 All 37 profiles now mark these four reads as `live_smoke`. The additional 22
 profiles use reviewed preliminary `full_core/v1` evidence from an installed
@@ -539,20 +536,13 @@ belongs to the external matrix orchestrator. A temporary campaign collector
 may supply them, but this repository does not claim that collector as a
 tracked, long-term command.
 
-The historical governed corpus under
-`docs/development/live-evidence/conformance-bundles/` was produced by campaign
-`conformance-e8eacee57af9-r12-20260811`, whose build source was commit
-`db14cf378a38ae6c2e1955e8fd1f2234855603a5` and tree
-`f022abdcb5a51f021a5540ea3ecf678050927365`. Its 15 highest-ready receipts bind
-one immutable wheel with SHA-256
-`e8eacee57af9a9d2659194b05bccbbd7680eb10c310c4189d9cfa3ae8b5c9152`.
-The set contains two `legacy_core/v1` coordinates and 13 `full_core/v1`
-coordinates. Its corpus checker passed for the recorded assessment. The
-receipts do not attest the newly expanded manifests, the 21 added profiles, or
-the newly ready full-core coordinates for `1.3.9` and `2.0.0`. This named-bundle
-evidence does not change per-action verification, support level, `tested`, whole-profile
-promotion, or authoring facets. `3.4.1` remains the sole stable profile;
-`3.4.2` remains experimental with `tested=false`. See
+The governed corpus lives under
+`docs/development/live-evidence/conformance-bundles/`. Each receipt records its
+exact version, named bundle, assessment and immutable wheel identity. Directory
+placement alone does not establish freshness: the corpus checker must match
+those bindings to the current source and candidate artifact. Named-bundle
+evidence does not change per-action verification, support level, `tested`,
+whole-profile promotion, or authoring facets. See
 [Release Process](release.md#local-gate)
 for the build-once ordering and [Tooling](tooling.md) for the checker boundary.
 
@@ -685,54 +675,26 @@ source contents, Core Metadata, `RECORD` and generated manifests before live
 testing. Preliminary results retain their original artifact identity and
 cannot substitute for a governed same-wheel corpus.
 
-The historical campaign `promotion-167723bbe11d-r7-20260809` built the wheel
-from an isolated clean source tree. Before any cluster testing, the public
-wheel-only preflight verified its exact source contents, Core Metadata,
-`RECORD`, and manifest. All 15 profiles then completed the same 12-invocation
-gate (`180/180`) against the single immutable wheel digest
-`sha256:167723bbe11d919b9d30a91ade4b017530743ec75061fdcb78a93429fc0bde88`.
-Each receipt binds the four installed-profile and public-catalog verification
-values as `live_smoke`, includes that mapping in its read-bundle digest, and
-retains the same zero-mutation and secret-free assertions. The receipts are
-archived as
+Archived schema-1 read receipts remain at
 `docs/development/live-evidence/history/exact-read/<version>/2026-08-09-167723bbe11d.json`.
-They passed the complete same-wheel corpus checker for that artifact. Current
-profile fingerprints have since changed, so those receipts remain historical.
-Campaign `conformance-e8eacee57af9-r12-20260811` reran all 15 coordinates with
-wheel SHA-256
-`e8eacee57af9a9d2659194b05bccbbd7680eb10c310c4189d9cfa3ae8b5c9152`.
-The receipts under `live-evidence/exact-read/<version>/` passed the complete
-same-wheel checker for their recorded manifests and bind exactly the four named
-read actions to `live_smoke` evidence with zero CLI-phase mutation. They do not
-attest the later compatibility-expansion manifests. Receipts do not
-carry a campaign identifier; the campaign record and the receipt evidence
-boundary remain distinct.
-
-After the final sweep, the orchestrator restored `3.2.2` as the rotating
-release and left the resident
-`3.4.1` and `3.4.2` releases running. All 18 services reported `1/1` replicas,
-no token bootstrap was pending, and the remote matrix repository was clean.
-The ledger change promoted exactly 56 previously `contract_tested` coordinates
-(`14 profiles × 4 actions`); `3.2.2` already carried those four `live_smoke`
-values. This bounded promotion did not promote any whole profile. A separate
-then-current mutating `3.4.2` gate was completed for that artifact and is now
-archived as recorded below; a later artifact-bound result follows and is also
-historical for the expanded manifests.
+They preserve the original four-action, zero-mutation evidence for their named
+wheel and profiles. Current-schema receipts under
+`live-evidence/exact-read/<version>/` must independently satisfy the current
+same-wheel checker. Neither an earlier successful campaign nor a receipt's
+location refreshes its fingerprints or extends its scope to new profiles.
 
 ### Exact `3.4.2` Installed-Wheel Gate
 
-The behavioral procedure below was used by the recorded schema-6 `0.4.0`
-campaigns. The current writer and promotion checker use semantic schema 7 and
-require a newly built canonical wheel and matching receipt because the generated
-fingerprints changed. Fixture ownership, identity, mutation, restoration,
+This gate verifies the `external-shell/v1` fixture-preservation and restoration
+scenario on its reviewed exact `3.4.2` target. The current writer and promotion
+checker use semantic schema 7 and require a
+receipt bound to the canonical wheel and current generated fingerprints.
+Fixture ownership, identity, mutation, restoration,
 redaction, semantic profile, manifest, and domain-recipe bindings remain part of
 the current safety contract. The previous schema-6 results are archived with the
 earlier schema-v3/v4/v5 receipts; each remains auditable for the historical
 artifact and action scope it names, but none can be copied or reclassified as
-schema-7 current evidence. Campaign `conformance-e8eacee57af9-r12-20260811`
-reran this procedure with the same canonical wheel used by both then-current
-15-version corpora; its artifact-bound schema-6 receipt is recorded below and is
-now historical for the expanded manifests.
+schema-7 current evidence.
 
 The version-selected mutating gate has one supported entry point. Its explicit
 `external-shell/v1` policy is currently reviewed for `3.4.2`; selecting another
@@ -746,7 +708,7 @@ python tools/run_exact_profile_live_gate.py \
   --attestation-key-file /secure/ds-3.4.2-attestation.key \
   --cluster-manifest /secure/ds-3.4.2-cluster.json \
   --fixture-manifest /secure/ds-3.4.2-fixture.json \
-  --evidence docs/development/live-evidence/3.4.2/DATE-WHEEL_SHA.json
+  --evidence docs/development/live-evidence/external-shell/3.4.2/DATE-WHEEL_SHA.json
 ```
 
 The profile and attestation-key file must be readable only by their owner, for
@@ -914,42 +876,13 @@ quality gate, and Python 3.11 CI lane require schema 7 once the complete
 receipt must also match the current profile, recipes, manifest, package version,
 wheel filename, and full wheel SHA-256.
 
-Historical campaign `promotion-f328d3e2-schema6-r2-20260810` passed schema 6
-against the then-current immutable wheel with SHA-256
-`f328d3e2d6ba261c26f9f74decb12a9229b5d471b6f2efdd2a07d55b116af06f`.
-The archived receipt is
-[`live-evidence/history/3.4.2/2026-08-10-f328d3e2d6ba.json`](live-evidence/history/3.4.2/2026-08-10-f328d3e2d6ba.json).
-Its redacted trace contains 48 operations: 45 successful operations and three
-expected negative paths (`conflict` once and `not_found` twice). The
-digest-bound bundle records these 15 actions as `live_smoke`: `doctor`, project
-create/delete/get/list/update, schedule list, workflow
-describe/digest/export/get/list, and task list/get/update. The gate trace and
-schema-6 cleanup attestation prove that the real external `SHELL` task update
-advanced and read back correctly and that its exact command, non-owned fields,
-DAG topology and version consistency, and workflow `OFFLINE` state were
-restored. The post-gate matrix describe separately confirmed fixture identity,
-topology, attached schedule, and `OFFLINE` state before cleanup. Current
-task-update recipe/profile changes make the archived receipt ineligible for the
-current release.
-Cleanup then converged with no
-pending resources, management drift, or remote repository changes.
-
-Campaign `conformance-e8eacee57af9-r12-20260811` produced
-[`live-evidence/3.4.2/2026-08-12-e8eacee57af9.json`](live-evidence/3.4.2/2026-08-12-e8eacee57af9.json)
-from wheel SHA-256
-`e8eacee57af9a9d2659194b05bccbbd7680eb10c310c4189d9cfa3ae8b5c9152`.
-The schema-6 checker passed its 48-operation trace (45 successes and three
-expected negative paths) for that recorded manifest, exact external-task restoration, preserved DAG
-and workflow state, and zero gate-created project leftovers. Its fixed
-15-action bundle remains `live_smoke`; it does not attest the manufactured
-prepare/interfere/apply stale-plan negative required to promote `task.update`
-to `live_full`.
-
-That artifact-bound receipt no longer satisfies the current bounded
-mutating-evidence checker. Its historical result did not set `profile.tested`,
-promote the support level, or attest a manufactured
-prepare/interfere/apply stale-plan conflict. `3.4.2` remains experimental with
-`tested=false`, and `3.4.1` remains the only stable profile.
+The retained [August 10 schema-6 receipt](live-evidence/history/external-shell/3.4.2/2026-08-10-f328d3e2d6ba.json)
+and [August 12 schema-6 receipt](live-evidence/external-shell/3.4.2/2026-08-12-e8eacee57af9.json)
+record their exact wheel identities, fixed 15-action `live_smoke` bundles,
+operation traces and fixture-restoration attestations. They are historical
+evidence and cannot satisfy the current schema-7 checker. Neither receipt
+attests the deterministic prepare/interfere/apply stale-plan negative required
+for `task.update=live_full`, sets `profile.tested`, or promotes a support level.
 
 Task update is non-idempotent from the gate operator's perspective. If the gate
 fails after the mutation boundary, first inspect task detail, the workflow DAG,
@@ -1164,7 +1097,7 @@ change per-action verification, or promote an exact profile or support tier.
 ## Current Stable Surface Matrix
 
 The tables below define the shared scenario obligations, with `3.4.1` as the
-historical stable baseline. Every exact profile uses the same standard for its
+historical baseline. Every exact profile uses the same standard for its
 supported actions. Select scenarios from the exact contracts; neither a nearby
 version nor the stable label supplies evidence for another coordinate.
 
@@ -1338,14 +1271,17 @@ The rule is not “skip forever”. The rule is:
 
 ## Current Coverage Snapshot
 
-The current release corpus covers all 37 profiles with four-action exact-read
-schema-2 receipts and 18-action `full_core/v1` receipts, plus the separate exact
-`3.4.2` schema-7 gate. These receipts bind the same immutable wheel. Historical
-schema-1 and schema-6 evidence remains valid only for its recorded artifacts;
-passing a bounded gate does not promote an entire profile.
+The retained development candidate corpus records all 37 profiles with
+four-action exact-read schema-2 receipts and 18-action `full_core/v1` receipts,
+plus the separate 15-action `external-shell/v1` schema-7 gate on exact `3.4.2`.
+These receipts bind the same immutable candidate wheel.
+They predate the subsequent Typer and DataX runtime fixes and do not attest
+current source. A new release candidate needs its own artifact-bound acceptance.
+Historical schema-1 and schema-6 evidence also remains valid only for its
+recorded artifacts; passing a bounded gate does not promote an entire profile.
 
 Broader development scenarios were verified on earlier installed candidates.
-They are separate from the current-wheel release corpus and must retain their
+They are separate from that release corpus and must retain their
 original artifact, scenario, revision and cleanup bindings:
 
 | Scenario | Verified development scope | Boundary |
@@ -1444,10 +1380,11 @@ filling gaps, preserving their original bindings; final candidate acceptance
 must still meet its own release obligations. Test counts alone are not the
 coverage contract.
 
-## Current Environment Notes
+## Exact behavior and environment prerequisites
 
-These findings came from the current shared cluster and should guide the next
-live additions.
+These source-reviewed behaviors and observed environment failure modes guide
+scenario design. Check prerequisites on the selected deployment; a past
+cluster observation does not describe every installation of that release.
 
 - `resource list` must send `searchVal=""` when no search term is provided.
   Treat this as an upstream 3.4.1 contract quirk, not a CLI feature choice.
@@ -1747,38 +1684,16 @@ Recommended cleanup policy:
 
 ## Execution Policy
 
-The live-testing program should usually proceed without conversational pauses.
+Define the target, personas, permitted mutations, owned fixtures and cleanup
+requirements before a campaign. Keep credentials and raw traces private;
+record reusable results through the artifact-bound receipt contracts above.
 
-### Continue Without Asking
-
-Proceed autonomously when the next step is a straightforward execution of the
-documented roadmap:
-
-- creating the live harness
-- adding live markers, fixtures, and helper utilities
-- adding live contract cases for already-decided command surfaces
-- running live tests against the provided cluster credentials
-- debugging failures and fixing the lowest correct layer
-- updating docs and offline regression coverage after a live finding
-
-### Stop And Ask Only When Truly Blocked
-
-Pause only when one of these conditions is true:
-
-- required credentials or env files are missing
-- the shared cluster contains safety constraints that make destructive cleanup
-  uncertain
-- a capability-gated surface depends on infrastructure that is unavailable and
-  no compatible environment is known
-- the observed upstream behavior creates a real product decision rather than an
-  implementation bug
-- a failure suggests conflicting interpretations of DS semantics that cannot be
-  resolved from upstream source or cluster behavior alone
-
-### Default Working Assumption
-
-If none of the stop conditions above applies, continue the live-testing
-roadmap and treat the work as implementation, not discussion.
+Stop dispatching affected scenarios if fixture ownership or cleanup is uncertain,
+required credentials or backends are unavailable, or the failure exposes an
+unresolved product or upstream-semantics decision. Diagnose the existing state
+before proceeding. Resume only applicable unfinished scenarios once their
+prerequisites and ownership are established, preserving failed attempts and
+previously verified evidence under their original artifact identities.
 
 ## Failure Analysis And Repair Principles
 
@@ -1787,7 +1702,10 @@ surfaced the failure. Classify the failure first.
 
 ### Step 1: Reproduce And Narrow
 
-- rerun the exact CLI command with the same env file
+- inspect the original command result and trace; reproduce read-only failures
+  with the same selected target
+- for uncertain writes, establish the actual outcome and fixture state before
+  deciding whether another mutation is appropriate
 - inspect `doctor` and health output
 - confirm whether the failure is deterministic
 - confirm whether the failure happens only for one persona or both

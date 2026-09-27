@@ -21,8 +21,13 @@ Then validate the selected artifact before applying it:
 
 ```bash
 dsctl lint workflow workflow.yaml
-dsctl workflow create --file workflow.yaml --dry-run
+dsctl workflow create --file workflow.yaml --project PROJECT --dry-run
 ```
+
+Replace `PROJECT` with the target project. A saved context can supply the
+project when `--project` is omitted. For complete producer/consumer,
+branch, child-workflow, and dependency compositions, see
+[Task examples](task-examples.md).
 
 Inspect task and parameter details only when the selected workflow needs them:
 
@@ -199,10 +204,10 @@ dsctl template params --topic output
 
 `dsctl template task TYPE` returns the default task-level YAML fragment.
 Use `--variant VARIANT` only for a complete scenario advertised by
-`data.template.variants`; defaults and pure aliases are not choices. Add `--raw` when you want only the YAML
-fragment without the JSON envelope. Copy the fragment under `tasks:` in a
-workflow YAML file, then run `dsctl lint workflow` and `workflow create
---dry-run`.
+`data.template.variants`; defaults and pure aliases are not choices. Add `--raw`
+when you want only the YAML fragment without the JSON envelope. Copy the
+fragment under `tasks:` in a workflow YAML file, then run `dsctl lint workflow`
+and `workflow create --dry-run`.
 
 ## Payload Modes
 
@@ -324,9 +329,9 @@ parameter. SQL tasks can publish result columns whose names match OUT parameter
 `prop` values.
 
 Runtime `--param KEY=VALUE` follows the selected exact profile: `1.3.9` rejects
-it because the executor has no `startParams`; `2.0.0` accepts only keys declared
-in `workflow.global_params`; and `2.0.9` and newer accept arbitrary keys as
-VARCHAR startup parameters. The same rule applies to `workflow run`,
+it because the executor has no `startParams`; `2.0.0` through `2.0.7` accept only
+keys declared in `workflow.global_params`; and `2.0.8` and newer accept arbitrary
+keys as VARCHAR startup parameters. The same rule applies to `workflow run`,
 `run-task`, and `backfill`.
 
 For ordinary tasks, an upstream OUT value in the var pool overrides the local
@@ -337,7 +342,7 @@ placeholder. Omit the local entry to consume the workflow global directly, or
 use a different property name for an intentional local alias. `lint workflow`
 reports this self-reference.
 
-Nested-workflow parameter inheritance is exact-versioned. On stable DS 3.4.1,
+Nested-workflow parameter inheritance is exact-versioned. On exact DS 3.4.1,
 a `SUB_WORKFLOW` task's `localParams` do not become child inputs. The child
 automatically inherits the parent workflow's globals, startup parameters, and
 workflow-instance var pool as startup parameters, which override matching
@@ -489,13 +494,15 @@ below and its boundary entry for runtime prerequisites, excluded modes and any
 allowed unchanged/export preservation path.
 
 `SEATUNNEL/literal_local_config_job` authors one literal ASCII/LF
-`task_params.rawScript` configuration on exact `3.0.0` through `3.4.2`.
+`task_params.rawScript` configuration on exact `3.0.0` through `3.4.3`.
 Placeholders, resources, parameters, outputs, arbitrary shell, remote engines,
 and alternate startup options are rejected. On `3.0.x`, compilation emits a
 REST-only POSIX wrapper that writes the configuration and starts the Spark
 launcher in client/local mode; this bypasses the upstream UI defect that emits
-a Waterdrop command. Exact `3.1.0` uses the native SPARK/custom-config wire,
-while `3.1.9` onward uses `seatunnel.sh` with custom config and local deploy.
+a Waterdrop command. Exact `3.1.0`–`3.1.5` use the native SPARK/custom-config
+wire with `deployMode=local`, whose enum renders client mode. Exact `3.1.6`
+uses `deployMode=client` and `master=LOCAL`; `3.1.7` onward uses
+`seatunnel.sh` with custom config and local deploy.
 Resource mode remains outside the facet, including the staged-path runtime
 holes on `3.2.0` through `3.2.2`. From `3.3.1`, the workflow must have no
 global parameters because upstream forwards them as command arguments outside
@@ -518,9 +525,9 @@ datasource; the modern epoch also verifies that its database matches the
 authored value. No-op edits and unchanged richer opaque-preserve tasks skip
 this authoring preflight. Compilation fixes local Java Spark, the Data Quality main
 class, a fixed-value row-count comparison, and blocking failure. Equality uses
-native `NE` on `3.0.0`, `3.1.0`, and `3.1.9` because those master result
-checks are inverted, and native `EQ` on `3.0.6` plus `3.2.x`. Older workers
-derive the database from the datasource; newer task wire carries it. A missing
+native `NE` on `3.0.0`–`3.0.3` and `3.1.0`–`3.1.9` because those master
+result checks are inverted, and native `EQ` on `3.0.4`–`3.0.6` plus `3.2.x`.
+Older workers derive the database from the datasource; newer task wire carries it. A missing
 result row can leave the task falsely successful without comparison. INFO logs
 include parameters, commands, and resolved credentials, so fields are not
 secret storage. Use a parameter-free workflow and shell-safe datasource
@@ -532,7 +539,7 @@ state is unchanged/export preserve-only. The review refreshes no live evidence
 and promotes no profile.
 
 `KUBEFLOW/tfjob_manifest` is typed in `MachineLearning` on exact `3.2.0`
-through `3.4.2` and upstream-absent earlier. Canonical authoring owns only
+through `3.4.3` and upstream-absent earlier. Canonical authoring owns only
 `namespace`, `cluster`, and one literal `yamlContent`. The manifest must be one
 ASCII/LF mapping document for `apiVersion: kubeflow.org/v1` and `kind: TFJob`,
 with explicit `metadata.namespace` equal to canonical `namespace`, no root
@@ -559,13 +566,13 @@ The master resolves `cluster` to kubeconfig, but fixed
 `kubectl apply/get/delete -f` execution ignores the outer namespace and uses
 the manifest namespace. The platform-default writer substitutes prepared
 values and INFO logs expose complete params, expanded YAML, commands, status
-JSON, and the complete resolved kubeconfig on all eight versions. The task-log
+JSON, and the complete resolved kubeconfig on every reviewed version. The task-log
 filter present on exact `3.3.1` and newer does not suppress that worker-service
 INFO event. On a valid status shape, the tracker recognizes only `Succeeded`,
 `Available`, or `Bound` as success and `Failed` as failure. Missing
 `status`/`conditions` or other nonterminal state can continue polling until the
 task timeout. However, an existing empty `status.conditions` array makes all
-eight exact `KubeflowHelper` implementations unconditionally access its last
+reviewed exact `KubeflowHelper` implementations unconditionally access its last
 element and fail at runtime instead of continuing to poll; a compatible
 nonempty conditions protocol is a runtime prerequisite.
 `appIds` is only a persisted submission sentinel, not a durable object id: it
@@ -617,7 +624,7 @@ live preflight or campaign is claimed; no profile is promoted and existing stabl
 `3.4.1` receipts become stale for this expanded authoring manifest.
 
 `PYTORCH/literal_resource_script` is authorable on exact `3.1.0` through
-`3.3.2` and upstream-absent on the five earlier profiles plus all exact
+`3.3.2` and upstream-absent on earlier profiles plus all exact
 `3.4.x` profiles. Its closed `MachineLearning` payload owns only
 `pythonExecutable`, one `.py` `scriptResource`, and ordered `scriptArgs`:
 
@@ -642,7 +649,7 @@ argument is one nonblank ASCII shell-safe token. Placeholders,
 whitespace-bearing or shell-expanding tokens, Git checkout, environment
 creation, custom launcher fragments, parameters, output declarations,
 additional resources, and future fields fail closed for typed create/edit.
-All seven typed profiles resolve that canonical path before mutation through the exact
+All typed profiles resolve that canonical path before mutation through the exact
 generated resource API and require one permission-visible, non-directory FILE.
 Exact `3.1.x` sends `pythonCommand` and the resolved positive id. Exact `3.2.0`
 through `3.3.2` query the FILE base, prefix and page-verify the canonical path,
@@ -661,7 +668,7 @@ metadata-only or unchanged/export preserve-only, and execution-affecting edits
 fail closed.
 
 Run the task only on Unix-like workers that already provide the selected
-executable and PyTorch dependencies. Exact `3.1.0` writes UTF-8; the other six
+executable and PyTorch dependencies. Exact `3.1.0` writes UTF-8; later
 reviewed releases write with the worker platform charset, which is why the
 shared typed subset is ASCII. Keep outer `timeout: 0` on exact `3.3.1` and
 `3.3.2`: those executors can block on output before timeout handling, plugin
@@ -672,7 +679,7 @@ application id or failover reattachment, and a retry can rerun the complete
 script. This review adds no live evidence and promotes no profile.
 
 `LINKIS` is a reviewed runtime exclusion on every source-present release,
-exact `3.2.0` through `3.4.2`. The stock worker submits `linkis-cli`
+exact `3.2.0` through `3.4.3`. The stock worker submits `linkis-cli`
 asynchronously and then parses a result field that its command executor never
 fills; it can lose the remote task id after submission. Its remote-task base
 also checks status only once rather than polling a terminal state. Therefore a
@@ -683,7 +690,7 @@ through an unchanged or metadata-only workflow edit with its native
 and missing identity prevents reliable cancellation. No live evidence or
 profile promotion is implied.
 
-`WATERDROP/literal_local_config_job` is authorable only on exact `2.0.9` and
+`WATERDROP/literal_local_config_job` is authorable on exact `2.0.1`–`2.0.9` and
 accepts one absolute ASCII shell-safe DS FILE `configResource`. Before the
 workflow mutation, dsctl resolves it to one visible, non-directory, positive
 resource id. Compilation fixes `localParams=[]`, emits a one-entry
@@ -699,7 +706,7 @@ Do not author new `WATERDROP` tasks against exact `2.0.0`. That release exposes
 the task type, model, and UI but its stock worker does not register the literal
 channel as a `SHELL` alias, so execution fails before task construction. Typed
 and raw opaque create/edit fail closed; existing server state remains
-preservable. Exact `2.0.9` adds the alias. Its worker needs a POSIX shell,
+preservable. Exact `2.0.1` adds the alias. Eligible workers need a POSIX shell,
 `WATERDROP_HOME`, a compatible foreground Waterdrop/Spark launcher, tenant and
 resource permissions, and target connectivity. Upstream INFO logs parameters,
 script, paths, command, and child output, so these fields are not secret
@@ -741,7 +748,7 @@ exclusions because they omit the child tenant; `3.2.1` also has an unguarded
 missing-start-parameter dereference. This review adds no live verification or
 profile promotion.
 
-`BLOCKING/same_workflow_state_gate` is available only on the seven exact
+`BLOCKING/same_workflow_state_gate` is available only on the exact
 profiles from `3.0.0` through `3.2.2`; `BLOCKING` is upstream-absent from
 `3.3.1`. Typed create/edit owns either blocking opportunity, strict
 `alertWhenBlocking`, and nonempty grouped
@@ -755,7 +762,7 @@ reapply it. Closed-looking native state is promoted to typed only when every
 predicate already has a matching acyclic workflow relation; otherwise it stays
 opaque. The task itself completes `SUCCESS`. A match moves the workflow
 through `READY_BLOCK` to terminal `BLOCK`; a miss continues without ordinary
-task retry, and active/retry work normally drains first. Exact `3.0.0` and
+task retry, and active/retry work normally drains first. Exact `3.0.0` through
 `3.0.6` mark standby tasks `KILL`; later reviewed versions use `PAUSE`.
 `alertWhenBlocking` requests an alert record for the workflow
 `warningGroupId`; actual delivery requires a valid alert group and alert
@@ -811,10 +818,11 @@ The base date values are exact: hour accepts `currentHour`, `last1Hour`,
 `last1Days`, `last2Days`, `last3Days`, and `last7Days`; week accepts
 `thisWeek`, `lastWeek`, and `lastMonday` through `lastSunday`; month accepts
 `thisMonth`, `lastMonth`, `lastMonthBegin`, and `lastMonthEnd`. Exact `1.3.9`,
-`2.0.0`, `2.0.9`, `3.0.0`, and `3.1.0` expose only that base set.
-`thisMonthBegin` and `thisMonthEnd` join only on `3.0.6`, `3.1.9`, and `3.2.0`
-through `3.4.2`. Keep `cycle` paired with the selected value: upstream runtime
-uses `dateValue` to calculate the window and does not use `cycle` to correct it.
+`2.0.0`–`2.0.9`, `3.0.0`–`3.0.1`, and `3.1.0` expose only that base set.
+`thisMonthBegin` and `thisMonthEnd` join on `3.0.2`–`3.0.6`, `3.1.1`–`3.1.9`,
+and `3.2.0` through `3.4.3`. Keep `cycle` paired with the selected value:
+upstream runtime uses `dateValue` to calculate the window and does not use
+`cycle` to correct it.
 
 Workflow create/edit/export and workflow-instance edit support the exact
 name-resolution path. Workflow-definition reads reverse-bind names best-effort.
@@ -900,9 +908,9 @@ members remain unchanged/export opaque preservation state and are not typed
 authoring. There is no reliable cancel, durable id, failover resume, or
 structured output. Retry resends the whole request, so
 `POST`, `PUT`, and `DELETE` side effects can duplicate. This review adds no live
-evidence or promotion; `3.4.1` remains stable.
+evidence or promotion.
 
-`PYTHON` is typed on all 15 exact profiles. On exact `1.3.9`, use
+`PYTHON` is typed on every exact profile. On exact `1.3.9`, use
 `rawScript`, an empty `resourceList`, and unique `IN`-only `localParams` with
 `VARCHAR`, `INTEGER`, `LONG`, `FLOAT`, `DOUBLE`, `DATE`, `TIME`, `TIMESTAMP`,
 or `BOOLEAN`. That release has no `varPool`, `LIST`, `FILE`, `OUT` publication,
@@ -958,7 +966,7 @@ do not put secrets in these fields. The task publishes no structured output or
 durable application id. This review adds no live receipt or profile promotion.
 
 `SPARK/inline_local_sql` has one default template from `3.0.0` through
-`3.4.2`:
+`3.4.3`:
 
 ```yaml
 name: run-inline-local-sql
@@ -967,7 +975,7 @@ task_params:
   rawScript: SELECT 1 AS answer
 ```
 
-The SPARK plugin also exists on `1.3.9`, `2.0.0`, and `2.0.9`, but those
+The SPARK plugin also exists on `1.3.9` and `2.0.0`–`2.0.9`, but those
 upstream parameter models have no SQL program mode. The typed facet is absent
 there, so use only an intentional native opaque payload on those profiles.
 Typed authoring owns exactly the nonblank literal `rawScript` shown above,
@@ -998,8 +1006,8 @@ cancellation controls that process and a retry runs the complete SQL again.
 Keep retries at zero unless repeated side effects are safe. This source review
 refreshes no live receipt, changes no `tested` flag, and promotes no profile.
 
-`FLINK/inline_local_sql` has one default template on exact `3.0.0`, `3.0.6`,
-`3.1.9`, and every release from `3.2.0` through `3.4.2`:
+`FLINK/inline_local_sql` has one default template on exact `3.0.0`–`3.0.6`,
+`3.1.2`–`3.1.9`, and `3.2.0` through `3.4.3`:
 
 ```yaml
 name: run-inline-local-sql
@@ -1010,14 +1018,17 @@ task_params:
 
 The `1.3.9` and `2.0.x` parameter models have no SQL `ProgramType`. Exact
 `3.1.0` has the SQL shape but no typed facet because its executor resolves
-`mainJar` unconditionally before SQL initialization; `3.1.9` adds the required
-guard. All four profiles still accept intentional generic opaque payloads.
+`mainJar` unconditionally before SQL initialization. Exact `3.1.1` fixes that
+guard but reverses LOCAL/CLUSTER SQL targets; `3.1.2` fixes target selection.
+Both `3.1.0` and `3.1.1` remain typed holes. Untyped registered profiles retain
+their exact opaque policies; `3.1.1` requires a recognized native selector and
+rejects canonical inline SQL.
 Typed authoring owns only the nonblank literal `rawScript`, keeps its spelling,
 and supplies `programType: SQL`, `deployMode: local`, and `initScript: ""` on
 the wire.
 
 Exact `3.0.x` workers write the SQL file with their platform-default charset,
-so those two typed schemas accept ASCII only. Exact `3.1.9` and newer write
+so those typed schemas accept ASCII only. Exact `3.1.2` and newer write
 UTF-8. All typed profiles reject blank scripts, carriage returns, DEL/C0/C1
 controls, `${...}`, and `$[...]`. Multi-statement SQL, TAB/LF, quotes,
 semicolons, backslashes, backticks, and `$()` remain literal and are not
@@ -1034,16 +1045,16 @@ Route tasks through `3.2.2` to a worker whose `PATH` resolves
 `sql-client.sh`; releases from `3.3.1` use
 `FLINK_HOME/bin/sql-client.sh`. Every eligible worker needs the Flink SQL
 client, Java, connector and catalog configuration, and target-data permissions.
-Exact `3.4.2` substitutes prepared parameters before writing SQL, but the typed
-contract still rejects placeholders for one portable literal meaning.
+Exact `3.4.2`–`3.4.3` substitute prepared parameters before writing SQL, but the
+typed contract still rejects placeholders for one portable literal meaning.
 Upstream logs task parameters, SQL content and file paths, and the command at
 INFO, so do not put secrets in the script. The local client exposes no DS task
 output, durable application id, or failover resume; retry runs the whole SQL
 again and may repeat side effects. This source review refreshes no live
 evidence, changes no `tested` flag, and promotes no profile.
 
-`FLINK_STREAM/inline_local_sql` has one default template only on exact `3.1.9`
-and `3.2.0` through `3.2.2`:
+`FLINK_STREAM/inline_local_sql` has one default template only on exact
+`3.1.5`–`3.1.9` and `3.2.0` through `3.2.2`:
 
 ```yaml
 name: run-inline-local-sql
@@ -1052,10 +1063,11 @@ task_params:
   rawScript: SELECT 1 AS answer
 ```
 
-The plugin is upstream-absent through `3.0.6`. Exact `3.1.0` registers
-`FLINK_STREAM`, but its executor resolves `mainJar` before SQL initialization,
-so that release exposes only generic opaque authoring. From `3.3.1` through
-`3.4.2`, `ExecutorServiceImpl.execStreamTaskInstance` immediately throws
+The plugin is upstream-absent through `3.0.6`. Exact `3.1.0`–`3.1.4` register
+`FLINK_STREAM`, but its executor resolves `mainJar` before SQL initialization.
+Those releases retain their exact opaque policies; `3.1.1`–`3.1.4` require a
+recognized native selector. From `3.3.1` through `3.4.3`,
+`ExecutorServiceImpl.execStreamTaskInstance` immediately throws
 `Not supported`; those registered runtime holes likewise expose no typed
 variant. Typed authoring owns only the nonblank literal `rawScript`, preserves
 its spelling, and supplies exactly four `taskParams` fields:
@@ -1071,7 +1083,7 @@ modes use explicit opaque create/edit. Local-inline extras and unrecognized
 inherited or future state survive only through unchanged/export
 opaque-preservation; invalid local SQL never unlocks opaque mode.
 
-Route all four typed releases to a worker whose `PATH` resolves
+Route every typed release to a worker whose `PATH` resolves
 `sql-client.sh`. Workers also need Java, connector and catalog configuration,
 and target-data permissions. Later `FLINK_HOME` and prepared-substitution
 plugin behavior cannot widen typed membership because the corresponding STREAM
@@ -1081,23 +1093,23 @@ and commands at INFO, so do not put secrets in this task.
 Local SQL is expected to publish no application id and exposes no result
 output, durable submit identity, or failover resume. Plugin cancel and
 savepoint require an application id. Stop order is plugin cancel then PID-tree
-kill on `3.1.9`, PID-tree kill then plugin cancel from `3.2.0` through `3.2.2`,
-and plugin cancel only from `3.3.1` through `3.4.2`; the last epoch returns on
+kill on `3.1.x`, PID-tree kill then plugin cancel from `3.2.0` through `3.2.2`,
+and plugin cancel only from `3.3.1` through `3.4.3`; the last epoch returns on
 the missing id without a process fallback. Reliable stop is unsupported, so an
 unbounded SQL stream may continue after the DS task stops. Retry reexecutes all
 SQL on typed releases. Keep retries at zero unless replay and continued-stream
 risks are acceptable. This review refreshes no live evidence, changes no
 `tested` flag, and promotes no profile.
 
-`K8S/literal_container_job` has one default template in `Cloud` on the nine
-exact profiles from `3.1.9` through `3.4.2`. The connection shape changes with
-the selected version. Exact `3.1.0` is not typed: its default template is an
-explicit native opaque risk scaffold under the broken watcher.
+`K8S/literal_container_job` has one default template in `Cloud` on exact
+`3.1.4` through `3.4.3`. The connection shape changes with the selected version.
+Exact `3.1.0`–`3.1.3` are not typed: their default template is an explicit
+native opaque risk scaffold under the broken watcher.
 Raw create/edit requires canonical `connectionMode` and sibling `cluster` to
 be absent, a nonblank image, and `namespace` containing compact JSON with
 nonblank `name` and `cluster`. Canonical connection intent fails closed rather
 than downgrading, and the scaffold is not an executable-runtime attestation.
-Exact `3.1.9` uses namespace intent:
+Exact `3.1.4`–`3.1.9` use namespace intent:
 
 ```yaml
 name: run-container-job
@@ -1158,7 +1170,7 @@ lists, an optional `pullSecret` object name, `imagePullPolicy`, unique valid
 least one custom label because its executor cannot mutate an empty label map;
 later profiles allow the empty list, and custom-label values may be empty.
 Exact `3.2.0` attaches custom labels to the Job only; `3.2.1` and newer attach
-them to both Job and Pod template. Exact `3.1.9` rejects all of these advanced
+them to both Job and Pod template. Exact `3.1.4`–`3.1.9` reject all of these advanced
 fields. Multiple node-selector expressions may repeat the same key; Kubernetes
 ANDs them, which permits bounds such as `rank Gt 1` plus `rank Lt 10`.
 `In`/`NotIn` require a nonempty list of unique nonempty Kubernetes label
@@ -1166,10 +1178,10 @@ values; `Exists`/`DoesNotExist` require `values: []`, while `Gt`/`Lt` take one
 decimal-integer string in the list, from zero through `9223372036854775807`,
 for example `values: ["1"]`.
 
-On exact `3.1.9`, the worker instead uses the image ENTRYPOINT/CMD and fixes
+On exact `3.1.4`–`3.1.9`, the worker instead uses the image ENTRYPOINT/CMD and fixes
 `imagePullPolicy=Always`.
 
-`outputs` is available only on `3.2.0`, `3.2.1`, `3.2.2`, and `3.4.2`:
+`outputs` is available only on `3.2.0`, `3.2.1`, `3.2.2`, and `3.4.2`–`3.4.3`:
 
 ```yaml
   outputs:
@@ -1181,9 +1193,9 @@ Output names must be unique Kubernetes-style names other than
 `OUT`/`VARCHAR` entries with empty values. The container must write
 `${(result_path=value)dsVal}` or `#{(result_path=value)dsVal}` on `3.2.0`, and
 `${setValue(result_path=value)}` or `#{setValue(result_path=value)}` on
-`3.2.1`, `3.2.2`, or `3.4.2`. Marker values must be nonempty on `3.2.0` and
+`3.2.1`, `3.2.2`, or `3.4.2`–`3.4.3`. Marker values must be nonempty on `3.2.0` and
 `3.2.1`. On `3.2.0`, `$VarPool$` is a reserved delimiter and a value such as
-`a=b` publishes only `a`; `3.2.1` preserves `a=b`. Exact `3.2.2` and `3.4.2`
+`a=b` publishes only `a`; `3.2.1` preserves `a=b`. Exact `3.2.2` and `3.4.2`–`3.4.3`
 also preserve `=` and allow an empty value. Do not author outputs on `3.3.1`
 through `3.4.1`; those releases
 parse into a local `varPool` but fail to transport it from the physical
@@ -1206,14 +1218,14 @@ K8S publishes no durable application id and cannot resume after worker
 failover. Cancel requires the same worker's in-memory Job, and retry or worker
 loss can duplicate the container's side effects. Typed K8S has no raw opaque
 create/edit selector; richer native state is retained only by unchanged edit or
-export provenance. The first five profiles are upstream-absent. Exact `3.1.0`
-has only selector-restricted native opaque authoring because its watcher can
-finish on `RUNNING` with exit status `-1`; canonical connection fields fail
+export provenance. Releases before `3.1.0` are upstream-absent. Exact
+`3.1.0`–`3.1.3` have only selector-restricted native opaque authoring because
+the watcher can finish on `RUNNING` with exit status `-1`; canonical connection fields fail
 closed and its default payload is an explicit risk scaffold. This
 review adds no live evidence and promotes no profile.
 
 `KUBEFLOW/tfjob_manifest` has one default template in `MachineLearning` on
-exact `3.2.0` through `3.4.2`:
+exact `3.2.0` through `3.4.3`:
 
 ```yaml
 name: train-mnist
@@ -1304,14 +1316,14 @@ pass the outer namespace to kubectl, so the manifest namespace is
 authoritative. Route the task to a worker with `kubectl`, that kubeconfig,
 network/RBAC, and a compatible Kubeflow TFJob CRD/status implementation. Do not
 place secrets in the manifest: upstream logs the expanded YAML, commands,
-status responses, and the complete resolved kubeconfig on all eight versions.
+status responses, and the complete resolved kubeconfig on every reviewed version.
 The task-log filter present on exact `3.3.1` and newer does not suppress that
 worker-service INFO event.
 On a valid status shape, only `Succeeded`, `Available`, or `Bound` ends tracking
 successfully and only `Failed` ends it unsuccessfully. Missing
 `status`/`conditions` or other nonterminal state can continue polling until the
 task timeout. An existing empty `status.conditions` array is different: all
-eight exact `KubeflowHelper` implementations unconditionally access its last
+reviewed exact `KubeflowHelper` implementations unconditionally access its last
 element and fail at runtime instead of continuing to poll. A compatible
 nonempty conditions protocol is therefore a runtime prerequisite.
 There is no structured output or durable Kubernetes id; persisted `appIds` is
@@ -1325,7 +1337,7 @@ rename in such a patch is metadata-only. Any task/workflow execution-semantic
 or topology edit fails closed.
 
 `JAVA/literal_fat_jar` has one default template in `Universal` on exact
-`3.2.0`, `3.2.2`, and `3.3.1` through `3.4.2`:
+`3.2.0`, `3.2.2`, and `3.3.1` through `3.4.3`:
 
 ```yaml
 name: run-java-fat-jar
@@ -1355,7 +1367,7 @@ the main JAR and resource list. Its materialized fail-closed policy allows
 opaque create/edit only for a nonblank native `runType=JAVA` raw-source
 payload; broken `JAR` state is preserve-only, and canonical `mainJar`/
 `mainArgs` input never downgrades to opaque. Exact `3.2.2` fixes the path
-defect. JAVA is upstream-absent on the seven earlier profiles through `3.1.9`.
+defect. JAVA is upstream-absent on earlier profiles through `3.1.9`.
 
 Legacy raw Java source on its reviewed exact wires and modern `NORMAL_JAR` are
 selector-restricted explicit opaque-authoring modes. JVM arguments, module
@@ -1370,8 +1382,8 @@ attempts generic application cancellation. JAVA has no durable application id
 or failover reattachment; retry runs the whole JAR again and can duplicate
 side effects. This review refreshes no live evidence and promotes no profile.
 
-`MR/literal_java_jar_job` has one default template in `Universal` on all 15
-exact profiles:
+`MR/literal_java_jar_job` has one default template in `Universal` on every
+exact profile:
 
 ```yaml
 name: run-mapreduce-jar
@@ -1411,8 +1423,8 @@ observed application id; retry or failover can rerun the whole JAR. Exact
 `3.3.1` onward also has a post-exit `appIds` context transport hole. This
 review refreshes no live evidence and promotes no profile.
 
-`SQOOP/literal_command` has one default template in `DataIntegration` on all
-15 exact profiles:
+`SQOOP/literal_command` has one default template in `DataIntegration` on every
+exact profile:
 
 ```yaml
 name: import-orders
@@ -1439,7 +1451,7 @@ Arguments reject edge whitespace, controls, surrogates, DS placeholders,
 interactive `-P`, standalone `--password`, and `--password=...`; a
 worker-readable `--password-file` is allowed. Empty argument tokens are valid
 and round-trip through POSIX `''`; only the ordered list itself must be
-nonempty. Releases through `3.1.0` write the script as UTF-8. Exact `3.1.9`
+nonempty. Releases through `3.1.0` write the script as UTF-8. Exact `3.1.1`
 and newer use the platform-default charset, so typed arguments there are
 ASCII-only. CRLF becomes LF through `3.1.9` and the worker OS line separator
 from `3.2.0`.
@@ -1454,7 +1466,7 @@ cancellation is best-effort and retry/failover can duplicate the transfer.
 This review refreshes no live evidence and promotes no profile.
 
 `DATA_FACTORY/pipeline_trigger` has one default template in the `Cloud`
-category from exact `3.2.0` through `3.4.2`:
+category from exact `3.2.0` through `3.4.3`:
 
 ```yaml
 name: trigger-data-factory-pipeline
@@ -1465,7 +1477,7 @@ task_params:
   pipelineName: daily-copy
 ```
 
-The plugin is upstream-absent through `3.1.9`. On all eight reviewed typed
+The plugin is upstream-absent through `3.1.9`. On all reviewed typed
 coordinates, create/edit owns exactly the three required literal identity
 fields shown above and preserves their names and values on the wire. Values
 must be nonblank and reject edge whitespace, control or surrogate text,
@@ -1491,8 +1503,8 @@ Keep task retries at zero unless duplicate Azure runs are acceptable. This
 source review refreshes no live evidence, changes no `tested` flag, and
 promotes no profile.
 
-`CHUNJUN/literal_local_json_job` has one default template in `Other` on all
-ten exact profiles from `3.1.0` through `3.4.2`:
+`CHUNJUN/literal_local_json_job` has one default template in `Other` on exact
+`3.1.0` through `3.4.3`:
 
 ```yaml
 name: run-chunjun-job
@@ -1523,17 +1535,17 @@ Built-in `customConfig=0`, the upstream UI typo `standlone`, local extras,
 parameters/resources, dormant datasource-generation fields, and future state
 are unchanged/export preserve-only. Built-in execution is a runtime hole:
 `ChunJunTask.buildChunJunJsonFile` never constructs its JSON.
-Exact `3.1.0` UI default `customConfig=false` is a UI defect; the compiler's
-strict integer `1` REST wire remains runnable. Do not derive exact native wire
-from UI defaults.
+Exact `3.1.0`–`3.1.6` UI default `customConfig=false` is a UI defect; the compiler's
+strict integer `1` REST wire remains runnable. The UI default becomes true
+in `3.1.7`. Do not derive exact native wire from UI defaults.
 
 Every exact worker normalizes CRLF to LF, substitutes prepared values without
 JSON escaping, and writes UTF-8; typed authoring therefore rejects
 placeholders. Exact `3.1.0` uses a legacy shell file and nondurable post-exit
-application-id log discovery; `3.1.9` keeps that path but stores empty
+application-id log discovery; `3.1.1`–`3.1.9` keep that path but store empty
 `appIds`; `3.2.0` through `3.3.2` use the shell interceptor with empty
-`appIds`; `3.4.0` through `3.4.2` use `taskRequest` with empty `appIds`.
-All ten exact upstream `chunjun.md` files require removing the trailing
+`appIds`; `3.4.0` through `3.4.3` use `taskRequest` with empty `appIds`.
+All reviewed exact upstream `chunjun.md` files require removing the trailing
 background `&` from the `nohup` command in
 `${CHUNJUN_HOME}/bin/start-chunjun`. Route this template only to a worker using
 that foreground launcher; otherwise DS status and cancellation are
@@ -1541,7 +1553,7 @@ untrustworthy. Complete parameters enter INFO logs and expanded JSON enters
 DEBUG logs, so do not store secrets here. There is no structured output,
 durable id, or failover resume. Cancellation remains worker-local and
 best-effort: `3.1.0` through `3.1.9` use legacy wrapper soft/hard kill, `3.2.0`
-through `3.2.2` direct-process destroy/force, and `3.3.1` through `3.4.2`
+through `3.2.2` direct-process destroy/force, and `3.3.1` through `3.4.3`
 process-tree kill plus generic application cancel. Keep retries at zero unless
 replaying the whole job is acceptable.
 
@@ -1590,7 +1602,7 @@ strict integer `customConfig=0`; add every exact field required by the chosen
 built-in mode before treating it as a raw payload. Raw opaque create/edit
 accepts only strict native `customConfig=0` or `1`, while canonical JSON-only
 input fails closed. The reason is
-`null-empty-prepare-params-map-breaks-custom-command`; exact `3.1.9` adds the
+`null-empty-prepare-params-map-breaks-custom-command`; exact `3.1.1` adds the
 null/empty guard.
 
 Through `3.1.9`, route DATAX to a worker configured with `PYTHON_HOME` or
@@ -1603,7 +1615,7 @@ worker OS separator from `3.2.0`. DataX `-p -D` prepared-map forwarding begins
 at `3.1.0`, but the typed contract forbids task parameters and placeholders.
 Upstream builds that option without safely quoting shell metacharacters in
 workflow, startup, local, or `varPool` values. Use a parameter-free workflow
-for this safe typed facet on positive releases from `3.1.9`.
+for this safe typed facet on positive releases from `3.1.1`.
 
 Complete task params, the final command, and child output enter INFO logs, and
 DataX job/command construction also appears at DEBUG. Do not put credentials
@@ -1613,10 +1625,10 @@ resume after failover. Cancellation is worker-local—wrapper kill through
 `3.1.9`, direct-process destroy through `3.2.2`, then process-tree plus generic
 application cancellation. Keep retries at zero unless replaying the entire
 transfer and possibly duplicating writes is acceptable. This review adds no
-live evidence or profile promotion; `3.4.1` remains stable.
+live evidence or profile promotion.
 
 `DATASYNC/create_and_execute` has a default template and the `raw-json` scenario in `Other`
-on exact `3.2.0` through `3.4.2`; the seven earlier profiles do not contain the
+on exact `3.2.0` through `3.4.3`; earlier profiles do not contain the
 plugin. The normal default template is typed:
 
 ```yaml
@@ -1698,12 +1710,15 @@ client is never closed. Failure before callback persistence, or retry without
 durable `appIds`, can create duplicate executions and leak additional
 persistent or scheduled Tasks. Polling has no internal deadline. Keep DS
 retries at zero unless that duplicate-and-leak window is acceptable. This
-review adds no live evidence, changes no `tested` flag, and promotes no profile;
-`3.4.1` remains stable.
+review adds no live evidence, changes no `tested` flag, and promotes no profile.
 
 `SAGEMAKER/start_pipeline_execution` has one default template with a short IN hint in
-`MachineLearning` on exact `3.1.0` through `3.4.2`; the first five profiles do
-not contain the plugin. Discover the selected exact form with:
+`MachineLearning` on exact `3.1.0` through `3.4.3`, except `3.1.1` and
+`3.1.2`; earlier profiles do not contain the plugin. The two excluded releases
+discard refreshed status and can poll forever after an initial EXECUTING
+state. Typed and raw opaque create/edit are closed there; existing native
+state remains unchanged/export preserve-only. Discover the selected exact form
+with:
 
 ```bash
 DS_VERSION=3.1.0 dsctl template task SAGEMAKER
@@ -1748,7 +1763,7 @@ task_params:
       value: nightly-training
 ```
 
-Omit `datasource` on exact `3.1.0`, `3.1.9`, and `3.2.0`; it is required and
+Omit `datasource` on typed releases through `3.2.0`; it is required and
 must be positive from `3.2.1`. Compilation always emits `localParams` and
 compiler-owned `resourceList=[]`, and adds native `type=SAGEMAKER` only in the
 datasource epoch. Without `${...}` or `$[...]`, `sagemakerRequestJson` must be
@@ -1779,10 +1794,10 @@ failure before persistence or a retry without `appIds` can submit again. Keep
 one stable explicit `ClientRequestToken` for AWS idempotency because an omitted
 SDK token may be transient while the plugin's persisted/read token remains
 null. Polling has no internal deadline or output, and the client is not closed.
-This review adds no live evidence or promotion; `3.4.1` remains stable.
+This review adds no live evidence or promotion.
 
 `DMS/resume_existing_full_load` has one default template in the `Cloud`
-category from exact `3.2.0` through `3.4.2`:
+category from exact `3.2.0` through `3.4.3`:
 
 ```yaml
 name: resume-existing-full-load
@@ -1795,7 +1810,7 @@ task_params:
   replicationTaskArn: arn:aws:dms:us-east-1:123456789012:task:REPLACE-ME
 ```
 
-The seven earlier profiles do not contain DMS. All five fields are required
+Releases before `3.2.0` do not contain DMS. All five fields are required
 and remain explicit on the native wire; the first four accept only the shown
 constants. `replicationTaskArn` must be a literal AWS DMS replication-task ARN
 without edge whitespace, controls, surrogates, `${...}`, or `$[...]`. Do not
@@ -1830,10 +1845,10 @@ cancellation stop the same remote task. Failure before callback persistence,
 or retry without durable `appIds`, can submit `resume-processing` again. Keep
 retries at zero unless that duplicate-resume window is acceptable. This source
 review adds no live evidence, changes no `tested` flag, and promotes no
-profile; `3.4.1` remains stable.
+profile.
 
 `ALIYUN_SERVERLESS_SPARK/literal_jar_submit` has one default template in the
-`Cloud` category on exact `3.3.1`, `3.3.2`, `3.4.0`, `3.4.1`, and `3.4.2`:
+`Cloud` category on exact `3.3.1` through `3.4.3`:
 
 ```yaml
 name: submit-aliyun-serverless-spark-jar
@@ -1851,7 +1866,7 @@ task_params:
   isProduction: false
 ```
 
-The first ten profiles do not contain this plugin. Typed create/edit owns only
+Releases before `3.3.1` do not contain this plugin. Typed create/edit owns only
 the eight fields above; `datasource` is a positive integer and
 `isProduction` is a strict boolean that defaults to and still emits `false`
 when omitted. The other scalar values must remain nonblank literals, and
@@ -1896,11 +1911,10 @@ resume the job, cancellation requires the current worker's in-memory
 `jobRunId`, and retry may duplicate submission. Polling runs every 10 seconds
 without an internal deadline and produces no DS task output. Keep DS retries
 at zero unless duplicate Aliyun jobs are acceptable. This source review adds
-no live evidence, changes no `tested` flag, and promotes no profile; `3.4.1`
-remains stable.
+no live evidence, changes no `tested` flag, and promotes no profile.
 
 `GRPC/literal_unary_string_record_call` has one default template in the
-`Universal` category only on exact `3.4.0`, `3.4.1`, and `3.4.2`:
+`Universal` category only on exact `3.4.0` through `3.4.3`:
 
 ```yaml
 name: call-grpc-echo
@@ -1924,7 +1938,7 @@ task_params:
   grpcConnectTimeoutMs: 10000
 ```
 
-The first twelve profiles do not contain GRPC. On the three reviewed releases,
+Releases before `3.4.0` do not contain GRPC. On the reviewed releases,
 `GrpcLiteralUnaryStringRecordTaskParamsSpec` owns exactly the eight fields
 shown above. `url` must be a literal `host:port` without userinfo. Service,
 method, and field names are strict package-free proto identifiers. Request and
@@ -1966,10 +1980,10 @@ failover resume exists; retry or failover can resend the RPC and duplicate its
 side effects. The channel and `NioEventLoopGroup` are not closed, so frequent
 calls can accumulate worker resources. Keep retries at zero unless the RPC is
 idempotent. This review adds no live evidence, changes no `tested` flag, and
-promotes no profile; `3.4.1` remains stable.
+promotes no profile.
 
 `OPENMLDB/literal_single_statement` has one default template in the
-`MachineLearning` category from `3.1.0` through `3.4.2`:
+`MachineLearning` category from `3.1.0` through `3.4.3`, except `3.1.2`:
 
 ```yaml
 name: openmldb-single-statement
@@ -1981,9 +1995,13 @@ task_params:
   sql: SELECT 1 AS answer
 ```
 
-The first five profiles do not contain a registered OPENMLDB plugin; orphaned
-UI files on `3.0.x` do not make the task available. The ten reviewed profiles
-project exactly the four required fields above without wire renaming.
+Releases before `3.1.0` do not contain a registered OPENMLDB plugin; orphaned
+UI files on `3.0.x` do not make the task available. Exact `3.1.2` leaves the
+inherited Python parameters null, so output handling fails after SQL has run.
+Typed and raw opaque create/edit are closed on that release; existing native
+state remains unchanged/export preserve-only. Retrying can repeat SQL effects.
+The typed profiles project exactly the four required fields above without wire
+renaming.
 `executeMode` accepts only lowercase `offline` or `online`. `zk` must be a
 comma-separated DNS/IPv4 `host:port` ensemble with ports from 1 through 65535,
 and `zkPath` must be an absolute conservative ZooKeeper znode path. `sql` must
@@ -2009,8 +2027,8 @@ application id or failover resume; retry runs the statement again and may
 repeat side effects. This source review refreshes no live evidence, changes no
 `tested` flag, and promotes no profile.
 
-`DINKY/job_trigger` has one default template from `3.1.0` through `3.4.2` and
-is absent upstream on the five earlier profiles. Supply only its exact native
+`DINKY/job_trigger` has one default template from `3.1.0` through `3.4.3` and
+is absent upstream on earlier profiles. Supply only its exact native
 core fields:
 
 ```yaml
@@ -2057,8 +2075,8 @@ Retry can submit the same job again; cancellation addresses `taskId`, not a
 unique submitted-run handle. This source-reviewed facet is not a
 confidentiality, live-execution, or profile-promotion claim.
 
-`HIVECLI` has one default template with a short IN binding hint from `3.1.0` through `3.4.2` and
-is absent upstream on the five earlier profiles. Typed authoring owns only
+`HIVECLI` has one default template with a short IN binding hint from `3.1.0`
+through `3.4.3` and is absent upstream on earlier profiles. Typed authoring owns only
 inline `SCRIPT`: a nonblank `hiveSqlScript`, optional literal
 `hiveCliOptions`, and unique `IN`/`VARCHAR` `localParams`. DS placeholders are
 supported in SQL but forbidden in options because upstream behavior changes:
@@ -2071,7 +2089,7 @@ not select a DS datasource, and the CLI does not provision this runtime.
 available only through lossless opaque preservation.
 
 `DVC/operation` has `upload`, `download`, and `init` variants from `3.1.0`
-through `3.4.2` and is absent upstream on the five earlier profiles. Use the
+through `3.4.3` and is absent upstream on earlier profiles. Use the
 exact native `dvcTaskType` values `Upload`, `Download`, and `Init DVC`. Upload
 requires repository, DVC location, worker path, version, and message; Download
 requires the same fields except message; Init DVC requires repository and
@@ -2098,8 +2116,8 @@ logs because a successful final command can mask an earlier failure. The
 upstream UI's `taskType: MLFLOW` initialization typo does not change the exact
 wire type `DVC`.
 
-`MLFLOW/model_serve` has one default template from `3.1.0` through `3.4.2`
-and is absent upstream on the five earlier profiles. This narrow tracer is not
+`MLFLOW/model_serve` has one default template from `3.1.0` through `3.4.3`
+and is absent upstream on earlier profiles. This narrow tracer is not
 full MLFLOW authoring. Supply exactly these five required native fields:
 
 - `mlflowTaskType: "MLflow Models"`
@@ -2129,7 +2147,7 @@ protocol. A retry can collide with a surviving process or occupied port. This
 typed review adds no live evidence and promotes no profile.
 
 `JUPYTER/preinstalled_notebook` has one default template with a short literal-map hint from
-`3.1.0` through `3.4.2` and is absent upstream on the five earlier profiles.
+`3.1.0` through `3.4.3` and is absent upstream on earlier profiles.
 It runs one notebook in an already installed conda environment. Required
 fields are a shell-safe `condaEnvName` plus distinct absolute POSIX-safe
 `.ipynb` `inputNotePath` and `outputNotePath` values. The optional `parameters`
@@ -2179,19 +2197,19 @@ the input/output notebook paths readable/writable as applicable. The output
 notebook is a worker filesystem artifact, not a DS task output. The plugin has
 no remote application id or failover-resume protocol, and a retry executes the
 notebook again. This reviewed facet adds no live evidence and does not promote
-a profile; `3.4.1` remains stable.
+a profile.
 
-`ZEPPELIN/paragraph` is available from `3.0.0` through `3.4.2` and absent on
-the three earlier profiles. The default template adds a short literal parameter-map
+`ZEPPELIN/paragraph` is available from `3.0.0` through `3.4.3` and absent on
+earlier profiles. The default template adds a short literal parameter-map
 hint from `3.1.0`. It executes exactly one paragraph and requires
 URL-segment-safe `noteId` and `paragraphId`. The exact selected version fixes
 the only valid connection mode:
 
 | Exact profiles | Canonical input | Native connection |
 | --- | --- | --- |
-| `3.0.0` and `3.0.6` | `connectionMode: WORKER_CONFIG` | The wire carries only the ids; configure worker `zeppelin.rest.url`. |
+| `3.0.0`–`3.0.6` | `connectionMode: WORKER_CONFIG` | The wire carries only the ids; configure worker `zeppelin.rest.url`. |
 | `3.1.0` through `3.2.0` | `connectionMode: REST_ENDPOINT` plus `restEndpoint` | The wire carries the literal anonymous HTTP(S) endpoint. |
-| `3.2.1` through `3.4.2` | `connectionMode: DATASOURCE` plus positive `datasource` | The wire carries the id and injected `type: ZEPPELIN`. |
+| `3.2.1` through `3.4.3` | `connectionMode: DATASOURCE` plus positive `datasource` | The wire carries the id and injected `type: ZEPPELIN`. |
 
 `connectionMode` is a canonical selector and is removed from the DS wire. A
 REST endpoint must be absolute HTTP(S) without whitespace, credentials, query,
@@ -2237,7 +2255,7 @@ zero unless the paragraph is safe to run more than once. Exact `3.4.1`
 constructs `taskName.result` without reliable downstream publication; `3.4.2`
 publishes that runtime value through the var pool. Neither result is authored
 in typed YAML. This source-reviewed facet adds no live evidence and does not
-promote any profile; `3.4.1` remains stable.
+promote any profile.
 
 `PROCEDURE` has one default template with a short positional binding hint. Author one
 canonical positional JDBC call such as `{call reporting.refresh_daily(?,?)}`;
@@ -2246,8 +2264,8 @@ matches one `localParams` entry in source order. Procedure parameters accept
 the JDBC scalar types documented by `dsctl task-type schema PROCEDURE`, not
 general `LIST` or `FILE` values.
 
-`EMR` has reviewed typed authoring from `3.0.0` through `3.4.2` and is absent
-upstream on the three earlier profiles. Its default creates a job flow from
+`EMR` has reviewed typed authoring from `3.0.0` through `3.4.3` and is absent
+upstream on earlier profiles. Its default creates a job flow from
 `3.0.0`; `add-steps` begins at `3.1.0`; a short IN request binding hint begins at
 `3.2.2`. Canonical `jobFlowDefineJson` and `stepsDefineJson` values remain raw
 JSON strings: the CLI validates literal JSON without converting it into a
@@ -2273,8 +2291,8 @@ Do not put those credentials in workflow YAML; the CLI does not provision or
 store them. Upstream EMR task failover is not implemented, and typed authoring
 does not supply a separate EMR failover or high-availability layer.
 
-`EMR_SERVERLESS/start_job_run` has one default template with a short IN hint only on
-exact `3.4.2`; the preceding 14 profiles do not contain the plugin. Its typed
+`EMR_SERVERLESS/start_job_run` has one default template with a short IN hint on
+exact `3.4.2`–`3.4.3`; earlier profiles do not contain the plugin. Its typed
 params are literal `applicationId`, `executionRoleArn`, optional `jobName`, raw
 `startJobRunRequestJson`, and unique `IN`/`VARCHAR` `localParams`. DS
 substitutes `${...}` and `$[...]` only in that raw request. Keep unresolved
@@ -2289,7 +2307,7 @@ endpoints use `emr.serverless.endpoint` or `EMR_SERVERLESS_ENDPOINT`, not
 `aws.emr.endpoint`. The plugin persists `jobRunId` through task-instance
 `appIds` and resumes polling after failover. Do not author those runtime
 values; runtime and future native fields remain opaque-preserve-only. This
-typed review adds no live evidence and does not promote `3.4.2`.
+typed review adds no live evidence and does not promote either profile.
 
 Useful variants:
 

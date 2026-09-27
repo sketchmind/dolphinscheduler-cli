@@ -87,7 +87,10 @@ per-family defect windows and parameter propagation rules.
 The later `3.4.3` admission uses its own tag, commit, source tree, contract and
 task reviews in the same three inventories. It adds 35 typed task memberships;
 the current totals belong to [task boundaries](task-authoring-boundaries.md).
-The profile remains experimental with `tested=false` and has no new live receipt.
+At admission, the profile was experimental with `tested=false`, and the source
+review added no live receipt. Later artifact-bound evidence is recorded in
+[live testing](live-testing.md#exact-version-profile-gates); it does not
+retroactively expand the admission evidence.
 
 | Surface | Reviewed change |
 | --- | --- |
@@ -105,8 +108,11 @@ its own installed-wheel and server acceptance before publication.
 
 ## Version Selection
 
-All 21 added releases require explicit `DS_VERSION`. Their official API trees
-provide neither trusted product-information nor OpenAPI version metadata.
+All 21 added releases require explicit `DS_VERSION` for writes and authoring.
+Their official API trees provide neither trusted product-information nor
+OpenAPI version metadata. Reviewed contract reads can still be admitted
+without exact identification; see
+[Version and Read Discovery](contract-read-discovery.md).
 Database schema versions are retained as evidence, not used as aliases:
 `2.0.8` reports `2.0.7`, `3.0.3` reports `3.0.2`, and the existing `3.2.2`
 profile reports `3.3.0`. Failed or ambiguous discovery never selects a neighbor.

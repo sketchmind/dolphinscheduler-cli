@@ -708,9 +708,9 @@ def _sdist_required_paths(
         ("docs/development/release.md", _contains("docs/development/release.md")),
         ("docs/development/tooling.md", _contains("docs/development/tooling.md")),
         (
-            "docs/development/live-evidence/3.4.2/*.json",
+            "docs/development/live-evidence/external-shell/3.4.2/*.json",
             _under_with_suffix(
-                "docs/development/live-evidence/3.4.2/",
+                "docs/development/live-evidence/external-shell/3.4.2/",
                 ".json",
             ),
         ),

@@ -1,72 +1,165 @@
-# 从主模板组成工作流
+# Compose workflows from main templates
 
-先明确目标的 `DS_VERSION`，再运行 `dsctl template task TYPE --raw`。每类任务的默认模板给出一个活动配置，普通 IN 参数或可选字段只有短注释提示；替换原字段，不追加同名 YAML key。SHELL/PYTHON 添加 `localParams` 时，把 `command` 移到 `task_params.rawScript`。
+First select the target `DS_VERSION`, then run `dsctl template task TYPE --raw`.
+Each task type's default template provides one active configuration, with brief
+comments for ordinary IN parameters or optional fields. Replace existing fields
+instead of appending duplicate YAML keys. When adding `localParams` to
+SHELL/PYTHON, move `command` to `task_params.rawScript`.
 
-只有需要完整联动配置的场景才进入 `data.template.variants`：例如 `output` 展示生产者代码与 OUT 声明，`resource` 展示附件名与脚本调用，DEPENDENT 的 `task-dependency` 改变引用目标。DVC 的 upload/download/init、EMR 的 add-steps、HTTP 的 post-json 也表达明确业务操作。默认无需 `--variant`；`minimal`、`params` 和纯别名选择器已删除。SQL pre/post 使用默认模板的短字段提示，不增加场景选择。DATASYNC `raw-json` 是受 selector 限制的 opaque 输入，不是 normal typed 字段校验，也不是任意 AWS 请求透传。
+Only scenarios that need a complete combination of related settings appear in
+`data.template.variants`: for example, `output` shows producer code and an OUT
+declaration, `resource` shows an attachment name and script invocation, and
+DEPENDENT's `task-dependency` changes the reference target. DVC's
+upload/download/init, EMR's add-steps, and HTTP's post-json also represent
+specific business operations. The default needs no `--variant`; `minimal`,
+`params`, and selectors that were only aliases have been removed. SQL pre/post
+fields use brief hints in the default template without adding a scenario
+selector. DATASYNC `raw-json` is opaque input restricted by a selector; it does
+not use normal typed field validation or pass through arbitrary AWS requests.
 
-下面通过已安装 CLI 获取**按所选 DS_VERSION 投影的完整工作流**，不需要复制仓库内的另一份 YAML。`basic` 与省略 `--example` 完全相同；四种组合均可加 `--with-schedule`，附加调度仍默认不激活。1.3.9 的 output/branch 会明确拒绝。这些示例经过本地解析、模型和图编译检查，不证明 worker、插件、凭据、资源或被引用工作流已存在。替换示例身份，用所选版本的 schema 核查字段。调用时显式选择的 `--env-file FILE` 也应带到发现、lint 和 dry-run 命令中；模板给出的导航会保留它。
+Use the installed CLI below to obtain **complete workflows projected for the
+selected DS_VERSION**, without copying a separate YAML file from the repository.
+`basic` is identical to omitting `--example`. All four compositions support
+`--with-schedule`; an attached schedule remains inactive by default. The
+output/branch examples are explicitly rejected on 1.3.9. These examples have
+passed local parsing, model, and graph compilation checks; they do not prove
+that workers, plugins, credentials, resources, or referenced workflows exist.
+Replace the example identities and check fields against the selected version's
+schema. Carry an explicitly selected `--env-file FILE` into discovery, lint, and
+dry-run commands as well; navigation supplied by the template preserves it.
 
-## OUT 生产者与下游 IN
+## OUT producers and downstream IN parameters
 
-保存为 `output-flow.yaml`：
+Save as `output-flow.yaml`:
 
 ```bash
 dsctl template workflow --example output --raw > output-flow.yaml
 ```
 
-3.3.1+ 下游必须声明 IN；只在后继脚本写 `${row_count}` 不建立同样的输入契约。1.3.9 不支持这一输出组合，旧版日志输出标记与参数覆盖规则也不同。用 `dsctl template params --topic output` 查当前版本标记，用 `--topic context` 查优先级。共享值放 `workflow.global_params`；只供一个任务使用的值放其 `localParams`，不要假定两处同名值在所有版本以同样顺序覆盖。
+On 3.3.1+, downstream tasks must declare IN parameters; writing `${row_count}`
+in a successor script alone does not establish the same input contract. This
+output composition is unsupported on 1.3.9, and older versions also have
+different log output markers and parameter override rules. Use
+`dsctl template params --topic output` to check the current version's markers
+and `--topic context` to check precedence. Put shared values in
+`workflow.global_params` and values used by only one task in that task's
+`localParams`. Do not assume that values with the same name in both locations
+override each other in the same order across all versions.
 
-## 分支与合流
+## Branches and joins
 
-保存为 `branch-flow.yaml`：
+Save as `branch-flow.yaml`:
 
 ```bash
 dsctl template workflow --example branch --raw > branch-flow.yaml
 ```
 
-SWITCH 自动生成到命中/default 目标的边；目标必须在同一个 `tasks[]` 中，合流节点显式列出前驱。2.0.0–3.2.1 的 SWITCH 只读取 workflow globals 和传入 runtime varPool，**不读取该节点的 localParams**；CLI 分支例刻意使用 global，因此不会误教旧版局部参数路由。3.2.2+ 才使用包含 localParams 的 prepared map。上游动态输出作为条件输入时，还须用 `depends_on` 建立到 SWITCH 的前驱边。1.3.9 没有 SWITCH。
+SWITCH automatically generates edges to matching/default targets. Targets must
+appear in the same `tasks[]`, and join nodes must explicitly list their
+predecessors. On 2.0.0–3.2.1, SWITCH reads only workflow globals and the
+incoming runtime varPool; **it does not read that node's localParams**. The CLI
+branch example deliberately uses a global parameter so it does not suggest that
+older versions can route using local parameters. Only 3.2.2+ uses the prepared
+map that includes localParams. When using dynamic upstream output as a condition
+input, also establish a predecessor edge to SWITCH with `depends_on`. SWITCH is
+absent on 1.3.9.
 
-若分支取决于同一实例中某任务的 SUCCESS/FAILURE，改用 `dsctl template task CONDITIONS --raw`。其模板已说明自动添加谓词任务入边与 successNode/failedNode 出边；不要重复添加同样的 `depends_on`。模板的可选兼容 `bizdate` 字段不参与状态谓词求值。
+If a branch depends on a task's SUCCESS/FAILURE within the same instance, use
+`dsctl template task CONDITIONS --raw`. Its template explains that incoming
+edges from predicate tasks and outgoing edges to successNode/failedNode are
+added automatically; do not duplicate them with the same `depends_on`. The
+template's optional compatibility field `bizdate` does not participate in state
+predicate evaluation.
 
-## 调用同项目子工作流
+## Call a child workflow in the same project
 
-先准备独立的 `child.yaml`，改成独立 child 名称并按需要调整其任务，再创建和上线：
+First prepare a separate `child.yaml`, give the child its own name, and adjust
+its tasks as needed. Then create it and bring it online:
 
 ```bash
 dsctl template workflow --example basic --raw > child.yaml
 ```
 
-父工作流 `parent.yaml`：
+Parent workflow `parent.yaml`:
 
 ```bash
 dsctl template workflow --example child --raw > parent.yaml
 ```
 
-父文件中的 child 名称或数字是占位符。运行 `dsctl workflow list --project PROJECT` / `dsctl workflow get WORKFLOW --project PROJECT`，取真实 child code 并核对子流程、引用闭包和上线状态。1.3.9 改用同项目 `childWorkflowName`，由 CLI 解析 id；不要把 code 填进 name。当前 authoring 的存在性/循环检查不能保证之后修改的子图仍就绪。
+The child name or number in the parent file is a placeholder. Run
+`dsctl workflow list --project PROJECT` /
+`dsctl workflow get WORKFLOW --project PROJECT` to obtain the real child code
+and check the child workflow, its reference closure, and its online status. On
+1.3.9, use `childWorkflowName` from the same project instead; the CLI resolves
+its id. Do not put a code in the name field. The current authoring checks for
+existence and cycles cannot guarantee that a child graph remains ready after
+later changes.
 
-SUB_WORKFLOW 的局部参数不是跨版本统一的 child input map。3.3.x 只转发 parent startup；3.4.x 转发 parent globals/startup/varPool，localParams 不作为 child 输入。2.0.x 还有同名覆盖与正常完成/取消输出的差异。执行 `dsctl template params --topic context` 与子任务 schema 读取精确规则，不在父模板机械复制所有 IN/OUT。tenant、worker group、environment 属于运行/调度或任务层配置，应在对应 schema 中选择；子工作流存在不证明其 worker 环境已安装。
+SUB_WORKFLOW local parameters do not form a uniform child input map across
+versions. 3.3.x forwards only parent startup parameters; 3.4.x forwards parent
+globals/startup/varPool, and localParams are not child inputs. 2.0.x also has
+differences in same-name overrides and outputs on normal completion versus
+cancellation. Run `dsctl template params --topic context` and consult the child
+task schema for the exact rules instead of mechanically copying every IN/OUT
+declaration into the parent template. Tenant, worker group, and environment
+belong to runtime/schedule or task-level configuration; select them through the
+corresponding schema. A child workflow's existence does not prove that its
+worker environment is installed.
 
-## 等待另一个项目的工作流或任务
+## Wait for a workflow or task in another project
 
-保存为 `dependency-flow.yaml`：
+Save as `dependency-flow.yaml`:
 
 ```bash
 dsctl template workflow --example dependent --raw > dependency-flow.yaml
 ```
 
-依次运行 `dsctl project list`、`dsctl workflow list --project PROJECT`、`dsctl task list --project PROJECT --workflow WORKFLOW`。现代模板取 **定义的 code**，不是实例 id；整工作流用 `depTaskCode: 0`。指定任务时改为其 task code 和 `DEPENDENT_ON_TASK`。1.3.9 使用 `projectName` / `workflowName` / `taskName`，整流程由 compiler 转换为 ALL；主模板同时给出两种范围的替换例。
+Run `dsctl project list`, `dsctl workflow list --project PROJECT`, and
+`dsctl task list --project PROJECT --workflow WORKFLOW` in order. Modern
+templates take **definition codes**, not instance ids; use `depTaskCode: 0` for
+the whole workflow. To select a specific task, use its task code and
+`DEPENDENT_ON_TASK`. 1.3.9 uses `projectName` / `workflowName` / `taskName`, and
+the compiler converts the whole-workflow scope to ALL. The main template
+provides replacement examples for both scopes.
 
-`cycle` / `dateValue` 必须成对选择 schema 列出的 exact 枚举，值不做参数替换。日期窗口按 DS 调度/运行上下文解释，并不等于“总是查当前此刻”。跨工作流引用不会自动生成本文件的 DAG 边；目标身份存在、目标项目权限、历史实例及预期状态仍需确认。3.2.0+ 的 failure controls 和 3.2.1+ 的 parameterPassing 只按版本模板使用。
+Choose `cycle` / `dateValue` as a pair from the exact enums listed in the
+schema; their values do not undergo parameter substitution. Date windows are
+interpreted in the DS schedule/runtime context, which does not mean they always
+query the current moment. Cross-workflow references do not automatically
+generate DAG edges in this file. You must still confirm the target identities,
+target project permissions, historical instances, and expected states. Use the
+failure controls available from 3.2.0+ and parameterPassing available from
+3.2.1+ only as shown in the version-specific templates.
 
-## 检查、依赖与变更
+## Validation, dependencies, and changes
 
 ```bash
 dsctl lint workflow output-flow.yaml
 dsctl workflow create --file output-flow.yaml --project PROJECT --dry-run
 ```
 
-对其余文件同样先 lint，再针对目标 dry-run。资源先用不带 --dir 的 `resource list` 取 FILE root，再按 schema 将文件 fullName 转成保留前导 / 的 root-relative 名，并核对 worker 下载目录中的脚本路径；datasource 取正 id 和匹配类型，连接测试不替代业务表/权限校验。ARN、Pigeon job、Zeppelin paragraph 等没有 CLI 发现命令的外部对象，须从所属系统取得；PIGEON 的 p_host 放在父级 workflow.global_params。
+For the other files, likewise run lint first, then a dry-run against the target.
+For resources, use `resource list` without --dir to obtain the FILE root, then
+follow the schema to convert the file's fullName into a root-relative name that
+retains the leading /. Check the script path in the worker's download directory.
+For datasources, use a positive id and matching type; a connection test does not
+replace checks of business tables and permissions. Obtain external objects with
+no CLI discovery command, such as ARNs, Pigeon jobs, and Zeppelin paragraphs,
+from their own systems. Put PIGEON's p_host in the parent
+workflow.global_params.
 
-外层 task `timeout` 单位是分钟，0 关闭；开启后默认 WARN 只告警，FAILED/WARNFAILED 的中止及远端取消效果仍取决于任务。HTTP connectTimeout、gRPC deadline 的毫秒，以及其他插件自己的秒数，不随此外层单位改变。KUBEFLOW/PYTORCH 等特殊约束继续以 exact schema 为准。
+The outer task `timeout` is measured in minutes; 0 disables it. When enabled,
+the default WARN behavior only emits a warning. The effects of FAILED/WARNFAILED
+on termination and remote cancellation still depend on the task. HTTP
+connectTimeout and gRPC deadline remain measured in milliseconds, and other
+plugins retain their own units in seconds; the outer timeout unit does not
+change them. The exact schema remains authoritative for special constraints such
+as those for KUBEFLOW/PYTORCH.
 
-已有工作流先读取/export 基线，再用 `dsctl template workflow-patch --raw` 编辑明确字段。默认只改 description；instance patch 默认只改指定任务脚本，不活动设置 workflow timeout/global_params。删除不需要的操作块，执行对应 edit `--dry-run` 后再应用。预览与应用之间对象可能变化；定义回改不回滚已发生的外部副作用。
+For an existing workflow, first read/export its baseline, then use
+`dsctl template workflow-patch --raw` to edit explicit fields. By default, it
+changes only description. An instance patch defaults to changing only the
+selected task's script and does not set workflow timeout/global_params. Remove
+unneeded operation blocks, run the corresponding edit with `--dry-run`, then
+apply. Objects may change between preview and apply; reverting a definition does
+not roll back external side effects that have already occurred.

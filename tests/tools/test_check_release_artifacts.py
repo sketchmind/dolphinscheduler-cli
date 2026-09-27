@@ -26,6 +26,7 @@ SOURCE_RECEIPT = (
     / "docs"
     / "development"
     / "live-evidence"
+    / "external-shell"
     / "3.4.2"
     / "2026-08-04-13b81eedd389.json"
 )
@@ -1504,7 +1505,7 @@ dev = ["pytest>=8,<9"]
         "CONTRIBUTING.md": "contributing\n",
         "src/dsctl/__init__.py": '__version__ = "0.4.0"\n',
         "docs/guide.md": "guide\n",
-        "docs/development/live-evidence/3.4.2/fixture.json": "{}\n",
+        "docs/development/live-evidence/external-shell/3.4.2/fixture.json": "{}\n",
         "tests/test_fixture.py": "def test_fixture():\n    assert True\n",
         "tests/fixtures/task_authoring/parameter_examples.json": '{"tasks": []}\n',
         "tests/fixtures/version_discovery/README.md": "Reviewed Swagger fixture.\n",

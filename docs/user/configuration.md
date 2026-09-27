@@ -68,11 +68,12 @@ The first applicable source wins:
 5. Unconfigured local operation.
 
 Each connection source supplies its own URL, token and version. Missing
-identity values never come from another source. Empty or incomplete environment values
-therefore shadow a saved default; remote commands fail instead of switching to
-that default. `DS_VERSION=3.4.1` alone supports offline version-selected work
-but does not supply a remote connection. A missing context, broken file or
-invalid selected source fails without trying another target.
+identity values never come from another source. Empty or incomplete environment
+values therefore shadow a saved default; remote commands fail instead of
+switching to that default. `DS_VERSION=3.4.1` alone supports offline
+version-selected work but does not supply a remote connection. A missing
+context, broken file or invalid selected source fails without trying another
+target.
 
 ## Connection Settings
 
@@ -196,16 +197,16 @@ remote invocation probes again. A successful unresolved observation replaces
 an older positive result; probe or network failures clear the old entry.
 Neither failure nor expiry falls back to stale evidence or another profile.
 
-Reviewed exact metadata identifies seven releases: `3.2.0` and `3.2.1` through
-OpenAPI, and `3.3.1`, `3.3.2`, `3.4.0`, `3.4.1` and `3.4.2` through product
-information. These fields rely on a completed installation or upgrade. Stock
-`3.2.2` records `3.3.0`; the CLI preserves that reported value separately and
-never rewrites it to exact `3.2.2`. Contract discovery may still admit reviewed
+Reviewed exact metadata identifies eight releases: `3.2.0` and `3.2.1` through
+OpenAPI, and `3.3.1`, `3.3.2`, `3.4.0`, `3.4.1`, `3.4.2` and `3.4.3` through
+product information. These fields rely on a completed installation or upgrade.
+Stock `3.2.2` records `3.3.0`; the CLI preserves that reported value separately
+and never rewrites it to exact `3.2.2`. Contract discovery may still admit reviewed
 reads for this anomaly. Other unreviewed release reports and contradictory
-metadata do not silently activate a different profile. Earlier releases can use the same read path when their API documents
-are available. Hidden or disabled documentation requires an explicit version
-for remote operations. API group labels such as `V1` and `V2` never identify a
-DolphinScheduler release.
+metadata do not silently activate a different profile. Earlier releases can use
+the same read path when their API documents are available. Hidden or disabled
+documentation requires an explicit version for remote operations. API group
+labels such as `V1` and `V2` never identify a DolphinScheduler release.
 
 See [Version Compatibility](version-compatibility.md) for the current support
 matrix.

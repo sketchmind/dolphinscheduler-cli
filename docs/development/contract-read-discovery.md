@@ -1,20 +1,35 @@
-# Contract Read Discovery
+# Version and Read Discovery
 
-This extension separates an observed API contract from the server's exact
-release. It adds bounded read admission when product-version metadata is
-unavailable. It does not promote a compatibility profile, authorize authoring,
-or replace an exact installed-wheel release gate. DolphinScheduler `3.4.1`
-remains the stable target.
+Discovery first tries to identify the exact server release from reviewed
+metadata. If that is unavailable, an observed API contract can admit a bounded
+set of reads without identifying the release. Neither path promotes a profile
+or replaces an installed-wheel release gate. Public configuration belongs in
+[Configuration](../user/configuration.md#version-selection); module ownership
+belongs in [Architecture](architecture.md#target-version-resolution).
 
 ## Evidence and Selection
 
-Discovery preserves the existing metadata-first path and seven exact mappings:
+Discovery preserves the metadata-first path and eight exact mappings:
 OpenAPI identifies `3.2.0` and `3.2.1`; product information identifies `3.3.1`,
-`3.3.2`, `3.4.0`, `3.4.1` and `3.4.2`. Explicit `DS_VERSION` is authoritative.
+`3.3.2` and `3.4.0`–`3.4.3`. Those six later releases also have reviewed
+OpenAPI metadata paths. Explicit `DS_VERSION` is authoritative.
 The stock `3.2.2` metadata value `3.3.0` remains an independent reported value,
 never an alias for an exact release. Missing metadata and this reviewed anomaly
 can continue to document discovery; contradictory or other unreviewed release
 reports do not silently select a different profile.
+
+Generated bootstrap facts bind product-information paths and response fields
+to full controller snapshots. OpenAPI declarations, database initialization
+and legacy route collisions retain their exact source membership:
+
+- Older plugin controllers interpret `query-product-info` as a plugin ID.
+  Only their reviewed `110003` result with absent/null data permits fallback;
+  arbitrary business errors do not.
+- Swagger group labels such as `V1` and `V2` do not identify a DS release.
+- Stock `3.2.2` initializes `sql/soft_version` and database version metadata
+  to `3.3.0`; this is not an alias for exact `3.2.2`.
+- Invalid credentials return HTTP 401 in the reviewed interceptors. Report
+  token, expiration and account guidance rather than trying another profile.
 
 When metadata cannot identify the release, generated public-document facts
 supply these fixed GET probes relative to the configured API context path:
@@ -25,7 +40,7 @@ supply these fixed GET probes relative to the configured API context path:
 | Springfox OpenAPI 3 in `3.1.x` | `v3/api-docs?group=v1(current)` and `v3/api-docs?group=v2` | Each complete declared group |
 | Springdoc from `3.2.0` | `v3/api-docs` | Complete public controller surface |
 
-The compiler reads all 36 full exact source snapshots before runtime slicing.
+The compiler reads all 37 full exact source snapshots before runtime slicing.
 Class and method visibility annotations determine public operations. Spring MVC
 wire declarations remain separate from Swagger documentation annotations:
 reviewed query/form differences, annotation-only parameter names and exposed
@@ -108,8 +123,8 @@ values and attributes agree across every candidate. It does not publish a union
 or choose one candidate's differing members. These are explicitly labeled
 `candidate_generated_contracts`, with server membership `unverified`; identical
 candidate values do not prove that a customized deployment exposes every member.
-For example, the live datasource document omitted `H2` from the generated
-candidate's enum. Completely untargeted local
+For example, a datasource document observed during development omitted `H2`
+from the generated candidate's enum. Completely untargeted local
 commands retain the documented offline baseline.
 
 The five-minute cache is scoped to normalized URL, API context path and
@@ -126,47 +141,35 @@ advertised by a document. One discovery attempt has a 45-second total deadline,
 parameters per operation. Authentication and malformed-response errors remain
 errors rather than evidence for another profile.
 
-## Verification Status
+## Verification Boundaries
 
-The original [automatic exact version discovery receipt](automatic-version-discovery.md)
-records a metadata-only wheel against 15 installed servers on 2026-09-08. Its
-seven exact successes and expected older-version rejections remain historical
-facts; the receipt does not attest this extension.
+Regression coverage must distinguish exact identification from candidate
+matching, including singleton candidates, complete route coverage, enum
+mismatches, missing transitive reads and unreviewed actions. It must also prove
+that admitted transport remains read-only, unresolved output does not expose the
+execution profile as the server version, and failed probes cannot reuse stale
+evidence. Local discovery must preserve parser syntax without borrowing one
+candidate's authoring models or differing enum members.
 
-During the current development exercise, the real cluster's 133 public routes
-retained candidate `1.3.9` without identifying an exact release. Of those
-operations, 126 matched verifiable parameter contracts and seven were excluded.
-For example, the live datasource enum omitted `H2` present in the clean exact
-source. The mismatch was retained rather than weakening enum comparison.
-The development campaign passed all 12 business read actions and the identity
-check without `DS_VERSION`. Ordinary remote invocations took about 2–3 seconds;
-global schedule-ID lookup took about 51 seconds because this older contract
-requires enumerating visible projects and workflows. Scoped schedule listing
-avoids that global scan.
-Action-by-action execution results belong to the campaign evidence, not the
-potential scope table above; they remain separate from exact identification.
+Metadata-path regressions separately cover explicit selection, reviewed route
+collisions, misleading version values, invalid credentials, cache expiry and
+fresh probe failures. Exercise local cache reuse and fresh `doctor` discovery
+independently; one does not establish the other's behavior.
 
-A clean `0.4.0` wheel was also built and installed into an isolated package
-directory on 2026-09-09. Its SHA-256 is
-`ee89b47c67da746491e5fb3b928df4c50759eff76280ef422296d02de57eb32a`.
-Package-content validation passed. Seven installed-wheel checks passed against
-the same target and cache: `doctor`, `project.list`, `version`, local schema,
-read and write capability queries, and candidate enum discovery. No explicit
-`DS_VERSION` was supplied. Identity stayed unknown, reads were admitted by
-contract, and write capability still required an exact version.
+Installed-wheel acceptance must bind each observed action and target to the
+tested artifact. The potential scope table above is not a passing-run receipt.
+Historical metadata-only observations do not attest contract-read admission.
+Exact profile release gates and profile
+promotion retain their independent requirements.
 
-One measured performance follow-up remains: scoped schema and capability
-queries currently calculate the complete compatible read inventory. In an
-isolated local process, the first 13-action calculation took about 760 ms,
-compared with 43 ms for `project.list` alone. A future scoped query should
-evaluate only its requested action; local-only commands can avoid remote
-contract compilation. This is separate from the roughly 600 ms CLI cold start.
+## Performance Boundaries
 
-The full development gate passed: 17,170 portable tests, 1,482 source-contract
-tests and three source-rebuild tests, plus lint, typing, architecture boundaries,
-generated freshness and conformance checks. The rebuild lane verifies
-byte-identical source and snapshot outputs across all 36 exact releases.
+Global schedule-ID lookup on older contracts can require enumerating visible
+projects and workflows. Scoped schedule listing avoids that global scan;
+performance claims must distinguish these query shapes.
 
-These observations are development and scoped installed-wheel evidence. Exact
-profile release gates and any profile promotion retain their independent
-requirements; this document makes no new profile promotion claim.
+Scoped schema and capability queries currently calculate the complete
+compatible read inventory through `compatible_read_actions`. A future scoped
+query should evaluate only its requested action; local-only commands can avoid
+remote contract compilation. Measure this work separately from CLI cold start
+and remote discovery before claiming an improvement.

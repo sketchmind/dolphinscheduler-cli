@@ -1,14 +1,18 @@
 # Version Compatibility
 
-A configured target is detected automatically when `DS_VERSION` is omitted or
-set to `auto`. An explicit exact `DS_VERSION` overrides discovery; common
-spellings such as `v3.4.1` and `ds_3_4_1` are normalized. Automatic selection
-does not change a profile's support level. Reviewed releases before `3.2.0`
-require an explicit version. Stock `3.2.2` also requires `DS_VERSION=3.2.2`
-because it reports `3.3.0` in its database version metadata. Other later
-deployments must expose their product
-information or OpenAPI version metadata. See [Version Selection](configuration.md#version-selection)
-for offline discovery, cache behavior, and failures.
+Omitting `DS_VERSION` or setting it to `auto` enables discovery for a configured
+target. Reviewed metadata can identify an exact release; otherwise public API
+contracts may admit bounded reads without identifying the server's release.
+An explicit exact `DS_VERSION` overrides discovery; common spellings such as
+`v3.4.1` and `ds_3_4_1` are normalized. Automatic selection does not change a
+profile's support level.
+
+Reviewed releases before `3.2.0` need an explicit version for writes and
+authoring. Stock `3.2.2` likewise needs `DS_VERSION=3.2.2` for those operations
+because its database version metadata reports `3.3.0`. Reviewed reads can still
+be admitted when the API documents satisfy their contracts. See
+[Version Selection](configuration.md#version-selection) for exact metadata,
+read admission, offline discovery, cache behavior, and failures.
 
 ## Current Support Matrix
 
@@ -23,70 +27,69 @@ The [current action inventory](../development/architecture.md#current-stable-sur
 records the installed CLI surface and aggregate availability decisions. Each
 selectable exact profile gives every action a terminal decision. Use
 `dsctl capabilities` for the selected profile's supported, limited and
-unsupported counts; these do not represent live-test counts. The table below
-records exact identities, current support levels, and evidence available at
-historical admission.
+unsupported counts; these do not represent live-test counts.
 
-| Server | Exact contract | Family | Level | Evidence at historical admission |
-| --- | --- | --- | --- | --- |
-| `1.3.9` | `1.3.9` | `process-definition-1.3` | experimental | prior four-action exact-read and `legacy_core/v1` receipts are artifact-bound; profile remains experimental |
-| `2.0.0` | `2.0.0` | `process-definition-2.0` | experimental | prior four-action exact-read and `legacy_core/v1` receipts are artifact-bound; profile remains experimental |
-| `2.0.1` | `2.0.1` | `process-definition-2.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `2.0.2` | `2.0.2` | `process-definition-2.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `2.0.3` | `2.0.3` | `process-definition-2.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `2.0.4` | `2.0.4` | `process-definition-2.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `2.0.5` | `2.0.5` | `process-definition-2.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `2.0.6` | `2.0.6` | `process-definition-2.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `2.0.7` | `2.0.7` | `process-definition-2.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `2.0.8` | `2.0.8` | `process-definition-2.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `2.0.9` | `2.0.9` | `process-definition-2.0` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.0.0` | `3.0.0` | `process-definition-3.0` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.0.1` | `3.0.1` | `process-definition-3.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.0.2` | `3.0.2` | `process-definition-3.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.0.3` | `3.0.3` | `process-definition-3.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.0.4` | `3.0.4` | `process-definition-3.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.0.5` | `3.0.5` | `process-definition-3.0` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.0.6` | `3.0.6` | `process-definition-3.0` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.1.0` | `3.1.0` | `process-definition-3.1` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.1.1` | `3.1.1` | `process-definition-3.1` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.1.2` | `3.1.2` | `process-definition-3.1` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.1.3` | `3.1.3` | `process-definition-3.1` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.1.4` | `3.1.4` | `process-definition-3.1` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.1.5` | `3.1.5` | `process-definition-3.1` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.1.6` | `3.1.6` | `process-definition-3.1` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.1.7` | `3.1.7` | `process-definition-3.1` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.1.8` | `3.1.8` | `process-definition-3.1` | experimental | exact-source and contract verification; no live receipt at admission |
-| `3.1.9` | `3.1.9` | `process-definition-3.1` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.2.0` | `3.2.0` | `process-definition-3.2` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.2.1` | `3.2.1` | `process-definition-3.2` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.2.2` | `3.2.2` | `process-definition-3.2` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.3.1` | `3.3.1` | `workflow-3.3-plus` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.3.2` | `3.3.2` | `workflow-3.3-plus` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.4.0` | `3.4.0` | `workflow-3.3-plus` | experimental | prior artifact-bound exact-read and `full_core/v1` receipts passed; profile remains experimental |
-| `3.4.1` | `3.4.1` | `workflow-3.3-plus` | full | stable release live suite exists; exact-read and `full_core/v1` receipts are artifact-bound |
-| `3.4.2` | `3.4.2` | `workflow-3.3-plus` | experimental | prior artifact-bound exact-read, `full_core/v1`, and schema-6 receipts passed; profile remains experimental with `tested=false` |
-| `3.4.3` | `3.4.3` | `workflow-3.3-plus` | experimental | exact-source and contract verification; no live receipt at admission, with `tested=false` |
+| Exact server releases | Profiles | Contract family |
+| --- | --- | --- |
+| `1.3.9` | 1 | `process-definition-1.3` |
+| `2.0.0`–`2.0.9` | 10 | `process-definition-2.0` |
+| `3.0.0`–`3.0.6` | 7 | `process-definition-3.0` |
+| `3.1.0`–`3.1.9` | 10 | `process-definition-3.1` |
+| `3.2.0`–`3.2.2` | 3 | `process-definition-3.2` |
+| `3.3.1`, `3.3.2`, `3.4.0`–`3.4.3` | 6 | `workflow-3.3-plus` |
 
-Upstream-present actions may be supported or limited; each exact profile records
-the decision. `3.4.1` remains
-the only stable, fully tested target. The other 36
-profiles are selectable for exact compatibility work but remain experimental
-until their release-specific gates justify promotion.
+Family names group related contracts. Select the actual server version to use
+its exact fields, enums and runtime behavior.
 
-The evidence column is a historical admission baseline. Its receipts attest
-only the wheel and generated manifests recorded in those receipts; they do not
-attest later compatibility expansions.
+## Support Policy and Verification
 
-The `0.4.0` candidate has passed semantic-schema-2
-[exact-read gates](../development/live-evidence/exact-read/) and
-[`full_core/v1` conformance gates](../development/live-evidence/conformance-bundles/)
-for all 37 releases on the same wheel. These artifact-bound receipts cover the
-fixed four-action read scope and the 18-action core bundle. They do not establish
-whole-profile live coverage or promote an experimental profile.
+These are separate facts:
+
+- **Action availability** records whether a specific operation is supported,
+  limited or absent upstream on the selected release. Check
+  `dsctl capabilities --action ACTION` for that operation's constraints.
+- **Live verification** records a tested scenario against a specific wheel,
+  source and environment. Each receipt identifies its actions and artifact.
+- **Profile support policy** is the recorded release designation. The current
+  metadata retains `3.4.1` as `full` with `tested=true`, historically called the
+  stable target; the other 36 profiles retain `experimental` with `tested=false`.
+  These labels record release-policy decisions. The profile-level `tested`
+  flag belongs to that policy; per-action verification and receipts describe
+  the behaviors exercised by tests.
+- **Offline default** selects `3.4.1` only when no URL, token or version is
+  configured. Configured targets use explicit version selection or discovery.
+  See [Version selection](configuration.md#version-selection).
+
+All 37 profiles passed the shared read and core scopes listed below. Support
+labels remain separate metadata used by diagnostics and release checks;
+changes follow an explicit policy review with matching evidence.
+
+### Recorded Live Coverage
+
+The historical `0.4.0` development candidate has these receipts on one wheel:
+
+| Scenario | Exact releases | Verified scope |
+| --- | --- | --- |
+| [Exact reads](../development/live-evidence/exact-read/) | All 37 | Four read actions |
+| [Core conformance](../development/live-evidence/conformance-bundles/) | All 37 | The same 18-action `full_core/v1` bundle |
+| [External SHELL preservation](../development/live-evidence/external-shell/3.4.2/) | `3.4.2` | A 15-action bundle including mutation and restoration of a pre-existing task |
+
+The additional SHELL scenario verifies restoration of the original command,
+non-owned fields, dependencies and DAG topology. Its reviewed test target is
+`3.4.2`; the suite establishes that restoration contract. Action counts overlap
+across bundles, so assess coverage using each suite's named operations. See the
+[live gate contracts](../development/live-testing.md#exact-version-profile-gates)
+for detailed obligations and other scenario-specific evidence.
+
+These receipts attest the listed scenarios on a historical candidate built
+before subsequent runtime fixes. Each new release candidate completes its own
+artifact-bound acceptance.
+Historical admission evidence is recorded in the
+[admission decisions](../development/stable-release-admission.md).
 
 The current generic exact-read promotion format is semantic schema 2; generic
-schema-1 receipts remain historical-audit-only. The separate exact `3.4.2`
-mutating promotion format is semantic schema 7; mutating schema-3 through
+schema-1 receipts remain historical-audit-only. The `external-shell/v1` format,
+currently reviewed for `3.4.2`, is semantic schema 7; its schema-3 through
 schema-6 receipts remain historical-audit-only. These receipt schema numbers are
 separate from the cluster, fixture, and image-inspection input manifest schemas.
 
@@ -170,81 +173,20 @@ gate over that action catalog:
 
 `full_core/v1` inherits all nine legacy actions and adds six workflow
 definition actions plus `task.list`, `task.get`, and `task.update`.
-Static-ready means only that every required action has an executable accepted
-recipe in the generated profile. The installed-wheel scenarios, strict receipt
-validator, complete same-wheel corpus checker, and quality, CI, and release
-gates are implemented. Campaign `conformance-e8eacee57af9-r12-20260811`
-completed all 15 then-highest-ready coordinates with one immutable wheel: two
-`legacy_core/v1` and 13 `full_core/v1` receipts. That corpus remains evidence
-only for its recorded wheel, assessment, and manifests; it does not attest the
-two newly ready full-core coordinates. It does not change per-action
-verification, support level, `tested`, whole-profile promotion, or authoring
-facets. `3.4.1` remains the sole stable, fully tested target; `3.4.2` remains
-experimental with `tested=false`.
+Static readiness means every required action has an executable accepted recipe
+in the generated profile. Release acceptance additionally needs installed-wheel
+scenarios, strict receipt validation, a complete same-wheel corpus and the
+quality and release gates. A passing bundle does not promote an entire profile
+or verify every authoring facet.
 
-Historical promotion campaign `promotion-167723bbe11d-r7-20260809` ran one immutable
-`0.4.0` wheel
-(`sha256:167723bbe11d919b9d30a91ade4b017530743ec75061fdcb78a93429fc0bde88`)
-through the schema-1 generic read sweep on every exact profile. Its 12
-sequential CLI invocations per version all passed (`180/180` total), with
-`effects.remote_mutations=0`, `effects.fixture_mutated=false`, and
-`secrets_recorded=false`. The remotely exercised stable-action scope was
-exactly `project.list`, `project.get`, `workflow.list`, and `workflow.get`; the
-other invocations establish local and diagnostic preconditions rather than
-expanding that action scope.
-
-The 15 receipts are archived under
-[`docs/development/live-evidence/history/exact-read/`](../development/live-evidence/history/exact-read/),
-one per exact-version directory with filename
-`2026-08-09-167723bbe11d.json`. Together, they preserve the historical
-same-wheel corpus produced by that campaign; the receipts do not themselves
-carry a `campaign_id`. Generated profile fingerprints changed, so campaign
-`conformance-e8eacee57af9-r12-20260811` reran the gate on all
-15 profiles with wheel SHA-256
-`e8eacee57af9a9d2659194b05bccbbd7680eb10c310c4189d9cfa3ae8b5c9152`.
-The tracked schema-1 corpus passed its checker for that manifest and supplied
-`live_smoke` evidence only for the four named actions. It does not attest the
-later compatibility-expansion manifests and is now historical-only. Neither the
-historical nor r12 per-action result changed `data.ds.tested`, support levels,
-or whole-profile promotion. On `1.3.9`, `2.0.0`, and `2.0.9`,
-`monitor.health` is absent upstream: `doctor` sent no actuator request,
-recorded an API warning with reason `upstream_endpoint_absent`, and passed its
-authenticated current-user fallback. Profiles from `3.0.0` used the actuator
-health check successfully. See
-[Live Testing](../development/live-testing.md#exact-version-profile-gates) for
-the gate and evidence policy.
-
-Successful behavior checks alone do not establish release readiness. Evidence
-must bind the installed wheel to its exact source, metadata and generated
-verification claims. Preliminary checks and artifacts that fail release
-preflight cannot enter the governed promotion corpus.
-
-Historical campaign `promotion-f328d3e2-schema6-r2-20260810` passed the
-`3.4.2` mutating gate with the then-current immutable `0.4.0` wheel whose
-SHA-256 is
-`f328d3e2d6ba261c26f9f74decb12a9229b5d471b6f2efdd2a07d55b116af06f`.
-The archived schema-6 receipt is
-[`2026-08-10-f328d3e2d6ba.json`](../development/live-evidence/history/3.4.2/2026-08-10-f328d3e2d6ba.json).
-It records 48 operations: 45 successful operations and three expected negative
-paths. Its digest-bound bundle binds exactly 15 actions to `live_smoke`, and
-the gate's trace and cleanup attestation prove that its external `SHELL` task
-was restored exactly. A separate post-gate matrix describe confirmed fixture
-identity, topology, attached schedule, and `OFFLINE` state before cleanup; the
-remote matrix then returned clean. This evidence does not change
-`data.ds.tested`, the experimental support level, or whole-profile promotion;
-`3.4.1` remains the only stable profile. The schema-v3/v4/v5 receipts remain
-valid only for the historical wheel, manifest, and action scope each names.
-Later campaign `conformance-e8eacee57af9-r12-20260811` also produced
-[`2026-08-12-e8eacee57af9.json`](../development/live-evidence/3.4.2/2026-08-12-e8eacee57af9.json)
-from that same immutable wheel. The schema-6 checker passed all 48 recorded
-operations (45 successes and three expected negative paths) and confirmed exact
-fixture restoration and zero gate-created project leftovers for that recorded
-manifest. Expanded fingerprints now make the receipt historical. Its 15-action
-evidence remains `live_smoke` for that artifact: it does not satisfy the separate
-deterministic stale-plan negative required for `task.update` to become
-`live_full`, and `3.4.2` remains experimental with `tested=false`.
-All schema-3 through schema-6 mutating receipts are historical audit evidence;
-a fresh current promotion must be emitted and checked as schema 7.
+The [live evidence policy](../development/live-testing.md#exact-version-profile-gates)
+defines current gate schemas and their fixed action scopes. Prior receipts are
+retained under [live-evidence](../development/live-evidence/), including historical
+read and mutation formats. Each attests only its recorded wheel, source,
+manifest, action scope and cleanup. Historical schema-3 through schema-6 task
+mutation receipts do not satisfy the current schema-7 stale-plan requirement.
+Source review, a successful development check or an older receipt cannot refresh
+those bindings for a new package.
 
 Version capability, cluster/plugin configuration, current-user permission, and
 runtime state are separate facts. A permission or cluster-state failure is not
@@ -485,9 +427,8 @@ dependencies, or workflow-level execution settings—including `release_state`
 transitions such as `OFFLINE` to `ONLINE`, workflow timeout, `execution_type`,
 and global parameters—reruns the applicable gates. Standalone YAML has
 no server provenance and gets no exception. This review performs no live
-preflight or campaign,
-promotes no profile, and makes
-existing stable `3.4.1` receipts stale for the expanded authoring manifest.
+preflight or campaign and promotes no profile. Earlier receipts remain bound to
+their original authoring manifest and do not attest this expansion.
 
 `PYTORCH/literal_resource_script` is available in `MachineLearning` on exact
 `3.1.0` through `3.3.2`. It is upstream-absent on earlier profiles
@@ -719,8 +660,7 @@ kind, nondefault socket timeout, and future native members remain unchanged/
 export opaque preservation state; none belongs to typed authoring. There is no
 reliable cancel, durable id, failover resume, or structured output. Retry
 resends the whole request, so `POST`, `PUT`, and
-`DELETE` side effects can duplicate. This review adds no live evidence, changes
-no promotion, and leaves `3.4.1` stable.
+`DELETE` side effects can duplicate. This review adds no live evidence or profile promotion.
 
 `PYTHON` is typed on all 37 exact profiles. Exact `1.3.9` canonical YAML owns
 `rawScript`, unique `IN`-only `localParams` using its nine scalar data types,
@@ -955,7 +895,7 @@ executor mutates an immutable empty map. Exact `3.1.4`–`3.1.9` do not expose t
 fields; it uses the image
 ENTRYPOINT/CMD and fixes `imagePullPolicy=Always`.
 
-Output declarations are typed only on `3.2.0`, `3.2.1`, `3.2.2`, and `3.4.2`–`3.4.3`–`3.4.3`.
+Output declarations are typed only on `3.2.0`, `3.2.1`, `3.2.2`, and `3.4.2`–`3.4.3`.
 Their unique Kubernetes-style names exclude `taskInstanceId`, stay disjoint
 from input environment, and compile as `OUT`/`VARCHAR`/empty-value
 `localParams`. Exact `3.2.0` parses the legacy terminal `dsVal` marker;
@@ -1058,7 +998,7 @@ or cancellation of the same Azure run. If the worker fails after `createRun`
 but before callback persistence, or a DS retry begins without `appIds`, the
 pipeline can be submitted again. The plugin itself does not retry `createRun`.
 This review adds no live evidence, changes no `tested` flag, and promotes no
-profile; `3.4.1` remains the sole stable target.
+profile.
 
 `CHUNJUN/literal_local_json_job` has reviewed typed membership in `Other` on
 all nineteen exact profiles from `3.1.0` through `3.4.3`; CHUNJUN is upstream-absent
@@ -1190,7 +1130,7 @@ deleted, its ARN is not stored, and the client is not closed. A pre-callback
 failure or retry without durable `appIds` can duplicate executions and leak
 persistent or scheduled Tasks. Polling has no internal deadline and produces
 no structured output. This review refreshes no live evidence, changes no
-`tested` flag, and promotes no profile; `3.4.1` remains the sole stable target.
+`tested` flag, and promotes no profile.
 
 `SAGEMAKER/start_pipeline_execution` is upstream-absent through `3.0.6` and
 has reviewed `MachineLearning` membership on sixteen exact profiles from
@@ -1230,8 +1170,7 @@ callback or retry without durable `appIds` can submit again. Author a stable
 transient while the plugin's persisted or reread token remains null. Polling
 has no internal deadline or task output, and the client is not closed. Richer
 native state is unchanged/export opaque-preserve-only. This review adds no
-live evidence, changes no `tested` flag, and promotes no profile; `3.4.1`
-remains the sole stable target.
+live evidence, changes no `tested` flag, and promotes no profile.
 
 `DMS/resume_existing_full_load` is upstream-absent through `3.1.9` and has
 reviewed typed `Cloud` membership on the nine exact profiles from `3.2.0`
@@ -1268,8 +1207,7 @@ After AWS accepts the resume request, a callback persists
 `AbstractRemoteTask` resume tracking after failover and lets cancellation stop
 the same remote task. A crash before callback persistence, or a retry without
 durable `appIds`, can send `resume-processing` again. This review refreshes no
-live evidence, changes no `tested` flag, and promotes no profile; `3.4.1`
-remains the only stable target.
+live evidence, changes no `tested` flag, and promotes no profile.
 
 `ALIYUN_SERVERLESS_SPARK/literal_jar_submit` is absent before `3.3.1` and has reviewed typed `Cloud` membership on exact `3.3.1`, `3.3.2`,
 `3.4.0`–`3.4.3`. Its closed canonical payload owns positive
@@ -1312,8 +1250,7 @@ permissions remain caller prerequisites. No callback durably stores the
 submitted id: failover cannot resume, cancellation needs the in-memory
 `jobRunId`, status polling runs every 10 seconds without an internal deadline,
 and no DS task output is published. This review adds no live evidence, changes
-no `tested` flag, and promotes no profile; `3.4.1` remains the only stable
-target.
+no `tested` flag, and promotes no profile.
 
 `GRPC/literal_unary_string_record_call` is upstream-absent through `3.3.2` and
 has reviewed typed `Universal` membership only on exact `3.4.0`, `3.4.1`, and
@@ -1351,7 +1288,7 @@ parameters, variable pool, or resources. It publishes no DS output, cancel is
 a no-op, and it has no durable id or failover resume; retry or failover can
 repeat the RPC. Its channel and `NioEventLoopGroup` are never closed. This
 review adds no live evidence, changes no `tested` flag, and promotes no
-profile; `3.4.1` remains the only stable target.
+profile.
 
 `OPENMLDB/literal_single_statement` is absent through `3.0.6` and has reviewed
 typed `MachineLearning` membership on eighteen exact profiles from `3.1.0`
@@ -1489,8 +1426,7 @@ conda environment plus Papermill, Jupyter, kernel, and engine already
 installed, and readable input plus writable output paths. The output notebook
 is a worker filesystem artifact rather than a DS task output. The plugin has
 no remote application id or failover-resume protocol, and a retry executes the
-notebook again. This review adds no live evidence, changes no `tested` flag,
-and leaves `3.4.1` as the sole stable profile.
+notebook again. This review adds no live evidence or profile promotion.
 
 `ZEPPELIN/paragraph` is absent upstream through `2.0.9`, then has reviewed
 typed membership on all twenty-six exact profiles from `3.0.0` through `3.4.3`.
@@ -1520,9 +1456,7 @@ redact arbitrary secret-like paragraph values, so do not use them as secret
 storage. The synchronous executor exposes no dependable remote application
 id or failover resume, so retries may repeat the paragraph. `3.4.1` constructs
 result state without reliable downstream publication; `3.4.2`–`3.4.3` publish
-runtime `taskName.result` through the var pool. This review adds no live
-evidence, changes no `tested` flag, and leaves `3.4.1` as the sole stable
-profile.
+runtime `taskName.result` through the var pool. This review adds no live evidence or profile promotion.
 
 `HIVECLI` is absent upstream through `3.0.6`, then has reviewed typed inline
 `SCRIPT` membership from `3.1.0` through `3.4.3`. The typed subset owns a
@@ -1642,9 +1576,11 @@ export DS_VERSION="3.4.1"
 dsctl version
 ```
 
-When `--env-file` is used, that file is the isolated profile source. Inherited
-process `DS_*` variables cannot override it or fill omitted keys, so selecting a
-different exact cluster/version does not require cleaning the parent shell.
+When `--env-file` is used, that file is the isolated connection source.
+Inherited process `DS_API_URL`, `DS_API_TOKEN`, and `DS_VERSION` values cannot
+override it or fill omitted identity keys. Retry and timeout settings resolve
+separately and may still come from the process environment; see
+[Connection Settings](configuration.md#connection-settings).
 
 The `version` command reports:
 

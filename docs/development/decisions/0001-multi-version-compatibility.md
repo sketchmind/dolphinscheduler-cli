@@ -5,6 +5,11 @@
 - Amended: 2026-09-09
 - Scope: Apache DolphinScheduler `1.3.9` through `3.4.2`
 
+This ADR records the decision at adoption and its dated amendment. Historical
+implementation counts below describe that stage. Current runtime ownership is
+maintained in [Architecture](../architecture.md), and later exact-release
+admissions are recorded in [release admission](../stable-release-admission.md).
+
 ## Context
 
 At adoption, `dsctl` shipped one full exact `3.4.1` generated package plus
@@ -60,12 +65,14 @@ the exact-version requirement. This exception does not infer support from GET,
 codec equality alone or version proximity. See
 [Contract Read Discovery](../contract-read-discovery.md) for scope and bounds.
 
-The implemented outcome now has reviewed deep domains for every stable remote
-action, no broad session/adapter or whole-session fake, and 15 exact generated
-runtime slices. Complete exact source contracts remain reproducible audit
-artifacts. Mechanical transport/projection shapes are deduplicated as finite
-static kernels, while semantic wire-family membership remains explicit review
-data. This consolidation does not change profile support or evidence.
+The initial implementation introduced reviewed deep domains for every stable
+remote action, removed the broad session/adapter and whole-session fake, and
+materialized 15 exact generated runtime slices. It deduplicated mechanical
+transport/projection shapes as finite static kernels while retaining explicit
+review of semantic wire-family membership. The later compiled-domain runtime
+supersedes that layout; complete exact source contracts remain reproducible
+audit artifacts. Neither consolidation changes profile support or refreshes
+evidence.
 
 ## Canonical Boundary
 

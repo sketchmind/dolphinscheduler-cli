@@ -13,6 +13,8 @@ the public `dsctl` surface stable and understandable.
 
 ## Development Setup
 
+From the repository root:
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -20,7 +22,8 @@ python -m pip install -c tools/lint-constraints.txt -e '.[dev]'
 pre-commit install
 ```
 
-Use Python 3.11 unless the CI matrix and `pyproject.toml` are widened together.
+Use Python 3.11 for the baseline development environment. Keep the supported
+Python range in `pyproject.toml` and the CI matrix aligned when changing it.
 
 Local development and CI use the Ruff version in `tools/lint-constraints.txt`.
 Update it together with the Ruff revision in `.pre-commit-config.yaml`, and
@@ -52,15 +55,37 @@ dispatches from protected `main` for TestPyPI and PyPI. Publish the draft
 GitHub Release only after PyPI verification; publishing it does not trigger a
 package-index upload.
 
-## Documentation Map
+## Documentation
 
-- User docs live under `docs/user/`.
-- Developer docs live under `docs/development/`.
-- Stable contract and reference docs live under `docs/reference/`.
-- The code generation workflow is documented in `docs/development/codegen.md`.
-- Tool naming and generated artifact paths are documented in
-  `docs/development/tooling.md`.
-- The release checklist is documented in `docs/development/release.md`.
+Use the [documentation map](docs/README.md) to choose a guide by task.
+`docs/user/` owns usage, `docs/reference/` owns public contracts, and
+`docs/development/` owns architecture, source-review decisions and contributor
+workflows. Start with the relevant guide rather than reading every design note.
+
+Write shared documentation in English. Keep examples runnable from a clean
+checkout with explicit placeholders and prerequisites. Update the existing
+owner of a rule and link to it instead of copying the rule into stage reports.
+Preserve exact-version exceptions and distinguish implemented behavior,
+historical observations and open work.
+
+A shared document should help someone use the CLI, change it correctly,
+reproduce a check, or understand a durable design decision. Put setup and
+usage in user guides, rules in their owning reference, and open work in the
+roadmap. Keep a separate design note only when it explains rationale, exact
+source differences or regression requirements that those guides do not cover.
+Merge completed proposals into their owner; do not keep parallel current-state
+descriptions or copies of campaign results across the README and guides.
+
+Commit reusable guidance and governed, secret-free receipts. Keep local plans,
+session transcripts, timings, candidate progress, raw logs and private fixture
+material in ignored `build/` or `localdevdocs/`. The governed JSON files under
+`docs/development/live-evidence/` are checker inputs, not disposable logs;
+retain their original artifact identities. Most documentation is also shipped
+in the sdist, so the same boundary applies to package contents.
+
+For documentation-only changes, check spelling, relative links and changed
+section anchors, then run applicable command-reference checks. If a change also
+alters product behavior or tooling, apply the corresponding quality gates below.
 
 ## Quality Gates
 
@@ -130,9 +155,9 @@ python tools/check_quality_gate.py --mode development --include-live
 
 ## Compatibility Notes
 
-The default and only stable runtime target is DolphinScheduler `3.4.1`. The
-runtime registry selects exact generated profiles for all 37 releases from
-`1.3.9` through `3.4.3`; the other 36 profiles retain their recorded experimental
-support level until an evidence-backed release-policy decision promotes them.
-See `docs/user/version-compatibility.md` before changing a profile's coverage or
-promotion state.
+The runtime registry selects exact generated profiles for all 37 releases from
+`1.3.9` through `3.4.3`. DolphinScheduler `3.4.1` is the offline default and
+retains the historical `full` / `tested=true` release policy. Artifact-bound
+verification coverage is reported separately. Read
+[support policy and verification](docs/user/version-compatibility.md#support-policy-and-verification)
+before changing a profile's coverage or promotion state.

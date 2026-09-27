@@ -9,8 +9,8 @@ parameter lists.
 The accepted compatibility policy is recorded in
 [ADR 0001](decisions/0001-multi-version-compatibility.md) and
 [Multi-Version Compatibility Architecture](multi-version-architecture.md).
-[Refactoring Plan](refactoring-plan.md) records the current simplification
-baseline and acceptance criteria. Task-specific public behavior belongs in the
+The [maintenance principles](#maintenance-principles) below guide changes to
+those boundaries. Task-specific public behavior belongs in the
 [CLI Contract](../reference/cli-contract.md) and
 [Workflow Authoring](../user/workflow-authoring.md).
 
@@ -18,9 +18,10 @@ baseline and acceptance criteria. Task-specific public behavior belongs in the
 
 The installed CLI has 181 actions. All 6,697 action/version coordinates have an
 explicit decision: 5,797 supported, 5 limited and 895 upstream-absent. This
-coverage is separate from live verification. DS 3.4.1 remains the stable target; other exact
-profiles retain their recorded support and evidence status. The original `3.4.3` admission added
-source and contract coverage without claiming live evidence at admission.
+coverage is separate from live verification and
+[support policy](../user/version-compatibility.md#support-policy-and-verification).
+The original `3.4.3` admission added source and contract coverage without
+claiming live evidence at admission.
 Current artifact-bound coverage is recorded in the
 [live evidence matrix](live-testing.md#exact-version-profile-gates).
 Its task updates use the whole-workflow transaction, user/token identity
@@ -160,9 +161,9 @@ schema/capabilities expose only the installed catalog; candidate enum discovery
 requires equal complete members across all candidates. Untargeted local
 authoring keeps its documented baseline, while help and context stay offline.
 
-[Contract Read Discovery](contract-read-discovery.md) records the current
-bounds and reviewed action scope. [Automatic Exact Version Discovery](automatic-version-discovery.md)
-retains the earlier metadata-only wheel receipt; it does not attest this extension.
+[Version and Read Discovery](contract-read-discovery.md) records metadata
+rules, probe bounds and the reviewed read scope. Metadata-only observations
+do not attest contract-read admission.
 
 ### Commands
 
@@ -403,6 +404,29 @@ or exclusion must register its implementation; model-only families are explicit
 registrations. An omitted builder fails instead of silently bypassing facet
 policy.
 
+## Maintenance Principles
+
+- Keep one edit path per responsibility: CLI inputs start in the command
+  catalog, task structure in the selected model, and exact wire changes in
+  compiler inputs or the generator. Remove superseded declarations in the same
+  change instead of keeping parallel implementations.
+- Judge a refactor by the decisions and edit points a contributor must
+  understand. File movement, formatting compression and line-count reductions
+  alone do not demonstrate simpler maintenance. Split modules around concrete
+  responsibilities; keep their dependency direction explicit.
+- Share generated types only when complete dependency identities and
+  validation/serialization behavior agree. Keep exact review membership,
+  preservation rules and independent expected requests separate even when
+  their current values happen to match.
+- For a DS upgrade, record changed source decisions, domain recipes, typed
+  claims and unsupported coordinates. Compare all four fingerprint axes,
+  regenerate atomically and follow the evolution workflow above.
+- Validate observable behavior through public seams and isolated installed
+  entry points, including completion, pipe closure, signals and error channels.
+  Minimum and current dependency environments are separate obligations.
+  Historical test counts or receipts never replace checks on changed code or
+  a new candidate artifact.
+
 ## Quality Gate
 
 `python tools/check_quality_gate.py --mode development` runs lint, formatting,
@@ -423,5 +447,6 @@ collaborator outcomes without reimplementing DS routes, field projection or the
 compiler. Verify a clean built wheel as well as the source tree.
 
 [Dependency compatibility](dependency-compatibility.md) records the executable
-dependency floor and its CI matrix. [Maintainability validation](maintainability-validation.md)
-records the process journeys, artifact checks and current campaign status.
+dependency floor and its CI matrix. [Release](release.md) owns installed-artifact
+validation and current-wheel evidence requirements; local campaign progress
+belongs in ignored build output.

@@ -56,7 +56,9 @@ def test_live_configuration_requires_reviewed_selected_version(tmp_path: Path) -
         live.load_exact_profile_gate_config(environment)
 
 
-def test_external_shell_policy_preserves_current_and_historical_boundaries() -> None:
+def test_external_shell_policy_preserves_current_and_historical_boundaries(
+    tmp_path: Path,
+) -> None:
     policy = exact_profile_gate_policy("3.4.2")
     assert policy.scenario == "external-shell/v1"
     assert policy.gate_id == "exact-profile-3.4.2"
@@ -64,6 +66,9 @@ def test_external_shell_policy_preserves_current_and_historical_boundaries() -> 
     assert policy.supported_schema_versions == {3, 4, 5, 6, 7}
     assert policy.support_level == "experimental"
     assert policy.tested is False
+    assert policy.evidence_directory(tmp_path) == (
+        tmp_path / "docs/development/live-evidence/external-shell/3.4.2"
+    )
     assert policy.actions == (
         "doctor",
         "project.create",

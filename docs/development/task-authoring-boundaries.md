@@ -591,8 +591,7 @@ The facet publishes no structured output or durable DataX id, cannot resume
 after failover, and retry reexecutes the whole transfer. Cancellation is
 worker-local: wrapper kill through `3.1.9`, direct-process destroy through
 `3.2.2`, then process-tree plus generic application cancellation. This
-review refreshes no live evidence, changes no profile promotion, and leaves
-`3.4.1` stable
+review refreshes no live evidence and changes no profile promotion.
 
 ## CHUNJUN
 
@@ -791,7 +790,8 @@ refreshes no live evidence and promotes no profile
 
 ## Evidence and promotion
 
-terminal compatibility, action support, verification evidence, and profile
-promotion are separate facts: `3.4.1` remains the stable target, the other
-35 profiles remain experimental, and old live receipts do not automatically
-attest newly generated manifests
+Terminal compatibility, action support, verification evidence, and profile
+promotion are separate facts. Old live receipts do not automatically attest
+newly generated manifests. See
+[support policy and verification](../user/version-compatibility.md#support-policy-and-verification)
+for the policy labels and their relation to evidence.

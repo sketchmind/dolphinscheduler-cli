@@ -14,8 +14,8 @@ isolated wheel installation, environment scrubbing, direct-target binding, and
 no-overwrite publication also live under `tools/live_gate/`; the two public
 runners remain thin scenario-specific wrappers.
 `tools/run_exact_profile_live_gate.py` and `tools/exact_342_evidence.py` own the
-separate current mutating `3.4.2` schema-7 release contract while retaining
-schema-v3/v4/v5/v6 validation for historical receipts.
+separate `external-shell/v1` schema-7 scenario contract on exact `3.4.2` while
+retaining schema-v3/v4/v5/v6 validation for historical receipts.
 
 The mutating runner, fixture projector and promotion checker require
 `--version`. `tools/live_gate/exact_profile_policy.py` selects an explicitly
@@ -46,10 +46,10 @@ execute the candidate wheel or observe candidate requests, so its output is
 fixture preparation rather than candidate wire evidence. Current schema-7
 evidence must record `dsmatrix-exact-read-state-projection/v2`; projection/v1
 receipts remain historical and cannot satisfy the current promotion checker.
-The untracked first campaign attempt used projection/v1 and was withdrawn when
-review showed that its bare RepoDigest was not bound to the inspected image ID;
-the projection/v2 r2 receipt below is archived historical evidence and cannot
-satisfy the current checker after later profile changes.
+A bare RepoDigest without a binding to the inspected image ID is insufficient.
+Archived projection/v2 receipts retain their original profile bindings and
+cannot satisfy the current checker after later profile changes. See the
+[exact gate](live-testing.md#exact-342-installed-wheel-gate) for retained evidence.
 
 `tools/project_conformance_matrix_fixture.py` is the separate all-version
 projector for named conformance bundles. It accepts the matrix's unchanged
@@ -102,9 +102,9 @@ lower-bundle, legacy-only, stale, mixed-wheel, wrong-wheel, or secret-bearing
 evidence fails closed. The release quality gate and artifact publication checks
 run this checker without an allowance.
 
-`tools/check_exact_profile_promotion_evidence.py` governs the separate mutating
-`3.4.2` claim. Its checker requires the fixed 15-action gate to be either
-entirely unclaimed or entirely `live_smoke`; a partial claim always fails. Once
+`tools/check_exact_profile_promotion_evidence.py` governs the separate
+`external-shell/v1` claim on exact `3.4.2`. Its checker requires the fixed
+15-action gate to be either entirely unclaimed or entirely `live_smoke`; a partial claim always fails. Once
 all 15 actions are promoted, the default checker requires exactly one current
 schema-7 receipt bound to the current semantic profile fingerprints, action
 verifications, decision recipes, generated manifest, package version, wheel
@@ -114,48 +114,26 @@ the one state where final metadata is complete and no schema-7 receipt exists,
 and it becomes an error as soon as that receipt is present. Historical schema
 3/4/5/6 receipts remain auditable but cannot satisfy current promotion.
 
-Historical campaign `promotion-f328d3e2-schema6-r2-20260810` produced the
-archived receipt at
-`docs/development/live-evidence/history/3.4.2/2026-08-10-f328d3e2d6ba.json`
-from wheel
-SHA-256
-`f328d3e2d6ba261c26f9f74decb12a9229b5d471b6f2efdd2a07d55b116af06f`.
-It records 48 operations (45 successes and three expected negative paths), all
-15 action verifications as `live_smoke`, and exact external `SHELL` task
-restoration. Task-update recipe/profile changes made it stale for the current
-source. Campaign `conformance-e8eacee57af9-r12-20260811` produced a later
-schema-6 receipt with wheel SHA-256
-`e8eacee57af9a9d2659194b05bccbbd7680eb10c310c4189d9cfa3ae8b5c9152`;
-the checker passed its 15-action bundle and restoration contract for that
-recorded manifest. The expanded manifests make it historical, so a future
-campaign must use a new canonical wheel and matching receipt. This checker
-promotes per-action `live_smoke` evidence only:
-`3.4.2` remains experimental with `tested=false`, and `3.4.1` remains the sole
-stable profile.
+This checker establishes per-action `live_smoke` evidence. The
+[support policy guide](../user/version-compatibility.md#support-policy-and-verification)
+explains how that evidence relates to profile release labels.
+See [live testing](live-testing.md#exact-342-installed-wheel-gate)
+for the schema history and retained receipts.
 
 `tools/check_release_artifacts.py --wheel-only <wheel>` is the public artifact
 preflight required before an installed-wheel live campaign. It compares the
 complete wheel runtime with current `src/dsctl`, then verifies Core Metadata,
-entry points, the exact semantic manifest, and `RECORD`. Campaign candidate
-`promotion-e1f1832fc79d-r6-20260809` demonstrated why this check precedes live
-testing: although its `180/180` behavior sweep passed, the preflight found eight
-deleted service modules copied from a stale `build/lib` tree and README Core
-Metadata drift, so its promotion status was revoked. Historical governed campaign
-`promotion-167723bbe11d-r7-20260809` used an isolated clean-source build, passed
-the wheel-only preflight first, and then produced the archived 15-version
-exact-read corpus from its `180/180` sweep. Current profile fingerprints have
-changed, so those receipts remain historical. Campaign
-`conformance-e8eacee57af9-r12-20260811` produced a replacement 15-version
-exact-read corpus and the separate 15-version highest-ready conformance corpus
-with the same immutable wheel; both checkers passed for their recorded
-manifests. The later all-version compatibility expansion changes those
-manifests, so neither corpus is evidence for the expanded coordinates.
+entry points, the exact semantic manifest, and `RECORD`. Build from an isolated
+clean source tree: stale `build/lib` files and README Core Metadata drift can
+invalidate a wheel even when its behavior tests pass. Historical receipts keep
+their original source, manifest and wheel bindings; they cannot attest an
+expanded profile set or a changed artifact.
 
 The full `tools/check_release_artifacts.py --tag ... <wheel> <sdist>` path first
 validates both artifacts, then calls the public conformance-corpus checker with
 the candidate wheel basename, full `sha256:` identity, and candidate source
-root. It separately validates the exact-`3.4.2` promotion receipt. Wheel-only
-preflight intentionally consults neither live-evidence source. This ordering
+root. It separately validates the `external-shell/v1` receipt on exact `3.4.2`.
+Wheel-only preflight intentionally consults neither live-evidence source. This ordering
 lets one canonical wheel be built and preflighted before its live receipts
 exist, while making the final release pair fail closed on absent, stale, or
 wrong-wheel evidence.
@@ -193,11 +171,16 @@ The repository has three mutually exclusive non-live test lanes:
   re-extraction and package-reproduction campaigns.
 - `python -m pytest -m "source_rebuild and not live" -q` is the source-rebuild
   lane. It re-extracts complete Java contracts and reproduces full or sliced
-  packages, including the 36-release source-versus-snapshot comparison.
+  packages, including the registry-wide source-versus-snapshot comparison.
 
 Both source lanes require explicitly prepared inputs. Missing inputs are a
 failed prerequisite, not a skipped test or a fallback to `references/`.
 Collection rejects overlapping markers and unmarked consumers of the corpus.
+
+The separate task-plugin inventory workspace is optional: its historical
+inventory consistency test explicitly skips when that workspace is absent.
+Report that skip separately; it is not a substitute for the required source
+corpus and does not make a development run skip-free.
 
 Positive whole-domain composition tests share one session compilation of the
 complete current registry through `compiled_all_domains`, with a deep-isolated
@@ -356,8 +339,8 @@ actions across the admitted exact versions. The
 action coordinates and availability counts. These dimensions must not be
 collapsed: terminal does not mean supported, supported does not mean
 live-verified, and live evidence does not
-automatically promote a profile. `3.4.1` remains stable/full; the other exact
-profiles remain experimental.
+automatically promote a profile. See
+[support policy and verification](../user/version-compatibility.md#support-policy-and-verification).
 
 Check that the materialized profile contains no pending coordinate with:
 
@@ -401,12 +384,10 @@ The release quality gate adds the independent live-evidence check:
 python tools/check_conformance_bundle_evidence.py
 ```
 
-Campaign `conformance-e8eacee57af9-r12-20260811` produced and tracked a
-complete corpus for its then-current assessment. That corpus is artifact-bound
-and does not attest the expanded manifests or newly ready full-core
-coordinates. For a future build-once campaign, the development gate validates code before
-building; the release gate rejects missing, stale or invalid receipts until the
-canonical wheel completes its campaigns.
+The development gate validates code before building. The release gate rejects
+missing, stale or invalid receipts until the canonical wheel completes its
+required campaigns. A corpus accepted for an earlier assessment does not
+attest newly admitted profiles, changed manifests or newly ready bundles.
 
 `tools/analyze_ds_stable_action_dependencies.py` joins stable commands to the
 explicit `--baseline-version` wire baseline, defaulting to `3.4.1`.

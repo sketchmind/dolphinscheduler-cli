@@ -10,8 +10,9 @@ exact DolphinScheduler profiles from `1.3.9` through `3.4.3` does not change
 that command tree; it binds an exact action catalog and execution recipes. Every
 action/version coordinate is terminal as supported, limited by upstream, or
 absent upstream. Terminal compatibility, executable support, verification
-evidence, and whole-profile promotion are separate facts. `3.4.1` remains the
-stable target and the other 36 selectable profiles remain experimental.
+evidence, and whole-profile promotion are separate facts. The
+[support policy and verification guide](../user/version-compatibility.md#support-policy-and-verification)
+explains the release labels and artifact-bound evidence scopes.
 
 Current stable commands:
 
@@ -717,8 +718,10 @@ Example:
 
 `supported_ds_versions` lists selectable targets; it does not claim that every
 listed version has stable support. The selected target's `support_level`
-communicates that distinction: `3.4.1` is currently `full`, while the other 36
-exact profiles are `experimental`. Each profile reports its own exact
+reports the inherited release policy: `3.4.1` is `full`, while the other 36
+exact profiles are `experimental`. Artifact-bound verification coverage is
+reported separately; see [support policy and verification](../user/version-compatibility.md#support-policy-and-verification).
+Each profile reports its own exact
 `contract_version` and one of the compatibility families
 `process-definition-1.3`, `process-definition-2.0`,
 `process-definition-3.0`, `process-definition-3.1`,
@@ -730,45 +733,20 @@ named live-smoke sets are evidence scopes rather than catalog limits. Current
 generic exact-read promotion receipts use schema 2 and bind the semantic
 profile, manifest, four accepted read recipes, their fingerprints, and
 digest-bound `live_smoke` verification to one installed wheel without exposing
-adapter class names. Schema-1 generic receipts remain auditable only for their
-historical wheels and cannot satisfy the current promotion checker. The
-historical 2026-08-09 promotion campaign
-`promotion-167723bbe11d-r7-20260809` ran one
-immutable wheel
-(`sha256:167723bbe11d919b9d30a91ade4b017530743ec75061fdcb78a93429fc0bde88`)
-through 12 CLI invocations on every exact profile (`180/180`). Its remotely
-exercised stable-action scope was exactly `project.list`, `project.get`,
-`workflow.list`, and `workflow.get`; each action now has per-action
-verification `live_smoke` on all 15 profiles for that artifact. The 15 receipts
-are archived under `docs/development/live-evidence/history/exact-read/`, one per
-exact-version directory as `2026-08-09-167723bbe11d.json`. Together, they
-preserve the same-wheel corpus produced by that campaign; the receipts do not
-themselves carry a `campaign_id`. Current generated profile fingerprints have
-changed, so those receipts remain historical. Campaign
-`conformance-e8eacee57af9-r12-20260811` produced a replacement exact-read
-corpus and the separate highest-ready named-conformance corpus across all 15
-profiles with immutable wheel SHA-256
-`e8eacee57af9a9d2659194b05bccbbd7680eb10c310c4189d9cfa3ae8b5c9152`.
-Both same-wheel checkers passed for the recorded manifests; exact-read supplied
-`live_smoke` only for the four named read actions, while conformance did not
-change per-action verification. The expanded manifests are not attested by
-those receipts. Neither result changes action support, `tested`, or whole-profile
-promotion: `3.4.1` remains the only stable profile, while the other 36 remain
-experimental. Successful behavior checks cannot replace verification of the
-installed wheel's source, metadata and generated claims. Preliminary checks
-and artifacts that fail release preflight cannot enter the governed promotion
-corpus. Separately,
-historical campaign `promotion-f328d3e2-schema6-r2-20260810` passed the `3.4.2`
-mutating gate for the then-current wheel SHA-256
-`f328d3e2d6ba261c26f9f74decb12a9229b5d471b6f2efdd2a07d55b116af06f`.
-Its archived schema-6 receipt records 48 operations (45 successful and three
-expected negative paths) and binds exactly 15 actions to `live_smoke` for that
-wheel and profile. The same r12 campaign's schema-6 receipt binds the same
-fixed scope to its canonical wheel and passed its checker and exact
-fixture-restoration contract for that manifest. It does not provide the deterministic stale-plan
-negative needed for `task.update=live_full`. Neither result sets `tested`,
-changes the experimental support level, or promotes the whole profile.
-See
+adapter class names. The read scope is exactly `project.list`, `project.get`,
+`workflow.list`, and `workflow.get`. Schema-1 generic receipts remain auditable
+only for their historical wheels and cannot satisfy the current promotion
+checker. The separate `external-shell/v1` scenario on exact `3.4.2` requires
+schema 7; its historical
+schema-3/4/5/6 receipts likewise retain their original artifact and action scope.
+
+Named conformance evidence does not itself change per-action verification,
+action support, `tested`, or whole-profile promotion. A `live_smoke` task-update
+receipt does not establish the deterministic stale-plan negative needed for
+`task.update=live_full`. Successful behavior checks cannot replace verification
+of the installed wheel's source, metadata and generated claims. Preliminary
+checks and artifacts that fail release preflight cannot enter the governed
+promotion corpus. See
 [Live Testing](../development/live-testing.md#exact-version-profile-gates) for
 the immutable identifiers and evidence policy.
 
@@ -1197,7 +1175,7 @@ Current guarantees:
   level, or expand an action catalog; current campaign status and receipt
   governance are maintained in
   [Live Testing](../development/live-testing.md#generic-exact-profile-installed-wheel-read-gate)
-- a current exact `3.4.2` schema-7 mutating receipt must bind its 15-action
+- a current `external-shell/v1` schema-7 receipt on exact `3.4.2` must bind its 15-action
   `live_smoke` bundle to the current canonical wheel, semantic profile, recipes,
   fingerprints, and generated manifest; schema-3 through schema-6 receipts
   remain auditable only for their historical artifacts, and neither current nor
@@ -1410,7 +1388,7 @@ dependencies, or workflow-level execution settings—including `release_state`
 transitions such as `OFFLINE` to `ONLINE`, workflow timeout, `execution_type`,
 and global parameters—reruns the applicable gates. Standalone YAML has no server
 provenance and cannot claim that preservation exception. No live preflight or
-campaign is part of this claim; stable `3.4.1`
+campaign is part of this claim; `3.4.1`
 receipts become stale for the expanded authoring manifest, and no profile is
 promoted.
 
@@ -1680,8 +1658,7 @@ promotes no profile.
   typed authoring. There is no reliable cancel, durable id, failover resume,
   or structured output. Retry resends the
   whole request, so `POST`, `PUT`, and `DELETE` side effects can duplicate.
-  This review supplies no live evidence or promotion and leaves `3.4.1`
-  stable;
+  This review supplies no live evidence or promotion;
 - `PYTHON` has reviewed typed membership on all 37 exact profiles. Exact
   `1.3.9` owns `rawScript`, unique `IN`-only `localParams` using its nine
   scalar data types, plus an empty `resourceList`; it has no `varPool`, `LIST`,
@@ -2149,7 +2126,7 @@ promotes no profile.
   Cancellation is worker-local: wrapper kill through `3.1.9`, direct-process
   destroy through `3.2.2`, then process-tree plus generic application cancel.
   This review refreshes no live evidence, changes no `tested` flag, and
-  promotes no profile; `3.4.1` remains stable;
+  promotes no profile;
 - `DATASYNC/create_and_execute` is upstream-absent through `3.1.9` and has
   reviewed `Other` membership on the nine exact profiles from `3.2.0` through
   `3.4.3`. Its closed public wrapper model is `DatasyncTaskParamsSpec`;
@@ -2202,7 +2179,7 @@ promotes no profile.
   retry without durable `appIds` can create duplicate executions and leak
   persistent or scheduled Tasks. Polling has no internal deadline and returns
   no structured output. This review adds no live evidence, changes no `tested`
-  flag, and promotes no profile; `3.4.1` remains stable;
+  flag, and promotes no profile;
 - `SAGEMAKER/start_pipeline_execution` is upstream-absent through `3.0.6` and
   typed in `MachineLearning` on seventeen exact profiles from `3.1.0` through
   `3.4.3`, excluding `3.1.1`–`3.1.2`. Those two keep a stale local polling
@@ -2267,7 +2244,7 @@ promotes no profile.
   only while status is `Executing`, treats only `Succeeded` as success, has no
   internal deadline, and publishes no DS output. The AWS client is not closed.
   This review adds no live evidence, changes no `tested` flag, and promotes no
-  profile; `3.4.1` remains stable;
+  profile;
 - `DMS/resume_existing_full_load` is upstream-absent through `3.1.9` and typed
   in `Cloud` on the nine exact profiles from `3.2.0` through `3.4.3`;
 - its canonical payload and native wire require all five explicit fields:
@@ -2340,8 +2317,7 @@ promotes no profile.
   resume. A DS retry can submit a duplicate, cancel requires the in-memory
   `jobRunId`, status polling runs every 10 seconds without an internal
   deadline, and no DS task output is published. This review adds no live
-  evidence, changes no `tested` flag, and promotes no profile; `3.4.1` remains
-  stable;
+  evidence, changes no `tested` flag, and promotes no profile;
 - `GRPC/literal_unary_string_record_call` is upstream-absent through `3.3.2`
   and typed in `Universal` only on exact `3.4.0`, `3.4.1`, `3.4.2`, and `3.4.3`. Its
   closed model is `GrpcLiteralUnaryStringRecordTaskParamsSpec`;
@@ -2387,7 +2363,7 @@ promotes no profile.
   resend the unary RPC and duplicate side effects. The channel and
   `NioEventLoopGroup` are not closed, so repeated tasks can accumulate worker
   resources. This review adds no live evidence, changes no `tested` flag, and
-  promotes no profile; `3.4.1` remains stable;
+  promotes no profile;
 - `OPENMLDB/literal_single_statement` is absent through `3.0.6` and typed in
   `MachineLearning` on eighteen exact profiles from `3.1.0` through `3.4.3`,
   excluding `3.1.2`. Its inherited Python output handling dereferences null
@@ -6196,7 +6172,7 @@ Topic result fields:
 Rules:
 
 - all topic details are selected by the exact `DS_VERSION`; they do not assume
-  the stable `3.4.1` runtime
+  the offline-default `3.4.1` runtime
 - DS task parameters use the upstream `Property` shape
 - `Property.type` values come from the exact generated DS `DataType` enum;
   enum discovery and parameter templates report those values, while workflow
@@ -6350,7 +6326,7 @@ Options:
 - `--variant VARIANT`
 - `--raw`
 
-Current stable task template coverage includes every authorable DS 3.4.1
+Task template coverage for exact DS 3.4.1 includes every authorable
 upstream default task type. Preserve-only runtime exclusions remain visible in
 the upstream inventory but do not receive create/edit templates.
 
@@ -6896,7 +6872,7 @@ execution settings—including `release_state` transitions such as `OFFLINE` to
 `ONLINE`, workflow timeout, `execution_type`, and global parameters—reruns the corresponding
 gates. Standalone YAML lacks that provenance and must pass them immediately.
 This claim performs no live preflight or campaign, refreshes no receipt, and
-promotes no profile; prior stable `3.4.1`
+promotes no profile; prior `3.4.1`
 receipts are stale for
 the expanded manifest.
 
@@ -7123,7 +7099,7 @@ structured output, durable application id, or failover resume. Cancellation is
 worker-local—wrapper kill through `3.1.9`, direct-process destroy through
 `3.2.2`, and process-tree plus generic application cancel thereafter. Retry
 reruns the entire transfer and can duplicate writes. This review adds no live
-evidence or profile promotion; `3.4.1` remains stable.
+evidence or profile promotion.
 
 The `DATASYNC` default template and `raw-json` scenario map to
 `DATASYNC/create_and_execute` in `Other` on exact profiles from `3.2.0` through
@@ -7187,7 +7163,7 @@ the persistent Task, and never closes the client. Only `taskExecutionArn` is
 callback-persisted in `appIds`; failover and cancel reuse it after persistence,
 while the pre-callback/retry window can duplicate executions and leak Tasks.
 Polling has no internal deadline or structured output. This review adds no live
-evidence or promotion; `3.4.1` remains stable.
+evidence or promotion.
 
 The `SAGEMAKER` default template and its short IN field hint map only to
 `SAGEMAKER/start_pipeline_execution` in `MachineLearning` on exact profiles
@@ -7237,7 +7213,7 @@ and cancellation, but the pre-callback/retry window can still submit another
 execution. Credential and logging epochs, the ignored datasource credentials
 from `3.3.1`, absent output/deadline, and unclosed client are specified under
 [Version-selected task authoring](#version-selected-task-authoring). This
-review adds no live evidence or promotion; `3.4.1` remains stable.
+review adds no live evidence or promotion.
 
 The `DMS` default template maps only to
 `DMS/resume_existing_full_load` in `Cloud` on exact profiles from `3.2.0`
@@ -7290,7 +7266,7 @@ after failover and cancellation stops the same remote task. A crash before the
 callback persists `appIds`, or a retry with no durable value, can submit
 `resume-processing` again. Keep retries at zero unless this duplicate-submit
 window is acceptable. This source review adds no live evidence, changes no
-`tested` flag, and promotes no profile; `3.4.1` remains stable.
+`tested` flag, and promotes no profile.
 
 The `OPENMLDB` default template maps only to
 `OPENMLDB/literal_single_statement` in the `MachineLearning` category on exact
@@ -7431,7 +7407,7 @@ task dynamic parameter fields: `task_params.localParams[]` and
 runtime state and must stay empty when the field exists, while exact `1.3.9`
 omits that field entirely. Parameter entries use the DS `Property` shape:
 `prop`, `direct`, `type`, and optional `value`. `direct` is `IN` or `OUT`. On
-stable `3.4.1`, the general generated parameter types are `VARCHAR`,
+exact `3.4.1`, the general generated parameter types are `VARCHAR`,
 `INTEGER`, `LONG`, `FLOAT`, `DOUBLE`, `DATE`, `TIME`, `TIMESTAMP`, `BOOLEAN`,
 `LIST`, and `FILE`; exact `1.3.9` omits `LIST` and `FILE`, releases from `2.0.0`
 through `3.1.9` omit `FILE`, and releases from `3.2.0` expose the stable set.
@@ -7988,7 +7964,7 @@ Rules:
   automatically, and callers must not blindly repeat it
 
 The archived `3.4.2` schema-6 installed-wheel receipt
-`history/3.4.2/2026-08-10-f328d3e2d6ba.json` proves dry-run non-mutation,
+`history/external-shell/3.4.2/2026-08-10-f328d3e2d6ba.json` proves dry-run non-mutation,
 apply/readback, preservation, and exact external `SHELL` task restoration for
 the then-current wheel SHA-256
 `f328d3e2d6ba261c26f9f74decb12a9229b5d471b6f2efdd2a07d55b116af06f`
@@ -8002,7 +7978,7 @@ an observed concurrent fixture change, which is a different guarantee. The
 generic read-only campaign cannot substitute for this mutating gate, and
 neither receipt promotes unrelated typed-authoring facets or the whole
 `3.4.2` profile. The later artifact-bound receipt
-`live-evidence/3.4.2/2026-08-12-e8eacee57af9.json` binds the same contract to
+`live-evidence/external-shell/3.4.2/2026-08-12-e8eacee57af9.json` binds the same contract to
 wheel SHA-256
 `e8eacee57af9a9d2659194b05bccbbd7680eb10c310c4189d9cfa3ae8b5c9152`
 and passed the checker for its recorded manifest. Expanded fingerprints now make it

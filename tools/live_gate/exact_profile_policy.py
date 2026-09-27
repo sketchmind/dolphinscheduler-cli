@@ -73,8 +73,16 @@ class ExactProfileGatePolicy:
         return f"tests/upstream/test_ds_{slug}.py"
 
     def evidence_directory(self, source_root: Path) -> Path:
-        """Locate this policy's current receipts within one source checkout."""
-        return source_root / "docs" / "development" / "live-evidence" / self.ds_version
+        """Locate current receipts by scenario and exact version."""
+        scenario_name = self.scenario.partition("/")[0]
+        return (
+            source_root
+            / "docs"
+            / "development"
+            / "live-evidence"
+            / scenario_name
+            / self.ds_version
+        )
 
 
 EXACT_PROFILE_GATE_POLICIES: Mapping[str, ExactProfileGatePolicy] = MappingProxyType(

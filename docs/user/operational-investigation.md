@@ -17,7 +17,7 @@ Use both `--start` and `--end` when investigating older targets:
 | workflow-instance list | 1.3.9 through 3.0.0 | `(start,end]` | rejected |
 | workflow-instance list | 3.0.1 through 3.0.6 | `[start,end]` | rejected |
 | task-instance list | 1.3.9 through 3.0.6 | `(start,end]` | rejected |
-| both lists | 3.1.0 through 3.4.2 | `[start,end]` | supported |
+| both lists | 3.1.0 through 3.4.3 | `[start,end]` | supported |
 
 These are reviewed final-release memberships, not a promise about an arbitrary
 intermediate or custom version. `resolved.time_filter` carries the applicable
@@ -149,7 +149,7 @@ explains why the CLI rejects those inputs before a request:
 | workflow instances | 1.3.9 through 3.0.0 | compares against a missing upper bound | no time filter |
 | workflow instances | 3.0.1 through 3.0.6 | no time filter | no time filter |
 | task instances | 1.3.9 through 3.0.6 | compares against a missing upper bound | no time filter |
-| both reads | 3.1.0 through 3.4.2 | independent bound | independent bound |
+| both reads | 3.1.0 through 3.4.3 | independent bound | independent bound |
 
 Representative immutable source references retain the native predicates and
 absent-bound handling:
