@@ -30,7 +30,7 @@ jobs:
       - name: Install package and dev dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev]
+          python -m pip install -c tools/lint-constraints.txt -e .[dev]
 
       - name: Prepare Runtime Bundle Sources
         if: matrix.python-version == '3.11'
@@ -75,7 +75,7 @@ jobs:
       - name: Install package with dependency matrix row
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev] \
+          python -m pip install -c tools/lint-constraints.txt -e .[dev] \
             "httpx==${{ matrix.httpx-version }}" \
             "pydantic==${{ matrix.pydantic-version }}" \
             "PyYAML==${{ matrix.pyyaml-version }}" \

@@ -17,6 +17,7 @@ import pytest
 
 from dsctl import __version__
 from tests.request_assertions import first_dry_run_request
+from tests.support import strip_cli_ansi
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -287,9 +288,10 @@ def test_root_help_and_global_option_order_use_real_process(tmp_path: Path) -> N
 
     assert help_result.returncode == 0
     assert help_result.stderr == ""
-    assert "Usage: dsctl [OPTIONS] COMMAND [ARGS]..." in help_result.stdout
-    assert "--show-completion" in help_result.stdout
-    assert "--install-completion" in help_result.stdout
+    help_text = strip_cli_ansi(help_result.stdout)
+    assert "Usage: dsctl [OPTIONS] COMMAND [ARGS]..." in help_text
+    assert "--show-completion" in help_text
+    assert "--install-completion" in help_text
     assert short_help_result.returncode == 0
     assert short_help_result.stdout == help_result.stdout
     assert short_help_result.stderr == ""

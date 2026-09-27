@@ -1,0 +1,3 @@
+# Keep lint and formatting reproducible across local development and CI.
+# Update this pin together with the Ruff revision in .pre-commit-config.yaml.
+ruff==0.15.21

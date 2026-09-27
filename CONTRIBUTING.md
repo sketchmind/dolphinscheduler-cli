@@ -16,11 +16,15 @@ the public `dsctl` surface stable and understandable.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
+python -m pip install -c tools/lint-constraints.txt -e '.[dev]'
 pre-commit install
 ```
 
 Use Python 3.11 unless the CI matrix and `pyproject.toml` are widened together.
+
+Local development and CI use the Ruff version in `tools/lint-constraints.txt`.
+Update it together with the Ruff revision in `.pre-commit-config.yaml`, and
+review new lint rules and formatting changes before adopting a new version.
 
 ## Branching Model
 
