@@ -59,7 +59,7 @@ jobs:
             httpx-version: "0.28.1"
             pydantic-version: "2.13.5"
             pyyaml-version: "6.0.3"
-            typer-version: "0.26.8"
+            typer-version: "0.27.2"
 
     name: dependency-compatibility (${{ matrix.name }})
 

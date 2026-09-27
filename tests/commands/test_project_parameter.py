@@ -100,9 +100,10 @@ def test_project_parameter_list_help_points_to_project_and_data_type_discovery()
     result = runner.invoke(app, ["project-parameter", "list", "--help"])
 
     assert result.exit_code == 0
-    assert "project list" in normalize_cli_help(result.stdout)
-    assert "enum list" in result.stdout
-    assert "data-type" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "project list" in help_text
+    assert "enum list" in help_text
+    assert "data-type" in help_text
 
 
 def test_project_parameter_get_command_reports_not_found_suggestion() -> None:
@@ -122,9 +123,9 @@ def test_project_parameter_get_help_points_to_selected_project_list() -> None:
     result = runner.invoke(app, ["project-parameter", "get", "--help"])
 
     assert result.exit_code == 0
-    assert "project-parameter" in result.stdout
-    assert "list" in result.stdout
-    help_text = " ".join(result.stdout.replace("│", " ").split())
+    help_text = normalize_cli_help(result.stdout)
+    assert "project-parameter" in help_text
+    assert "list" in help_text
     assert "selected project" in help_text
 
 

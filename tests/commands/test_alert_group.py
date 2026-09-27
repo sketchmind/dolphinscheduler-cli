@@ -14,7 +14,7 @@ from tests.fakes import (
     FakeAlertGroup,
     FakeAlertGroupAdapter,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -84,8 +84,9 @@ def test_alert_group_get_help_points_to_list_for_selector() -> None:
     result = runner.invoke(app, ["alert-group", "get", "--help"])
 
     assert result.exit_code == 0
-    assert "alert-group" in result.stdout
-    assert "list" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "alert-group" in help_text
+    assert "list" in help_text
 
 
 def test_alert_group_create_command_returns_created_group() -> None:
@@ -116,8 +117,9 @@ def test_alert_group_create_help_points_to_alert_plugin_list() -> None:
     result = runner.invoke(app, ["alert-group", "create", "--help"])
 
     assert result.exit_code == 0
-    assert "alert-plugin list" in result.stdout
-    assert "--group-type" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "alert-plugin list" in help_text
+    assert "--group-type" in help_text
 
 
 def test_alert_group_update_command_returns_updated_group() -> None:

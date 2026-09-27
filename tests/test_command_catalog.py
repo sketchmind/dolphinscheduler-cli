@@ -24,6 +24,8 @@ _BASELINE = json.loads(
         / "fixtures/command_contract/pre_catalog_fingerprints.json"
     ).read_text()
 )
+# Typer 0.27 renamed these display labels without changing their parser types.
+_TYPE_LABEL_ALIASES = {"str": "text", "int": "integer", "int range": "integer range"}
 
 
 def _digest(value: object) -> str:
@@ -55,7 +57,9 @@ def _parameters(command: TyperCommand | TyperGroup) -> list[dict[str, object]]:
                 "count",
             )
         }
-        record["type"] = parameter.type.name
+        record["type"] = _TYPE_LABEL_ALIASES.get(
+            parameter.type.name, parameter.type.name
+        )
         record["choices"] = list(getattr(parameter.type, "choices", []))
         record["type_attrs"] = {
             key: getattr(parameter.type, key)

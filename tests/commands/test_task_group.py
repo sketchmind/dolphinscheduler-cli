@@ -18,7 +18,7 @@ from tests.fakes import (
     fake_bound_domain_service_runtime,
     fake_project_definitions,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -116,11 +116,13 @@ def test_task_group_help_points_to_selector_and_status_values() -> None:
     list_result = runner.invoke(app, ["task-group", "list", "--help"])
 
     assert get_result.exit_code == 0
-    assert "task-group" in get_result.stdout
-    assert "list" in get_result.stdout
+    get_help = normalize_cli_help(get_result.stdout)
+    assert "task-group" in get_help
+    assert "list" in get_help
     assert list_result.exit_code == 0
-    assert "open," in list_result.stdout
-    assert "closed, 1, or 0" in list_result.stdout
+    list_help = normalize_cli_help(list_result.stdout)
+    assert "open," in list_help
+    assert "closed, 1, or 0" in list_help
 
 
 def test_task_group_create_command_uses_project_selection() -> None:
@@ -207,10 +209,10 @@ def test_task_group_queue_help_points_to_queue_id_discovery() -> None:
     result = runner.invoke(app, ["task-group", "queue", "force-start", "--help"])
 
     assert result.exit_code == 0
-    help_text = " ".join(result.stdout.replace("│", " ").split())
+    help_text = normalize_cli_help(result.stdout)
     assert "task-group queue list" in help_text
-    assert "discover" in result.stdout
-    assert "ids" in result.stdout
+    assert "discover" in help_text
+    assert "ids" in help_text
 
 
 def test_task_group_queue_force_start_command_reports_already_started(

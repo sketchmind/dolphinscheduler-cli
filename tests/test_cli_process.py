@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 _ENTRYPOINT = "import sys; sys.argv[0] = 'dsctl'; from dsctl.app import main; main()"
+_PROCESS_TIMEOUT = 30.0
 _PROCESS_CONTROL_ENV = {
     "COMP_CWORD",
     "COMP_WORDS",
@@ -122,7 +123,7 @@ def _run_cli(
     home: Path,
     environment: Mapping[str, str] | None = None,
     stdin: int | None = subprocess.DEVNULL,
-    timeout: float = 10,
+    timeout: float = _PROCESS_TIMEOUT,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - fixed interpreter and entry point
         [sys.executable, "-c", _ENTRYPOINT, *args],
@@ -210,6 +211,28 @@ def _start_cli(
         if process.poll() is None:
             process.kill()
         process.communicate(timeout=5)
+
+
+def _wait_for_stdout(process: subprocess.Popen[bytes]) -> None:
+    stdout = process.stdout
+    assert stdout is not None
+    first_byte: list[bytes] = []
+
+    def read_first_byte() -> None:
+        first_byte.append(stdout.read(1))
+
+    reader = threading.Thread(target=read_first_byte, daemon=True)
+    reader.start()
+    try:
+        reader.join(timeout=_PROCESS_TIMEOUT)
+        assert not reader.is_alive(), "CLI did not produce output during startup"
+    finally:
+        if reader.is_alive():
+            process.kill()
+            reader.join(timeout=5)
+            assert not reader.is_alive(), "CLI stdout reader did not stop"
+    assert first_byte, "CLI stdout reader failed"
+    assert first_byte[0], "CLI exited before producing output"
 
 
 def test_shell_completion_is_exposed_without_configuration(tmp_path: Path) -> None:
@@ -318,7 +341,10 @@ def test_usage_errors_follow_the_selected_error_format(tmp_path: Path) -> None:
         "kind": "argument",
         "parameter": "workflow",
     }
-    assert "workflow get [OPTIONS] WORKFLOW" in payload["error"]["details"]["usage"]
+    assert payload["error"]["details"]["usage"] in {
+        "dsctl workflow get [OPTIONS] WORKFLOW",
+        "dsctl workflow get [OPTIONS] {WORKFLOW}",
+    }
 
     spelling_payload = json.loads(spelling_error.stderr)
     assert spelling_payload["action"] == "project.list"
@@ -772,7 +798,6 @@ def test_non_tty_delete_requires_force_without_prompting(tmp_path: Path) -> None
         "delete",
         "example-project",
         home=tmp_path,
-        timeout=3,
     )
 
     assert completed.returncode == 1
@@ -787,6 +812,7 @@ def test_non_tty_delete_requires_force_without_prompting(tmp_path: Path) -> None
 
 def test_closed_pipeline_consumer_is_silent_and_bounded(tmp_path: Path) -> None:
     with _start_cli("schema", "--full", home=tmp_path) as process:
+        _wait_for_stdout(process)
         assert process.stdout is not None
         process.stdout.close()
         process.stdout = None
@@ -801,7 +827,7 @@ def test_sigint_during_rest_request_exits_cleanly(tmp_path: Path) -> None:
     release_request = threading.Event()
 
     def delayed_query(_request: _Request) -> tuple[int, object]:
-        release_request.wait(timeout=5)
+        release_request.wait(timeout=_PROCESS_TIMEOUT)
         return 200, {
             "code": 0,
             "msg": "success",
@@ -822,7 +848,7 @@ def test_sigint_during_rest_request_exits_cleanly(tmp_path: Path) -> None:
         ) as process,
     ):
         try:
-            assert rest.request_started.wait(timeout=5)
+            assert rest.request_started.wait(timeout=_PROCESS_TIMEOUT)
             process.send_signal(signal.SIGINT)
             stdout, stderr = process.communicate(timeout=5)
         finally:

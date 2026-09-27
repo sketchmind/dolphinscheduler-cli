@@ -28,14 +28,24 @@ treats warnings as errors, and the affected Typer/Click combination fails before
 the CLI command tree can be built.
 
 The dependency CI lane installs external Click 8.5.0 beside Typer 0.26.0 and
-0.26.8 deliberately. Passing both rows proves that the CLI uses Typer's vendored
+0.27.2 deliberately. Passing both rows proves that the CLI uses Typer's vendored
 implementation and that an unrelated package may install modern external Click
 without changing the 181-command parser/help contract. The project does not use
 external Click classes, plug-ins or custom parameter types; adding one requires
 a new compatibility decision because Typer's vendored Click types have separate
 class identities.
 
-Structured parser errors use exception classes from Typer's private `_click`
-module. The process tests exercise this boundary through help, invalid input
-and exit behavior. Dependency updates must retain these checks; external Click
-exceptions are not interchangeable with the vendored classes.
+Structured parser errors use the remaining exception classes from Typer's
+private `_click` module. Exit and abort handling uses the public `typer.Exit`
+and `typer.Abort` classes. The [0.26.0 exports](https://github.com/fastapi/typer/blob/0.26.0/typer/__init__.py)
+alias the original private classes; the [0.27.2 exports](https://github.com/fastapi/typer/blob/0.27.2/typer/__init__.py)
+alias the classes moved to `typer.exceptions`. The
+[0.27.2 exception refactor](https://github.com/fastapi/typer/releases/tag/0.27.2)
+removed the old private `Exit` and `Abort` attributes, so looking them up during
+exception handling fails at runtime as well as type checking.
+
+Dependency regressions remove those private aliases and verify standalone exit
+codes, abort diagnostics and embedded exception propagation. The process tests
+also exercise help, invalid input, interrupts and closed stdout pipes.
+Dependency updates must retain these checks; external Click exceptions are not
+interchangeable with the vendored classes.

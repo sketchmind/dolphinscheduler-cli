@@ -1010,6 +1010,9 @@ def test_checker_rejects_a_receipt_replaced_by_another_inode_after_lstat(
     receipt = _receipt_path(evidence_root, "3.2.2")
     replacement = tmp_path / "same-valid-receipt.json"
     shutil.copy2(receipt, replacement)
+    original_inode = receipt.stat().st_ino
+    replacement_inode = replacement.stat().st_ino
+    assert replacement_inode != original_inode
     real_open = os.open
     replaced = False
 
@@ -1023,8 +1026,10 @@ def test_checker_rejects_a_receipt_replaced_by_another_inode_after_lstat(
         nonlocal replaced
         if _open_targets_receipt(path, dir_fd=dir_fd, receipt=receipt) and not replaced:
             replaced = True
-            receipt.unlink()
-            shutil.copy2(replacement, receipt)
+            # Keep the replacement inode alive before removing the original;
+            # unlink followed by copy can reuse the original inode on Linux.
+            replacement.replace(receipt)
+            assert receipt.stat().st_ino == replacement_inode
         return real_open(path, flags, mode, dir_fd=dir_fd)
 
     monkeypatch.setattr(os, "open", replace_before_open)

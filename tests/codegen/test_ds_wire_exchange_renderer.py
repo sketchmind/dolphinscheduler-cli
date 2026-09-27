@@ -5,9 +5,13 @@ from __future__ import annotations
 import ast
 import importlib
 import sys
-from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+import pytest
+
+if TYPE_CHECKING:
+    from tests.codegen.exact_contract_corpus import ExactContractCorpus
 
 
 def _module(name: str) -> Any:
@@ -17,12 +21,13 @@ def _module(name: str) -> Any:
     return importlib.import_module(name)
 
 
-def test_full_exact_source_audit_keeps_typed_direct_wrappers(tmp_path: Path) -> None:
-    inputs = _module("ds_codegen.contract_inputs")
+@pytest.mark.source_rebuild
+def test_full_exact_source_audit_keeps_typed_direct_wrappers(
+    tmp_path: Path,
+    exact_contract_corpus: ExactContractCorpus,
+) -> None:
     package = _module("ds_codegen.render.package")
-    snapshot = inputs.load_contract_snapshot(
-        Path("build/ds_contract/snapshots-v2/ds-3.4.1-contract.json")
-    )
+    snapshot = exact_contract_corpus.snapshot("3.4.1")
     package.write_generated_package(snapshot, tmp_path)
     package_root = tmp_path / "generated" / "versions" / "ds_3_4_1"
     source = (package_root / "api" / "operations" / "project.py").read_text()
@@ -63,26 +68,38 @@ def test_full_exact_source_audit_keeps_typed_direct_wrappers(tmp_path: Path) -> 
 def test_runtime_slice_omits_empty_wrappers_and_preserves_enums(
     tmp_path: Path,
 ) -> None:
-    inputs = _module("ds_codegen.contract_inputs")
+    ir = _module("ds_codegen.ir")
     package = _module("ds_codegen.render.package")
-    snapshot = inputs.load_contract_snapshot(
-        Path("build/ds_contract/snapshots-v2/ds-3.4.1-contract.json")
-    )
-    snapshot = replace(
-        snapshot,
+    snapshot = ir.ContractSnapshot(
+        ds_version="9.9.9",
         operations=[],
         operation_count=0,
         models=[],
         model_count=0,
         dtos=[],
         dto_count=0,
+        enums=[
+            ir.EnumSpec(
+                name="SampleMode",
+                import_path="org.apache.dolphinscheduler.common.enums.SampleMode",
+                documentation=None,
+                fields=[],
+                json_value_field=None,
+                values=[
+                    ir.EnumValueSpec(name="FAST", arguments=[], documentation=None),
+                    ir.EnumValueSpec(name="SAFE", arguments=[], documentation=None),
+                ],
+            )
+        ],
+        enum_count=1,
     )
     package.write_generated_package(snapshot, tmp_path, shared_runtime=True)
-    package_root = tmp_path / "generated" / "versions" / "ds_3_4_1"
+    package_root = tmp_path / "generated" / "versions" / "ds_9_9_9"
     assert (package_root / "__init__.py").read_text() == ""
     assert not (package_root / "client.py").exists()
     assert not (package_root / "_models.py").exists()
     assert not (package_root / "api" / "operations").exists()
-    assert list(package_root.rglob("*enums*.py")) or list(
-        package_root.rglob("enums/*.py")
-    )
+    enum_source = (package_root / "common" / "enums" / "sample_mode.py").read_text()
+    assert "class SampleMode(StrEnum):" in enum_source
+    assert "FAST = 'FAST'" in enum_source
+    assert "SAFE = 'SAFE'" in enum_source

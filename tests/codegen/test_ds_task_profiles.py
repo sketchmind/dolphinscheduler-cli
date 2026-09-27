@@ -1049,6 +1049,7 @@ def test_generated_task_profiles_are_fresh_readable_and_importable(
     assert loaded["TARGET_DS_VERSIONS"] == _EXPECTED_PROFILE_VERSIONS
 
 
+@pytest.mark.source_contract
 def test_exact_inventory_projection_is_fresh_when_local_inventory_exists(
     task_profile_documents: tuple[dict[str, Any], dict[str, Any]],
 ) -> None:

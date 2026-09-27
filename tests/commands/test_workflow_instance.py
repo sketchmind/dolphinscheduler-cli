@@ -23,7 +23,7 @@ from tests.fakes import (
 )
 from tests.request_assertions import first_dry_run_request
 from tests.runtime_instance_domain_fakes import install_runtime_instance_domain_runtime
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -271,29 +271,32 @@ def test_workflow_instance_list_help_points_to_filter_discovery() -> None:
     result = runner.invoke(app, ["workflow-instance", "list", "--help"])
 
     assert result.exit_code == 0
-    assert "project" in result.stdout
-    assert "workflow" in result.stdout
-    assert "workflow-execution-status" in result.stdout
-    assert "list" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "project" in help_text
+    assert "workflow" in help_text
+    assert "workflow-execution-status" in help_text
+    assert "list" in help_text
 
 
 def test_workflow_instance_get_help_points_to_instance_discovery() -> None:
     result = runner.invoke(app, ["workflow-instance", "get", "--help"])
 
     assert result.exit_code == 0
-    assert "workflow-instance" in result.stdout
-    assert "list" in result.stdout
-    assert "--raw" not in result.stdout
-    assert "--format" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "workflow-instance" in help_text
+    assert "list" in help_text
+    assert "--raw" not in help_text
+    assert "--format" in help_text
 
 
 def test_workflow_instance_export_help_points_to_instance_discovery() -> None:
     result = runner.invoke(app, ["workflow-instance", "export", "--help"])
 
     assert result.exit_code == 0
-    assert "workflow-instance" in result.stdout
-    assert "list" in result.stdout
-    assert "--raw" not in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "workflow-instance" in help_text
+    assert "list" in help_text
+    assert "--raw" not in help_text
 
 
 def test_workflow_instance_get_command_returns_one_instance() -> None:
@@ -975,9 +978,10 @@ def test_workflow_instance_execute_task_help_points_to_task_discovery() -> None:
     result = runner.invoke(app, ["workflow-instance", "execute-task", "--help"])
 
     assert result.exit_code == 0
-    assert "task-instance" in result.stdout
-    assert "workflow-instance" in result.stdout
-    assert "list" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "task-instance" in help_text
+    assert "workflow-instance" in help_text
+    assert "list" in help_text
 
 
 @pytest.mark.parametrize("version", ["3.3.1", "3.3.2", "3.4.0", "3.4.1"])

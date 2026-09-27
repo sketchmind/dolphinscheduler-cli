@@ -417,15 +417,16 @@ def test_template_datasource_help_points_to_type_discovery() -> None:
     result = runner.invoke(app, ["template", "datasource", "--help"])
 
     assert result.exit_code == 0
-    assert "dsctl template datasource" in normalize_cli_help(result.stdout)
-    assert "--ds-version" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "dsctl template datasource" in help_text
+    assert "--ds-version" in help_text
 
 
 def test_template_cluster_help_describes_json_config_template() -> None:
     result = runner.invoke(app, ["template", "cluster", "--help"])
 
     assert result.exit_code == 0
-    assert "cluster config JSON template" in result.stdout
+    assert "cluster config JSON template" in normalize_cli_help(result.stdout)
 
 
 def test_template_datasource_command_returns_payload_for_type() -> None:

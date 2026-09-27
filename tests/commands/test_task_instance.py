@@ -16,7 +16,7 @@ from tests.fakes import (
     FakeWorkflowInstanceAdapter,
 )
 from tests.runtime_instance_domain_fakes import install_runtime_instance_domain_runtime
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -221,13 +221,14 @@ def test_task_instance_list_help_points_to_filter_discovery() -> None:
     result = runner.invoke(app, ["task-instance", "list", "--help"])
 
     assert result.exit_code == 0
-    assert "workflow-instance" in result.stdout
-    assert "project" in result.stdout
-    assert "task-execution-status" in result.stdout
-    assert "BATCH" in result.stdout
-    assert "STREAM" in result.stdout
-    assert "task-execute-type" in result.stdout
-    assert "list" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "workflow-instance" in help_text
+    assert "project" in help_text
+    assert "task-execution-status" in help_text
+    assert "BATCH" in help_text
+    assert "STREAM" in help_text
+    assert "task-execute-type" in help_text
+    assert "list" in help_text
 
 
 def test_task_instance_get_command_returns_one_instance() -> None:
@@ -378,9 +379,10 @@ def test_task_instance_get_help_points_to_instance_discovery() -> None:
     result = runner.invoke(app, ["task-instance", "get", "--help"])
 
     assert result.exit_code == 0
-    assert "task-instance" in result.stdout
-    assert "workflow-instance" in result.stdout
-    assert "list" in result.stdout
+    help_text = normalize_cli_help(result.stdout)
+    assert "task-instance" in help_text
+    assert "workflow-instance" in help_text
+    assert "list" in help_text
 
 
 def test_task_instance_watch_command_returns_finished_instance() -> None:

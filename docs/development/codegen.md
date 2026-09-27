@@ -649,6 +649,13 @@ python tools/generate_ds_task_plugin_inventory.py \
   --output build/ds_task_plugins/all-version-inventory.json
 ```
 
+The source-contract lane optionally audits this historical inventory against the
+tracked task-profile facts, including its exact provenance and extractor
+fingerprint. It skips that audit when the inventory is absent; runtime source
+preparation does not create this separate artifact. The portable lane excludes
+this audit. Tracked fact/review attestations and generated task-profile freshness
+remain checked without the optional inventory.
+
 `tools/ds_codegen/exact_sources.json` is the mechanical analysis corpus, not
 the runtime bundle plan. Its loader rejects a missing, duplicate, unexpected,
 or reordered target, while the prepare step rejects any source root that is not

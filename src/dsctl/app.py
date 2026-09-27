@@ -118,9 +118,9 @@ class _GlobalOptionGroup(SemanticMetavarGroup):
         except _click.exceptions.UsageError as exc:
             _render_usage_error(exc, invocation_args)
             return _usage_exit(exc.exit_code, standalone_mode=standalone_mode)
-        except _click.exceptions.Exit as exc:
+        except typer.Exit as exc:
             return _usage_exit(exc.exit_code, standalone_mode=standalone_mode)
-        except _click.exceptions.Abort:
+        except typer.Abort:
             if not standalone_mode:
                 raise
             typer.echo("Aborted!", err=True)
@@ -309,7 +309,7 @@ def _usage_action(ctx: _click.Context | None) -> str:
 def _usage_exit(exit_code: int, *, standalone_mode: bool) -> int:
     if standalone_mode:
         raise SystemExit(exit_code)
-    raise _click.exceptions.Exit(exit_code)
+    raise typer.Exit(exit_code)
 
 
 def _parse_output_format(value: str) -> OutputFormat:
