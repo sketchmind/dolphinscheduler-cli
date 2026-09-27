@@ -10,6 +10,8 @@ from tests.fakes import FakeDag, FakeTaskDefinition, FakeWorkflow
 from tests.services import _task_authoring_prep as authoring_prep
 
 from dsctl.errors import UnsupportedFeatureError, UserInputError
+from dsctl.models.common import ModelValidationError
+from dsctl.models.task_spec import literal_json
 from dsctl.models.workflow_patch import WorkflowPatchDocument
 from dsctl.models.workflow_spec import validate_workflow_document
 from dsctl.services._legacy_workflow_mutation import (
@@ -563,8 +565,8 @@ def test_datax_json_accepts_numbers_beyond_python_numeric_ranges(
     assert normalized == {"json": json_text}
 
 
-def test_datax_deep_json_string_validation_is_iterative() -> None:
-    json_text = '{"nested":' * 2_000 + "null" + "}" * 2_000
+def test_datax_nested_json_preserves_original_spelling() -> None:
+    json_text = '{"nested":' * 100 + '"literal"' + "}" * 100
 
     normalized = get_task_authoring_catalog("3.4.2").normalize_task_params(
         _TASK_TYPE,
@@ -573,6 +575,60 @@ def test_datax_deep_json_string_validation_is_iterative() -> None:
     )
 
     assert normalized == {"json": json_text}
+
+
+@pytest.mark.parametrize(
+    ("leaf", "message"),
+    [
+        ("literal", None),
+        ("${secret}", "DolphinScheduler placeholders"),
+        ("\x00", "controls or surrogates"),
+        ({"${secret}": "literal"}, "DolphinScheduler placeholders"),
+    ],
+    ids=["valid", "placeholder-value", "control-value", "placeholder-key"],
+)
+def test_datax_deep_decoded_json_string_validation_is_iterative(
+    leaf: YamlValue,
+    message: str | None,
+) -> None:
+    # Exercise the decoded-string walk independently of the JSON decoder's
+    # interpreter-specific recursion limit, retaining all 2,000 nesting levels.
+    decoded = leaf
+    for depth in range(2_000):
+        decoded = {"nested": decoded} if depth % 2 else [decoded]
+
+    if message is None:
+        literal_json._validate_literal_json_decoded_strings(decoded)
+    else:
+        with pytest.raises(ValueError, match=message):
+            literal_json._validate_literal_json_decoded_strings(decoded)
+
+
+@pytest.mark.parametrize("task_type", ["DATAX", "CHUNJUN"])
+def test_literal_json_parser_recursion_failure_is_a_validation_error(
+    task_type: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog = get_task_authoring_catalog("3.4.2")
+
+    def decoder_depth_limit(*_args: object, **_kwargs: object) -> None:
+        message = "decoder recursion limit"
+        raise RecursionError(message)
+
+    monkeypatch.setattr(json, "loads", decoder_depth_limit)
+
+    with pytest.raises(
+        ModelValidationError,
+        match=(
+            r"task_params\.json: json must be one syntactically valid "
+            "JSON object string"
+        ),
+    ):
+        catalog.normalize_task_params(
+            task_type,
+            {"json": _JOB_JSON},
+            intent=TaskAuthoringIntent.TYPED_CREATE,
+        )
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import re
 from typing import ClassVar
 
 from pydantic import (
@@ -31,8 +31,10 @@ def validate_datax_literal_custom_json(value: str) -> str:
 def validate_datax_inline_job_presence(
     value: str, *, empty_json_object_is_absent: bool
 ) -> None:
-    """Reject the exact native file-fallback discriminator in the literal facet."""
-    if empty_json_object_is_absent and json.loads(value) == {}:
+    """Reject an empty object after literal JSON validation has succeeded."""
+    if empty_json_object_is_absent and re.fullmatch(
+        r"[ \t\n\r]*\{[ \t\n\r]*\}[ \t\n\r]*", value
+    ):
         message = (
             "DATAX task_params.json must contain a nonempty JSON object on this "
             "profile: upstream treats an empty object as absent and requires a "
