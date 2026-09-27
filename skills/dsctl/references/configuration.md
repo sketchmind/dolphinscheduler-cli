@@ -15,8 +15,9 @@ authorized change to persistent defaults.
    default may be shadowed: explicit selectors win over process selectors,
    then any present process `DS_API_URL`, `DS_API_TOKEN` or `DS_VERSION` wins
    over the saved default.
-   Complete when this effective target matches the requested task. Run
-   `doctor` when remote readiness is also required.
+   Complete when this effective target matches the requested task. Use
+   `doctor` to check connection and authenticated API access; verify execution
+   readiness through the requested workflow and task results.
 
 Connection identities never merge. Retry and timeout policies resolve from
 process settings before the selected profile and built-in defaults, without
@@ -45,8 +46,8 @@ read; obtain an exact version before writes, exports, templates or lint.
 
 Help, `context` and invocation schema can be inspected without connecting.
 Local templates/lint consume an explicit version or fresh cached exact
-observation; `doctor` refreshes remote discovery when needed. With no connection
-selected, local authoring uses the CLI's offline baseline, which does not
-identify a deployment. Preserve the same selected source for discovery,
-authoring, preview and apply; an unrelated process `DS_VERSION` does not replace
+observation; `doctor` refreshes remote discovery when needed. With no URL, token
+or version configured, local authoring uses the CLI's offline baseline. Select
+the deployment's exact version for targeted authoring. Preserve the same source
+for discovery, authoring, preview and apply; an unrelated process `DS_VERSION` does not replace
 the version inside an explicitly selected env file or context.

@@ -10,8 +10,9 @@ description: dsctl operations for Apache DolphinScheduler cluster resources, wor
 1. **Frame.** Resolve the requested outcome, target connection, and authorized
    mutation scope. Keep the selected target stable; carry any supplied
    `--context` or `--env-file` through later commands and preserve stored
-   context unless changing it is part of the request. Treat suggested actions
-   as navigation within that authority. Continue when the desired state, target,
+   context unless changing it is part of the request. Reuse the user's existing
+   authorization for actions within that scope. Treat suggested actions as
+   navigation within that authority. Continue when the desired state, target,
    and permitted mutations are explicit.
 2. **Ground.** Resolve names, ids, codes, enum values, and paths from the user or
    current CLI output, preserving exact spelling and shell quoting. Treat
@@ -61,7 +62,7 @@ loop.
   When setup, source precedence, or persistent defaults are the unknown, read
   [Connection selection](references/configuration.md). Complete that branch
   when `context` reports the intended target and project; use `doctor` only
-  when remote readiness must also be established.
+  when connection and authenticated API access must also be checked.
 - For id-first commands, let the id select the resource and add project or
   workflow options when leaf help or action schema requires them.
 - Treat a complete returned command as grounded when its resolved target and

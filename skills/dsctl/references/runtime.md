@@ -53,5 +53,6 @@ Report generic exit errors as unresolved causes until a task or child log
 provides the underlying failure.
 
 Complete runtime work when the requested instance and task states are
-authoritative, or when a precise blocker identifies the required authority or
-external change.
+authoritative, the user's monitoring window ends, or a precise blocker identifies
+the required authority or external change. At the monitoring deadline, report
+the last observed state and any still-pending outcome.

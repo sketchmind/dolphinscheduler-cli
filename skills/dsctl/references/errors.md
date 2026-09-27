@@ -7,11 +7,12 @@ stdout is not an ambiguous outcome when stderr contains a structured failure.
 | Result | Response |
 | --- | --- |
 | `user_input_error` or usage exit | Follow `error.suggestion`; inspect leaf help or the action schema for any remaining unknown. |
-| `not_found` | Refresh scope and select an exact authoritative match. |
+| `not_found` | Verify the selected target and scope. Authoritative absence completes a requested deletion; otherwise resolve the intended resource. |
 | `permission_denied` | Report the required permission as the blocker. |
 | `conflict` or `invalid_state` | Refresh live state and ground any necessary, authorized lifecycle mutation. |
-| `confirmation_required` | Confirm the risk remains within scope, then retry the same effective input with exactly the returned token. |
-| Ambiguous transport result | Inspect `mutation_may_have_applied` and read target state first; retry only when authoritative evidence proves the mutation had no effect. |
+| `confirmation_required` | Read the stated risk. When existing authorization covers it, retry the same effective input with exactly the returned token. Ask only when the risk extends beyond that authority. |
+| Transient read failure | Retry within the task's bounded retry budget when `error.details` reports both `retryable: true` and `request_replay_safe: true`. Otherwise follow the error type and suggestion. |
+| Ambiguous mutation result | Inspect `mutation_may_have_applied` and read target state first; retry only when authoritative evidence proves the mutation had no effect. |
 | Applied write followed by failure | Preserve `mutation_applied: true` and known identities. Verify the failed readback or remaining stage; a failed command does not cancel the write. |
 | `phase: output_render` with `result_available: true` | The operation already returned a result. Inspect preserved `data`, `resolved` and receipts; do not resend a mutation to correct display options. Preview results still do not imply a write. |
 | Partial mutation | Inspect `resolved.mutation` or error-detail progress, preserve known identities and completed stages, and resume only missing authorized work. |

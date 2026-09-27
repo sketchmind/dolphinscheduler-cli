@@ -39,6 +39,14 @@ Continue when the artifact source and edit mode match the requested outcome.
   IN parameters use the main comments and parameter topic, rather than a second
   parameter template. On a removed selector error, select a current advertised
   scenario rather than retrying an old alias.
+- For SHELL/PYTHON resource attachments, run `resource list` without `--dir` to
+  obtain the FILE root in `resolved.directory`. Convert the selected storage
+  `fullName` to `task_params.resourceList[].resourceName` by removing that root
+  prefix and keeping one leading `/`. For example, root `/tenant/resources` and full name
+  `/tenant/resources/scripts/job.sh` give `/scripts/job.sh`; the script uses
+  `scripts/job.sh` inside the task directory. With FILE root `/`, the full name
+  is already the attachment path. Use this mapping when the exact profile
+  advertises the resource variant.
 - Use the focused `template params --topic ...` output for parameters and time
   expressions. Task-local parameters belong in `task_params.localParams`, not
   at the task root. Keep example workflow globals only when the composed tasks use
