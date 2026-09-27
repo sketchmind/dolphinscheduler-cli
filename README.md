@@ -17,6 +17,7 @@ API. See [Version compatibility](https://github.com/sketchmind/dolphinscheduler-
 for supported operations and deployment prerequisites.
 
 [Documentation](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/README.md)
+· [Agent skill](#use-with-coding-agents)
 · [Changelog](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/CHANGELOG.md)
 · [Contributing](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/CONTRIBUTING.md)
 
@@ -55,95 +56,181 @@ the results, then list and inspect its workflows:
 
 ```bash
 dsctl workflow list --project etl-prod
-dsctl workflow get daily-etl --project etl-prod
+dsctl workflow digest daily-etl --project etl-prod
 ```
 
 Use your own project and workflow names in place of `etl-prod` and `daily-etl`.
+`digest` gives a compact graph overview; use `workflow describe` when you need
+task configuration details.
 [Configuration](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/configuration.md)
 explains saved connections, credential files and switching clusters.
 
-## Author a Workflow
+## Workflow Lifecycle
 
-Discover task families and inspect their parameters for your selected DS version:
+Create a workflow and run it once, then iterate: **inspect → repair the instance
+→ rerun or recover → verify**. Keep the definition in sync for future runs.
+Once the result meets its goal, enable recurring scheduling. Pause or retire
+the workflow when the work is complete.
 
-```bash
-dsctl template task
-dsctl task-type schema SQL
-```
+### 1. Prepare a definition
 
-Generate a workflow template, edit it for your tasks, and preview the result:
+For a new workflow, generate a template. Set `workflow.name` to `daily-etl`,
+`workflow.project` to your chosen project, and keep `workflow.release_state`
+`OFFLINE` while editing its tasks:
 
 ```bash
 dsctl template workflow --raw > workflow.yaml
-# Edit workflow.yaml, keeping its OFFLINE release state for this example.
+# Edit workflow.yaml with your names, project and tasks.
 dsctl lint workflow workflow.yaml
 dsctl workflow create --file workflow.yaml --project etl-prod --dry-run
-```
-
-Lint validates YAML locally. Dry-run resolves references and previews the planned
-changes. After reviewing the preview, save the OFFLINE workflow:
-
-```bash
 dsctl workflow create --file workflow.yaml --project etl-prod
 ```
 
-For an existing workflow, export its current definition, edit the file, and
-preview the update:
+Review the dry-run before applying. Lint checks the local definition; dry-run
+resolves references and previews the target changes. Create the definition once,
+then use the resulting execution as the starting point for refinement.
+
+For task examples, use `dsctl template task SQL --raw`; `dsctl template task`
+lists other families. Inspect `dsctl task-type schema SQL` for parameter
+constraints. See [Workflow authoring](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/workflow-authoring.md)
+and [Task examples](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/task-examples.md)
+for dependencies and reusable compositions.
+
+### 2. Iterate until the result meets your goal
+
+With the definition and worker prerequisites ready, bring the workflow ONLINE
+and run it manually. ONLINE makes the definition runnable; schedule activation
+is a separate step below:
 
 ```bash
-dsctl workflow export daily-etl --project etl-prod > workflow.yaml
-# Edit workflow.yaml.
-dsctl workflow edit daily-etl --project etl-prod --file workflow.yaml --dry-run
-```
-
-Follow [Workflow authoring](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/workflow-authoring.md)
-for task parameters, applying edits and publication, or start from the
-[task examples](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/task-examples.md).
-
-## Run and Monitor
-
-Start an existing **ONLINE** workflow and find its new execution:
-
-```bash
+dsctl workflow online daily-etl --project etl-prod
 dsctl workflow run daily-etl --project etl-prod
-dsctl workflow-instance list --project etl-prod --workflow daily-etl
 ```
 
-Once the new instance appears, use its ID in place of `901`:
+Use the instance ID from the run result or its suggested discovery command.
+To find a run from history, use
+`dsctl workflow-instance list --project etl-prod --workflow daily-etl`.
+Replace `901` with the selected instance ID and inspect its progress:
 
 ```bash
 dsctl workflow-instance digest 901 --project etl-prod
-dsctl workflow-instance watch 901 --project etl-prod
 ```
 
-To investigate a failed run, list its task instances:
+If it is still active and completion is needed, wait for up to ten minutes.
+`--exit-status` makes successful execution the shell success condition:
 
 ```bash
-dsctl task-instance list --project etl-prod --workflow-instance 901
+dsctl workflow-instance watch 901 --project etl-prod --timeout-seconds 600 --exit-status
 ```
 
-Use the failed task instance's ID in place of `902` to read its log:
+Compare task results and outputs with the intended outcome. For a failure, use
+its task ID from the digest, replacing `902` below, to read the recent log:
 
 ```bash
-dsctl task-instance log 902 --raw
+dsctl task-instance log 902
 ```
 
-[Runtime operations](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/runtime.md)
-covers schedules, backfills and execution controls.
+Use `dsctl task-instance list --project etl-prod --workflow-instance 901` when
+you need to select other tasks in the run. Add `--raw` to the log command for
+plain text; structured logs retain line coverage and continuation.
+
+When a finished run fails or its output needs refinement, export that instance
+and edit its tasks. The following development loop uses `--sync-definition` to
+save the repair to both the instance and the workflow definition immediately,
+so future runs use the revised graph:
+
+```bash
+dsctl workflow-instance export 901 --project etl-prod > instance.yaml
+# Edit instance.yaml, keeping the complete desired task set.
+dsctl lint workflow instance.yaml
+dsctl workflow-instance edit 901 --project etl-prod --file instance.yaml --sync-definition --dry-run
+dsctl workflow-instance edit 901 --project etl-prod --file instance.yaml --sync-definition
+```
+
+After reviewing and applying the repair, choose one execution action:
+
+| Intent | Command |
+| --- | --- |
+| Recheck the whole workflow, including tasks that previously succeeded | `dsctl workflow-instance rerun 901 --project etl-prod` |
+| Resume a `FAILURE` instance from its failed tasks, retaining successful work | `dsctl workflow-instance recover-failed 901 --project etl-prod` |
+
+Use the result's suggested `watch` command, retaining its `--after-run-times`
+marker, to observe the new execution round. Inspect the result and repeat until
+the output meets the goal. Choose a full rerun when changes affect previously
+successful tasks or their outputs need to be regenerated. Read a fresh digest
+after each replay and use its current task IDs for logs.
+
+For a small repair or a task rename, use
+`dsctl template workflow-instance-patch --raw` and `workflow-instance edit --patch`.
+Instance repair covers tasks, dependencies, global parameters and timeout.
+Use `workflow export` and
+`workflow edit` with an OFFLINE definition for definition metadata or changes
+before the first run. Follow [scheduled-workflow editing](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/workflow-authoring.md#edit-a-scheduled-workflow)
+when revising a workflow that already has a schedule. The
+[runtime guide](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/runtime.md)
+explains instance-only edits and exact-version synchronization rules;
 [Operational investigation](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/operational-investigation.md)
-explains task logs, failure diagnosis and recovery.
+covers recovery choices and deeper log analysis.
+
+### 3. Enable recurring scheduling
+
+After verifying the workflow's result, keep the definition ONLINE and create
+its schedule. This example uses a daily 02:00 Quartz cron; replace the dates
+with your future scheduling window and choose the intended timezone:
+
+```bash
+dsctl schedule create --workflow daily-etl --project etl-prod \
+  --cron "0 0 2 * * ?" --timezone Asia/Shanghai \
+  --start "2027-01-01 00:00:00" --end "2027-12-31 23:59:59"
+```
+
+Use the returned schedule ID in place of `701`. For an existing schedule,
+find its ID with `dsctl schedule list --project etl-prod --workflow daily-etl`.
+Review the next trigger times before activation:
+
+```bash
+dsctl schedule preview 701 --project etl-prod
+dsctl schedule online 701 --project etl-prod
+```
+
+Check the first scheduled execution with the same instance and task commands
+above. For exact-version options, including the server-local timezone on DS
+`1.3.9`, see the [schedule reference](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/reference/cli-contract.md#dsctl-schedule-create).
+
+### 4. Pause or retire the workflow
+
+Pause future scheduled runs while retaining the definition:
+
+```bash
+dsctl schedule offline 701 --project etl-prod
+```
+
+For retirement, take the workflow OFFLINE to prevent further scheduled runs.
+Let unfinished executions finish and retain any definitions or logs you need
+before permanently deleting it:
+
+```bash
+dsctl workflow offline daily-etl --project etl-prod
+dsctl workflow-instance list --project etl-prod --workflow daily-etl
+# Wait for unfinished executions before deleting.
+dsctl workflow delete daily-etl --project etl-prod --force
+```
+
+Review the returned deletion result. If other workflows still reference this
+one, resolve those dependencies before retrying its deletion.
+[Runtime operations](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/user/runtime.md)
+covers backfills, execution controls and environment selection.
 
 ## Explore Commands
 
-Use help for syntax, `schema` for machine-readable inputs, and `capabilities`
-for support on the selected server version:
+Use `dsctl --help` to find a command group, then choose the lookup that answers
+your current question:
 
-```bash
-dsctl --help
-dsctl workflow edit --help
-dsctl schema --command workflow.edit
-dsctl capabilities --action workflow.edit
-```
+| Need | Command |
+| --- | --- |
+| Syntax and examples for a known action | `dsctl workflow edit --help` |
+| Machine-readable inputs and constraints | `dsctl schema --command workflow.edit` |
+| Availability on the selected DS version | `dsctl capabilities --action workflow.edit` |
 
 Structured commands return JSON by default. Use `--format table` or `--format tsv`
 for interactive views; workflow exports produce YAML:
@@ -152,19 +239,33 @@ for interactive views; workflow exports produce YAML:
 dsctl --format table workflow list --project etl-prod
 ```
 
-In scripts and CI jobs, use `workflow-instance watch --exit-status` to make the
-process exit status reflect the execution outcome. For the instance selected
-above:
+See the [CLI reference](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/reference/cli-contract.md)
+for filtering, output formats and errors.
 
-```bash
-dsctl workflow-instance watch 901 --project etl-prod --exit-status
+## Use with Coding Agents
+
+The [dsctl skill](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/skills/dsctl/SKILL.md)
+guides agents through command discovery, workflow changes, scheduling, diagnosis
+and outcome verification. Install the complete
+[`skills/dsctl` directory](https://github.com/sketchmind/dolphinscheduler-cli/tree/main/skills/dsctl),
+including its `references/` files, so the agent can load guidance for the task
+at hand.
+
+Give your agent this installation request:
+
+```text
+Install the dsctl skill from https://github.com/sketchmind/dolphinscheduler-cli,
+directory skills/dsctl, into your supported skills location. Use the repository
+ref matching my installed CLI: the release tag for a release, or the checkout
+revision for a development install. Preserve the complete directory and any
+existing local customizations, then verify that the skill is discoverable.
 ```
 
-See the
-[CLI reference](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/docs/reference/cli-contract.md)
-for filtering, output formats and errors. An optional
-[agent skill](https://github.com/sketchmind/dolphinscheduler-cli/blob/main/skills/dsctl/SKILL.md)
-provides guidance for coding agents using the same CLI.
+The skill uses the `dsctl` executable and connection configured above. Once
+installed, ask the agent to use it for a concrete task, for example:
+
+> Use the dsctl skill to investigate the latest failed run of daily-etl in
+> project etl-prod and summarize the relevant task logs.
 
 ## Documentation and Contributing
 
