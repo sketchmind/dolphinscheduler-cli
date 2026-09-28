@@ -11,6 +11,7 @@ from tests.live.conformance_bundle_gate import (
     execute_conformance_bundle_scenario,
     load_conformance_bundle_gate_config,
     load_conformance_recovery_run_id,
+    load_conformance_run_id,
     recover_existing_full_conformance_state,
     write_conformance_bundle_candidate,
 )
@@ -97,6 +98,6 @@ def test_exact_conformance_bundle_installed_wheel_gate(
                 run_id=run_id,
             )
         ),
-        run_id=secrets.token_hex(8),
+        run_id=load_conformance_run_id(os.environ) or secrets.token_hex(8),
     )
     write_conformance_bundle_candidate(runtime, result=result)

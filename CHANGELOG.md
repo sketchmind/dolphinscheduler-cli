@@ -256,6 +256,13 @@ versioning policy is needed.
 
 ### Verification
 
+- Require private task-definition cleanup on `2.0.0` and `2.0.1`, including
+  `OFFLINE` before deletion on `2.0.1`, and prove the complete native task
+  inventory empty before project deletion. Historical receipts keep their
+  original bytes and do not supply this previously missing cleanup proof.
+- Add optional private run-id persistence to the conformance gate runner so
+  failed or interrupted attempts retain their recovery identity. Each attempt
+  uses a new file; concurrent runs cannot overwrite an existing identity.
 - Treat output-size budgets as review metrics; retain semantic completeness,
   command-reference, and architecture checks. Batch focused regressions before
   the full portable, source-contract, and source-rebuild lanes.

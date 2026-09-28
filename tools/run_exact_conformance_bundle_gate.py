@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 import re
+import secrets
+import stat
 import subprocess
 import sys
 import zipfile
@@ -308,6 +310,7 @@ class ConformanceGateInputs(gate_harness.GateFiles):
     ds_version: str
     bundle: str
     recovery_run_id_file: Path | None = None
+    run_id_output_file: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -349,6 +352,7 @@ def run_gate(
     """Run one installed-wheel named conformance gate."""
     coordinate = _validate_inputs(inputs)
     recovery_run_id = _validated_recovery_run_id(inputs)
+    run_id_output_file = _validated_run_id_output_file(inputs)
     if not _PYTEST_ENTRY_PATH.is_file():
         message = (
             f"Conformance gate fixed pytest entry does not exist: {_PYTEST_ENTRY_PATH}"
@@ -380,12 +384,15 @@ def run_gate(
         attestation_path = workspace / "installed-attestation.json"
         _write_private_json(attestation_path, asdict(attestation))
         candidate_evidence = workspace / "candidate-evidence.json"
+        if run_id_output_file is not None:
+            _write_new_private_run_id(run_id_output_file)
         environment = _conformance_environment(
             snapshot,
             executable=installed.executable,
             python=installed.python,
             attestation=attestation_path,
             candidate_evidence=candidate_evidence,
+            run_id_output_file=run_id_output_file,
         )
         completed = process_runner(
             [
@@ -556,6 +563,76 @@ def _validated_recovery_run_id(inputs: ConformanceGateInputs) -> str | None:
         message = "Conformance recovery run_id is not 16-32 lowercase safe characters"
         raise ValueError(message)
     return run_id
+
+
+def _validated_run_id_output_file(inputs: ConformanceGateInputs) -> Path | None:
+    path = inputs.run_id_output_file
+    if path is None:
+        return None
+    if inputs.recovery_run_id_file is not None:
+        message = "Conformance run-id output and recovery are mutually exclusive"
+        raise ValueError(message)
+    if inputs.bundle != "full_core/v1":
+        message = "Conformance run-id output requires full_core/v1"
+        raise ValueError(message)
+    if path.name == inputs.evidence.name and (
+        path.parent.resolve() == inputs.evidence.parent.resolve()
+    ):
+        message = "Conformance run-id output must differ from evidence"
+        raise ValueError(message)
+    os.close(_open_run_id_output_parent(path, check_new=True))
+    return path
+
+
+def _open_run_id_output_parent(path: Path, *, check_new: bool) -> int:
+    parent = path.parent
+    status = parent.lstat()
+    if not stat.S_ISDIR(status.st_mode):
+        message = "Conformance run-id output parent must be owner-private"
+        raise PermissionError(message)
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(parent, flags)
+    opened = os.fstat(descriptor)
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or opened.st_uid != os.geteuid()
+        or opened.st_mode & 0o077
+        or (opened.st_dev, opened.st_ino) != (status.st_dev, status.st_ino)
+    ):
+        os.close(descriptor)
+        message = "Conformance run-id output parent must be owner-private"
+        raise PermissionError(message)
+    if check_new:
+        try:
+            os.stat(path.name, dir_fd=descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            os.close(descriptor)
+            message = "Refusing to overwrite conformance run-id output"
+            raise FileExistsError(message)
+    return descriptor
+
+
+def _write_new_private_run_id(path: Path) -> None:
+    parent = _open_run_id_output_parent(path, check_new=True)
+    try:
+        descriptor = os.open(
+            path.name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=parent,
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(
+                _canonical_json({"schema_version": 1, "run_id": secrets.token_hex(8)})
+            )
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.fsync(parent)
+    finally:
+        os.close(parent)
 
 
 def _require_tracked_static_ready_coordinate(
@@ -1243,6 +1320,7 @@ def _conformance_environment(
     python: Path,
     attestation: Path,
     candidate_evidence: Path,
+    run_id_output_file: Path | None = None,
 ) -> dict[str, str]:
     environment = gate_harness.isolated_environment()
     environment.update(
@@ -1267,6 +1345,8 @@ def _conformance_environment(
         environment["DS_LIVE_CONFORMANCE_RECOVERY_RUN_ID_FILE"] = str(
             inputs.recovery_run_id_file
         )
+    if run_id_output_file is not None:
+        environment["DS_LIVE_CONFORMANCE_RUN_ID_FILE"] = str(run_id_output_file)
     gate_harness.bind_direct_api_target(
         environment,
         inputs.env_file,
@@ -1292,6 +1372,7 @@ def _parse_args(argv: list[str] | None = None) -> ConformanceGateInputs:
     parser.add_argument("--fixture-manifest", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--recovery-run-id-file", type=Path)
+    parser.add_argument("--run-id-output-file", type=Path)
     args = parser.parse_args(argv)
     return ConformanceGateInputs(
         ds_version=args.ds_version,
@@ -1305,6 +1386,11 @@ def _parse_args(argv: list[str] | None = None) -> ConformanceGateInputs:
         recovery_run_id_file=(
             absolute_path(args.recovery_run_id_file)
             if args.recovery_run_id_file is not None
+            else None
+        ),
+        run_id_output_file=(
+            absolute_path(args.run_id_output_file)
+            if args.run_id_output_file is not None
             else None
         ),
     )

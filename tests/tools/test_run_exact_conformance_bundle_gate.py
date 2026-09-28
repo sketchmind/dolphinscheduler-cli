@@ -99,6 +99,35 @@ def test_parse_args_accepts_one_private_cross_process_recovery_identity(
     assert inputs.recovery_run_id_file == recovery.resolve()
 
 
+def test_parse_args_accepts_private_run_id_output(tmp_path: Path) -> None:
+    gate = _load_module()
+    base = _inputs(tmp_path, gate=gate, ds_version="2.0.0", bundle="full_core/v1")
+    output = tmp_path / "run-id.json"
+    inputs = gate._parse_args(
+        [
+            "--ds-version",
+            base.ds_version,
+            "--bundle",
+            base.bundle,
+            "--wheel",
+            str(base.wheel),
+            "--env-file",
+            str(base.env_file),
+            "--attestation-key-file",
+            str(base.attestation_key_file),
+            "--cluster-manifest",
+            str(base.cluster_manifest),
+            "--fixture-manifest",
+            str(base.fixture_manifest),
+            "--evidence",
+            str(base.evidence),
+            "--run-id-output-file",
+            str(output),
+        ]
+    )
+    assert inputs.run_id_output_file == output.absolute()
+
+
 def test_parse_args_preserves_recovery_symlink_for_nofollow_rejection(
     tmp_path: Path,
 ) -> None:
@@ -365,6 +394,7 @@ def test_recovery_mode_rejects_non_generated_coordinate_before_any_execution(
 
     assert str(rejected.value) == (
         "Conformance recovery is only supported for "
+        "2.0.0/full_core/v1, 2.0.1/full_core/v1, "
         "2.0.2/full_core/v1, 2.0.3/full_core/v1, 2.0.4/full_core/v1, "
         "2.0.5/full_core/v1, 2.0.6/full_core/v1, 2.0.7/full_core/v1, "
         "2.0.8/full_core/v1, 2.0.9/full_core/v1, 3.1.3/full_core/v1, "
@@ -1168,6 +1198,129 @@ def test_run_gate_uses_fixed_pytest_entry_and_validates_before_private_publish(
         '{\n  "status": "passed"\n}\n'
     )
     assert inputs.evidence.stat().st_mode & 0o077 == 0
+
+
+@pytest.mark.parametrize("failure", ["nonzero", "baseexception"])
+def test_run_id_is_private_and_persists_when_pytest_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    gate = _load_module()
+    monkeypatch.setattr(gate, "_PYTEST_ENTRY_PATH", Path(__file__))
+    inputs = _inputs(tmp_path, gate=gate, ds_version="2.0.0", bundle="full_core/v1")
+    run_id_path = tmp_path / "run-id.json"
+    inputs = replace(inputs, run_id_output_file=run_id_path)
+    coordinate = gate._require_tracked_static_ready_coordinate(inputs)
+    payload = _installed_recovery_full_probe_payload(
+        tmp_path,
+        ds_version=inputs.ds_version,
+        bundle_digest=coordinate.bundle_digest,
+        catalog_digest=coordinate.catalog_digest,
+        assessment_digest=coordinate.assessment_digest,
+    )
+    _write_probe_wheel(
+        inputs.wheel,
+        assessment=gate._TRACKED_CONFORMANCE_DATA,
+        manifest=payload["manifest"],
+    )
+    pytest_launches = 0
+
+    def fake_install(wheel: Path, workspace: Path, **kwargs: object) -> Any:
+        return gate.gate_harness.InstalledWheel(
+            python=workspace / "venv" / "bin" / "python",
+            executable=workspace / "venv" / "bin" / "dsctl",
+        )
+
+    def fake_process(
+        argv: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal pytest_launches
+        if argv[1] == "-I":
+            probed = copy.deepcopy(payload)
+            probed["module_file"] = str(
+                Path(argv[0]).parents[2]
+                / "venv/lib/python3.12/site-packages/dsctl/__init__.py"
+            )
+            return subprocess.CompletedProcess(
+                argv, 0, stdout=json.dumps(probed), stderr=""
+            )
+        pytest_launches += 1
+        environment = kwargs["env"]
+        assert isinstance(environment, dict)
+        assert environment["DS_LIVE_CONFORMANCE_RUN_ID_FILE"] == str(run_id_path)
+        assert run_id_path.is_file()
+        assert run_id_path.stat().st_mode & 0o077 == 0
+        if failure == "baseexception":
+            raise KeyboardInterrupt
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="")
+
+    if failure == "baseexception":
+        with pytest.raises(KeyboardInterrupt):
+            gate.run_gate(
+                inputs, process_runner=fake_process, install_wheel=fake_install
+            )
+    else:
+        assert (
+            gate.run_gate(
+                inputs, process_runner=fake_process, install_wheel=fake_install
+            )
+            == 1
+        )
+    assert pytest_launches == 1
+    identity = json.loads(run_id_path.read_text(encoding="utf-8"))
+    assert identity["schema_version"] == 1
+    assert gate._RECOVERY_RUN_ID.fullmatch(identity["run_id"])
+    assert not inputs.evidence.exists()
+
+
+def test_existing_or_nonprivate_run_id_output_fails_before_install(
+    tmp_path: Path,
+) -> None:
+    gate = _load_module()
+    inputs = _inputs(tmp_path, gate=gate, ds_version="2.0.0", bundle="full_core/v1")
+    output = tmp_path / "run-id.json"
+    output.write_text("unchanged", encoding="utf-8")
+    launches: list[object] = []
+
+    def unexpected_launch(*args: object, **kwargs: object) -> Any:
+        launches.append((args, kwargs))
+        message = "run-id collision reached installation"
+        raise AssertionError(message)
+
+    with pytest.raises(FileExistsError, match="overwrite"):
+        gate.run_gate(
+            replace(inputs, run_id_output_file=output), install_wheel=unexpected_launch
+        )
+    assert output.read_text(encoding="utf-8") == "unchanged"
+    assert launches == []
+
+    real = tmp_path / "real"
+    private = real / "private"
+    private.mkdir(parents=True, mode=0o700)
+    alias = tmp_path / "alias"
+    alias.symlink_to(real, target_is_directory=True)
+    with pytest.raises(ValueError, match="differ from evidence"):
+        gate.run_gate(
+            replace(
+                inputs,
+                evidence=private / "run-id.json",
+                run_id_output_file=alias / "private" / "run-id.json",
+            ),
+            install_wheel=unexpected_launch,
+        )
+    assert launches == []
+
+    output.unlink()
+    public_parent = tmp_path / "public"
+    public_parent.mkdir(mode=0o755)
+    public_parent.chmod(0o755)
+    with pytest.raises(PermissionError, match="owner-private"):
+        gate.run_gate(
+            replace(inputs, run_id_output_file=public_parent / "run-id.json"),
+            install_wheel=unexpected_launch,
+        )
+    assert launches == []
 
 
 @pytest.mark.parametrize("ds_version", _RECOVERY_VERSIONS)

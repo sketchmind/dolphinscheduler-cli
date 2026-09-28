@@ -425,6 +425,36 @@ def test_recovery_run_id_loader_reads_one_private_exact_identity(
     assert gate_module.load_conformance_recovery_run_id({}) is None
 
 
+def test_fixed_live_entry_uses_persisted_run_id_before_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry = importlib.import_module("tests.live.test_exact_conformance_bundle")
+    runtime = _config(tmp_path, ds_version="2.0.0", bundle_name="full_core/v1")
+    identity = tmp_path / "run-id.json"
+    identity.write_text(
+        json.dumps({"schema_version": 1, "run_id": "0123456789abcdef"}),
+        encoding="utf-8",
+    )
+    identity.chmod(0o600)
+    monkeypatch.setenv("DS_LIVE_CONFORMANCE_RUN_ID_FILE", str(identity))
+    monkeypatch.delenv("DS_LIVE_CONFORMANCE_RECOVERY_RUN_ID_FILE", raising=False)
+    observed: list[str] = []
+
+    def fake_execute(*args: object, **kwargs: object) -> object:
+        run_id = kwargs["run_id"]
+        assert isinstance(run_id, str)
+        observed.append(run_id)
+        return object()
+
+    monkeypatch.setattr(entry, "execute_conformance_bundle_scenario", fake_execute)
+    monkeypatch.setattr(
+        entry, "write_conformance_bundle_candidate", lambda *a, **kw: None
+    )
+    entry.test_exact_conformance_bundle_installed_wheel_gate(tmp_path, runtime)
+    assert observed == ["0123456789abcdef"]
+
+
 def test_fixed_live_entry_dispatches_recovery_without_writing_a_candidate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -617,10 +647,21 @@ def test_cleanup_failure_returns_no_result_and_never_publishes(
     assert not config.evidence_path.exists()
 
 
-@pytest.mark.parametrize("ds_version", ["2.0.9", "3.0.0", "3.0.6", "3.1.0"])
+@pytest.mark.parametrize(
+    ("ds_version", "expected_mutations"),
+    [
+        ("2.0.0", 9),
+        ("2.0.1", 11),
+        ("2.0.9", 9),
+        ("3.0.0", 9),
+        ("3.0.6", 9),
+        ("3.1.0", 9),
+    ],
+)
 def test_affected_full_versions_use_private_task_cleanup_and_count_both_deletes(
     tmp_path: Path,
     ds_version: str,
+    expected_mutations: int,
 ) -> None:
     config = _config(tmp_path, ds_version=ds_version, bundle_name="full_core/v1")
     remote = _FullFakeDsctl(config)
@@ -631,7 +672,8 @@ def test_affected_full_versions_use_private_task_cleanup_and_count_both_deletes(
     assert remote.owned_project is None
     assert remote.owned_workflow is None
     assert remote.owned_tasks == {}
-    assert result.effects.remote_mutations == 9
+    assert result.effects.remote_mutations == expected_mutations
+    assert ("task-definition-offline" in remote.mutations) is (ds_version == "2.0.1")
     assert [
         operation for operation, _project, _workflow, _run_id in task_cleanup.calls
     ] == [
@@ -830,10 +872,12 @@ def test_full_cleanup_ambiguous_delete_retained_is_not_retried_or_published(
     assert not config.evidence_path.exists()
 
 
+@pytest.mark.parametrize("ds_version", ["2.0.0", "2.0.1", "2.0.9"])
 def test_full_recovery_removes_proven_workflow_then_two_task_definitions(
     tmp_path: Path,
+    ds_version: str,
 ) -> None:
-    config = _config(tmp_path, ds_version="2.0.9", bundle_name="full_core/v1")
+    config = _config(tmp_path, ds_version=ds_version, bundle_name="full_core/v1")
     remote = _FullFakeDsctl(
         config,
         fail_at="workflow-digest-cleanup-delete-retained",
@@ -868,6 +912,7 @@ def test_full_recovery_removes_proven_workflow_then_two_task_definitions(
         workflow for _operation, _project, workflow, _run in task_cleanup.calls
     ]
     assert workflows == [1001, 1001]
+    assert ("task-definition-offline" in remote.mutations) is (ds_version == "2.0.1")
 
 
 def test_full_recovery_requires_one_exact_preexisting_owned_residue(
@@ -890,10 +935,12 @@ def test_full_recovery_requires_one_exact_preexisting_owned_residue(
     )
 
 
+@pytest.mark.parametrize("ds_version", ["2.0.0", "2.0.1", "2.0.9"])
 def test_full_recovery_accepts_project_only_residue_with_zero_tasks(
     tmp_path: Path,
+    ds_version: str,
 ) -> None:
-    config = _config(tmp_path, ds_version="2.0.9", bundle_name="full_core/v1")
+    config = _config(tmp_path, ds_version=ds_version, bundle_name="full_core/v1")
     remote = _FullFakeDsctl(config)
     run_id = "0123456789abcdef"
     version_slug = config.ds_version.replace(".", "-")
@@ -930,10 +977,12 @@ def test_full_recovery_accepts_project_only_residue_with_zero_tasks(
     assert any(argv[:2] == ["project", "delete"] for argv in remote.calls)
 
 
+@pytest.mark.parametrize("ds_version", ["2.0.0", "2.0.1", "2.0.9"])
 def test_full_recovery_cleans_one_task_after_workflow_delete_crash(
     tmp_path: Path,
+    ds_version: str,
 ) -> None:
-    config = _config(tmp_path, ds_version="2.0.9", bundle_name="full_core/v1")
+    config = _config(tmp_path, ds_version=ds_version, bundle_name="full_core/v1")
     remote = _FullFakeDsctl(
         config,
         fail_at="workflow-digest-cleanup-delete-retained",
@@ -964,10 +1013,12 @@ def test_full_recovery_cleans_one_task_after_workflow_delete_crash(
     ] == ["cleanup"]
 
 
-def test_202_recovery_accepts_task_already_offline_from_prior_attempt(
+@pytest.mark.parametrize("ds_version", ["2.0.1", "2.0.2", "2.0.3"])
+def test_recovery_accepts_task_already_offline_from_prior_attempt(
     tmp_path: Path,
+    ds_version: str,
 ) -> None:
-    config = _config(tmp_path, ds_version="2.0.2", bundle_name="full_core/v1")
+    config = _config(tmp_path, ds_version=ds_version, bundle_name="full_core/v1")
     remote = _FullFakeDsctl(
         config,
         fail_at="workflow-digest-cleanup-delete-retained",
@@ -1001,7 +1052,7 @@ def test_202_recovery_accepts_task_already_offline_from_prior_attempt(
         remote.mutations.extend(["task-definition-delete"] * observed)
         return TaskDefinitionCleanupInvocation(
             operation="cleanup",
-            ds_version="2.0.2",
+            ds_version=ds_version,
             observed=observed,
             released=0,
             deleted=observed,
@@ -1055,7 +1106,7 @@ def test_full_recovery_refuses_non_generated_recovery_profile_without_invoking_d
     with pytest.raises(
         ValueError,
         match=(
-            r"only supported.*2\.0\.2, 2\.0\.3, 2\.0\.4, 2\.0\.5, "
+            r"only supported.*2\.0\.0, 2\.0\.1, 2\.0\.2, 2\.0\.3, 2\.0\.4, 2\.0\.5, "
             r"2\.0\.6, 2\.0\.7, 2\.0\.8, 2\.0\.9, 3\.1\.3, 3\.1\.4, "
             r"3\.1\.5, 3\.1\.6, 3\.1\.7, 3\.1\.8, 3\.1\.9$"
         ),

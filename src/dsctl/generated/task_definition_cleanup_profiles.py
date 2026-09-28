@@ -37,6 +37,8 @@ _TASK_DEFINITION_CLEANUP_PROFILE_JSON = r'''
     "3.1.9"
   ],
   "full_core_reconciliation_versions": [
+    "2.0.0",
+    "2.0.1",
     "2.0.2",
     "2.0.3",
     "2.0.4",
@@ -64,6 +66,8 @@ _TASK_DEFINITION_CLEANUP_PROFILE_JSON = r'''
     "3.1.9"
   ],
   "full_core_versions": [
+    "2.0.0",
+    "2.0.1",
     "2.0.2",
     "2.0.3",
     "2.0.4",
@@ -84,6 +88,8 @@ _TASK_DEFINITION_CLEANUP_PROFILE_JSON = r'''
     "3.1.2"
   ],
   "cross_process_recovery_versions": [
+    "2.0.0",
+    "2.0.1",
     "2.0.2",
     "2.0.3",
     "2.0.4",

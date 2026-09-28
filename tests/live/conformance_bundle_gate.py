@@ -62,6 +62,7 @@ _RUNTIME_ENV_NAMES = {
     "evidence": "DS_LIVE_CONFORMANCE_EVIDENCE",
 }
 _RECOVERY_RUN_ID_ENV = "DS_LIVE_CONFORMANCE_RECOVERY_RUN_ID_FILE"
+_RUN_ID_OUTPUT_ENV = "DS_LIVE_CONFORMANCE_RUN_ID_FILE"
 _LEGACY_OUTCOMES = (
     "bound-current-user",
     "capability-preflight-complete",
@@ -712,6 +713,14 @@ def load_conformance_recovery_run_id(
         message = "Conformance recovery run_id is not 16-32 lowercase safe characters"
         raise ValueError(message)
     return run_id
+
+
+def load_conformance_run_id(environment: Mapping[str, str]) -> str | None:
+    """Read the runner-persisted identity before any live mutation."""
+    raw_path = environment.get(_RUN_ID_OUTPUT_ENV, "").strip()
+    if not raw_path:
+        return None
+    return load_conformance_recovery_run_id({_RECOVERY_RUN_ID_ENV: raw_path})
 
 
 def execute_conformance_bundle_scenario(
@@ -5505,6 +5514,7 @@ __all__ = [
     "identity_hmac",
     "load_conformance_bundle_gate_config",
     "load_conformance_recovery_run_id",
+    "load_conformance_run_id",
     "recover_existing_full_conformance_state",
     "write_conformance_bundle_candidate",
 ]

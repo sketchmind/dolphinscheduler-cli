@@ -386,7 +386,7 @@ def test_task_cleanup_applicability_requires_verified_runtime_ownership(
             )
 
 
-def test_private_cleanup_release_does_not_promote_full_core_membership() -> None:
+def test_private_cleanup_release_and_full_core_membership_are_independent() -> None:
     _load_module()
     current_truth = importlib.import_module(
         "live_gate.conformance_evidence.current_truth"
@@ -398,7 +398,9 @@ def test_private_cleanup_release_does_not_promote_full_core_membership() -> None
         runtime_operations=current.runtime_operations,
     )
     assert "2.0.1" in cleanup.pre_delete_release_versions
-    assert "2.0.1" not in cleanup.full_core_versions
+    assert {"2.0.0", "2.0.1"} <= cleanup.full_core_versions
+    assert "2.0.0" not in cleanup.pre_delete_release_versions
+    assert {"2.0.0", "2.0.1"} <= cleanup.cross_process_recovery_versions
 
     drifted = copy.deepcopy(cleanup_profiles.TASK_DEFINITION_CLEANUP_PROFILE_DATA)
     drifted["profiles"]["3.1.9"]["pre_delete_release"] = "offline"

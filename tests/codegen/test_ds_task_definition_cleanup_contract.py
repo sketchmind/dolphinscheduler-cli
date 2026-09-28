@@ -106,9 +106,10 @@ def test_cleanup_contract_records_exact_page_and_nullable_delete_epochs() -> Non
     assert legacy.pre_delete_release == "none"
     legacy_201 = contract.task_definition_cleanup_contract("2.0.1")
     assert legacy_201.pre_delete_release == "offline"
-    assert not legacy_201.full_core_applicable
-    assert not legacy_201.full_core_reconciliation_applicable
-    assert not legacy_201.cross_process_recovery
+    for recipe in (legacy, legacy_201):
+        assert recipe.full_core_applicable
+        assert recipe.full_core_reconciliation_applicable
+        assert recipe.cross_process_recovery
     assert contract.task_definition_cleanup_contract("2.0.2").pre_delete_release == (
         "offline"
     )
@@ -241,6 +242,8 @@ def test_cleanup_profile_projects_exact_runtime_invocation_facts() -> None:
     assert data["semantic_operation"] == ("release-gate.task-definition.cleanup")
     assert data["target_versions"] == list(contract.TASK_DEFINITION_CLEANUP_VERSIONS)
     assert data["full_core_reconciliation_versions"] == [
+        "2.0.0",
+        "2.0.1",
         "2.0.2",
         "2.0.3",
         "2.0.4",
@@ -268,6 +271,8 @@ def test_cleanup_profile_projects_exact_runtime_invocation_facts() -> None:
         "3.1.9",
     ]
     assert data["full_core_versions"] == [
+        "2.0.0",
+        "2.0.1",
         "2.0.2",
         "2.0.3",
         "2.0.4",
@@ -288,6 +293,8 @@ def test_cleanup_profile_projects_exact_runtime_invocation_facts() -> None:
         "3.1.2",
     ]
     assert data["cross_process_recovery_versions"] == [
+        "2.0.0",
+        "2.0.1",
         "2.0.2",
         "2.0.3",
         "2.0.4",

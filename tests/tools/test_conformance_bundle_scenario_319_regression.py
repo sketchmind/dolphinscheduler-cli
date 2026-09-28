@@ -435,9 +435,13 @@ def test_generated_reconciliation_and_cross_recovery_sets_remain_independent(
     assert "3.1.9" not in recovery
     assert strategies["3.1.9"] == "workflow-cascade-proof-only"
     assert pre_delete_release_versions == {"2.0.1", "2.0.2", "2.0.3"}
-    assert "2.0.1" not in reconciliation
+    assert "2.0.1" in reconciliation
     assert "2.0.1" not in recovery
-    assert pre_delete_release_versions & reconciliation == {"2.0.2", "2.0.3"}
+    assert pre_delete_release_versions & reconciliation == {
+        "2.0.1",
+        "2.0.2",
+        "2.0.3",
+    }
 
     monkeypatch.setattr(
         gate_module,

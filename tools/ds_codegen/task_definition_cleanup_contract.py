@@ -106,9 +106,9 @@ _LEGACY = TaskDefinitionCleanupContract(
     history_model=None,
     delete_response="void",
     pre_delete_release="none",
-    full_core_applicable=False,
-    full_core_reconciliation_applicable=False,
-    cross_process_recovery=False,
+    full_core_applicable=True,
+    full_core_reconciliation_applicable=True,
+    cross_process_recovery=True,
 )
 _TRANSITIONAL = TaskDefinitionCleanupContract(
     version="2.0.9",

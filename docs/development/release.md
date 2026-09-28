@@ -253,6 +253,14 @@ The canonical build-once order is:
    below. Never use `python -m build` without `--sdist` at this stage because it
    would replace the attested wheel.
 
+If a campaign exposes a runtime or cleanup correctness defect, preserve its
+failed attempt and original receipts, complete owned cleanup, and fix the source
+before freezing a new wheel. Repeat the complete same-wheel acceptance corpus
+for that new candidate; neither earlier passing rows nor later residue cleanup
+can replace its receipts. On `2.0.0` and `2.0.1`, cleanup must prove the complete
+native task inventory empty before deleting its owned project, as detailed in
+[Live Testing](live-testing.md#named-conformance-bundle-installed-wheel-gate).
+
 Inspect the wheel and install it in a clean virtual environment:
 
 ```bash
@@ -322,8 +330,20 @@ python tools/run_exact_conformance_bundle_gate.py \
   --attestation-key-file /secure/campaign/attestation.key \
   --cluster-manifest /secure/campaign/VERSION-cluster-schema2.json \
   --fixture-manifest /secure/campaign/VERSION-fixture-schema1.json \
+  --run-id-output-file /secure/campaign/run-ids/VERSION-ATTEMPT.json \
   --evidence /secure/campaign/receipts/VERSION.json
 ```
+
+For `full_core/v1`, the optional `--run-id-output-file` shown above requires a parent
+directory owned by the current user with mode `0700` and creates a new `0600`
+identity file before live execution. The parent directory must already exist.
+Choose a unique path for each attempt, including concurrent runs; existing
+destinations are never overwritten. Retain the file after failure or
+interruption for explicit `--recovery-run-id-file` use on a generated recovery
+coordinate, with the original candidate and fresh target/fixture proofs.
+Recovery never produces a passing receipt. See
+[Live Testing](live-testing.md#named-conformance-bundle-installed-wheel-gate)
+for the exact versions and ownership checks.
 
 Track exactly one accepted receipt per version under
 `docs/development/live-evidence/conformance-bundles/<version>/`, then run
