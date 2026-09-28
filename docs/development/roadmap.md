@@ -58,18 +58,19 @@ administrative scenarios are recorded in the
 artifact and scenario bindings when addressing gaps; a historical pending list
 is not a reason to repeat completed work.
 
-## Next Release Candidate
+## Release Acceptance and Support Policy
 
-- [ ] Freeze a candidate that includes the later Typer and DataX runtime fixes,
-  then complete its own artifact-bound acceptance and strict release gate under
-  [candidate validation](release.md#candidate-validation).
+The `0.4.0` release candidate includes the Typer and DataX runtime fixes and
+exact `2.0.0` / `2.0.1` independent-task cleanup repair. Its
+[artifact-bound corpus](live-testing.md#exact-version-profile-gates) contains
+37 four-action exact-read receipts, 37 18-action `full_core/v1` receipts and
+one 15-action `external-shell/v1` schema-7 receipt on exact `3.4.2`, with
+independent cleanup verification. Earlier receipts retain their original
+artifact bindings and cleanup limits in [history](live-evidence/history/).
 
-The retained `0.4.0` development candidate corpus contains 37 four-action
-exact-read receipts, 37 18-action `full_core/v1` receipts and one 15-action
-`external-shell/v1` schema-7 receipt on exact `3.4.2`. That wheel predates those
-runtime fixes. Its corrected release gate and subsequent documentation/package
-checks remain evidence for their recorded sources and artifacts, not release
-readiness of current `main`. Historical receipts must not be relabeled.
+Each publication requires the strict release gate, canonical artifact checks
+and protected source integration described in
+[candidate validation](release.md#candidate-validation).
 
 - [ ] Review support-policy labels against the recorded verification scopes.
   Keep the offline default and historical `full` / `tested=true` designation

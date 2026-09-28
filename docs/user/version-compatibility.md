@@ -66,7 +66,8 @@ changes follow an explicit policy review with matching evidence.
 
 ### Recorded Live Coverage
 
-The historical `0.4.0` development candidate has these receipts on one wheel:
+The `0.4.0` release candidate has these receipts on one immutable wheel
+(`5829e708757e…`), including the Typer, DataX and exact task-cleanup fixes:
 
 | Scenario | Exact releases | Verified scope |
 | --- | --- | --- |
@@ -81,11 +82,12 @@ across bundles, so assess coverage using each suite's named operations. See the
 [live gate contracts](../development/live-testing.md#exact-version-profile-gates)
 for detailed obligations and other scenario-specific evidence.
 
-These receipts attest the listed scenarios on a historical candidate built
-before subsequent runtime fixes. Each new release candidate completes its own
-artifact-bound acceptance.
-Historical admission evidence is recorded in the
-[admission decisions](../development/stable-release-admission.md).
+These receipts attest the listed scenarios and their cleanup on that candidate.
+The [full wheel identity and gate contracts](../development/live-testing.md#exact-version-profile-gates)
+define the acceptance scope. Each new candidate completes its own artifact-bound
+acceptance. Earlier receipts retain their original bindings and cleanup limits
+in [history](../development/live-evidence/history/); profile admission is recorded
+in the [admission decisions](../development/stable-release-admission.md).
 
 The current generic exact-read promotion format is semantic schema 2; generic
 schema-1 receipts remain historical-audit-only. The `external-shell/v1` format,

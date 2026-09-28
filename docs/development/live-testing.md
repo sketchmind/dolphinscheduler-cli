@@ -174,13 +174,17 @@ is separate from these artifact-bound verification scopes.
 
 A live gate exercises a named set of actions. Its receipt binds those actions
 to an immutable artifact and manifest.
-The retained `0.4.0` development candidate corpus binds all 37 profiles to the
-same wheel: 37 four-action [exact-read receipts](live-evidence/exact-read/), 37
+The `0.4.0` release candidate corpus binds all 37 profiles to one wheel:
+37 four-action [exact-read receipts](live-evidence/exact-read/), 37
 18-action [conformance receipts](live-evidence/conformance-bundles/) using
 `full_core/v1`, and the separate 15-action `external-shell/v1` schema-7 receipt
-on exact `3.4.2`. Each receipt records its immutable wheel digest and exact
-contract identities. This wheel predates the later Typer and DataX runtime
-fixes; a release candidate containing those fixes needs its own acceptance.
+on exact `3.4.2`. Its wheel SHA-256 is
+`5829e708757e29756de66d3912995d5ff7635a315940f2d9226e738700477299`.
+This candidate includes the Typer and DataX runtime fixes and the exact
+`2.0.0` / `2.0.1` independent-task cleanup repair. Each receipt records its
+exact contract identities and successful scenario cleanup. The
+[earlier candidate corpus](live-evidence/history/candidates/dd34c34733a5/)
+retains its original wheel binding and receipt bytes.
 
 The generic read gate covers four remote stable actions: `project.list`,
 `project.get`, `workflow.list`, and `workflow.get`. A promotion-grade generic
@@ -1286,18 +1290,22 @@ The rule is not “skip forever”. The rule is:
 
 ## Current Coverage Snapshot
 
-The retained development candidate corpus records all 37 profiles with
-four-action exact-read schema-2 receipts and 18-action `full_core/v1` receipts,
-plus the separate 15-action `external-shell/v1` schema-7 gate on exact `3.4.2`.
-These 75 receipts bind the same immutable candidate wheel.
-They predate the subsequent Typer, DataX, and private cleanup fixes and do not
-attest current source. The historical `2.0.0` and `2.0.1` full-core cleanup
-proofs did not inspect independent native task definitions, so they do not prove
-zero native task residue. Preserve the original receipt bytes and their recorded
-bindings; later cleanup cannot retroactively supply the missing proof. A new
-release candidate needs its own complete artifact-bound acceptance corpus.
-Historical schema-1 and schema-6 evidence also remains valid only for its
-recorded artifacts; passing a bounded gate does not promote an entire profile.
+The `0.4.0` release candidate has 75 receipts on the wheel identified
+[above](#exact-version-profile-gates): four-action exact-read schema-2 and
+18-action `full_core/v1` receipts for all 37 profiles, plus the separate
+15-action `external-shell/v1` schema-7 receipt on exact `3.4.2`. All scenario
+and external fixture cleanup was independently verified. The corrected exact
+`2.0.0` and `2.0.1` full-core scenarios verify native task inventory before
+project deletion.
+
+The earlier `dd34c34733a5…` candidate corpus remains in
+[history](live-evidence/history/candidates/dd34c34733a5/) with its original
+artifact bindings. Its `2.0.0` and `2.0.1` full-core cleanup proofs covered
+workflow-scoped task absence; independent native task inventory was outside
+those proofs. Their recorded bytes remain historical evidence with that limit.
+The new candidate's cleanup evidence applies to its own test objects and runs.
+Historical schema-1 and schema-6 receipts retain their original scopes.
+Profile support policy is maintained separately from these named gates.
 
 Broader development scenarios were verified on earlier installed candidates.
 They are separate from that release corpus and must retain their
