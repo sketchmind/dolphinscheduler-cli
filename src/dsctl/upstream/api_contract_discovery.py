@@ -169,14 +169,14 @@ def _scoped_document_operations(
     documents: Mapping[str, tuple[DocumentOperation, ...]],
     expected: Mapping[tuple[str, str], ApiOperationContract],
 ) -> dict[tuple[str, str], DocumentOperation] | None:
-    groups = {probe.path: probe.api_group for probe in facts.DOCUMENT_PROBES}
+    groups = {probe.path: probe.document_group for probe in facts.DOCUMENT_PROBES}
     observed: dict[tuple[str, str], DocumentOperation] = {}
     for path in paths:
         group = groups[path]
         scoped_expected = {
             key
             for key, operation in expected.items()
-            if group is None or operation.api_group == group
+            if group is None or operation.document_group == group
         }
         current = {
             (operation.method, operation.path): operation

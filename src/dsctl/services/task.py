@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from dsctl.cli_surface import TASK_RESOURCE
 from dsctl.errors import (
     ApiResultError,
+    ApiTransportError,
     ConflictError,
     InvalidStateError,
     NotFoundError,
@@ -36,6 +37,7 @@ from dsctl.upstream.legacy_task_definitions import (
     LegacyTaskSelector,
     LegacyWorkflowSelector,
 )
+from dsctl.upstream.legacy_workflow_graph import LegacyWorkflowGraphError
 from dsctl.upstream.serialization import optional_text
 from dsctl.upstream.task_definitions import (
     TaskSelector,
@@ -47,6 +49,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from dsctl.services.selection import SelectionData
+    from dsctl.services.task_authoring_catalog import TaskAuthoringCatalog
     from dsctl.support.yaml_io import JsonObject, JsonValue
     from dsctl.upstream.legacy_task_definitions import PreparedLegacyTaskUpdate
     from dsctl.upstream.resolver import ResolvedTask, ResolvedWorkflow
@@ -209,6 +212,12 @@ def _list_tasks_result(
             _raise_task_list_error(exc, workflow=selected_workflow.value)
             message = "legacy task list error mapping must raise"
             raise AssertionError(message) from exc
+        except LegacyWorkflowGraphError as exc:
+            raise _legacy_task_graph_error(
+                exc,
+                workflow=selected_workflow.value,
+                action="task.list",
+            ) from exc
         legacy_data = [
             task_item.to_data()
             for task_item in legacy_listing.tasks
@@ -297,6 +306,13 @@ def _get_task_result(
             )
             message = "legacy task read error mapping must raise"
             raise AssertionError(message) from exc
+        except LegacyWorkflowGraphError as exc:
+            raise _legacy_task_graph_error(
+                exc,
+                workflow=selected_workflow.value,
+                task=task,
+                action="task.get",
+            ) from exc
         return CommandResult(
             data=require_json_object(
                 legacy_task_read.view.to_data(),
@@ -372,66 +388,14 @@ def _update_task_result(
         workflow=workflow,
     )
     if isinstance(runtime.definitions, LegacyTaskDefinitions):
-        try:
-            legacy_prepared = runtime.definitions.prepare_update(
-                LegacyTaskSelector(
-                    project=selected_project.value,
-                    workflow=selected_workflow.value,
-                    task=task,
-                ),
-                patch=update_spec,
-                requested_fields=tuple(requested_fields),
-            )
-        except ApiResultError as exc:
-            _raise_legacy_task_access_error(
-                exc,
-                task=task,
-                workflow=selected_workflow.value,
-                operation="read",
-            )
-            message = "legacy task update preparation error mapping must raise"
-            raise AssertionError(message) from exc
-        workflow_scope = legacy_prepared.current.scope.workflow
-        legacy_resolved_data = require_json_object(
-            {
-                "project": with_selection_source(
-                    cast("SelectionData", workflow_scope.project.to_data()),
-                    selected_project,
-                ),
-                "workflow": with_selection_source(
-                    cast("SelectionData", workflow_scope.workflow.to_data()),
-                    selected_workflow,
-                ),
-                "task": legacy_prepared.current.scope.task.to_data(),
-            },
-            label="task update resolved",
-        )
-        if dry_run:
-            return _task_update_dry_run_result(
-                legacy_prepared,
-                resolved=legacy_resolved_data,
-            )
-        if legacy_prepared.no_change:
-            return _task_update_no_change_result(
-                legacy_prepared.current.view.to_data(),
-                resolved=legacy_resolved_data,
-            )
-        try:
-            legacy_outcome = runtime.definitions.apply(legacy_prepared)
-        except ApiResultError as exc:
-            _raise_legacy_task_update_error(
-                exc,
-                task=legacy_prepared.current.scope.task.name,
-                workflow=selected_workflow.value,
-            )
-            message = "legacy task update error mapping must raise"
-            raise AssertionError(message) from exc
-        return CommandResult(
-            data=require_json_object(
-                legacy_outcome.value.view.to_data(),
-                label="task data",
-            ),
-            resolved=legacy_resolved_data,
+        return _update_legacy_task_result(
+            runtime.definitions,
+            selected_project=selected_project,
+            selected_workflow=selected_workflow,
+            task=task,
+            update_spec=update_spec,
+            requested_fields=requested_fields,
+            dry_run=dry_run,
         )
     try:
         prepared = runtime.definitions.prepare_update(
@@ -486,6 +450,93 @@ def _update_task_result(
     return CommandResult(
         data=require_json_object(outcome.value.view.to_data(), label="task data"),
         resolved=resolved_json,
+    )
+
+
+def _update_legacy_task_result(
+    definitions: LegacyTaskDefinitions[TaskAuthoringCatalog],
+    *,
+    selected_project: SelectedValue,
+    selected_workflow: SelectedValue,
+    task: str,
+    update_spec: WorkflowPatchTaskSetSpec,
+    requested_fields: list[str],
+    dry_run: bool,
+) -> CommandResult:
+    try:
+        legacy_prepared = definitions.prepare_update(
+            LegacyTaskSelector(
+                project=selected_project.value,
+                workflow=selected_workflow.value,
+                task=task,
+            ),
+            patch=update_spec,
+            requested_fields=tuple(requested_fields),
+        )
+    except ApiResultError as exc:
+        _raise_legacy_task_access_error(
+            exc,
+            task=task,
+            workflow=selected_workflow.value,
+            operation="read",
+        )
+        message = "legacy task update preparation error mapping must raise"
+        raise AssertionError(message) from exc
+    except LegacyWorkflowGraphError as exc:
+        raise _legacy_task_graph_error(
+            exc,
+            workflow=selected_workflow.value,
+            task=task,
+            action="task.update",
+        ) from exc
+    workflow_scope = legacy_prepared.current.scope.workflow
+    legacy_resolved_data = require_json_object(
+        {
+            "project": with_selection_source(
+                cast("SelectionData", workflow_scope.project.to_data()),
+                selected_project,
+            ),
+            "workflow": with_selection_source(
+                cast("SelectionData", workflow_scope.workflow.to_data()),
+                selected_workflow,
+            ),
+            "task": legacy_prepared.current.scope.task.to_data(),
+        },
+        label="task update resolved",
+    )
+    if dry_run:
+        return _task_update_dry_run_result(
+            legacy_prepared,
+            resolved=legacy_resolved_data,
+        )
+    if legacy_prepared.no_change:
+        return _task_update_no_change_result(
+            legacy_prepared.current.view.to_data(),
+            resolved=legacy_resolved_data,
+        )
+    try:
+        legacy_outcome = definitions.apply(legacy_prepared)
+    except ApiResultError as exc:
+        _raise_legacy_task_update_error(
+            exc,
+            task=legacy_prepared.current.scope.task.name,
+            workflow=selected_workflow.value,
+        )
+        message = "legacy task update error mapping must raise"
+        raise AssertionError(message) from exc
+    except LegacyWorkflowGraphError as exc:
+        raise _legacy_task_graph_error(
+            exc,
+            workflow=selected_workflow.value,
+            task=legacy_prepared.current.scope.task.name,
+            action="task.update",
+        ) from exc
+    return CommandResult(
+        data=require_json_object(
+            legacy_outcome.value.view.to_data(),
+            label="task data",
+        ),
+        resolved=legacy_resolved_data,
     )
 
 
@@ -676,6 +727,34 @@ def _assign_task_update_value(
         message = f"Task update field {'.'.join(path)!r} was specified more than once"
         raise _task_update_user_input_error(message)
     current[leaf] = value
+
+
+def _legacy_task_graph_error(
+    exc: LegacyWorkflowGraphError,
+    *,
+    workflow: str,
+    action: str,
+    task: str | None = None,
+) -> ApiTransportError:
+    details: JsonObject = {
+        "resource": TASK_RESOURCE,
+        "workflow": workflow,
+        "action": action,
+        "ds_version": "1.3.9",
+        "reason": str(exc),
+    }
+    if task is not None:
+        details["task"] = task
+    if action == "task.update":
+        details["mutation_applied"] = False
+    return ApiTransportError(
+        "The legacy workflow graph is internally inconsistent.",
+        details=details,
+        suggestion=(
+            "Repair the selected workflow graph in DolphinScheduler before "
+            "retrying this CLI operation."
+        ),
+    )
 
 
 def _raise_task_update_error(

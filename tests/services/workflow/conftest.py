@@ -1,5 +1,7 @@
 """Fresh adapters shared by workflow service tests."""
 
+import json
+
 import pytest
 from tests.fakes import (
     FakeDag,
@@ -17,6 +19,87 @@ from tests.fakes import (
 from tests.services.workflow.harness import (
     _WorkflowServiceHarness,
 )
+
+
+@pytest.fixture
+def stale_legacy_workflow_graph() -> tuple[str, str, str]:
+    """Independent native graph with consistent edges and stale UI counters."""
+    return (
+        json.dumps(
+            {
+                "globalParams": [],
+                "timeout": 30,
+                "tenantId": -1,
+                "tasks": [
+                    {
+                        "id": "tasks-extract",
+                        "name": "extract",
+                        "type": "SHELL",
+                        "params": {"rawScript": "echo extract"},
+                        "preTasks": [],
+                        "runFlag": "NORMAL",
+                    },
+                    {
+                        "id": "tasks-transform",
+                        "name": "transform",
+                        "type": "SHELL",
+                        "params": {"rawScript": "echo transform"},
+                        "preTasks": ["extract"],
+                        "runFlag": "NORMAL",
+                    },
+                    {
+                        "id": "tasks-load",
+                        "name": "load",
+                        "type": "SHELL",
+                        "params": {"rawScript": "echo load"},
+                        "preTasks": ["extract", "transform"],
+                        "runFlag": "NORMAL",
+                    },
+                ],
+            }
+        ),
+        json.dumps(
+            {
+                "tasks-extract": {
+                    "name": "extract",
+                    "targetarr": "",
+                    "nodenumber": "6",
+                    "x": 50,
+                    "y": 80,
+                },
+                "tasks-transform": {
+                    "name": "transform",
+                    "targetarr": "tasks-extract",
+                    "nodenumber": 0,
+                    "x": 300,
+                    "y": 80,
+                },
+                "tasks-load": {
+                    "name": "load",
+                    "targetarr": "tasks-extract,tasks-transform",
+                    "nodenumber": 0,
+                    "x": 550,
+                    "y": 80,
+                },
+            }
+        ),
+        json.dumps(
+            [
+                {
+                    "endPointSourceId": "tasks-extract",
+                    "endPointTargetId": "tasks-transform",
+                },
+                {
+                    "endPointSourceId": "tasks-extract",
+                    "endPointTargetId": "tasks-load",
+                },
+                {
+                    "endPointSourceId": "tasks-transform",
+                    "endPointTargetId": "tasks-load",
+                },
+            ]
+        ),
+    )
 
 
 @pytest.fixture

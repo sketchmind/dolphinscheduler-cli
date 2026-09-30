@@ -539,6 +539,74 @@ def test_decode_rejects_duplicate_native_task_identity(
         )
 
 
+@pytest.mark.parametrize("stored_count", ["4", 0])
+def test_decode_preserves_stale_ui_counter_and_prepare_recomputes_it(
+    stored_count: str | int,
+) -> None:
+    process_definition_json = json.dumps(
+        {
+            "tasks": [
+                {
+                    "id": "tasks-extract",
+                    "name": "extract",
+                    "type": "SHELL",
+                    "params": {"rawScript": "echo extract"},
+                    "preTasks": [],
+                },
+                {
+                    "id": "tasks-load",
+                    "name": "load",
+                    "type": "SHELL",
+                    "params": {"rawScript": "echo load"},
+                    "preTasks": ["extract"],
+                },
+            ],
+        }
+    )
+    locations: dict[str, dict[str, str | int]] = {
+        "tasks-extract": {
+            "name": "extract",
+            "targetarr": "",
+            "nodenumber": stored_count,
+            "x": 17,
+            "y": 23,
+            "futureLocationField": "keep",
+        },
+        "tasks-load": {
+            "name": "load",
+            "targetarr": "tasks-extract",
+            "nodenumber": "0",
+            "x": 317,
+            "y": 23,
+        },
+    }
+    decoded = decode_legacy_workflow_graph(
+        process_definition_json,
+        locations=json.dumps(locations),
+        connects=(
+            '[{"endPointSourceId":"tasks-extract","endPointTargetId":"tasks-load"}]'
+        ),
+    )
+
+    assert decoded.edges == (("extract", "load"),)
+    assert decoded.tasks[1].depends_on == ("extract",)
+    assert decoded.native_locations == locations
+
+    prepared = prepare_legacy_workflow_graph(
+        decoded.to_workflow_spec(name="daily"),
+        baseline=decoded,
+    ).materialize()
+    updated_locations = json.loads(prepared["locations"])
+    assert updated_locations == {
+        "tasks-extract": {**locations["tasks-extract"], "nodenumber": 1},
+        "tasks-load": {**locations["tasks-load"], "nodenumber": 0},
+    }
+    assert decoded.native_locations == locations
+    assert json.loads(prepared["connects"]) == [
+        {"endPointSourceId": "tasks-extract", "endPointTargetId": "tasks-load"}
+    ]
+
+
 @pytest.mark.parametrize(
     ("locations", "connects", "conflicting_source"),
     [

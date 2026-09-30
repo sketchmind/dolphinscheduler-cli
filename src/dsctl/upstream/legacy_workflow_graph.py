@@ -463,7 +463,7 @@ def decode_legacy_workflow_graph(
     dependent_refs: LegacyDependentRefIndex = _EMPTY_DEPENDENT_REFS,
     resource_refs: TaskResourceRefIndex | None = None,
 ) -> DecodedLegacyWorkflowGraph:
-    """Decode and cross-check the three DS 1.3.9 native graph strings."""
+    """Decode and cross-check native DS 1.3.9 task identities and graph edges."""
     process_data = _json_object(process_definition_json, label="processDefinitionJson")
     raw_tasks = process_data.get("tasks")
     if not _is_json_sequence(raw_tasks):
@@ -2533,26 +2533,10 @@ def _location_edges(
                 raise LegacyWorkflowGraphError(msg)
             edges.append((predecessor.name, task.name))
     _require_unique_edges(edges, label="locations.targetarr")
-    outgoing_counts = {
-        task.name: sum(predecessor == task.name for predecessor, _ in edges)
-        for task in task_by_id.values()
-    }
-    for task_id, task in task_by_id.items():
-        location = _json_mapping(
-            locations[task_id],
-            label=f"locations.{task_id}",
-        )
-        node_number = location.get("nodenumber")
-        if (
-            node_number is not None
-            and _non_negative_int(
-                node_number,
-                label=f"locations.{task_id}.nodenumber",
-            )
-            != outgoing_counts[task.name]
-        ):
-            msg = f"locations.{task_id}.nodenumber conflicts with graph edges"
-            raise LegacyWorkflowGraphError(msg)
+    # The 1.3.9 UI increments nodenumber for every connection but decrements it
+    # only for CONDITIONS when deleting a connection (jsPlumbHandle.js). Keep
+    # that display counter as opaque layout metadata; _locations recomputes it
+    # when preparing an authored graph.
     return edges
 
 

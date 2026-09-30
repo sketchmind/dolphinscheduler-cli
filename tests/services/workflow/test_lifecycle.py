@@ -152,10 +152,15 @@ def test_139_online_workflow_uses_legacy_graph_for_activation_preflight(
     assert fake_workflow_adapter.release_calls == [(101, "ONLINE")]
 
 
+@pytest.mark.parametrize("stale_counter", [False, True])
+@pytest.mark.parametrize("activation_allowed", [False, True])
 def test_139_online_workflow_keeps_typed_datax_activation_guard(
     monkeypatch: pytest.MonkeyPatch,
     workflow_harness: _WorkflowServiceHarness,
     fake_workflow_adapter: FakeWorkflowAdapter,
+    *,
+    stale_counter: bool,
+    activation_allowed: bool,
 ) -> None:
     daily = replace(
         fake_workflow_adapter.workflows[0],
@@ -192,6 +197,10 @@ def test_139_online_workflow_keeps_typed_datax_activation_guard(
         spec,
         task_id_factory=lambda name: f"tasks-{name}",
     ).materialize()
+    if stale_counter:
+        locations = json.loads(graph["locations"])
+        locations["tasks-load"]["nodenumber"] = 4
+        graph["locations"] = json.dumps(locations)
     operations.legacy_definitions[101] = (
         graph["processDefinitionJson"],
         graph["locations"],
@@ -206,6 +215,9 @@ def test_139_online_workflow_keeps_typed_datax_activation_guard(
     ) -> None:
         captured["spec"] = activation_spec
         captured["profile_version"] = profile_version
+        if not activation_allowed:
+            message = "DATAX activation preflight rejected"
+            raise UserInputError(message)
 
     monkeypatch.setattr(
         workflow_lifecycle,
@@ -213,7 +225,11 @@ def test_139_online_workflow_keeps_typed_datax_activation_guard(
         capture_datax_preflight,
     )
 
-    workflow_service.online_workflow_result("daily-sync", project="etl-prod")
+    if activation_allowed:
+        workflow_service.online_workflow_result("daily-sync", project="etl-prod")
+    else:
+        with pytest.raises(UserInputError, match="DATAX activation preflight rejected"):
+            workflow_service.online_workflow_result("daily-sync", project="etl-prod")
 
     activation_spec = captured["spec"]
     assert isinstance(activation_spec, WorkflowSpec)
@@ -226,7 +242,39 @@ def test_139_online_workflow_keeps_typed_datax_activation_guard(
     ]
     assert len(typed_global_params) == len(global_params)
     assert [param.prop for param in typed_global_params] == ["batch"]
+    assert fake_workflow_adapter.release_calls == (
+        [(101, "ONLINE")] if activation_allowed else []
+    )
+
+
+@pytest.mark.parametrize("initial_state", ["OFFLINE", "ONLINE"])
+def test_139_online_workflow_accepts_stale_ui_counters_without_updating_graph(
+    initial_state: str,
+    monkeypatch: pytest.MonkeyPatch,
+    workflow_harness: _WorkflowServiceHarness,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    stale_legacy_workflow_graph: tuple[str, str, str],
+) -> None:
+    fake_workflow_adapter.workflows[0] = replace(
+        fake_workflow_adapter.workflows[0],
+        release_state_value=FakeEnumValue(initial_state),
+        schedule_release_state_value=None,
+        schedule_value=None,
+    )
+    operations = workflow_harness.install(profile=make_profile(ds_version="1.3.9"))
+    operations.legacy_definitions[101] = stale_legacy_workflow_graph
+    monkeypatch.setattr(
+        operations,
+        "apply_update",
+        lambda _prepared: pytest.fail("workflow online sent an update request"),
+    )
+
+    result = workflow_service.online_workflow_result("daily-sync", project="etl-prod")
+
+    assert _mapping(result.data)["releaseState"] == "ONLINE"
     assert fake_workflow_adapter.release_calls == [(101, "ONLINE")]
+    assert fake_workflow_adapter.update_calls == []
+    assert operations.legacy_definitions[101] == stale_legacy_workflow_graph
 
 
 def _kubeflow_release_dag(
