@@ -8,7 +8,7 @@ from ._discovery_types import ApiOperationContract
 OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     'AccessTokenController.queryAccessTokenList@1.3.9': ApiOperationContract(
         operation_id='AccessTokenController.queryAccessTokenList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='access-token/list-paging',
         parameters=(
@@ -20,7 +20,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.createAlertgroup@1.3.9': ApiOperationContract(
         operation_id='AlertGroupController.createAlertgroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-group/create',
         parameters=(
@@ -32,7 +32,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.delAlertgroupById@1.3.9': ApiOperationContract(
         operation_id='AlertGroupController.delAlertgroupById',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-group/delete',
         parameters=(
@@ -42,7 +42,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.grantUser@1.3.9': ApiOperationContract(
         operation_id='AlertGroupController.grantUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-group/grant-user',
         parameters=(
@@ -53,7 +53,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.list@1.3.9': ApiOperationContract(
         operation_id='AlertGroupController.list',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-group/list',
         parameters=(
@@ -62,7 +62,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.listPaging@1.3.9': ApiOperationContract(
         operation_id='AlertGroupController.listPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-group/list-paging',
         parameters=(
@@ -74,7 +74,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.updateAlertgroup@1.3.9': ApiOperationContract(
         operation_id='AlertGroupController.updateAlertgroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-group/update',
         parameters=(
@@ -87,7 +87,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.verifyGroupName@1.3.9': ApiOperationContract(
         operation_id='AlertGroupController.verifyGroupName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-group/verify-group-name',
         parameters=(
@@ -97,7 +97,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.authedDatasource@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.authedDatasource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/authed-datasource',
         parameters=(
@@ -107,7 +107,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.connectDataSource@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.connectDataSource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='datasources/connect',
         parameters=(
@@ -127,7 +127,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.connectionTest@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.connectionTest',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/connect-by-id',
         parameters=(
@@ -137,7 +137,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.createDataSource@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.createDataSource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='datasources/create',
         parameters=(
@@ -157,7 +157,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.delete@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.delete',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/delete',
         parameters=(
@@ -167,7 +167,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.getKerberosStartupState@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.getKerberosStartupState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/kerberos-startup-state',
         parameters=(
@@ -176,7 +176,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSourceList@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.queryDataSourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/list',
         parameters=(
@@ -186,7 +186,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSourceListPaging@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.queryDataSourceListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/list-paging',
         parameters=(
@@ -198,7 +198,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.unauthDatasource@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.unauthDatasource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/unauth-datasource',
         parameters=(
@@ -208,7 +208,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.updateDataSource@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.updateDataSource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='datasources/update',
         parameters=(
@@ -229,7 +229,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSource@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.queryDataSource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='datasources/update-ui',
         parameters=(
@@ -239,7 +239,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.verifyDataSourceName@1.3.9': ApiOperationContract(
         operation_id='DataSourceController.verifyDataSourceName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/verify-name',
         parameters=(
@@ -249,7 +249,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoggerController.queryLog@1.3.9': ApiOperationContract(
         operation_id='LoggerController.queryLog',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='log/detail',
         parameters=(
@@ -261,7 +261,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoggerController.downloadTaskLog@1.3.9': ApiOperationContract(
         operation_id='LoggerController.downloadTaskLog',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='log/download-log',
         parameters=(
@@ -271,7 +271,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoginController.login@1.3.9': ApiOperationContract(
         operation_id='LoginController.login',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='login',
         parameters=(
@@ -282,7 +282,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.queryDatabaseState@1.3.9': ApiOperationContract(
         operation_id='MonitorController.queryDatabaseState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/database',
         parameters=(
@@ -291,7 +291,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.listMaster@1.3.9': ApiOperationContract(
         operation_id='MonitorController.listMaster',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/master/list',
         parameters=(
@@ -300,7 +300,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.listWorker@1.3.9': ApiOperationContract(
         operation_id='MonitorController.listWorker',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/worker/list',
         parameters=(
@@ -309,7 +309,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.queryZookeeperState@1.3.9': ApiOperationContract(
         operation_id='MonitorController.queryZookeeperState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/zookeeper/list',
         parameters=(
@@ -318,7 +318,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countCommandState@1.3.9': ApiOperationContract(
         operation_id='DataAnalysisController.countCommandState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/command-state-count',
         parameters=(
@@ -330,7 +330,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countDefinitionByUser@1.3.9': ApiOperationContract(
         operation_id='DataAnalysisController.countDefinitionByUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/define-user-count',
         parameters=(
@@ -340,7 +340,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countProcessInstanceState@1.3.9': ApiOperationContract(
         operation_id='DataAnalysisController.countProcessInstanceState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/process-state-count',
         parameters=(
@@ -352,7 +352,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countQueueState@1.3.9': ApiOperationContract(
         operation_id='DataAnalysisController.countQueueState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/queue-count',
         parameters=(
@@ -362,7 +362,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countTaskState@1.3.9': ApiOperationContract(
         operation_id='DataAnalysisController.countTaskState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/task-state-count',
         parameters=(
@@ -374,7 +374,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryAuthorizedProject@1.3.9': ApiOperationContract(
         operation_id='ProjectController.queryAuthorizedProject',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/authed-project',
         parameters=(
@@ -384,7 +384,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.createProject@1.3.9': ApiOperationContract(
         operation_id='ProjectController.createProject',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/create',
         parameters=(
@@ -395,7 +395,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.deleteProject@1.3.9': ApiOperationContract(
         operation_id='ProjectController.deleteProject',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/delete',
         parameters=(
@@ -405,7 +405,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.importProcessDefinition@1.3.9': ApiOperationContract(
         operation_id='ProjectController.importProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/import-definition',
         parameters=(
@@ -416,7 +416,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryProjectListPaging@1.3.9': ApiOperationContract(
         operation_id='ProjectController.queryProjectListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/list-paging',
         parameters=(
@@ -428,7 +428,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryProjectById@1.3.9': ApiOperationContract(
         operation_id='ProjectController.queryProjectById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/query-by-id',
         parameters=(
@@ -438,7 +438,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryAllProjectList@1.3.9': ApiOperationContract(
         operation_id='ProjectController.queryAllProjectList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/query-project-list',
         parameters=(
@@ -447,7 +447,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryUnauthorizedProject@1.3.9': ApiOperationContract(
         operation_id='ProjectController.queryUnauthorizedProject',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/unauth-project',
         parameters=(
@@ -457,7 +457,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.updateProject@1.3.9': ApiOperationContract(
         operation_id='ProjectController.updateProject',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/update',
         parameters=(
@@ -469,7 +469,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.execute@1.3.9': ApiOperationContract(
         operation_id='ExecutorController.execute',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/executors/execute',
         parameters=(
@@ -481,7 +481,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.startCheckProcessDefinition@1.3.9': ApiOperationContract(
         operation_id='ExecutorController.startCheckProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/executors/start-check',
         parameters=(
@@ -491,7 +491,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.startProcessInstance@1.3.9': ApiOperationContract(
         operation_id='ExecutorController.startProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/executors/start-process-instance',
         parameters=(
@@ -515,7 +515,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.batchDeleteProcessInstanceByIds@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.batchDeleteProcessInstanceByIds',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/instance/batch-delete',
         parameters=(
@@ -526,7 +526,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.deleteProcessInstanceById@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.deleteProcessInstanceById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/instance/delete',
         parameters=(
@@ -537,7 +537,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryProcessInstanceList@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.queryProcessInstanceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/instance/list-paging',
         parameters=(
@@ -556,7 +556,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryProcessInstanceById@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.queryProcessInstanceById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/instance/select-by-id',
         parameters=(
@@ -567,7 +567,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryParentInstanceBySubId@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.queryParentInstanceBySubId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/instance/select-parent-process',
         parameters=(
@@ -578,7 +578,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.querySubProcessInstanceByTaskId@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.querySubProcessInstanceByTaskId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/instance/select-sub-process',
         parameters=(
@@ -589,7 +589,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryTaskListByProcessId@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.queryTaskListByProcessId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/instance/task-list-by-process-id',
         parameters=(
@@ -600,7 +600,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.updateProcessInstance@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.updateProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/instance/update',
         parameters=(
@@ -617,7 +617,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.viewTree@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.viewTree',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/instance/view-gantt',
         parameters=(
@@ -628,7 +628,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.viewVariables@1.3.9': ApiOperationContract(
         operation_id='ProcessInstanceController.viewVariables',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/instance/view-variables',
         parameters=(
@@ -638,7 +638,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.batchDeleteProcessDefinitionByIds@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.batchDeleteProcessDefinitionByIds',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/batch-delete',
         parameters=(
@@ -649,7 +649,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.copyProcessDefinition@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.copyProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/process/copy',
         parameters=(
@@ -660,7 +660,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.deleteProcessDefinitionById@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.deleteProcessDefinitionById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/delete',
         parameters=(
@@ -671,7 +671,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.batchExportProcessDefinitionByIds@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.batchExportProcessDefinitionByIds',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/export',
         parameters=(
@@ -682,7 +682,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.getNodeListByDefinitionId@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.getNodeListByDefinitionId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/gen-task-list',
         parameters=(
@@ -693,7 +693,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.getNodeListByDefinitionIdList@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.getNodeListByDefinitionIdList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/get-task-list',
         parameters=(
@@ -704,7 +704,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionList@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/list',
         parameters=(
@@ -714,7 +714,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionListPaging@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/list-paging',
         parameters=(
@@ -728,7 +728,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionAllByProjectId@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionAllByProjectId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/queryProcessDefinitionAllByProjectId',
         parameters=(
@@ -738,7 +738,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.releaseProcessDefinition@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.releaseProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/process/release',
         parameters=(
@@ -750,7 +750,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.createProcessDefinition@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.createProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/process/save',
         parameters=(
@@ -765,7 +765,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionById@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/select-by-id',
         parameters=(
@@ -776,7 +776,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.updateProcessDefinition@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/process/update',
         parameters=(
@@ -792,7 +792,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.verifyProcessDefinitionName@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.verifyProcessDefinitionName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/verify-name',
         parameters=(
@@ -803,7 +803,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.viewTree@1.3.9': ApiOperationContract(
         operation_id='ProcessDefinitionController.viewTree',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/process/view-tree',
         parameters=(
@@ -815,7 +815,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.createSchedule@1.3.9': ApiOperationContract(
         operation_id='SchedulerController.createSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/schedule/create',
         parameters=(
@@ -834,7 +834,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.deleteScheduleById@1.3.9': ApiOperationContract(
         operation_id='SchedulerController.deleteScheduleById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/schedule/delete',
         parameters=(
@@ -845,7 +845,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.queryScheduleList@1.3.9': ApiOperationContract(
         operation_id='SchedulerController.queryScheduleList',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/schedule/list',
         parameters=(
@@ -855,7 +855,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.queryScheduleListPaging@1.3.9': ApiOperationContract(
         operation_id='SchedulerController.queryScheduleListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/schedule/list-paging',
         parameters=(
@@ -869,7 +869,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.offline@1.3.9': ApiOperationContract(
         operation_id='SchedulerController.offline',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/schedule/offline',
         parameters=(
@@ -880,7 +880,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.online@1.3.9': ApiOperationContract(
         operation_id='SchedulerController.online',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/schedule/online',
         parameters=(
@@ -891,7 +891,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.previewSchedule@1.3.9': ApiOperationContract(
         operation_id='SchedulerController.previewSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/schedule/preview',
         parameters=(
@@ -902,7 +902,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateSchedule@1.3.9': ApiOperationContract(
         operation_id='SchedulerController.updateSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectName}/schedule/update',
         parameters=(
@@ -921,7 +921,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceController.queryTaskListPaging@1.3.9': ApiOperationContract(
         operation_id='TaskInstanceController.queryTaskListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectName}/task-instance/list-paging',
         parameters=(
@@ -941,7 +941,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.createQueue@1.3.9': ApiOperationContract(
         operation_id='QueueController.createQueue',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='queue/create',
         parameters=(
@@ -952,7 +952,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.queryList@1.3.9': ApiOperationContract(
         operation_id='QueueController.queryList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='queue/list',
         parameters=(
@@ -961,7 +961,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.queryQueueListPaging@1.3.9': ApiOperationContract(
         operation_id='QueueController.queryQueueListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='queue/list-paging',
         parameters=(
@@ -973,7 +973,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.updateQueue@1.3.9': ApiOperationContract(
         operation_id='QueueController.updateQueue',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='queue/update',
         parameters=(
@@ -985,7 +985,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.verifyQueue@1.3.9': ApiOperationContract(
         operation_id='QueueController.verifyQueue',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='queue/verify-queue',
         parameters=(
@@ -996,7 +996,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.authorizedFile@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.authorizedFile',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/authed-file',
         parameters=(
@@ -1006,7 +1006,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.authorizedUDFFunction@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.authorizedUDFFunction',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/authed-udf-func',
         parameters=(
@@ -1016,7 +1016,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.authorizeResourceTree@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.authorizeResourceTree',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/authorize-resource-tree',
         parameters=(
@@ -1026,7 +1026,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createResource@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.createResource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/create',
         parameters=(
@@ -1041,7 +1041,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.deleteResource@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.deleteResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/delete',
         parameters=(
@@ -1051,7 +1051,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createDirectory@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.createDirectory',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/directory/create',
         parameters=(
@@ -1065,7 +1065,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.downloadResource@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.downloadResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/download',
         parameters=(
@@ -1075,7 +1075,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceList@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.queryResourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/list',
         parameters=(
@@ -1085,7 +1085,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceListPaging@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.queryResourceListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/list-paging',
         parameters=(
@@ -1099,7 +1099,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceJarList@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.queryResourceJarList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/list/jar',
         parameters=(
@@ -1110,7 +1110,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.onlineCreateResource@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.onlineCreateResource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/online-create',
         parameters=(
@@ -1126,7 +1126,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResource@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.queryResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/queryResource',
         parameters=(
@@ -1138,7 +1138,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createUdfFunc@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.createUdfFunc',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/udf-func/create',
         parameters=(
@@ -1154,7 +1154,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.deleteUdfFunc@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.deleteUdfFunc',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/udf-func/delete',
         parameters=(
@@ -1164,7 +1164,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryUdfFuncList@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.queryUdfFuncList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/udf-func/list',
         parameters=(
@@ -1174,7 +1174,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryUdfFuncListPaging@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.queryUdfFuncListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/udf-func/list-paging',
         parameters=(
@@ -1186,7 +1186,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateUdfFunc@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.updateUdfFunc',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/udf-func/update',
         parameters=(
@@ -1203,7 +1203,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.viewUIUdfFunction@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.viewUIUdfFunction',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/udf-func/update-ui',
         parameters=(
@@ -1213,7 +1213,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.verifyUdfFuncName@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.verifyUdfFuncName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/udf-func/verify-name',
         parameters=(
@@ -1223,7 +1223,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.unauthUDFFunc@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.unauthUDFFunc',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/unauth-udf-func',
         parameters=(
@@ -1233,7 +1233,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateResource@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.updateResource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/update',
         parameters=(
@@ -1247,7 +1247,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateResourceContent@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.updateResourceContent',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/update-content',
         parameters=(
@@ -1258,7 +1258,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.verifyResourceName@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.verifyResourceName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/verify-name',
         parameters=(
@@ -1269,7 +1269,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.viewResource@1.3.9': ApiOperationContract(
         operation_id='ResourcesController.viewResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/view',
         parameters=(
@@ -1281,7 +1281,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoginController.signOut@1.3.9': ApiOperationContract(
         operation_id='LoginController.signOut',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='signOut',
         parameters=(
@@ -1290,7 +1290,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.createTenant@1.3.9': ApiOperationContract(
         operation_id='TenantController.createTenant',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='tenant/create',
         parameters=(
@@ -1303,7 +1303,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.deleteTenantById@1.3.9': ApiOperationContract(
         operation_id='TenantController.deleteTenantById',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='tenant/delete',
         parameters=(
@@ -1313,7 +1313,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.queryTenantlist@1.3.9': ApiOperationContract(
         operation_id='TenantController.queryTenantlist',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='tenant/list',
         parameters=(
@@ -1322,7 +1322,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.queryTenantlistPaging@1.3.9': ApiOperationContract(
         operation_id='TenantController.queryTenantlistPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='tenant/list-paging',
         parameters=(
@@ -1334,7 +1334,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.updateTenant@1.3.9': ApiOperationContract(
         operation_id='TenantController.updateTenant',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='tenant/update',
         parameters=(
@@ -1348,7 +1348,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.verifyTenantCode@1.3.9': ApiOperationContract(
         operation_id='TenantController.verifyTenantCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='tenant/verify-tenant-code',
         parameters=(
@@ -1358,7 +1358,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.authorizedUser@1.3.9': ApiOperationContract(
         operation_id='UsersController.authorizedUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/authed-user',
         parameters=(
@@ -1368,7 +1368,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.createUser@1.3.9': ApiOperationContract(
         operation_id='UsersController.createUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/create',
         parameters=(
@@ -1383,7 +1383,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.delUserById@1.3.9': ApiOperationContract(
         operation_id='UsersController.delUserById',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/delete',
         parameters=(
@@ -1393,7 +1393,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.getUserInfo@1.3.9': ApiOperationContract(
         operation_id='UsersController.getUserInfo',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/get-user-info',
         parameters=(
@@ -1402,7 +1402,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantDataSource@1.3.9': ApiOperationContract(
         operation_id='UsersController.grantDataSource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-datasource',
         parameters=(
@@ -1413,7 +1413,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantResource@1.3.9': ApiOperationContract(
         operation_id='UsersController.grantResource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-file',
         parameters=(
@@ -1424,7 +1424,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantProject@1.3.9': ApiOperationContract(
         operation_id='UsersController.grantProject',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-project',
         parameters=(
@@ -1435,7 +1435,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantUDFFunc@1.3.9': ApiOperationContract(
         operation_id='UsersController.grantUDFFunc',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-udf-func',
         parameters=(
@@ -1446,7 +1446,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.listUser@1.3.9': ApiOperationContract(
         operation_id='UsersController.listUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/list',
         parameters=(
@@ -1455,7 +1455,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.listAll@1.3.9': ApiOperationContract(
         operation_id='UsersController.listAll',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/list-all',
         parameters=(
@@ -1464,7 +1464,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.queryUserList@1.3.9': ApiOperationContract(
         operation_id='UsersController.queryUserList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/list-paging',
         parameters=(
@@ -1476,7 +1476,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.unauthorizedUser@1.3.9': ApiOperationContract(
         operation_id='UsersController.unauthorizedUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/unauth-user',
         parameters=(
@@ -1486,7 +1486,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.updateUser@1.3.9': ApiOperationContract(
         operation_id='UsersController.updateUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/update',
         parameters=(
@@ -1502,7 +1502,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.verifyUserName@1.3.9': ApiOperationContract(
         operation_id='UsersController.verifyUserName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/verify-user-name',
         parameters=(
@@ -1512,7 +1512,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.queryAllWorkerGroups@1.3.9': ApiOperationContract(
         operation_id='WorkerGroupController.queryAllWorkerGroups',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='worker-group/all-groups',
         parameters=(
@@ -1521,7 +1521,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.deleteById@1.3.9': ApiOperationContract(
         operation_id='WorkerGroupController.deleteById',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='worker-group/delete-by-id',
         parameters=(
@@ -1531,7 +1531,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.queryAllWorkerGroupsPaging@1.3.9': ApiOperationContract(
         operation_id='WorkerGroupController.queryAllWorkerGroupsPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='worker-group/list-paging',
         parameters=(
@@ -1543,7 +1543,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.saveWorkerGroup@1.3.9': ApiOperationContract(
         operation_id='WorkerGroupController.saveWorkerGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='worker-group/save',
         parameters=(
@@ -1555,7 +1555,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.queryWorkerAddressList@1.3.9': ApiOperationContract(
         operation_id='WorkerGroupController.queryWorkerAddressList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='worker-group/worker-address-list',
         parameters=(
@@ -1564,7 +1564,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AccessTokenController.queryAccessTokenList@2.0.0': ApiOperationContract(
         operation_id='AccessTokenController.queryAccessTokenList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='access-tokens',
         parameters=(
@@ -1576,7 +1576,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.listPaging@2.0.0': ApiOperationContract(
         operation_id='AlertGroupController.listPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-groups',
         parameters=(
@@ -1588,7 +1588,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.createAlertgroup@2.0.0': ApiOperationContract(
         operation_id='AlertGroupController.createAlertgroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-groups',
         parameters=(
@@ -1600,7 +1600,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.list@2.0.0': ApiOperationContract(
         operation_id='AlertGroupController.list',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-groups/list',
         parameters=(
@@ -1609,7 +1609,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.queryAlertGroupById@2.0.0': ApiOperationContract(
         operation_id='AlertGroupController.queryAlertGroupById',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-groups/query',
         parameters=(
@@ -1619,7 +1619,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.verifyGroupName@2.0.0': ApiOperationContract(
         operation_id='AlertGroupController.verifyGroupName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-groups/verify-name',
         parameters=(
@@ -1629,7 +1629,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.delAlertgroupById@2.0.0': ApiOperationContract(
         operation_id='AlertGroupController.delAlertgroupById',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='alert-groups/{id}',
         parameters=(
@@ -1639,7 +1639,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.updateAlertgroup@2.0.0': ApiOperationContract(
         operation_id='AlertGroupController.updateAlertgroup',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='alert-groups/{id}',
         parameters=(
@@ -1652,7 +1652,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.listPaging@2.0.0': ApiOperationContract(
         operation_id='AlertPluginInstanceController.listPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-plugin-instances',
         parameters=(
@@ -1663,7 +1663,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.createAlertPluginInstance@2.0.0': ApiOperationContract(
         operation_id='AlertPluginInstanceController.createAlertPluginInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-plugin-instances',
         parameters=(
@@ -1675,7 +1675,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.getAlertPluginInstance__get_alert_plugin_instances_list@2.0.0': ApiOperationContract(
         operation_id='AlertPluginInstanceController.getAlertPluginInstance__get_alert_plugin_instances_list',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-plugin-instances/list',
         parameters=(
@@ -1684,7 +1684,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.verifyGroupName@2.0.0': ApiOperationContract(
         operation_id='AlertPluginInstanceController.verifyGroupName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-plugin-instances/verify-name',
         parameters=(
@@ -1694,7 +1694,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.deleteAlertPluginInstance@2.0.0': ApiOperationContract(
         operation_id='AlertPluginInstanceController.deleteAlertPluginInstance',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='alert-plugin-instances/{id}',
         parameters=(
@@ -1704,7 +1704,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.getAlertPluginInstance__get_alert_plugin_instances_id@2.0.0': ApiOperationContract(
         operation_id='AlertPluginInstanceController.getAlertPluginInstance__get_alert_plugin_instances_id',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-plugin-instances/{id}',
         parameters=(
@@ -1714,7 +1714,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.updateAlertPluginInstance@2.0.0': ApiOperationContract(
         operation_id='AlertPluginInstanceController.updateAlertPluginInstance',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='alert-plugin-instances/{id}',
         parameters=(
@@ -1726,7 +1726,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSourceListPaging@2.0.0': ApiOperationContract(
         operation_id='DataSourceController.queryDataSourceListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources',
         parameters=(
@@ -1738,7 +1738,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.createDataSource@2.0.0': ApiOperationContract(
         operation_id='DataSourceController.createDataSource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='datasources',
         parameters=(
@@ -1748,7 +1748,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.connectDataSource@2.0.0': ApiOperationContract(
         operation_id='DataSourceController.connectDataSource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='datasources/connect',
         parameters=(
@@ -1758,7 +1758,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSourceList@2.0.0': ApiOperationContract(
         operation_id='DataSourceController.queryDataSourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/list',
         parameters=(
@@ -1768,7 +1768,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.delete@2.0.0': ApiOperationContract(
         operation_id='DataSourceController.delete',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='datasources/{id}',
         parameters=(
@@ -1778,7 +1778,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSource@2.0.0': ApiOperationContract(
         operation_id='DataSourceController.queryDataSource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/{id}',
         parameters=(
@@ -1788,7 +1788,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.updateDataSource@2.0.0': ApiOperationContract(
         operation_id='DataSourceController.updateDataSource',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='datasources/{id}',
         parameters=(
@@ -1799,7 +1799,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.connectionTest@2.0.0': ApiOperationContract(
         operation_id='DataSourceController.connectionTest',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/{id}/connect-test',
         parameters=(
@@ -1809,7 +1809,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'EnvironmentController.createProject@2.0.0': ApiOperationContract(
         operation_id='EnvironmentController.createProject',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='environment/create',
         parameters=(
@@ -1822,7 +1822,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'EnvironmentController.deleteEnvironment@2.0.0': ApiOperationContract(
         operation_id='EnvironmentController.deleteEnvironment',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='environment/delete',
         parameters=(
@@ -1832,7 +1832,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'EnvironmentController.queryEnvironmentListPaging@2.0.0': ApiOperationContract(
         operation_id='EnvironmentController.queryEnvironmentListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='environment/list-paging',
         parameters=(
@@ -1844,7 +1844,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'EnvironmentController.queryEnvironmentByCode@2.0.0': ApiOperationContract(
         operation_id='EnvironmentController.queryEnvironmentByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='environment/query-by-code',
         parameters=(
@@ -1854,7 +1854,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'EnvironmentController.queryAllEnvironmentList@2.0.0': ApiOperationContract(
         operation_id='EnvironmentController.queryAllEnvironmentList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='environment/query-environment-list',
         parameters=(
@@ -1863,7 +1863,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'EnvironmentController.updateEnvironment@2.0.0': ApiOperationContract(
         operation_id='EnvironmentController.updateEnvironment',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='environment/update',
         parameters=(
@@ -1877,7 +1877,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'EnvironmentController.verifyEnvironment@2.0.0': ApiOperationContract(
         operation_id='EnvironmentController.verifyEnvironment',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='environment/verify-environment',
         parameters=(
@@ -1887,7 +1887,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoggerController.queryLog@2.0.0': ApiOperationContract(
         operation_id='LoggerController.queryLog',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='log/detail',
         parameters=(
@@ -1899,7 +1899,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoggerController.downloadTaskLog@2.0.0': ApiOperationContract(
         operation_id='LoggerController.downloadTaskLog',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='log/download-log',
         parameters=(
@@ -1909,7 +1909,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.queryDatabaseState@2.0.0': ApiOperationContract(
         operation_id='MonitorController.queryDatabaseState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/databases',
         parameters=(
@@ -1918,7 +1918,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.listMaster@2.0.0': ApiOperationContract(
         operation_id='MonitorController.listMaster',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/masters',
         parameters=(
@@ -1927,7 +1927,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.listWorker@2.0.0': ApiOperationContract(
         operation_id='MonitorController.listWorker',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/workers',
         parameters=(
@@ -1936,7 +1936,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryProjectListPaging@2.0.0': ApiOperationContract(
         operation_id='ProjectController.queryProjectListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects',
         parameters=(
@@ -1948,7 +1948,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.createProject@2.0.0': ApiOperationContract(
         operation_id='ProjectController.createProject',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects',
         parameters=(
@@ -1959,7 +1959,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countCommandState@2.0.0': ApiOperationContract(
         operation_id='DataAnalysisController.countCommandState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/command-state-count',
         parameters=(
@@ -1968,7 +1968,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countDefinitionByUser@2.0.0': ApiOperationContract(
         operation_id='DataAnalysisController.countDefinitionByUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/define-user-count',
         parameters=(
@@ -1978,7 +1978,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countProcessInstanceState@2.0.0': ApiOperationContract(
         operation_id='DataAnalysisController.countProcessInstanceState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/process-state-count',
         parameters=(
@@ -1990,7 +1990,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countQueueState@2.0.0': ApiOperationContract(
         operation_id='DataAnalysisController.countQueueState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/queue-count',
         parameters=(
@@ -1999,7 +1999,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countTaskState@2.0.0': ApiOperationContract(
         operation_id='DataAnalysisController.countTaskState',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/task-state-count',
         parameters=(
@@ -2011,7 +2011,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryProjectCreatedAndAuthorizedByUser@2.0.0': ApiOperationContract(
         operation_id='ProjectController.queryProjectCreatedAndAuthorizedByUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/created-and-authed',
         parameters=(
@@ -2020,7 +2020,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryAllProjectList@2.0.0': ApiOperationContract(
         operation_id='ProjectController.queryAllProjectList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/list',
         parameters=(
@@ -2029,7 +2029,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.deleteProject@2.0.0': ApiOperationContract(
         operation_id='ProjectController.deleteProject',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{code}',
         parameters=(
@@ -2039,7 +2039,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryProjectByCode@2.0.0': ApiOperationContract(
         operation_id='ProjectController.queryProjectByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{code}',
         parameters=(
@@ -2049,7 +2049,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.updateProject@2.0.0': ApiOperationContract(
         operation_id='ProjectController.updateProject',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{code}',
         parameters=(
@@ -2062,7 +2062,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.execute@2.0.0': ApiOperationContract(
         operation_id='ExecutorController.execute',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/execute',
         parameters=(
@@ -2074,7 +2074,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.startCheckProcessDefinition@2.0.0': ApiOperationContract(
         operation_id='ExecutorController.startCheckProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/start-check',
         parameters=(
@@ -2084,7 +2084,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.startProcessInstance@2.0.0': ApiOperationContract(
         operation_id='ExecutorController.startProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/start-process-instance',
         parameters=(
@@ -2110,7 +2110,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkFlowLineageController.queryWorkFlowLineage@2.0.0': ApiOperationContract(
         operation_id='WorkFlowLineageController.queryWorkFlowLineage',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/lineages/list',
         parameters=(
@@ -2120,7 +2120,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkFlowLineageController.queryWorkFlowLineageByName@2.0.0': ApiOperationContract(
         operation_id='WorkFlowLineageController.queryWorkFlowLineageByName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/lineages/query-by-name',
         parameters=(
@@ -2131,7 +2131,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkFlowLineageController.queryWorkFlowLineageByCode@2.0.0': ApiOperationContract(
         operation_id='WorkFlowLineageController.queryWorkFlowLineageByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/lineages/{workFlowCode}',
         parameters=(
@@ -2142,7 +2142,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionListPaging@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition',
         parameters=(
@@ -2156,7 +2156,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.createProcessDefinition@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.createProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition',
         parameters=(
@@ -2174,7 +2174,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryAllProcessDefinitionByProjectCode@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryAllProcessDefinitionByProjectCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/all',
         parameters=(
@@ -2184,7 +2184,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.copyProcessDefinition@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.copyProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/batch-copy',
         parameters=(
@@ -2196,7 +2196,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.batchDeleteProcessDefinitionByCodes@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.batchDeleteProcessDefinitionByCodes',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/batch-delete',
         parameters=(
@@ -2207,7 +2207,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.batchExportProcessDefinitionByCodes@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.batchExportProcessDefinitionByCodes',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/batch-export',
         parameters=(
@@ -2218,7 +2218,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.moveProcessDefinition@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.moveProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/batch-move',
         parameters=(
@@ -2230,7 +2230,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.getNodeListMapByDefinitionCodes@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.getNodeListMapByDefinitionCodes',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/batch-query-tasks',
         parameters=(
@@ -2241,7 +2241,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.importProcessDefinition@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.importProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/import',
         parameters=(
@@ -2252,7 +2252,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionList@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/list',
         parameters=(
@@ -2262,7 +2262,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionByName@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionByName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/query-by-name',
         parameters=(
@@ -2273,7 +2273,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionSimpleList@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionSimpleList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/simple-list',
         parameters=(
@@ -2283,7 +2283,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.verifyProcessDefinitionName@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.verifyProcessDefinitionName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/verify-name',
         parameters=(
@@ -2294,7 +2294,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.deleteProcessDefinitionByCode@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.deleteProcessDefinitionByCode',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/process-definition/{code}',
         parameters=(
@@ -2305,7 +2305,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/{code}',
         parameters=(
@@ -2316,7 +2316,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.updateProcessDefinition@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-definition/{code}',
         parameters=(
@@ -2336,7 +2336,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.releaseProcessDefinition@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.releaseProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/{code}/release',
         parameters=(
@@ -2348,7 +2348,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.getNodeListByDefinitionCode@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.getNodeListByDefinitionCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/{code}/tasks',
         parameters=(
@@ -2359,7 +2359,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.queryProcessDefinitionVersions@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionVersions',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/{code}/versions',
         parameters=(
@@ -2372,7 +2372,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.deleteProcessDefinitionVersion@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.deleteProcessDefinitionVersion',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/process-definition/{code}/versions/{version}',
         parameters=(
@@ -2384,7 +2384,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.switchProcessDefinitionVersion@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.switchProcessDefinitionVersion',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/{code}/versions/{version}',
         parameters=(
@@ -2396,7 +2396,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.viewTree@2.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.viewTree',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/{code}/view-tree',
         parameters=(
@@ -2408,7 +2408,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryProcessInstanceList@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryProcessInstanceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances',
         parameters=(
@@ -2427,7 +2427,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.batchDeleteProcessInstanceByIds@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.batchDeleteProcessInstanceByIds',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-instances/batch-delete',
         parameters=(
@@ -2438,7 +2438,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryParentInstanceBySubId@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryParentInstanceBySubId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/query-parent-by-sub',
         parameters=(
@@ -2449,7 +2449,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.querySubProcessInstanceByTaskId@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.querySubProcessInstanceByTaskId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/query-sub-by-parent',
         parameters=(
@@ -2460,7 +2460,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryTopNLongestRunningProcessInstance@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryTopNLongestRunningProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/top-n',
         parameters=(
@@ -2473,7 +2473,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.deleteProcessInstanceById@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.deleteProcessInstanceById',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/process-instances/{id}',
         parameters=(
@@ -2484,7 +2484,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryProcessInstanceById@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryProcessInstanceById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/{id}',
         parameters=(
@@ -2495,7 +2495,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.updateProcessInstance@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.updateProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-instances/{id}',
         parameters=(
@@ -2515,7 +2515,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryTaskListByProcessId@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryTaskListByProcessId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/{id}/tasks',
         parameters=(
@@ -2526,7 +2526,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.viewTree@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.viewTree',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/{id}/view-gantt',
         parameters=(
@@ -2537,7 +2537,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.viewVariables@2.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.viewVariables',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/{id}/view-variables',
         parameters=(
@@ -2547,7 +2547,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.queryScheduleListPaging@2.0.0': ApiOperationContract(
         operation_id='SchedulerController.queryScheduleListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/schedules',
         parameters=(
@@ -2561,7 +2561,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.createSchedule@2.0.0': ApiOperationContract(
         operation_id='SchedulerController.createSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/schedules',
         parameters=(
@@ -2579,7 +2579,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.queryScheduleList@2.0.0': ApiOperationContract(
         operation_id='SchedulerController.queryScheduleList',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/schedules/list',
         parameters=(
@@ -2589,7 +2589,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.previewSchedule@2.0.0': ApiOperationContract(
         operation_id='SchedulerController.previewSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/schedules/preview',
         parameters=(
@@ -2599,7 +2599,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.deleteScheduleById@2.0.0': ApiOperationContract(
         operation_id='SchedulerController.deleteScheduleById',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/schedules/{id}',
         parameters=(
@@ -2610,7 +2610,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateSchedule@2.0.0': ApiOperationContract(
         operation_id='SchedulerController.updateSchedule',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/{id}',
         parameters=(
@@ -2628,7 +2628,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.offline@2.0.0': ApiOperationContract(
         operation_id='SchedulerController.offline',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/schedules/{id}/offline',
         parameters=(
@@ -2639,7 +2639,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.online@2.0.0': ApiOperationContract(
         operation_id='SchedulerController.online',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/schedules/{id}/online',
         parameters=(
@@ -2650,7 +2650,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.queryTaskDefinitionListPaging@2.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.queryTaskDefinitionListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-definition',
         parameters=(
@@ -2665,7 +2665,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.createTaskDefinition@2.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.createTaskDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/task-definition',
         parameters=(
@@ -2676,7 +2676,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.genTaskCodeList@2.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.genTaskCodeList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-definition/gen-task-codes',
         parameters=(
@@ -2686,7 +2686,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.deleteTaskDefinitionByCode@2.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.deleteTaskDefinitionByCode',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/task-definition/{code}',
         parameters=(
@@ -2697,7 +2697,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.queryTaskDefinitionDetail@2.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.queryTaskDefinitionDetail',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-definition/{code}',
         parameters=(
@@ -2708,7 +2708,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.updateTaskDefinition@2.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.updateTaskDefinition',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/task-definition/{code}',
         parameters=(
@@ -2720,7 +2720,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.queryTaskDefinitionVersions@2.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.queryTaskDefinitionVersions',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-definition/{code}/versions',
         parameters=(
@@ -2733,7 +2733,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.deleteTaskDefinitionVersion@2.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.deleteTaskDefinitionVersion',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/task-definition/{code}/versions/{version}',
         parameters=(
@@ -2745,7 +2745,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.switchTaskDefinitionVersion@2.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.switchTaskDefinitionVersion',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-definition/{code}/versions/{version}',
         parameters=(
@@ -2757,7 +2757,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceController.queryTaskListPaging@2.0.0': ApiOperationContract(
         operation_id='TaskInstanceController.queryTaskListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-instances',
         parameters=(
@@ -2778,7 +2778,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceController.forceTaskSuccess@2.0.0': ApiOperationContract(
         operation_id='TaskInstanceController.forceTaskSuccess',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/task-instances/{id}/force-success',
         parameters=(
@@ -2789,7 +2789,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.queryQueueListPaging@2.0.0': ApiOperationContract(
         operation_id='QueueController.queryQueueListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='queues',
         parameters=(
@@ -2801,7 +2801,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.createQueue@2.0.0': ApiOperationContract(
         operation_id='QueueController.createQueue',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='queues',
         parameters=(
@@ -2812,7 +2812,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.queryList@2.0.0': ApiOperationContract(
         operation_id='QueueController.queryList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='queues/list',
         parameters=(
@@ -2821,7 +2821,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.verifyQueue@2.0.0': ApiOperationContract(
         operation_id='QueueController.verifyQueue',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='queues/verify',
         parameters=(
@@ -2832,7 +2832,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueController.updateQueue@2.0.0': ApiOperationContract(
         operation_id='QueueController.updateQueue',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='queues/{id}',
         parameters=(
@@ -2844,7 +2844,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceListPaging@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources',
         parameters=(
@@ -2858,7 +2858,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createResource@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.createResource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources',
         parameters=(
@@ -2873,7 +2873,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.authorizeResourceTree@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.authorizeResourceTree',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/authed-resource-tree',
         parameters=(
@@ -2883,7 +2883,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createDirectory@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.createDirectory',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/directory',
         parameters=(
@@ -2897,7 +2897,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceJarList@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceJarList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/query-by-type',
         parameters=(
@@ -2908,7 +2908,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryUdfFuncListPaging@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.queryUdfFuncListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/udf-func',
         parameters=(
@@ -2920,7 +2920,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.deleteUdfFunc@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.deleteUdfFunc',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='resources/udf-func/{id}',
         parameters=(
@@ -2930,7 +2930,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.deleteResource@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.deleteResource',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='resources/{id}',
         parameters=(
@@ -2940,7 +2940,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResource@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.queryResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/{id}',
         parameters=(
@@ -2952,7 +2952,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateResource@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.updateResource',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='resources/{id}',
         parameters=(
@@ -2966,7 +2966,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.downloadResource@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.downloadResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/{id}/download',
         parameters=(
@@ -2976,7 +2976,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.viewUIUdfFunction@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.viewUIUdfFunction',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/{id}/udf-func',
         parameters=(
@@ -2986,7 +2986,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateResourceContent@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.updateResourceContent',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='resources/{id}/update-content',
         parameters=(
@@ -2997,7 +2997,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.viewResource@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.viewResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/{id}/view',
         parameters=(
@@ -3009,7 +3009,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createUdfFunc@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.createUdfFunc',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/{resourceId}/udf-func',
         parameters=(
@@ -3025,7 +3025,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateUdfFunc@2.0.0': ApiOperationContract(
         operation_id='ResourcesController.updateUdfFunc',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='resources/{resourceId}/udf-func/{id}',
         parameters=(
@@ -3042,7 +3042,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.queryTenantlistPaging@2.0.0': ApiOperationContract(
         operation_id='TenantController.queryTenantlistPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='tenants',
         parameters=(
@@ -3054,7 +3054,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.createTenant@2.0.0': ApiOperationContract(
         operation_id='TenantController.createTenant',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='tenants',
         parameters=(
@@ -3066,7 +3066,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.queryTenantlist@2.0.0': ApiOperationContract(
         operation_id='TenantController.queryTenantlist',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='tenants/list',
         parameters=(
@@ -3075,7 +3075,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.verifyTenantCode@2.0.0': ApiOperationContract(
         operation_id='TenantController.verifyTenantCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='tenants/verify-code',
         parameters=(
@@ -3085,7 +3085,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.deleteTenantById@2.0.0': ApiOperationContract(
         operation_id='TenantController.deleteTenantById',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='tenants/{id}',
         parameters=(
@@ -3095,7 +3095,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.updateTenant@2.0.0': ApiOperationContract(
         operation_id='TenantController.updateTenant',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='tenants/{id}',
         parameters=(
@@ -3108,7 +3108,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UiPluginController.queryUiPluginsByType@2.0.0': ApiOperationContract(
         operation_id='UiPluginController.queryUiPluginsByType',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='ui-plugins/query-by-type',
         parameters=(
@@ -3118,7 +3118,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UiPluginController.queryUiPluginDetailById@2.0.0': ApiOperationContract(
         operation_id='UiPluginController.queryUiPluginDetailById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='ui-plugins/{id}',
         parameters=(
@@ -3128,7 +3128,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.activateUser@2.0.0': ApiOperationContract(
         operation_id='UsersController.activateUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/activate',
         parameters=(
@@ -3138,7 +3138,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.authorizedUser@2.0.0': ApiOperationContract(
         operation_id='UsersController.authorizedUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/authed-user',
         parameters=(
@@ -3148,7 +3148,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.batchActivateUser@2.0.0': ApiOperationContract(
         operation_id='UsersController.batchActivateUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/batch/activate',
         parameters=(
@@ -3158,7 +3158,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.createUser@2.0.0': ApiOperationContract(
         operation_id='UsersController.createUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/create',
         parameters=(
@@ -3174,7 +3174,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.delUserById@2.0.0': ApiOperationContract(
         operation_id='UsersController.delUserById',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/delete',
         parameters=(
@@ -3184,7 +3184,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantDataSource@2.0.0': ApiOperationContract(
         operation_id='UsersController.grantDataSource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-datasource',
         parameters=(
@@ -3195,7 +3195,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantResource@2.0.0': ApiOperationContract(
         operation_id='UsersController.grantResource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-file',
         parameters=(
@@ -3206,7 +3206,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantProject@2.0.0': ApiOperationContract(
         operation_id='UsersController.grantProject',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-project',
         parameters=(
@@ -3217,7 +3217,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantUDFFunc@2.0.0': ApiOperationContract(
         operation_id='UsersController.grantUDFFunc',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-udf-func',
         parameters=(
@@ -3228,7 +3228,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.listAll@2.0.0': ApiOperationContract(
         operation_id='UsersController.listAll',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/list-all',
         parameters=(
@@ -3237,7 +3237,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.queryUserList@2.0.0': ApiOperationContract(
         operation_id='UsersController.queryUserList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/list-paging',
         parameters=(
@@ -3249,7 +3249,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.registerUser@2.0.0': ApiOperationContract(
         operation_id='UsersController.registerUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/register',
         parameters=(
@@ -3262,7 +3262,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.unauthorizedUser@2.0.0': ApiOperationContract(
         operation_id='UsersController.unauthorizedUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/unauth-user',
         parameters=(
@@ -3272,7 +3272,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.updateUser@2.0.0': ApiOperationContract(
         operation_id='UsersController.updateUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/update',
         parameters=(
@@ -3289,7 +3289,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.verifyUserName@2.0.0': ApiOperationContract(
         operation_id='UsersController.verifyUserName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/verify-user-name',
         parameters=(
@@ -3299,7 +3299,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.queryAllWorkerGroupsPaging@2.0.0': ApiOperationContract(
         operation_id='WorkerGroupController.queryAllWorkerGroupsPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='worker-groups',
         parameters=(
@@ -3311,7 +3311,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.saveWorkerGroup@2.0.0': ApiOperationContract(
         operation_id='WorkerGroupController.saveWorkerGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='worker-groups',
         parameters=(
@@ -3323,7 +3323,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.queryAllWorkerGroups@2.0.0': ApiOperationContract(
         operation_id='WorkerGroupController.queryAllWorkerGroups',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='worker-groups/all',
         parameters=(
@@ -3332,7 +3332,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.queryWorkerAddressList@2.0.0': ApiOperationContract(
         operation_id='WorkerGroupController.queryWorkerAddressList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='worker-groups/worker-address-list',
         parameters=(
@@ -3341,7 +3341,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.deleteById@2.0.0': ApiOperationContract(
         operation_id='WorkerGroupController.deleteById',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='worker-groups/{id}',
         parameters=(
@@ -3351,7 +3351,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.listPaging@2.0.1': ApiOperationContract(
         operation_id='AlertPluginInstanceController.listPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-plugin-instances',
         parameters=(
@@ -3363,7 +3363,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.createEmptyProcessDefinition@2.0.1': ApiOperationContract(
         operation_id='ProcessDefinitionController.createEmptyProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/empty',
         parameters=(
@@ -3379,7 +3379,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.updateProcessDefinitionBasicInfo@2.0.1': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinitionBasicInfo',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-definition/{code}/basic-info',
         parameters=(
@@ -3397,7 +3397,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.releaseWorkflowAndSchedule@2.0.1': ApiOperationContract(
         operation_id='ProcessDefinitionController.releaseWorkflowAndSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/{code}/release-workflow',
         parameters=(
@@ -3409,7 +3409,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.createProcessTaskRelation@2.0.1': ApiOperationContract(
         operation_id='ProcessTaskRelationController.createProcessTaskRelation',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-task-relation',
         parameters=(
@@ -3422,7 +3422,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.moveTaskProcessRelation@2.0.1': ApiOperationContract(
         operation_id='ProcessTaskRelationController.moveTaskProcessRelation',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-task-relation/move',
         parameters=(
@@ -3435,7 +3435,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.deleteEdge@2.0.1': ApiOperationContract(
         operation_id='ProcessTaskRelationController.deleteEdge',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/process-task-relation/{processDefinitionCode}/{preTaskCode}/{postTaskCode}',
         parameters=(
@@ -3448,7 +3448,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.deleteTaskProcessRelation@2.0.1': ApiOperationContract(
         operation_id='ProcessTaskRelationController.deleteTaskProcessRelation',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/process-task-relation/{taskCode}',
         parameters=(
@@ -3460,7 +3460,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.deleteDownstreamRelation@2.0.1': ApiOperationContract(
         operation_id='ProcessTaskRelationController.deleteDownstreamRelation',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/process-task-relation/{taskCode}/downstream',
         parameters=(
@@ -3472,7 +3472,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.queryDownstreamRelation@2.0.1': ApiOperationContract(
         operation_id='ProcessTaskRelationController.queryDownstreamRelation',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-task-relation/{taskCode}/downstream',
         parameters=(
@@ -3483,7 +3483,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.deleteUpstreamRelation@2.0.1': ApiOperationContract(
         operation_id='ProcessTaskRelationController.deleteUpstreamRelation',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/process-task-relation/{taskCode}/upstream',
         parameters=(
@@ -3495,7 +3495,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.queryUpstreamRelation@2.0.1': ApiOperationContract(
         operation_id='ProcessTaskRelationController.queryUpstreamRelation',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-task-relation/{taskCode}/upstream',
         parameters=(
@@ -3506,7 +3506,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateScheduleByProcessDefinitionCode@2.0.1': ApiOperationContract(
         operation_id='SchedulerController.updateScheduleByProcessDefinitionCode',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/update/{code}',
         parameters=(
@@ -3524,7 +3524,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateSchedule@2.0.1': ApiOperationContract(
         operation_id='SchedulerController.updateSchedule',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/{id}',
         parameters=(
@@ -3542,7 +3542,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.releaseTaskDefinition@2.0.1': ApiOperationContract(
         operation_id='TaskDefinitionController.releaseTaskDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/task-definition/{code}/release',
         parameters=(
@@ -3554,7 +3554,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AccessTokenController.createToken@2.0.2': ApiOperationContract(
         operation_id='AccessTokenController.createToken',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='access-tokens',
         parameters=(
@@ -3566,7 +3566,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AccessTokenController.queryAccessTokenByUser@2.0.2': ApiOperationContract(
         operation_id='AccessTokenController.queryAccessTokenByUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='access-tokens/user/{userId}',
         parameters=(
@@ -3576,7 +3576,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AccessTokenController.updateToken@2.0.2': ApiOperationContract(
         operation_id='AccessTokenController.updateToken',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='access-tokens/{id}',
         parameters=(
@@ -3589,7 +3589,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoggerController.queryLog__get_log_detail@2.0.2': ApiOperationContract(
         operation_id='LoggerController.queryLog__get_log_detail',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='log/detail',
         parameters=(
@@ -3601,7 +3601,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoggerController.downloadTaskLog__get_log_download_log@2.0.2': ApiOperationContract(
         operation_id='LoggerController.downloadTaskLog__get_log_download_log',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='log/download-log',
         parameters=(
@@ -3611,7 +3611,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoggerController.queryLog__get_log_projectCode_detail@2.0.2': ApiOperationContract(
         operation_id='LoggerController.queryLog__get_log_projectCode_detail',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='log/{projectCode}/detail',
         parameters=(
@@ -3624,7 +3624,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoggerController.downloadTaskLog__get_log_projectCode_download_log@2.0.2': ApiOperationContract(
         operation_id='LoggerController.downloadTaskLog__get_log_projectCode_download_log',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='log/{projectCode}/download-log',
         parameters=(
@@ -3635,7 +3635,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryAuthorizedUser@2.0.2': ApiOperationContract(
         operation_id='ProjectController.queryAuthorizedUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/authed-user',
         parameters=(
@@ -3645,7 +3645,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.viewVariables@2.0.2': ApiOperationContract(
         operation_id='ProcessInstanceController.viewVariables',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/{id}/view-variables',
         parameters=(
@@ -3656,7 +3656,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantProjectByCode@2.0.2': ApiOperationContract(
         operation_id='UsersController.grantProjectByCode',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-project-by-code',
         parameters=(
@@ -3667,7 +3667,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.revokeProject@2.0.2': ApiOperationContract(
         operation_id='UsersController.revokeProject',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/revoke-project',
         parameters=(
@@ -3678,7 +3678,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.batchStartProcessInstance@2.0.3': ApiOperationContract(
         operation_id='ExecutorController.batchStartProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/batch-start-process-instance',
         parameters=(
@@ -3704,7 +3704,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.updateProcessInstance@2.0.3': ApiOperationContract(
         operation_id='ProcessInstanceController.updateProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-instances/{id}',
         parameters=(
@@ -3723,7 +3723,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryProcessInstanceList@2.0.6': ApiOperationContract(
         operation_id='ProcessInstanceController.queryProcessInstanceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances',
         parameters=(
@@ -3742,7 +3742,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AccessTokenController.updateToken@3.0.0': ApiOperationContract(
         operation_id='AccessTokenController.updateToken',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='access-tokens/{id}',
         parameters=(
@@ -3755,7 +3755,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataQualityController.getDatasourceOptionsById@3.0.0': ApiOperationContract(
         operation_id='DataQualityController.getDatasourceOptionsById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='data-quality/getDatasourceOptionsById',
         parameters=(
@@ -3765,7 +3765,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataQualityController.getRuleFormCreateJsonById@3.0.0': ApiOperationContract(
         operation_id='DataQualityController.getRuleFormCreateJsonById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='data-quality/getRuleFormCreateJson',
         parameters=(
@@ -3775,7 +3775,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataQualityController.queryExecuteResultListPaging@3.0.0': ApiOperationContract(
         operation_id='DataQualityController.queryExecuteResultListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='data-quality/result/page',
         parameters=(
@@ -3791,7 +3791,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataQualityController.queryRuleListPaging@3.0.0': ApiOperationContract(
         operation_id='DataQualityController.queryRuleListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='data-quality/rule/page',
         parameters=(
@@ -3806,7 +3806,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataQualityController.queryRuleList@3.0.0': ApiOperationContract(
         operation_id='DataQualityController.queryRuleList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='data-quality/ruleList',
         parameters=(
@@ -3815,7 +3815,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSourceList@3.0.0': ApiOperationContract(
         operation_id='DataSourceController.queryDataSourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/list',
         parameters=(
@@ -3825,7 +3825,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.getTableColumns@3.0.0': ApiOperationContract(
         operation_id='DataSourceController.getTableColumns',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/tableColumns',
         parameters=(
@@ -3836,7 +3836,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.getTables@3.0.0': ApiOperationContract(
         operation_id='DataSourceController.getTables',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/tables',
         parameters=(
@@ -3846,7 +3846,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.queryProjectListPaging@3.0.0': ApiOperationContract(
         operation_id='K8sNamespaceController.queryProjectListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='k8s-namespace',
         parameters=(
@@ -3858,7 +3858,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.createNamespace@3.0.0': ApiOperationContract(
         operation_id='K8sNamespaceController.createNamespace',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='k8s-namespace',
         parameters=(
@@ -3871,7 +3871,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.queryAuthorizedNamespace@3.0.0': ApiOperationContract(
         operation_id='K8sNamespaceController.queryAuthorizedNamespace',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='k8s-namespace/authed-namespace',
         parameters=(
@@ -3881,7 +3881,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.queryAvailableNamespaceList@3.0.0': ApiOperationContract(
         operation_id='K8sNamespaceController.queryAvailableNamespaceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='k8s-namespace/available-list',
         parameters=(
@@ -3890,7 +3890,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.delNamespaceById@3.0.0': ApiOperationContract(
         operation_id='K8sNamespaceController.delNamespaceById',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='k8s-namespace/delete',
         parameters=(
@@ -3900,7 +3900,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.queryUnauthorizedNamespace@3.0.0': ApiOperationContract(
         operation_id='K8sNamespaceController.queryUnauthorizedNamespace',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='k8s-namespace/unauth-namespace',
         parameters=(
@@ -3910,7 +3910,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.verifyNamespace@3.0.0': ApiOperationContract(
         operation_id='K8sNamespaceController.verifyNamespace',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='k8s-namespace/verify',
         parameters=(
@@ -3921,7 +3921,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.updateNamespace@3.0.0': ApiOperationContract(
         operation_id='K8sNamespaceController.updateNamespace',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='k8s-namespace/{id}',
         parameters=(
@@ -3935,7 +3935,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AuditLogController.queryAuditLogListPaging@3.0.0': ApiOperationContract(
         operation_id='AuditLogController.queryAuditLogListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/audit/audit-log-list',
         parameters=(
@@ -3951,7 +3951,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.batchStartProcessInstance@3.0.0': ApiOperationContract(
         operation_id='ExecutorController.batchStartProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/batch-start-process-instance',
         parameters=(
@@ -3978,7 +3978,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.queryExecutingWorkflow@3.0.0': ApiOperationContract(
         operation_id='ExecutorController.queryExecutingWorkflow',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/executors/query-executing-workflow',
         parameters=(
@@ -3988,7 +3988,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.startProcessInstance@3.0.0': ApiOperationContract(
         operation_id='ExecutorController.startProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/start-process-instance',
         parameters=(
@@ -4015,7 +4015,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.createProcessDefinition@3.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.createProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition',
         parameters=(
@@ -4034,7 +4034,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.createEmptyProcessDefinition@3.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.createEmptyProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/empty',
         parameters=(
@@ -4051,7 +4051,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.getProcessListByProjectCodes@3.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.getProcessListByProjectCodes',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/query-process-definition-list',
         parameters=(
@@ -4061,7 +4061,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.getTaskListByProcessDefinitionCode@3.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.getTaskListByProcessDefinitionCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/query-task-definition-list',
         parameters=(
@@ -4072,7 +4072,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.updateProcessDefinition@3.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-definition/{code}',
         parameters=(
@@ -4093,7 +4093,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.updateProcessDefinitionBasicInfo@3.0.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinitionBasicInfo',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-definition/{code}/basic-info',
         parameters=(
@@ -4112,7 +4112,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryProcessInstanceList@3.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryProcessInstanceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances',
         parameters=(
@@ -4131,7 +4131,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.batchDeleteProcessInstanceByIds@3.0.0': ApiOperationContract(
         operation_id='ProcessInstanceController.batchDeleteProcessInstanceByIds',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-instances/batch-delete',
         parameters=(
@@ -4142,7 +4142,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.deleteScheduleById@3.0.0': ApiOperationContract(
         operation_id='SchedulerController.deleteScheduleById',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/schedules/{id}',
         parameters=(
@@ -4153,7 +4153,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.queryTaskDefinitionListPaging@3.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.queryTaskDefinitionListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-definition',
         parameters=(
@@ -4168,7 +4168,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.createTaskBindsWorkFlow@3.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.createTaskBindsWorkFlow',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/task-definition/save-single',
         parameters=(
@@ -4181,7 +4181,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.updateTaskWithUpstream@3.0.0': ApiOperationContract(
         operation_id='TaskDefinitionController.updateTaskWithUpstream',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/task-definition/{code}/with-upstream',
         parameters=(
@@ -4194,7 +4194,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceController.queryTaskListPaging@3.0.0': ApiOperationContract(
         operation_id='TaskInstanceController.queryTaskListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-instances',
         parameters=(
@@ -4215,7 +4215,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceJarList@3.0.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceJarList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/query-by-type',
         parameters=(
@@ -4226,7 +4226,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceById@3.0.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/{id}/query',
         parameters=(
@@ -4236,7 +4236,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.closeTaskGroup@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.closeTaskGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/close-task-group',
         parameters=(
@@ -4246,7 +4246,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.createTaskGroup@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.createTaskGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/create',
         parameters=(
@@ -4259,7 +4259,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.forceStart@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.forceStart',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/forceStart',
         parameters=(
@@ -4269,7 +4269,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.queryAllTaskGroup@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.queryAllTaskGroup',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='task-group/list-paging',
         parameters=(
@@ -4282,7 +4282,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.modifyPriority@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.modifyPriority',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/modifyPriority',
         parameters=(
@@ -4293,7 +4293,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.queryTasksByGroupId@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.queryTasksByGroupId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='task-group/query-list-by-group-id',
         parameters=(
@@ -4308,7 +4308,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.queryTaskGroupByCode@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.queryTaskGroupByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='task-group/query-list-by-projectCode',
         parameters=(
@@ -4320,7 +4320,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.queryTaskGroupByStatus@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.queryTaskGroupByStatus',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='task-group/query-list-by-status',
         parameters=(
@@ -4332,7 +4332,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.startTaskGroup@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.startTaskGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/start-task-group',
         parameters=(
@@ -4342,7 +4342,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.updateTaskGroup@3.0.0': ApiOperationContract(
         operation_id='TaskGroupController.updateTaskGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/update',
         parameters=(
@@ -4355,7 +4355,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.grantNamespace@3.0.0': ApiOperationContract(
         operation_id='UsersController.grantNamespace',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-namespace',
         parameters=(
@@ -4366,7 +4366,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.listAll@3.0.0': ApiOperationContract(
         operation_id='UsersController.listAll',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/list-all',
         parameters=(
@@ -4375,7 +4375,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.updateUser@3.0.0': ApiOperationContract(
         operation_id='UsersController.updateUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/update',
         parameters=(
@@ -4393,7 +4393,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.verifyProcessDefinitionName@3.0.1': ApiOperationContract(
         operation_id='ProcessDefinitionController.verifyProcessDefinitionName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/verify-name',
         parameters=(
@@ -4405,7 +4405,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateSchedule@3.0.1': ApiOperationContract(
         operation_id='SchedulerController.updateSchedule',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/{id}',
         parameters=(
@@ -4423,7 +4423,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.startProcessInstance@3.0.2': ApiOperationContract(
         operation_id='ExecutorController.startProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/start-process-instance',
         parameters=(
@@ -4450,7 +4450,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkFlowLineageController.verifyTaskCanDelete@3.0.2': ApiOperationContract(
         operation_id='WorkFlowLineageController.verifyTaskCanDelete',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/lineages/tasks/verify-delete',
         parameters=(
@@ -4460,9 +4460,207 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'AccessTokenController.queryAccessTokenList@3.1.0': ApiOperationContract(
+        operation_id='AccessTokenController.queryAccessTokenList',
+        document_group='v1',
+        method='GET',
+        path='access-tokens',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AccessTokenController.createToken@3.1.0': ApiOperationContract(
+        operation_id='AccessTokenController.createToken',
+        document_group='v1',
+        method='POST',
+        path='access-tokens',
+        parameters=(
+            PARAMETER_CONTRACTS['request:expireTime@AccessTokenController.createToken@2.0.2'],
+            PARAMETER_CONTRACTS['request:token@AccessTokenController.createToken@2.0.2'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AccessTokenController.queryAccessTokenByUser@3.1.0': ApiOperationContract(
+        operation_id='AccessTokenController.queryAccessTokenByUser',
+        document_group='v1',
+        method='GET',
+        path='access-tokens/user/{userId}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:userId@AccessTokenController.queryAccessTokenByUser@2.0.2'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AccessTokenController.updateToken@3.1.0': ApiOperationContract(
+        operation_id='AccessTokenController.updateToken',
+        document_group='v1',
+        method='PUT',
+        path='access-tokens/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['request:expireTime@AccessTokenController.createToken@2.0.2'],
+            PARAMETER_CONTRACTS['request:token@AccessTokenController.createToken@2.0.2'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertGroupController.listPaging@3.1.0': ApiOperationContract(
+        operation_id='AlertGroupController.listPaging',
+        document_group='v1',
+        method='GET',
+        path='alert-groups',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertGroupController.createAlertgroup@3.1.0': ApiOperationContract(
+        operation_id='AlertGroupController.createAlertgroup',
+        document_group='v1',
+        method='POST',
+        path='alert-groups',
+        parameters=(
+            PARAMETER_CONTRACTS['request:alertInstanceIds@AlertGroupController.createAlertgroup@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:groupName@AlertGroupController.createAlertgroup@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertGroupController.list@3.1.0': ApiOperationContract(
+        operation_id='AlertGroupController.list',
+        document_group='v1',
+        method='GET',
+        path='alert-groups/list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertGroupController.queryAlertGroupById@3.1.0': ApiOperationContract(
+        operation_id='AlertGroupController.queryAlertGroupById',
+        document_group='v1',
+        method='POST',
+        path='alert-groups/query',
+        parameters=(
+            PARAMETER_CONTRACTS['request:id@UsersController.delUserById@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertGroupController.verifyGroupName@3.1.0': ApiOperationContract(
+        operation_id='AlertGroupController.verifyGroupName',
+        document_group='v1',
+        method='GET',
+        path='alert-groups/verify-name',
+        parameters=(
+            PARAMETER_CONTRACTS['request:groupName@AlertGroupController.createAlertgroup@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertGroupController.delAlertgroupById@3.1.0': ApiOperationContract(
+        operation_id='AlertGroupController.delAlertgroupById',
+        document_group='v1',
+        method='DELETE',
+        path='alert-groups/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertGroupController.updateAlertgroup@3.1.0': ApiOperationContract(
+        operation_id='AlertGroupController.updateAlertgroup',
+        document_group='v1',
+        method='PUT',
+        path='alert-groups/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['request:alertInstanceIds@AlertGroupController.createAlertgroup@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:groupName@AlertGroupController.createAlertgroup@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertPluginInstanceController.listPaging@3.1.0': ApiOperationContract(
+        operation_id='AlertPluginInstanceController.listPaging',
+        document_group='v1',
+        method='GET',
+        path='alert-plugin-instances',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertPluginInstanceController.createAlertPluginInstance@3.1.0': ApiOperationContract(
+        operation_id='AlertPluginInstanceController.createAlertPluginInstance',
+        document_group='v1',
+        method='POST',
+        path='alert-plugin-instances',
+        parameters=(
+            PARAMETER_CONTRACTS['request:instanceName@AlertPluginInstanceController.createAlertPluginInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:pluginDefineId@AlertPluginInstanceController.createAlertPluginInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:pluginInstanceParams@AlertPluginInstanceController.createAlertPluginInstance@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertPluginInstanceController.getAlertPluginInstance__get_alert_plugin_instances_list@3.1.0': ApiOperationContract(
+        operation_id='AlertPluginInstanceController.getAlertPluginInstance__get_alert_plugin_instances_list',
+        document_group='v1',
+        method='GET',
+        path='alert-plugin-instances/list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertPluginInstanceController.verifyGroupName@3.1.0': ApiOperationContract(
+        operation_id='AlertPluginInstanceController.verifyGroupName',
+        document_group='v1',
+        method='GET',
+        path='alert-plugin-instances/verify-name',
+        parameters=(
+            PARAMETER_CONTRACTS['request:alertInstanceName@AlertPluginInstanceController.verifyGroupName@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertPluginInstanceController.deleteAlertPluginInstance@3.1.0': ApiOperationContract(
+        operation_id='AlertPluginInstanceController.deleteAlertPluginInstance',
+        document_group='v1',
+        method='DELETE',
+        path='alert-plugin-instances/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertPluginInstanceController.getAlertPluginInstance__get_alert_plugin_instances_id@3.1.0': ApiOperationContract(
+        operation_id='AlertPluginInstanceController.getAlertPluginInstance__get_alert_plugin_instances_id',
+        document_group='v1',
+        method='GET',
+        path='alert-plugin-instances/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AlertPluginInstanceController.updateAlertPluginInstance@3.1.0': ApiOperationContract(
+        operation_id='AlertPluginInstanceController.updateAlertPluginInstance',
+        document_group='v1',
+        method='PUT',
+        path='alert-plugin-instances/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['request:instanceName@AlertPluginInstanceController.createAlertPluginInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:pluginInstanceParams@AlertPluginInstanceController.createAlertPluginInstance@2.0.0'],
+        ),
+        ignored_document_parameters=('alertPluginInstanceId',),
+    ),
     'ClusterController.createProject@3.1.0': ApiOperationContract(
         operation_id='ClusterController.createProject',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='cluster/create',
         parameters=(
@@ -4474,7 +4672,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ClusterController.deleteCluster@3.1.0': ApiOperationContract(
         operation_id='ClusterController.deleteCluster',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='cluster/delete',
         parameters=(
@@ -4484,7 +4682,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ClusterController.queryClusterListPaging@3.1.0': ApiOperationContract(
         operation_id='ClusterController.queryClusterListPaging',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='cluster/list-paging',
         parameters=(
@@ -4496,7 +4694,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ClusterController.queryClusterByCode@3.1.0': ApiOperationContract(
         operation_id='ClusterController.queryClusterByCode',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='cluster/query-by-code',
         parameters=(
@@ -4506,7 +4704,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ClusterController.queryAllClusterList@3.1.0': ApiOperationContract(
         operation_id='ClusterController.queryAllClusterList',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='cluster/query-cluster-list',
         parameters=(
@@ -4515,7 +4713,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ClusterController.updateCluster@3.1.0': ApiOperationContract(
         operation_id='ClusterController.updateCluster',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='cluster/update',
         parameters=(
@@ -4528,7 +4726,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ClusterController.verifyCluster@3.1.0': ApiOperationContract(
         operation_id='ClusterController.verifyCluster',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='cluster/verify-cluster',
         parameters=(
@@ -4536,9 +4734,81 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'DataQualityController.getDatasourceOptionsById@3.1.0': ApiOperationContract(
+        operation_id='DataQualityController.getDatasourceOptionsById',
+        document_group='v1',
+        method='GET',
+        path='data-quality/getDatasourceOptionsById',
+        parameters=(
+            PARAMETER_CONTRACTS['request:datasourceId@DataQualityController.getDatasourceOptionsById@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataQualityController.getRuleFormCreateJsonById@3.1.0': ApiOperationContract(
+        operation_id='DataQualityController.getRuleFormCreateJsonById',
+        document_group='v1',
+        method='GET',
+        path='data-quality/getRuleFormCreateJson',
+        parameters=(
+            PARAMETER_CONTRACTS['request:ruleId@DataQualityController.getRuleFormCreateJsonById@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataQualityController.queryExecuteResultListPaging@3.1.0': ApiOperationContract(
+        operation_id='DataQualityController.queryExecuteResultListPaging',
+        document_group='v1',
+        method='GET',
+        path='data-quality/result/page',
+        parameters=(
+            PARAMETER_CONTRACTS['request:endDate@DataAnalysisController.countCommandState@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageNo@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:ruleType@DataQualityController.queryExecuteResultListPaging@3.0.0'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:startDate@DataAnalysisController.countCommandState@1.3.9'],
+            PARAMETER_CONTRACTS['request:state@UsersController.createUser@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataQualityController.queryRuleListPaging@3.1.0': ApiOperationContract(
+        operation_id='DataQualityController.queryRuleListPaging',
+        document_group='v1',
+        method='GET',
+        path='data-quality/rule/page',
+        parameters=(
+            PARAMETER_CONTRACTS['request:endDate@DataAnalysisController.countCommandState@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageNo@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:ruleType@DataQualityController.queryExecuteResultListPaging@3.0.0'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:startDate@DataAnalysisController.countCommandState@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataQualityController.queryRuleList@3.1.0': ApiOperationContract(
+        operation_id='DataQualityController.queryRuleList',
+        document_group='v1',
+        method='GET',
+        path='data-quality/ruleList',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataSourceController.queryDataSourceListPaging@3.1.0': ApiOperationContract(
+        operation_id='DataSourceController.queryDataSourceListPaging',
+        document_group='v1',
+        method='GET',
+        path='datasources',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'DataSourceController.createDataSource@3.1.0': ApiOperationContract(
         operation_id='DataSourceController.createDataSource',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='datasources',
         parameters=(
@@ -4546,9 +4816,19 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'DataSourceController.authedDatasource@3.1.0': ApiOperationContract(
+        operation_id='DataSourceController.authedDatasource',
+        document_group='v1',
+        method='GET',
+        path='datasources/authed-datasource',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'DataSourceController.connectDataSource@3.1.0': ApiOperationContract(
         operation_id='DataSourceController.connectDataSource',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='datasources/connect',
         parameters=(
@@ -4556,9 +4836,18 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'DataSourceController.getKerberosStartupState@3.1.0': ApiOperationContract(
+        operation_id='DataSourceController.getKerberosStartupState',
+        document_group='v1',
+        method='GET',
+        path='datasources/kerberos-startup-state',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
     'DataSourceController.queryDataSourceList@3.1.0': ApiOperationContract(
         operation_id='DataSourceController.queryDataSourceList',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='datasources/list',
         parameters=(
@@ -4566,10 +4855,61 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'DataSourceController.getTableColumns@3.1.0': ApiOperationContract(
+        operation_id='DataSourceController.getTableColumns',
+        document_group='v1',
+        method='GET',
+        path='datasources/tableColumns',
+        parameters=(
+            PARAMETER_CONTRACTS['request:datasourceId@DataSourceController.getTableColumns@3.0.0'],
+            PARAMETER_CONTRACTS['request:tableName@DataSourceController.getTableColumns@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataSourceController.getTables@3.1.0': ApiOperationContract(
+        operation_id='DataSourceController.getTables',
+        document_group='v1',
+        method='GET',
+        path='datasources/tables',
+        parameters=(
+            PARAMETER_CONTRACTS['request:datasourceId@DataSourceController.getTableColumns@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataSourceController.unauthDatasource@3.1.0': ApiOperationContract(
+        operation_id='DataSourceController.unauthDatasource',
+        document_group='v1',
+        method='GET',
+        path='datasources/unauth-datasource',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataSourceController.verifyDataSourceName@3.1.0': ApiOperationContract(
+        operation_id='DataSourceController.verifyDataSourceName',
+        document_group='v1',
+        method='GET',
+        path='datasources/verify-name',
+        parameters=(
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'DataSourceController.deleteDataSource@3.1.0': ApiOperationContract(
         operation_id='DataSourceController.deleteDataSource',
-        api_group='v1',
+        document_group='v1',
         method='DELETE',
+        path='datasources/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataSourceController.queryDataSource@3.1.0': ApiOperationContract(
+        operation_id='DataSourceController.queryDataSource',
+        document_group='v1',
+        method='GET',
         path='datasources/{id}',
         parameters=(
             PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
@@ -4578,7 +4918,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.updateDataSource@3.1.0': ApiOperationContract(
         operation_id='DataSourceController.updateDataSource',
-        api_group='v1',
+        document_group='v1',
         method='PUT',
         path='datasources/{id}',
         parameters=(
@@ -4587,9 +4927,19 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=('dataSourceParam',),
     ),
+    'DataSourceController.connectionTest@3.1.0': ApiOperationContract(
+        operation_id='DataSourceController.connectionTest',
+        document_group='v1',
+        method='GET',
+        path='datasources/{id}/connect-test',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'EnvironmentController.createEnvironment@3.1.0': ApiOperationContract(
         operation_id='EnvironmentController.createEnvironment',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='environment/create',
         parameters=(
@@ -4600,9 +4950,74 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'EnvironmentController.deleteEnvironment@3.1.0': ApiOperationContract(
+        operation_id='EnvironmentController.deleteEnvironment',
+        document_group='v1',
+        method='POST',
+        path='environment/delete',
+        parameters=(
+            PARAMETER_CONTRACTS['request:environmentCode@EnvironmentController.deleteEnvironment@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'EnvironmentController.queryEnvironmentListPaging@3.1.0': ApiOperationContract(
+        operation_id='EnvironmentController.queryEnvironmentListPaging',
+        document_group='v1',
+        method='GET',
+        path='environment/list-paging',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'EnvironmentController.queryEnvironmentByCode@3.1.0': ApiOperationContract(
+        operation_id='EnvironmentController.queryEnvironmentByCode',
+        document_group='v1',
+        method='GET',
+        path='environment/query-by-code',
+        parameters=(
+            PARAMETER_CONTRACTS['request:environmentCode@EnvironmentController.deleteEnvironment@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'EnvironmentController.queryAllEnvironmentList@3.1.0': ApiOperationContract(
+        operation_id='EnvironmentController.queryAllEnvironmentList',
+        document_group='v1',
+        method='GET',
+        path='environment/query-environment-list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'EnvironmentController.updateEnvironment@3.1.0': ApiOperationContract(
+        operation_id='EnvironmentController.updateEnvironment',
+        document_group='v1',
+        method='POST',
+        path='environment/update',
+        parameters=(
+            PARAMETER_CONTRACTS['request:code@EnvironmentController.updateEnvironment@2.0.0'],
+            PARAMETER_CONTRACTS['request:config@EnvironmentController.createProject@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:workerGroups@EnvironmentController.createProject@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'EnvironmentController.verifyEnvironment@3.1.0': ApiOperationContract(
+        operation_id='EnvironmentController.verifyEnvironment',
+        document_group='v1',
+        method='POST',
+        path='environment/verify-environment',
+        parameters=(
+            PARAMETER_CONTRACTS['request:environmentName@EnvironmentController.verifyEnvironment@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'FavTaskController.listTaskType@3.1.0': ApiOperationContract(
         operation_id='FavTaskController.listTaskType',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='favourite/taskTypes',
         parameters=(
@@ -4611,7 +5026,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'FavTaskController.deleteFavTask@3.1.0': ApiOperationContract(
         operation_id='FavTaskController.deleteFavTask',
-        api_group='v1',
+        document_group='v1',
         method='DELETE',
         path='favourite/{taskName}',
         parameters=(
@@ -4621,7 +5036,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'FavTaskController.addFavTask@3.1.0': ApiOperationContract(
         operation_id='FavTaskController.addFavTask',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='favourite/{taskName}',
         parameters=(
@@ -4631,7 +5046,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.queryNamespaceListPaging@3.1.0': ApiOperationContract(
         operation_id='K8sNamespaceController.queryNamespaceListPaging',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='k8s-namespace',
         parameters=(
@@ -4643,7 +5058,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.createNamespace@3.1.0': ApiOperationContract(
         operation_id='K8sNamespaceController.createNamespace',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='k8s-namespace',
         parameters=(
@@ -4654,9 +5069,48 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=('limits_cpu', 'limits_memory'),
     ),
+    'K8sNamespaceController.queryAuthorizedNamespace@3.1.0': ApiOperationContract(
+        operation_id='K8sNamespaceController.queryAuthorizedNamespace',
+        document_group='v1',
+        method='GET',
+        path='k8s-namespace/authed-namespace',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@ProjectController.queryAuthorizedProject@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'K8sNamespaceController.queryAvailableNamespaceList@3.1.0': ApiOperationContract(
+        operation_id='K8sNamespaceController.queryAvailableNamespaceList',
+        document_group='v1',
+        method='GET',
+        path='k8s-namespace/available-list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'K8sNamespaceController.delNamespaceById@3.1.0': ApiOperationContract(
+        operation_id='K8sNamespaceController.delNamespaceById',
+        document_group='v1',
+        method='POST',
+        path='k8s-namespace/delete',
+        parameters=(
+            PARAMETER_CONTRACTS['request:id@AlertGroupController.delAlertgroupById@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'K8sNamespaceController.queryUnauthorizedNamespace@3.1.0': ApiOperationContract(
+        operation_id='K8sNamespaceController.queryUnauthorizedNamespace',
+        document_group='v1',
+        method='GET',
+        path='k8s-namespace/unauth-namespace',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@ProjectController.queryAuthorizedProject@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'K8sNamespaceController.verifyNamespace@3.1.0': ApiOperationContract(
         operation_id='K8sNamespaceController.verifyNamespace',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='k8s-namespace/verify',
         parameters=(
@@ -4665,9 +5119,45 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'K8sNamespaceController.updateNamespace@3.1.0': ApiOperationContract(
+        operation_id='K8sNamespaceController.updateNamespace',
+        document_group='v1',
+        method='PUT',
+        path='k8s-namespace/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['request:limitsCpu@K8sNamespaceController.createNamespace@3.0.0'],
+            PARAMETER_CONTRACTS['request:limitsMemory@K8sNamespaceController.createNamespace@3.0.0'],
+            PARAMETER_CONTRACTS['request:tag@K8sNamespaceController.updateNamespace@3.0.0'],
+            PARAMETER_CONTRACTS['request:userName@K8sNamespaceController.updateNamespace@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'LoggerController.queryLog__get_log_detail@3.1.0': ApiOperationContract(
+        operation_id='LoggerController.queryLog__get_log_detail',
+        document_group='v1',
+        method='GET',
+        path='log/detail',
+        parameters=(
+            PARAMETER_CONTRACTS['request:limit@ProcessDefinitionController.viewTree@1.3.9'],
+            PARAMETER_CONTRACTS['request:skipLineNum@ResourcesController.viewResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:taskInstanceId@LoggerController.queryLog@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'LoggerController.downloadTaskLog__get_log_download_log@3.1.0': ApiOperationContract(
+        operation_id='LoggerController.downloadTaskLog__get_log_download_log',
+        document_group='v1',
+        method='GET',
+        path='log/download-log',
+        parameters=(
+            PARAMETER_CONTRACTS['request:taskInstanceId@LoggerController.queryLog@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'LoggerController.queryLog__get_log_projectCode_detail@3.1.0': ApiOperationContract(
         operation_id='LoggerController.queryLog__get_log_projectCode_detail',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='log/{projectCode}/detail',
         parameters=(
@@ -4680,7 +5170,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoggerController.downloadTaskLog__get_log_projectCode_download_log@3.1.0': ApiOperationContract(
         operation_id='LoggerController.downloadTaskLog__get_log_projectCode_download_log',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='log/{projectCode}/download-log',
         parameters=(
@@ -4689,18 +5179,228 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'LoginController.login@3.1.0': ApiOperationContract(
+        operation_id='LoginController.login',
+        document_group='v1',
+        method='POST',
+        path='login',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userName@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:userPassword@LoginController.login@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'MonitorController.queryDatabaseState@3.1.0': ApiOperationContract(
+        operation_id='MonitorController.queryDatabaseState',
+        document_group='v1',
+        method='GET',
+        path='monitor/databases',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'MonitorController.listMaster@3.1.0': ApiOperationContract(
+        operation_id='MonitorController.listMaster',
+        document_group='v1',
+        method='GET',
+        path='monitor/masters',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'MonitorController.listWorker@3.1.0': ApiOperationContract(
+        operation_id='MonitorController.listWorker',
+        document_group='v1',
+        method='GET',
+        path='monitor/workers',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProjectController.queryProjectListPaging@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.queryProjectListPaging',
+        document_group='v1',
+        method='GET',
+        path='projects',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProjectController.createProject@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.createProject',
+        document_group='v1',
+        method='POST',
+        path='projects',
+        parameters=(
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:projectName@ProjectController.createProject@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataAnalysisController.countCommandState@3.1.0': ApiOperationContract(
+        operation_id='DataAnalysisController.countCommandState',
+        document_group='v1',
+        method='GET',
+        path='projects/analysis/command-state-count',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataAnalysisController.countDefinitionByUser@3.1.0': ApiOperationContract(
+        operation_id='DataAnalysisController.countDefinitionByUser',
+        document_group='v1',
+        method='GET',
+        path='projects/analysis/define-user-count',
+        parameters=(
+            PARAMETER_CONTRACTS['request:projectCode@DataAnalysisController.countDefinitionByUser@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataAnalysisController.countProcessInstanceState@3.1.0': ApiOperationContract(
+        operation_id='DataAnalysisController.countProcessInstanceState',
+        document_group='v1',
+        method='GET',
+        path='projects/analysis/process-state-count',
+        parameters=(
+            PARAMETER_CONTRACTS['request:endDate@DataAnalysisController.countCommandState@1.3.9'],
+            PARAMETER_CONTRACTS['request:projectCode@DataAnalysisController.countDefinitionByUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:startDate@DataAnalysisController.countCommandState@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataAnalysisController.countQueueState@3.1.0': ApiOperationContract(
+        operation_id='DataAnalysisController.countQueueState',
+        document_group='v1',
+        method='GET',
+        path='projects/analysis/queue-count',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataAnalysisController.countTaskState@3.1.0': ApiOperationContract(
+        operation_id='DataAnalysisController.countTaskState',
+        document_group='v1',
+        method='GET',
+        path='projects/analysis/task-state-count',
+        parameters=(
+            PARAMETER_CONTRACTS['request:endDate@DataAnalysisController.countCommandState@1.3.9'],
+            PARAMETER_CONTRACTS['request:projectCode@DataAnalysisController.countDefinitionByUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:startDate@DataAnalysisController.countCommandState@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'AuditLogController.queryAuditLogListPaging@3.1.0': ApiOperationContract(
+        operation_id='AuditLogController.queryAuditLogListPaging',
+        document_group='v1',
+        method='GET',
+        path='projects/audit/audit-log-list',
+        parameters=(
+            PARAMETER_CONTRACTS['request:endDate@DataAnalysisController.countCommandState@1.3.9'],
+            PARAMETER_CONTRACTS['request:operationType@AuditLogController.queryAuditLogListPaging@3.0.0'],
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:resourceType@AuditLogController.queryAuditLogListPaging@3.0.0'],
+            PARAMETER_CONTRACTS['request:startDate@DataAnalysisController.countCommandState@1.3.9'],
+            PARAMETER_CONTRACTS['request:userName@K8sNamespaceController.updateNamespace@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProjectController.queryAuthorizedProject@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.queryAuthorizedProject',
+        document_group='v1',
+        method='GET',
+        path='projects/authed-project',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@ProjectController.queryAuthorizedProject@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProjectController.queryAuthorizedUser@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.queryAuthorizedUser',
+        document_group='v1',
+        method='GET',
+        path='projects/authed-user',
+        parameters=(
+            PARAMETER_CONTRACTS['request:projectCode@ProjectController.queryAuthorizedUser@2.0.2'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProjectController.queryProjectCreatedAndAuthorizedByUser@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.queryProjectCreatedAndAuthorizedByUser',
+        document_group='v1',
+        method='GET',
+        path='projects/created-and-authed',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProjectController.queryAllProjectList@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.queryAllProjectList',
+        document_group='v1',
+        method='GET',
+        path='projects/list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProjectController.queryAllProjectListForDependent@3.1.0': ApiOperationContract(
         operation_id='ProjectController.queryAllProjectListForDependent',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/list-dependent',
         parameters=(
         ),
         ignored_document_parameters=(),
     ),
+    'ProjectController.queryUnauthorizedProject@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.queryUnauthorizedProject',
+        document_group='v1',
+        method='GET',
+        path='projects/unauth-project',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@ProjectController.queryAuthorizedProject@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProjectController.deleteProject@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.deleteProject',
+        document_group='v1',
+        method='DELETE',
+        path='projects/{code}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProjectController.deleteProject@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProjectController.queryProjectByCode@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.queryProjectByCode',
+        document_group='v1',
+        method='GET',
+        path='projects/{code}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProjectController.deleteProject@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProjectController.updateProject@3.1.0': ApiOperationContract(
+        operation_id='ProjectController.updateProject',
+        document_group='v1',
+        method='PUT',
+        path='projects/{code}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProjectController.deleteProject@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:projectName@ProjectController.createProject@1.3.9'],
+            PARAMETER_CONTRACTS['request:userName@UsersController.createUser@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ExecutorController.batchExecute@3.1.0': ApiOperationContract(
         operation_id='ExecutorController.batchExecute',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/executors/batch-execute',
         parameters=(
@@ -4710,9 +5410,95 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=('alertGroup', 'createTime', 'email', 'id', 'phone', 'queue', 'queueName', 'state', 'tenantCode', 'tenantId', 'timeZone', 'updateTime', 'userName', 'userPassword', 'userType'),
     ),
+    'ExecutorController.batchStartProcessInstance@3.1.0': ApiOperationContract(
+        operation_id='ExecutorController.batchStartProcessInstance',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/executors/batch-start-process-instance',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:complementDependentMode@ExecutorController.batchStartProcessInstance@3.0.0'],
+            PARAMETER_CONTRACTS['request:dryRun@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:environmentCode@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:execType@ExecutorController.batchStartProcessInstance@3.0.0'],
+            PARAMETER_CONTRACTS['request:expectedParallelismNumber@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:failureStrategy@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:processDefinitionCodes@ExecutorController.batchStartProcessInstance@2.0.3'],
+            PARAMETER_CONTRACTS['request:processInstancePriority@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:runMode@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:scheduleTime@ExecutorController.batchStartProcessInstance@3.0.0'],
+            PARAMETER_CONTRACTS['request:startNodeList@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:startParams@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:taskDependType@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:timeout@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:warningGroupId@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:warningType@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:workerGroup@ExecutorController.startProcessInstance@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ExecutorController.execute@3.1.0': ApiOperationContract(
+        operation_id='ExecutorController.execute',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/executors/execute',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:executeType@ExecutorController.execute@1.3.9'],
+            PARAMETER_CONTRACTS['request:processInstanceId@ExecutorController.execute@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ExecutorController.queryExecutingWorkflow@3.1.0': ApiOperationContract(
+        operation_id='ExecutorController.queryExecutingWorkflow',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/executors/query-executing-workflow',
+        parameters=(
+            PARAMETER_CONTRACTS['request:id@AlertGroupController.delAlertgroupById@1.3.9'],
+        ),
+        ignored_document_parameters=('processInstanceId',),
+    ),
+    'ExecutorController.startCheckProcessDefinition@3.1.0': ApiOperationContract(
+        operation_id='ExecutorController.startCheckProcessDefinition',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/executors/start-check',
+        parameters=(
+            PARAMETER_CONTRACTS['request:processDefinitionCode@ExecutorController.startCheckProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ExecutorController.startProcessInstance@3.1.0': ApiOperationContract(
+        operation_id='ExecutorController.startProcessInstance',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/executors/start-process-instance',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:complementDependentMode@ExecutorController.batchStartProcessInstance@3.0.0'],
+            PARAMETER_CONTRACTS['request:dryRun@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:environmentCode@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:execType@ExecutorController.batchStartProcessInstance@3.0.0'],
+            PARAMETER_CONTRACTS['request:expectedParallelismNumber@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:failureStrategy@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:processDefinitionCode@ExecutorController.startCheckProcessDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:processInstancePriority@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:runMode@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:scheduleTime@ExecutorController.batchStartProcessInstance@3.0.0'],
+            PARAMETER_CONTRACTS['request:startNodeList@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:startParams@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:taskDependType@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:timeout@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:warningGroupId@ExecutorController.startProcessInstance@3.0.0'],
+            PARAMETER_CONTRACTS['request:warningType@ExecutorController.startProcessInstance@1.3.9'],
+            PARAMETER_CONTRACTS['request:workerGroup@ExecutorController.startProcessInstance@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ExecutorController.startStreamTaskInstance@3.1.0': ApiOperationContract(
         operation_id='ExecutorController.startStreamTaskInstance',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/executors/task-instance/{code}/start',
         parameters=(
@@ -4727,9 +5513,30 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=('execType', 'failureStrategy', 'timeout', 'warningType'),
     ),
+    'WorkFlowLineageController.queryWorkFlowLineage@3.1.0': ApiOperationContract(
+        operation_id='WorkFlowLineageController.queryWorkFlowLineage',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/lineages/list',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'WorkFlowLineageController.queryWorkFlowLineageByName@3.1.0': ApiOperationContract(
+        operation_id='WorkFlowLineageController.queryWorkFlowLineageByName',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/lineages/query-by-name',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:workFlowName@WorkFlowLineageController.queryWorkFlowLineageByName@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'WorkFlowLineageController.verifyTaskCanDelete@3.1.0': ApiOperationContract(
         operation_id='WorkFlowLineageController.verifyTaskCanDelete',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/lineages/tasks/verify-delete',
         parameters=(
@@ -4739,9 +5546,20 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'WorkFlowLineageController.queryWorkFlowLineageByCode@3.1.0': ApiOperationContract(
+        operation_id='WorkFlowLineageController.queryWorkFlowLineageByCode',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/lineages/{workFlowCode}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:workFlowCode@WorkFlowLineageController.queryWorkFlowLineageByCode@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProcessDefinitionController.queryProcessDefinitionListPaging@3.1.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.queryProcessDefinitionListPaging',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/process-definition',
         parameters=(
@@ -4756,7 +5574,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.createProcessDefinition@3.1.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.createProcessDefinition',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/process-definition',
         parameters=(
@@ -4774,9 +5592,125 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProcessDefinitionController.queryAllProcessDefinitionByProjectCode@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.queryAllProcessDefinitionByProjectCode',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/all',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.copyProcessDefinition@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.copyProcessDefinition',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/process-definition/batch-copy',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:codes@ProcessDefinitionController.copyProcessDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:targetProjectCode@ProcessDefinitionController.copyProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.batchDeleteProcessDefinitionByCodes@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.batchDeleteProcessDefinitionByCodes',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/process-definition/batch-delete',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:codes@ProcessDefinitionController.copyProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.batchExportProcessDefinitionByCodes@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.batchExportProcessDefinitionByCodes',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/process-definition/batch-export',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:codes@ProcessDefinitionController.copyProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.moveProcessDefinition@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.moveProcessDefinition',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/process-definition/batch-move',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:codes@ProcessDefinitionController.copyProcessDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:targetProjectCode@ProcessDefinitionController.copyProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.getNodeListMapByDefinitionCodes@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.getNodeListMapByDefinitionCodes',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/batch-query-tasks',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:codes@ProcessDefinitionController.copyProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.createEmptyProcessDefinition@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.createEmptyProcessDefinition',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/process-definition/empty',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:executionType@ProcessDefinitionController.createProcessDefinition@3.0.0'],
+            PARAMETER_CONTRACTS['request:globalParams@ProcessDefinitionController.createProcessDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:scheduleJson@ProcessDefinitionController.createEmptyProcessDefinition@2.0.1'],
+            PARAMETER_CONTRACTS['request:tenantCode@TenantController.createTenant@1.3.9'],
+            PARAMETER_CONTRACTS['request:timeout@ProcessDefinitionController.createProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.importProcessDefinition@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.importProcessDefinition',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/process-definition/import',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:file@ProjectController.importProcessDefinition@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.queryProcessDefinitionList@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.queryProcessDefinitionList',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/list',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.queryProcessDefinitionByName@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.queryProcessDefinitionByName',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/query-by-name',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProcessDefinitionController.getProcessListByProjectCodes@3.1.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.getProcessListByProjectCodes',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/process-definition/query-process-definition-list',
         parameters=(
@@ -4786,7 +5720,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.getTaskListByProcessDefinitionCode@3.1.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.getTaskListByProcessDefinitionCode',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/process-definition/query-task-definition-list',
         parameters=(
@@ -4795,9 +5729,53 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProcessDefinitionController.queryProcessDefinitionSimpleList@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.queryProcessDefinitionSimpleList',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/simple-list',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.verifyProcessDefinitionName@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.verifyProcessDefinitionName',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/verify-name',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:code@ProcessDefinitionController.verifyProcessDefinitionName@3.0.1'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.deleteProcessDefinitionByCode@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.deleteProcessDefinitionByCode',
+        document_group='v1',
+        method='DELETE',
+        path='projects/{projectCode}/process-definition/{code}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProjectController.deleteProject@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.queryProcessDefinitionByCode@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.queryProcessDefinitionByCode',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/{code}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProcessDefinitionController.updateProcessDefinition@3.1.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinition',
-        api_group='v1',
+        document_group='v1',
         method='PUT',
         path='projects/{projectCode}/process-definition/{code}',
         parameters=(
@@ -4819,7 +5797,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.updateProcessDefinitionBasicInfo@3.1.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinitionBasicInfo',
-        api_group='v1',
+        document_group='v1',
         method='PUT',
         path='projects/{projectCode}/process-definition/{code}/basic-info',
         parameters=(
@@ -4837,9 +5815,21 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProcessDefinitionController.releaseProcessDefinition@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.releaseProcessDefinition',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/process-definition/{code}/release',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:releaseState@ProcessDefinitionController.releaseProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=('name',),
+    ),
     'ProcessDefinitionController.releaseWorkflowAndSchedule@3.1.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.releaseWorkflowAndSchedule',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/process-definition/{code}/release-workflow',
         parameters=(
@@ -4849,9 +5839,69 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProcessDefinitionController.getNodeListByDefinitionCode@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.getNodeListByDefinitionCode',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/{code}/tasks',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.queryProcessDefinitionVersions@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.queryProcessDefinitionVersions',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/{code}/versions',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.deleteProcessDefinitionVersion@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.deleteProcessDefinitionVersion',
+        document_group='v1',
+        method='DELETE',
+        path='projects/{projectCode}/process-definition/{code}/versions/{version}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:version@ProcessDefinitionController.deleteProcessDefinitionVersion@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.switchProcessDefinitionVersion@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.switchProcessDefinitionVersion',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/{code}/versions/{version}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:version@ProcessDefinitionController.deleteProcessDefinitionVersion@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.viewTree@3.1.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.viewTree',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-definition/{code}/view-tree',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:limit@ProcessDefinitionController.viewTree@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProcessInstanceController.queryProcessInstanceList@3.1.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryProcessInstanceList',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/process-instances',
         parameters=(
@@ -4871,7 +5921,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.batchDeleteProcessInstanceByIds@3.1.0': ApiOperationContract(
         operation_id='ProcessInstanceController.batchDeleteProcessInstanceByIds',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/process-instances/batch-delete',
         parameters=(
@@ -4880,9 +5930,66 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=('alertGroup', 'createTime', 'email', 'id', 'phone', 'queue', 'queueName', 'state', 'tenantCode', 'tenantId', 'timeZone', 'updateTime', 'userName', 'userPassword', 'userType'),
     ),
+    'ProcessInstanceController.queryParentInstanceBySubId@3.1.0': ApiOperationContract(
+        operation_id='ProcessInstanceController.queryParentInstanceBySubId',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-instances/query-parent-by-sub',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:subId@ProcessInstanceController.queryParentInstanceBySubId@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessInstanceController.querySubProcessInstanceByTaskId@3.1.0': ApiOperationContract(
+        operation_id='ProcessInstanceController.querySubProcessInstanceByTaskId',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-instances/query-sub-by-parent',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:taskId@ProcessInstanceController.querySubProcessInstanceByTaskId@2.0.0'],
+        ),
+        ignored_document_parameters=('taskCode',),
+    ),
+    'ProcessInstanceController.queryTopNLongestRunningProcessInstance@3.1.0': ApiOperationContract(
+        operation_id='ProcessInstanceController.queryTopNLongestRunningProcessInstance',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-instances/top-n',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:endTime@ProcessInstanceController.queryTopNLongestRunningProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:size@ProcessInstanceController.queryTopNLongestRunningProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:startTime@ProcessInstanceController.queryTopNLongestRunningProcessInstance@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessInstanceController.deleteProcessInstanceById@3.1.0': ApiOperationContract(
+        operation_id='ProcessInstanceController.deleteProcessInstanceById',
+        document_group='v1',
+        method='DELETE',
+        path='projects/{projectCode}/process-instances/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessInstanceController.queryProcessInstanceById@3.1.0': ApiOperationContract(
+        operation_id='ProcessInstanceController.queryProcessInstanceById',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-instances/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProcessInstanceController.updateProcessInstance@3.1.0': ApiOperationContract(
         operation_id='ProcessInstanceController.updateProcessInstance',
-        api_group='v1',
+        document_group='v1',
         method='PUT',
         path='projects/{projectCode}/process-instances/{id}',
         parameters=(
@@ -4899,9 +6006,42 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProcessInstanceController.queryTaskListByProcessId@3.1.0': ApiOperationContract(
+        operation_id='ProcessInstanceController.queryTaskListByProcessId',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-instances/{id}/tasks',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessInstanceController.viewTree@3.1.0': ApiOperationContract(
+        operation_id='ProcessInstanceController.viewTree',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-instances/{id}/view-gantt',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessInstanceController.viewVariables@3.1.0': ApiOperationContract(
+        operation_id='ProcessInstanceController.viewVariables',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/process-instances/{id}/view-variables',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProcessTaskRelationController.createProcessTaskRelation@3.1.0': ApiOperationContract(
         operation_id='ProcessTaskRelationController.createProcessTaskRelation',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/process-task-relation',
         parameters=(
@@ -4914,7 +6054,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.deleteEdge@3.1.0': ApiOperationContract(
         operation_id='ProcessTaskRelationController.deleteEdge',
-        api_group='v1',
+        document_group='v1',
         method='DELETE',
         path='projects/{projectCode}/process-task-relation/{processDefinitionCode}/{preTaskCode}/{postTaskCode}',
         parameters=(
@@ -4927,7 +6067,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.deleteTaskProcessRelation@3.1.0': ApiOperationContract(
         operation_id='ProcessTaskRelationController.deleteTaskProcessRelation',
-        api_group='v1',
+        document_group='v1',
         method='DELETE',
         path='projects/{projectCode}/process-task-relation/{taskCode}',
         parameters=(
@@ -4939,7 +6079,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.deleteDownstreamRelation@3.1.0': ApiOperationContract(
         operation_id='ProcessTaskRelationController.deleteDownstreamRelation',
-        api_group='v1',
+        document_group='v1',
         method='DELETE',
         path='projects/{projectCode}/process-task-relation/{taskCode}/downstream',
         parameters=(
@@ -4951,7 +6091,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.queryDownstreamRelation@3.1.0': ApiOperationContract(
         operation_id='ProcessTaskRelationController.queryDownstreamRelation',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/process-task-relation/{taskCode}/downstream',
         parameters=(
@@ -4962,7 +6102,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.deleteUpstreamRelation@3.1.0': ApiOperationContract(
         operation_id='ProcessTaskRelationController.deleteUpstreamRelation',
-        api_group='v1',
+        document_group='v1',
         method='DELETE',
         path='projects/{projectCode}/process-task-relation/{taskCode}/upstream',
         parameters=(
@@ -4974,7 +6114,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationController.queryUpstreamRelation@3.1.0': ApiOperationContract(
         operation_id='ProcessTaskRelationController.queryUpstreamRelation',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/process-task-relation/{taskCode}/upstream',
         parameters=(
@@ -4983,9 +6123,108 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'SchedulerController.queryScheduleListPaging@3.1.0': ApiOperationContract(
+        operation_id='SchedulerController.queryScheduleListPaging',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/schedules',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:pageNo@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:processDefinitionCode@ExecutorController.startCheckProcessDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=('processDefinitionId',),
+    ),
+    'SchedulerController.createSchedule@3.1.0': ApiOperationContract(
+        operation_id='SchedulerController.createSchedule',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/schedules',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:environmentCode@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:failureStrategy@SchedulerController.createSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:processDefinitionCode@ExecutorController.startCheckProcessDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:processInstancePriority@SchedulerController.createSchedule@2.0.0'],
+            PARAMETER_CONTRACTS['request:schedule@SchedulerController.createSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:warningGroupId@SchedulerController.createSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:warningType@SchedulerController.createSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:workerGroup@ExecutorController.startProcessInstance@1.3.9'],
+        ),
+        ignored_document_parameters=('workerGroupId',),
+    ),
+    'SchedulerController.queryScheduleList@3.1.0': ApiOperationContract(
+        operation_id='SchedulerController.queryScheduleList',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/schedules/list',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'SchedulerController.previewSchedule@3.1.0': ApiOperationContract(
+        operation_id='SchedulerController.previewSchedule',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/schedules/preview',
+        parameters=(
+            PARAMETER_CONTRACTS['request:schedule@SchedulerController.createSchedule@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'SchedulerController.updateScheduleByProcessDefinitionCode@3.1.0': ApiOperationContract(
+        operation_id='SchedulerController.updateScheduleByProcessDefinitionCode',
+        document_group='v1',
+        method='PUT',
+        path='projects/{projectCode}/schedules/update/{code}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:environmentCode@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:failureStrategy@SchedulerController.updateSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:processInstancePriority@SchedulerController.createSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:schedule@SchedulerController.createSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:warningGroupId@SchedulerController.updateSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:warningType@SchedulerController.createSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:workerGroup@ExecutorController.startProcessInstance@1.3.9'],
+        ),
+        ignored_document_parameters=('processDefinitionCode',),
+    ),
+    'SchedulerController.deleteScheduleById@3.1.0': ApiOperationContract(
+        operation_id='SchedulerController.deleteScheduleById',
+        document_group='v1',
+        method='DELETE',
+        path='projects/{projectCode}/schedules/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=('alertGroup', 'createTime', 'email', 'id', 'phone', 'queue', 'queueName', 'state', 'tenantCode', 'tenantId', 'timeZone', 'updateTime', 'userName', 'userPassword', 'userType'),
+    ),
+    'SchedulerController.updateSchedule@3.1.0': ApiOperationContract(
+        operation_id='SchedulerController.updateSchedule',
+        document_group='v1',
+        method='PUT',
+        path='projects/{projectCode}/schedules/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:environmentCode@ExecutorController.startProcessInstance@2.0.0'],
+            PARAMETER_CONTRACTS['request:failureStrategy@SchedulerController.updateSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:processInstancePriority@SchedulerController.createSchedule@2.0.0'],
+            PARAMETER_CONTRACTS['request:schedule@SchedulerController.createSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:warningGroupId@SchedulerController.updateSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:warningType@SchedulerController.createSchedule@1.3.9'],
+            PARAMETER_CONTRACTS['request:workerGroup@ExecutorController.startProcessInstance@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'SchedulerController.offlineSchedule@3.1.0': ApiOperationContract(
         operation_id='SchedulerController.offlineSchedule',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/schedules/{id}/offline',
         parameters=(
@@ -4996,7 +6235,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.publishScheduleOnline@3.1.0': ApiOperationContract(
         operation_id='SchedulerController.publishScheduleOnline',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/schedules/{id}/online',
         parameters=(
@@ -5007,7 +6246,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.queryTaskDefinitionListPaging@3.1.0': ApiOperationContract(
         operation_id='TaskDefinitionController.queryTaskDefinitionListPaging',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/task-definition',
         parameters=(
@@ -5023,7 +6262,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.createTaskDefinition@3.1.0': ApiOperationContract(
         operation_id='TaskDefinitionController.createTaskDefinition',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/task-definition',
         parameters=(
@@ -5032,9 +6271,19 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'TaskDefinitionController.genTaskCodeList@3.1.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.genTaskCodeList',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/task-definition/gen-task-codes',
+        parameters=(
+            PARAMETER_CONTRACTS['request:genNum@TaskDefinitionController.genTaskCodeList@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'TaskDefinitionController.createTaskBindsWorkFlow@3.1.0': ApiOperationContract(
         operation_id='TaskDefinitionController.createTaskBindsWorkFlow',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/task-definition/save-single',
         parameters=(
@@ -5045,9 +6294,31 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'TaskDefinitionController.deleteTaskDefinitionByCode@3.1.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.deleteTaskDefinitionByCode',
+        document_group='v1',
+        method='DELETE',
+        path='projects/{projectCode}/task-definition/{code}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskDefinitionController.queryTaskDefinitionDetail@3.1.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.queryTaskDefinitionDetail',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/task-definition/{code}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'TaskDefinitionController.updateTaskDefinition@3.1.0': ApiOperationContract(
         operation_id='TaskDefinitionController.updateTaskDefinition',
-        api_group='v1',
+        document_group='v1',
         method='PUT',
         path='projects/{projectCode}/task-definition/{code}',
         parameters=(
@@ -5059,7 +6330,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionController.releaseTaskDefinition@3.1.0': ApiOperationContract(
         operation_id='TaskDefinitionController.releaseTaskDefinition',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/task-definition/{code}/release',
         parameters=(
@@ -5069,9 +6340,46 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'TaskDefinitionController.queryTaskDefinitionVersions@3.1.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.queryTaskDefinitionVersions',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/task-definition/{code}/versions',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskDefinitionController.deleteTaskDefinitionVersion@3.1.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.deleteTaskDefinitionVersion',
+        document_group='v1',
+        method='DELETE',
+        path='projects/{projectCode}/task-definition/{code}/versions/{version}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:version@ProcessDefinitionController.deleteProcessDefinitionVersion@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskDefinitionController.switchTaskDefinitionVersion@3.1.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.switchTaskDefinitionVersion',
+        document_group='v1',
+        method='GET',
+        path='projects/{projectCode}/task-definition/{code}/versions/{version}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:version@ProcessDefinitionController.deleteProcessDefinitionVersion@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'TaskDefinitionController.updateTaskWithUpstream@3.1.0': ApiOperationContract(
         operation_id='TaskDefinitionController.updateTaskWithUpstream',
-        api_group='v1',
+        document_group='v1',
         method='PUT',
         path='projects/{projectCode}/task-definition/{code}/with-upstream',
         parameters=(
@@ -5084,7 +6392,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceController.queryTaskListPaging@3.1.0': ApiOperationContract(
         operation_id='TaskInstanceController.queryTaskListPaging',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/task-instances',
         parameters=(
@@ -5105,9 +6413,20 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'TaskInstanceController.forceTaskSuccess@3.1.0': ApiOperationContract(
+        operation_id='TaskInstanceController.forceTaskSuccess',
+        document_group='v1',
+        method='POST',
+        path='projects/{projectCode}/task-instances/{id}/force-success',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'TaskInstanceController.taskSavePoint@3.1.0': ApiOperationContract(
         operation_id='TaskInstanceController.taskSavePoint',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/task-instances/{id}/savepoint',
         parameters=(
@@ -5118,7 +6437,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceController.stopTask@3.1.0': ApiOperationContract(
         operation_id='TaskInstanceController.stopTask',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='projects/{projectCode}/task-instances/{id}/stop',
         parameters=(
@@ -5127,9 +6446,378 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'QueueController.queryQueueListPaging@3.1.0': ApiOperationContract(
+        operation_id='QueueController.queryQueueListPaging',
+        document_group='v1',
+        method='GET',
+        path='queues',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'QueueController.createQueue@3.1.0': ApiOperationContract(
+        operation_id='QueueController.createQueue',
+        document_group='v1',
+        method='POST',
+        path='queues',
+        parameters=(
+            PARAMETER_CONTRACTS['request:queue@QueueController.createQueue@1.3.9'],
+            PARAMETER_CONTRACTS['request:queueName@QueueController.createQueue@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'QueueController.queryList@3.1.0': ApiOperationContract(
+        operation_id='QueueController.queryList',
+        document_group='v1',
+        method='GET',
+        path='queues/list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'QueueController.verifyQueue@3.1.0': ApiOperationContract(
+        operation_id='QueueController.verifyQueue',
+        document_group='v1',
+        method='POST',
+        path='queues/verify',
+        parameters=(
+            PARAMETER_CONTRACTS['request:queue@QueueController.createQueue@1.3.9'],
+            PARAMETER_CONTRACTS['request:queueName@QueueController.createQueue@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'QueueController.updateQueue@3.1.0': ApiOperationContract(
+        operation_id='QueueController.updateQueue',
+        document_group='v1',
+        method='PUT',
+        path='queues/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['request:queue@QueueController.createQueue@1.3.9'],
+            PARAMETER_CONTRACTS['request:queueName@QueueController.createQueue@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.queryResourceListPaging@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.queryResourceListPaging',
+        document_group='v1',
+        method='GET',
+        path='resources',
+        parameters=(
+            PARAMETER_CONTRACTS['request:id@AlertGroupController.delAlertgroupById@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.createResource@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.createResource',
+        document_group='v1',
+        method='POST',
+        path='resources',
+        parameters=(
+            PARAMETER_CONTRACTS['request:currentDir@ResourcesController.createResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:file@ProjectController.importProcessDefinition@1.3.9'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:pid@ResourcesController.createResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.authorizedFile@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.authorizedFile',
+        document_group='v1',
+        method='GET',
+        path='resources/authed-file',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.authorizeResourceTree@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.authorizeResourceTree',
+        document_group='v1',
+        method='GET',
+        path='resources/authed-resource-tree',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.authorizedUDFFunction@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.authorizedUDFFunction',
+        document_group='v1',
+        method='GET',
+        path='resources/authed-udf-func',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.createDirectory@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.createDirectory',
+        document_group='v1',
+        method='POST',
+        path='resources/directory',
+        parameters=(
+            PARAMETER_CONTRACTS['request:currentDir@ResourcesController.createResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:pid@ResourcesController.createResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.queryResourceList@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.queryResourceList',
+        document_group='v1',
+        method='GET',
+        path='resources/list',
+        parameters=(
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.onlineCreateResource@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.onlineCreateResource',
+        document_group='v1',
+        method='POST',
+        path='resources/online-create',
+        parameters=(
+            PARAMETER_CONTRACTS['request:content@ResourcesController.onlineCreateResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:currentDir@ResourcesController.createResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:fileName@ResourcesController.onlineCreateResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:pid@ResourcesController.createResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:suffix@ResourcesController.onlineCreateResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.queryResourceJarList@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.queryResourceJarList',
+        document_group='v1',
+        method='GET',
+        path='resources/query-by-type',
+        parameters=(
+            PARAMETER_CONTRACTS['request:programType@ResourcesController.queryResourceJarList@3.0.0'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.queryUdfFuncListPaging@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.queryUdfFuncListPaging',
+        document_group='v1',
+        method='GET',
+        path='resources/udf-func',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.queryUdfFuncList@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.queryUdfFuncList',
+        document_group='v1',
+        method='GET',
+        path='resources/udf-func/list',
+        parameters=(
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createUdfFunc@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.verifyUdfFuncName@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.verifyUdfFuncName',
+        document_group='v1',
+        method='GET',
+        path='resources/udf-func/verify-name',
+        parameters=(
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.deleteUdfFunc@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.deleteUdfFunc',
+        document_group='v1',
+        method='DELETE',
+        path='resources/udf-func/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.unauthUDFFunc@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.unauthUDFFunc',
+        document_group='v1',
+        method='GET',
+        path='resources/unauth-udf-func',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.verifyResourceName@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.verifyResourceName',
+        document_group='v1',
+        method='GET',
+        path='resources/verify-name',
+        parameters=(
+            PARAMETER_CONTRACTS['request:fullName@ResourcesController.verifyResourceName@1.3.9'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.deleteResource@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.deleteResource',
+        document_group='v1',
+        method='DELETE',
+        path='resources/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.queryResource@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.queryResource',
+        document_group='v1',
+        method='GET',
+        path='resources/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@ResourcesController.queryResource@2.0.0'],
+            PARAMETER_CONTRACTS['request:fullName@ResourcesController.queryResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.updateResource@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.updateResource',
+        document_group='v1',
+        method='PUT',
+        path='resources/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:file@ResourcesController.updateResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.downloadResource@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.downloadResource',
+        document_group='v1',
+        method='GET',
+        path='resources/{id}/download',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.queryResourceById@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.queryResourceById',
+        document_group='v1',
+        method='GET',
+        path='resources/{id}/query',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.viewUIUdfFunction@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.viewUIUdfFunction',
+        document_group='v1',
+        method='GET',
+        path='resources/{id}/udf-func',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.updateResourceContent@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.updateResourceContent',
+        document_group='v1',
+        method='PUT',
+        path='resources/{id}/update-content',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['request:content@ResourcesController.onlineCreateResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.viewResource@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.viewResource',
+        document_group='v1',
+        method='GET',
+        path='resources/{id}/view',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['request:limit@ProcessDefinitionController.viewTree@1.3.9'],
+            PARAMETER_CONTRACTS['request:skipLineNum@ResourcesController.viewResource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.createUdfFunc@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.createUdfFunc',
+        document_group='v1',
+        method='POST',
+        path='resources/{resourceId}/udf-func',
+        parameters=(
+            PARAMETER_CONTRACTS['path:resourceId@ResourcesController.createUdfFunc@2.0.0'],
+            PARAMETER_CONTRACTS['request:argTypes@ResourcesController.createUdfFunc@1.3.9'],
+            PARAMETER_CONTRACTS['request:className@ResourcesController.createUdfFunc@1.3.9'],
+            PARAMETER_CONTRACTS['request:database@ResourcesController.createUdfFunc@1.3.9'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:funcName@ResourcesController.createUdfFunc@1.3.9'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createUdfFunc@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ResourcesController.updateUdfFunc@3.1.0': ApiOperationContract(
+        operation_id='ResourcesController.updateUdfFunc',
+        document_group='v1',
+        method='PUT',
+        path='resources/{resourceId}/udf-func/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:resourceId@ResourcesController.createUdfFunc@2.0.0'],
+            PARAMETER_CONTRACTS['request:argTypes@ResourcesController.createUdfFunc@1.3.9'],
+            PARAMETER_CONTRACTS['request:className@ResourcesController.createUdfFunc@1.3.9'],
+            PARAMETER_CONTRACTS['request:database@ResourcesController.createUdfFunc@1.3.9'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:funcName@ResourcesController.createUdfFunc@1.3.9'],
+            PARAMETER_CONTRACTS['request:type@ResourcesController.createUdfFunc@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'LoginController.signOut@3.1.0': ApiOperationContract(
+        operation_id='LoginController.signOut',
+        document_group='v1',
+        method='POST',
+        path='signOut',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskGroupController.closeTaskGroup@3.1.0': ApiOperationContract(
+        operation_id='TaskGroupController.closeTaskGroup',
+        document_group='v1',
+        method='POST',
+        path='task-group/close-task-group',
+        parameters=(
+            PARAMETER_CONTRACTS['request:id@TaskGroupController.closeTaskGroup@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'TaskGroupController.createTaskGroup@3.1.0': ApiOperationContract(
         operation_id='TaskGroupController.createTaskGroup',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='task-group/create',
         parameters=(
@@ -5140,9 +6828,211 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'TaskGroupController.forceStart@3.1.0': ApiOperationContract(
+        operation_id='TaskGroupController.forceStart',
+        document_group='v1',
+        method='POST',
+        path='task-group/forceStart',
+        parameters=(
+            PARAMETER_CONTRACTS['request:queueId@TenantController.createTenant@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskGroupController.queryAllTaskGroup@3.1.0': ApiOperationContract(
+        operation_id='TaskGroupController.queryAllTaskGroup',
+        document_group='v1',
+        method='GET',
+        path='task-group/list-paging',
+        parameters=(
+            PARAMETER_CONTRACTS['request:name@TaskGroupController.queryAllTaskGroup@3.0.0'],
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:status@TaskGroupController.queryAllTaskGroup@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskGroupController.modifyPriority@3.1.0': ApiOperationContract(
+        operation_id='TaskGroupController.modifyPriority',
+        document_group='v1',
+        method='POST',
+        path='task-group/modifyPriority',
+        parameters=(
+            PARAMETER_CONTRACTS['request:priority@TaskGroupController.modifyPriority@3.0.0'],
+            PARAMETER_CONTRACTS['request:queueId@TenantController.createTenant@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskGroupController.queryTasksByGroupId@3.1.0': ApiOperationContract(
+        operation_id='TaskGroupController.queryTasksByGroupId',
+        document_group='v1',
+        method='GET',
+        path='task-group/query-list-by-group-id',
+        parameters=(
+            PARAMETER_CONTRACTS['request:groupId@TaskGroupController.queryTasksByGroupId@3.0.0'],
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:processInstanceName@TaskInstanceController.queryTaskListPaging@2.0.0'],
+            PARAMETER_CONTRACTS['request:status@TaskGroupController.queryAllTaskGroup@3.0.0'],
+            PARAMETER_CONTRACTS['request:taskInstanceName@TaskGroupController.queryTasksByGroupId@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskGroupController.queryTaskGroupByCode@3.1.0': ApiOperationContract(
+        operation_id='TaskGroupController.queryTaskGroupByCode',
+        document_group='v1',
+        method='GET',
+        path='task-group/query-list-by-projectCode',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:projectCode@TaskGroupController.queryTaskGroupByCode@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskGroupController.queryTaskGroupByStatus@3.1.0': ApiOperationContract(
+        operation_id='TaskGroupController.queryTaskGroupByStatus',
+        document_group='v1',
+        method='GET',
+        path='task-group/query-list-by-status',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:status@TaskGroupController.queryTaskGroupByStatus@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskGroupController.startTaskGroup@3.1.0': ApiOperationContract(
+        operation_id='TaskGroupController.startTaskGroup',
+        document_group='v1',
+        method='POST',
+        path='task-group/start-task-group',
+        parameters=(
+            PARAMETER_CONTRACTS['request:id@TaskGroupController.closeTaskGroup@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskGroupController.updateTaskGroup@3.1.0': ApiOperationContract(
+        operation_id='TaskGroupController.updateTaskGroup',
+        document_group='v1',
+        method='POST',
+        path='task-group/update',
+        parameters=(
+            PARAMETER_CONTRACTS['request:description@TaskGroupController.createTaskGroup@3.0.0'],
+            PARAMETER_CONTRACTS['request:groupSize@TaskGroupController.createTaskGroup@3.0.0'],
+            PARAMETER_CONTRACTS['request:id@UsersController.delUserById@1.3.9'],
+            PARAMETER_CONTRACTS['request:name@TaskGroupController.createTaskGroup@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TenantController.queryTenantlistPaging@3.1.0': ApiOperationContract(
+        operation_id='TenantController.queryTenantlistPaging',
+        document_group='v1',
+        method='GET',
+        path='tenants',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TenantController.createTenant@3.1.0': ApiOperationContract(
+        operation_id='TenantController.createTenant',
+        document_group='v1',
+        method='POST',
+        path='tenants',
+        parameters=(
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:queueId@TenantController.createTenant@1.3.9'],
+            PARAMETER_CONTRACTS['request:tenantCode@TenantController.createTenant@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TenantController.queryTenantlist@3.1.0': ApiOperationContract(
+        operation_id='TenantController.queryTenantlist',
+        document_group='v1',
+        method='GET',
+        path='tenants/list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TenantController.verifyTenantCode@3.1.0': ApiOperationContract(
+        operation_id='TenantController.verifyTenantCode',
+        document_group='v1',
+        method='GET',
+        path='tenants/verify-code',
+        parameters=(
+            PARAMETER_CONTRACTS['request:tenantCode@TenantController.createTenant@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TenantController.deleteTenantById@3.1.0': ApiOperationContract(
+        operation_id='TenantController.deleteTenantById',
+        document_group='v1',
+        method='DELETE',
+        path='tenants/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TenantController.updateTenant@3.1.0': ApiOperationContract(
+        operation_id='TenantController.updateTenant',
+        document_group='v1',
+        method='PUT',
+        path='tenants/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:queueId@TenantController.createTenant@1.3.9'],
+            PARAMETER_CONTRACTS['request:tenantCode@TenantController.createTenant@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UiPluginController.queryUiPluginsByType@3.1.0': ApiOperationContract(
+        operation_id='UiPluginController.queryUiPluginsByType',
+        document_group='v1',
+        method='GET',
+        path='ui-plugins/query-by-type',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pluginType@UiPluginController.queryUiPluginsByType@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UiPluginController.queryUiPluginDetailById@3.1.0': ApiOperationContract(
+        operation_id='UiPluginController.queryUiPluginDetailById',
+        document_group='v1',
+        method='GET',
+        path='ui-plugins/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.activateUser@3.1.0': ApiOperationContract(
+        operation_id='UsersController.activateUser',
+        document_group='v1',
+        method='POST',
+        path='users/activate',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userName@UsersController.createUser@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.authorizedUser@3.1.0': ApiOperationContract(
+        operation_id='UsersController.authorizedUser',
+        document_group='v1',
+        method='GET',
+        path='users/authed-user',
+        parameters=(
+            PARAMETER_CONTRACTS['request:alertgroupId@UsersController.authorizedUser@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'UsersController.batchActivateUser@3.1.0': ApiOperationContract(
         operation_id='UsersController.batchActivateUser',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='users/batch/activate',
         parameters=(
@@ -5150,9 +7040,88 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'UsersController.createUser@3.1.0': ApiOperationContract(
+        operation_id='UsersController.createUser',
+        document_group='v1',
+        method='POST',
+        path='users/create',
+        parameters=(
+            PARAMETER_CONTRACTS['request:email@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:phone@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:queue@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:state@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:tenantId@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:userName@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:userPassword@LoginController.login@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.delUserById@3.1.0': ApiOperationContract(
+        operation_id='UsersController.delUserById',
+        document_group='v1',
+        method='POST',
+        path='users/delete',
+        parameters=(
+            PARAMETER_CONTRACTS['request:id@AlertGroupController.delAlertgroupById@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.getUserInfo@3.1.0': ApiOperationContract(
+        operation_id='UsersController.getUserInfo',
+        document_group='v1',
+        method='GET',
+        path='users/get-user-info',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.grantDataSource@3.1.0': ApiOperationContract(
+        operation_id='UsersController.grantDataSource',
+        document_group='v1',
+        method='POST',
+        path='users/grant-datasource',
+        parameters=(
+            PARAMETER_CONTRACTS['request:datasourceIds@UsersController.grantDataSource@2.0.0'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.grantResource@3.1.0': ApiOperationContract(
+        operation_id='UsersController.grantResource',
+        document_group='v1',
+        method='POST',
+        path='users/grant-file',
+        parameters=(
+            PARAMETER_CONTRACTS['request:resourceIds@UsersController.grantResource@2.0.0'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.grantNamespace@3.1.0': ApiOperationContract(
+        operation_id='UsersController.grantNamespace',
+        document_group='v1',
+        method='POST',
+        path='users/grant-namespace',
+        parameters=(
+            PARAMETER_CONTRACTS['request:namespaceIds@UsersController.grantNamespace@3.0.0'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.grantProject@3.1.0': ApiOperationContract(
+        operation_id='UsersController.grantProject',
+        document_group='v1',
+        method='POST',
+        path='users/grant-project',
+        parameters=(
+            PARAMETER_CONTRACTS['request:projectIds@UsersController.grantProject@2.0.0'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'UsersController.grantProjectByCode@3.1.0': ApiOperationContract(
         operation_id='UsersController.grantProjectByCode',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='users/grant-project-by-code',
         parameters=(
@@ -5161,9 +7130,63 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'UsersController.grantUDFFunc@3.1.0': ApiOperationContract(
+        operation_id='UsersController.grantUDFFunc',
+        document_group='v1',
+        method='POST',
+        path='users/grant-udf-func',
+        parameters=(
+            PARAMETER_CONTRACTS['request:udfIds@UsersController.grantUDFFunc@2.0.0'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.listUser@3.1.0': ApiOperationContract(
+        operation_id='UsersController.listUser',
+        document_group='v1',
+        method='GET',
+        path='users/list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.listAll@3.1.0': ApiOperationContract(
+        operation_id='UsersController.listAll',
+        document_group='v1',
+        method='GET',
+        path='users/list-all',
+        parameters=(
+        ),
+        ignored_document_parameters=('alertGroup', 'createTime', 'email', 'id', 'phone', 'queue', 'queueName', 'state', 'tenantCode', 'tenantId', 'timeZone', 'updateTime', 'userName', 'userPassword', 'userType'),
+    ),
+    'UsersController.queryUserList@3.1.0': ApiOperationContract(
+        operation_id='UsersController.queryUserList',
+        document_group='v1',
+        method='GET',
+        path='users/list-paging',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.registerUser@3.1.0': ApiOperationContract(
+        operation_id='UsersController.registerUser',
+        document_group='v1',
+        method='POST',
+        path='users/register',
+        parameters=(
+            PARAMETER_CONTRACTS['request:email@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:repeatPassword@UsersController.registerUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:userName@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:userPassword@LoginController.login@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'UsersController.revokeProject@3.1.0': ApiOperationContract(
         operation_id='UsersController.revokeProject',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='users/revoke-project',
         parameters=(
@@ -5172,9 +7195,47 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'UsersController.unauthorizedUser@3.1.0': ApiOperationContract(
+        operation_id='UsersController.unauthorizedUser',
+        document_group='v1',
+        method='GET',
+        path='users/unauth-user',
+        parameters=(
+            PARAMETER_CONTRACTS['request:alertgroupId@UsersController.authorizedUser@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.updateUser@3.1.0': ApiOperationContract(
+        operation_id='UsersController.updateUser',
+        document_group='v1',
+        method='POST',
+        path='users/update',
+        parameters=(
+            PARAMETER_CONTRACTS['request:email@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:id@AlertGroupController.delAlertgroupById@1.3.9'],
+            PARAMETER_CONTRACTS['request:phone@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:queue@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:state@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:tenantId@UsersController.createUser@2.0.0'],
+            PARAMETER_CONTRACTS['request:timeZone@UsersController.updateUser@3.0.0'],
+            PARAMETER_CONTRACTS['request:userName@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:userPassword@LoginController.login@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.verifyUserName@3.1.0': ApiOperationContract(
+        operation_id='UsersController.verifyUserName',
+        document_group='v1',
+        method='GET',
+        path='users/verify-user-name',
+        parameters=(
+            PARAMETER_CONTRACTS['request:userName@DataSourceController.connectDataSource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'AccessTokenV2Controller.createToken@3.1.0': ApiOperationContract(
         operation_id='AccessTokenV2Controller.createToken',
-        api_group='v1',
+        document_group='v2',
         method='POST',
         path='v2/access-tokens',
         parameters=(
@@ -5184,7 +7245,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryProjectListPaging@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryProjectListPaging',
-        api_group='v1',
+        document_group='v2',
         method='GET',
         path='v2/projects',
         parameters=(
@@ -5194,7 +7255,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.createProject@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.createProject',
-        api_group='v1',
+        document_group='v2',
         method='POST',
         path='v2/projects',
         parameters=(
@@ -5204,7 +7265,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryAuthorizedProject@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryAuthorizedProject',
-        api_group='v1',
+        document_group='v2',
         method='GET',
         path='v2/projects/authed-project',
         parameters=(
@@ -5214,7 +7275,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryAuthorizedUser@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryAuthorizedUser',
-        api_group='v1',
+        document_group='v2',
         method='GET',
         path='v2/projects/authed-user',
         parameters=(
@@ -5224,7 +7285,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryProjectCreatedAndAuthorizedByUser@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryProjectCreatedAndAuthorizedByUser',
-        api_group='v1',
+        document_group='v2',
         method='GET',
         path='v2/projects/created-and-authed',
         parameters=(
@@ -5233,7 +7294,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryAllProjectList@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryAllProjectList',
-        api_group='v1',
+        document_group='v2',
         method='GET',
         path='v2/projects/list',
         parameters=(
@@ -5242,7 +7303,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryAllProjectListForDependent@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryAllProjectListForDependent',
-        api_group='v1',
+        document_group='v2',
         method='GET',
         path='v2/projects/list-dependent',
         parameters=(
@@ -5251,7 +7312,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryUnauthorizedProject@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryUnauthorizedProject',
-        api_group='v1',
+        document_group='v2',
         method='GET',
         path='v2/projects/unauth-project',
         parameters=(
@@ -5261,7 +7322,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.deleteProject@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.deleteProject',
-        api_group='v1',
+        document_group='v2',
         method='DELETE',
         path='v2/projects/{code}',
         parameters=(
@@ -5271,7 +7332,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryProjectByCode@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryProjectByCode',
-        api_group='v1',
+        document_group='v2',
         method='GET',
         path='v2/projects/{code}',
         parameters=(
@@ -5281,7 +7342,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.updateProject@3.1.0': ApiOperationContract(
         operation_id='ProjectV2Controller.updateProject',
-        api_group='v1',
+        document_group='v2',
         method='PUT',
         path='v2/projects/{code}',
         parameters=(
@@ -5290,9 +7351,21 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'WorkerGroupController.queryAllWorkerGroupsPaging@3.1.0': ApiOperationContract(
+        operation_id='WorkerGroupController.queryAllWorkerGroupsPaging',
+        document_group='v1',
+        method='GET',
+        path='worker-groups',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'WorkerGroupController.saveWorkerGroup@3.1.0': ApiOperationContract(
         operation_id='WorkerGroupController.saveWorkerGroup',
-        api_group='v1',
+        document_group='v1',
         method='POST',
         path='worker-groups',
         parameters=(
@@ -5304,9 +7377,27 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'WorkerGroupController.queryAllWorkerGroups@3.1.0': ApiOperationContract(
+        operation_id='WorkerGroupController.queryAllWorkerGroups',
+        document_group='v1',
+        method='GET',
+        path='worker-groups/all',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'WorkerGroupController.queryWorkerAddressList@3.1.0': ApiOperationContract(
+        operation_id='WorkerGroupController.queryWorkerAddressList',
+        document_group='v1',
+        method='GET',
+        path='worker-groups/worker-address-list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
     'WorkerGroupController.deleteWorkerGroupById@3.1.0': ApiOperationContract(
         operation_id='WorkerGroupController.deleteWorkerGroupById',
-        api_group='v1',
+        document_group='v1',
         method='DELETE',
         path='worker-groups/{id}',
         parameters=(
@@ -5316,7 +7407,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.viewVariables@3.1.1': ApiOperationContract(
         operation_id='ProcessDefinitionController.viewVariables',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/process-definition/{code}/view-variables',
         parameters=(
@@ -5327,7 +7418,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceController.queryTaskListPaging@3.1.7': ApiOperationContract(
         operation_id='TaskInstanceController.queryTaskListPaging',
-        api_group='v1',
+        document_group='v1',
         method='GET',
         path='projects/{projectCode}/task-instances',
         parameters=(
@@ -5348,9 +7439,20 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'AccessTokenController.generateToken@3.2.0': ApiOperationContract(
+        operation_id='AccessTokenController.generateToken',
+        document_group=None,
+        method='POST',
+        path='access-tokens/generate',
+        parameters=(
+            PARAMETER_CONTRACTS['request:expireTime@AccessTokenController.createToken@2.0.2'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=('alertGroup', 'createTime', 'email', 'id', 'phone', 'queue', 'queueName', 'state', 'tenantCode', 'tenantId', 'timeZone', 'updateTime', 'userName', 'userPassword', 'userType'),
+    ),
     'AccessTokenController.queryAccessTokenByUser@3.2.0': ApiOperationContract(
         operation_id='AccessTokenController.queryAccessTokenByUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='access-tokens/user/{userId}',
         parameters=(
@@ -5358,9 +7460,19 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'AccessTokenController.delAccessTokenById@3.2.0': ApiOperationContract(
+        operation_id='AccessTokenController.delAccessTokenById',
+        document_group=None,
+        method='DELETE',
+        path='access-tokens/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'AlertGroupController.queryAlertGroupById@3.2.0': ApiOperationContract(
         operation_id='AlertGroupController.queryAlertGroupById',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-groups/query',
         parameters=(
@@ -5370,7 +7482,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.updateAlertPluginInstance@3.2.0': ApiOperationContract(
         operation_id='AlertPluginInstanceController.updateAlertPluginInstance',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='alert-plugin-instances/{id}',
         parameters=(
@@ -5382,7 +7494,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'CloudController.listDataFactory@3.2.0': ApiOperationContract(
         operation_id='CloudController.listDataFactory',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='cloud/azure/datafactory/factories',
         parameters=(
@@ -5391,7 +7503,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'CloudController.listPipeline@3.2.0': ApiOperationContract(
         operation_id='CloudController.listPipeline',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='cloud/azure/datafactory/pipelines',
         parameters=(
@@ -5402,16 +7514,92 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'CloudController.listResourceGroup@3.2.0': ApiOperationContract(
         operation_id='CloudController.listResourceGroup',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='cloud/azure/datafactory/resourceGroups',
         parameters=(
         ),
         ignored_document_parameters=(),
     ),
+    'ClusterController.createProject@3.2.0': ApiOperationContract(
+        operation_id='ClusterController.createProject',
+        document_group=None,
+        method='POST',
+        path='cluster/create',
+        parameters=(
+            PARAMETER_CONTRACTS['request:config@EnvironmentController.createProject@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ClusterController.deleteCluster@3.2.0': ApiOperationContract(
+        operation_id='ClusterController.deleteCluster',
+        document_group=None,
+        method='POST',
+        path='cluster/delete',
+        parameters=(
+            PARAMETER_CONTRACTS['request:clusterCode@ClusterController.deleteCluster@3.1.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ClusterController.queryClusterListPaging@3.2.0': ApiOperationContract(
+        operation_id='ClusterController.queryClusterListPaging',
+        document_group=None,
+        method='GET',
+        path='cluster/list-paging',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ClusterController.queryClusterByCode@3.2.0': ApiOperationContract(
+        operation_id='ClusterController.queryClusterByCode',
+        document_group=None,
+        method='GET',
+        path='cluster/query-by-code',
+        parameters=(
+            PARAMETER_CONTRACTS['request:clusterCode@ClusterController.deleteCluster@3.1.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ClusterController.queryAllClusterList@3.2.0': ApiOperationContract(
+        operation_id='ClusterController.queryAllClusterList',
+        document_group=None,
+        method='GET',
+        path='cluster/query-cluster-list',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ClusterController.updateCluster@3.2.0': ApiOperationContract(
+        operation_id='ClusterController.updateCluster',
+        document_group=None,
+        method='POST',
+        path='cluster/update',
+        parameters=(
+            PARAMETER_CONTRACTS['request:code@EnvironmentController.updateEnvironment@2.0.0'],
+            PARAMETER_CONTRACTS['request:config@EnvironmentController.createProject@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ClusterController.verifyCluster@3.2.0': ApiOperationContract(
+        operation_id='ClusterController.verifyCluster',
+        document_group=None,
+        method='POST',
+        path='cluster/verify-cluster',
+        parameters=(
+            PARAMETER_CONTRACTS['request:clusterName@ClusterController.verifyCluster@3.1.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'LoginController.clearCookieSessionId@3.2.0': ApiOperationContract(
         operation_id='LoginController.clearCookieSessionId',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='cookies',
         parameters=(
@@ -5420,7 +7608,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataQualityController.getDatasourceOptionsById@3.2.0': ApiOperationContract(
         operation_id='DataQualityController.getDatasourceOptionsById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='data-quality/getDatasourceOptionsById',
         parameters=(
@@ -5430,7 +7618,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataQualityController.getRuleFormCreateJsonById@3.2.0': ApiOperationContract(
         operation_id='DataQualityController.getRuleFormCreateJsonById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='data-quality/getRuleFormCreateJson',
         parameters=(
@@ -5440,7 +7628,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataQualityController.queryExecuteResultListPaging@3.2.0': ApiOperationContract(
         operation_id='DataQualityController.queryExecuteResultListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='data-quality/result/page',
         parameters=(
@@ -5456,7 +7644,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataQualityController.queryRuleListPaging@3.2.0': ApiOperationContract(
         operation_id='DataQualityController.queryRuleListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='data-quality/rule/page',
         parameters=(
@@ -5469,9 +7657,29 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'DataSourceController.createDataSource@3.2.0': ApiOperationContract(
+        operation_id='DataSourceController.createDataSource',
+        document_group=None,
+        method='POST',
+        path='datasources',
+        parameters=(
+            PARAMETER_CONTRACTS['body:jsonStr@DataSourceController.createDataSource@3.1.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'DataSourceController.connectDataSource@3.2.0': ApiOperationContract(
+        operation_id='DataSourceController.connectDataSource',
+        document_group=None,
+        method='POST',
+        path='datasources/connect',
+        parameters=(
+            PARAMETER_CONTRACTS['body:jsonStr@DataSourceController.createDataSource@3.1.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'DataSourceController.getDatabases@3.2.0': ApiOperationContract(
         operation_id='DataSourceController.getDatabases',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/databases',
         parameters=(
@@ -5481,7 +7689,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSourceList@3.2.0': ApiOperationContract(
         operation_id='DataSourceController.queryDataSourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/list',
         parameters=(
@@ -5491,7 +7699,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.getTableColumns@3.2.0': ApiOperationContract(
         operation_id='DataSourceController.getTableColumns',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/tableColumns',
         parameters=(
@@ -5503,7 +7711,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.getTables@3.2.0': ApiOperationContract(
         operation_id='DataSourceController.getTables',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/tables',
         parameters=(
@@ -5514,7 +7722,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.unAuthDatasource@3.2.0': ApiOperationContract(
         operation_id='DataSourceController.unAuthDatasource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/unauth-datasource',
         parameters=(
@@ -5522,9 +7730,19 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'DataSourceController.deleteDataSource@3.2.0': ApiOperationContract(
+        operation_id='DataSourceController.deleteDataSource',
+        document_group=None,
+        method='DELETE',
+        path='datasources/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'DataSourceController.updateDataSource@3.2.0': ApiOperationContract(
         operation_id='DataSourceController.updateDataSource',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='datasources/{id}',
         parameters=(
@@ -5535,7 +7753,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DynamicTaskTypeController.listDynamicTaskCategories@3.2.0': ApiOperationContract(
         operation_id='DynamicTaskTypeController.listDynamicTaskCategories',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='dynamic/taskCategories',
         parameters=(
@@ -5544,7 +7762,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DynamicTaskTypeController.listDynamicTaskTypes@3.2.0': ApiOperationContract(
         operation_id='DynamicTaskTypeController.listDynamicTaskTypes',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='dynamic/{taskCategory}/taskTypes',
         parameters=(
@@ -5552,9 +7770,31 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'EnvironmentController.createEnvironment@3.2.0': ApiOperationContract(
+        operation_id='EnvironmentController.createEnvironment',
+        document_group=None,
+        method='POST',
+        path='environment/create',
+        parameters=(
+            PARAMETER_CONTRACTS['request:config@EnvironmentController.createProject@2.0.0'],
+            PARAMETER_CONTRACTS['request:description@AlertGroupController.createAlertgroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:workerGroups@EnvironmentController.createProject@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'FavTaskController.listTaskType@3.2.0': ApiOperationContract(
+        operation_id='FavTaskController.listTaskType',
+        document_group=None,
+        method='GET',
+        path='favourite/taskTypes',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
     'FavTaskController.deleteFavTask@3.2.0': ApiOperationContract(
         operation_id='FavTaskController.deleteFavTask',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='favourite/{taskType}',
         parameters=(
@@ -5564,7 +7804,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'FavTaskController.addFavTask@3.2.0': ApiOperationContract(
         operation_id='FavTaskController.addFavTask',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='favourite/{taskType}',
         parameters=(
@@ -5572,9 +7812,21 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'K8sNamespaceController.queryNamespaceListPaging@3.2.0': ApiOperationContract(
+        operation_id='K8sNamespaceController.queryNamespaceListPaging',
+        document_group=None,
+        method='GET',
+        path='k8s-namespace',
+        parameters=(
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'K8sNamespaceController.createNamespace@3.2.0': ApiOperationContract(
         operation_id='K8sNamespaceController.createNamespace',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='k8s-namespace',
         parameters=(
@@ -5587,7 +7839,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.queryAuthorizedNamespace@3.2.0': ApiOperationContract(
         operation_id='K8sNamespaceController.queryAuthorizedNamespace',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='k8s-namespace/authed-namespace',
         parameters=(
@@ -5597,7 +7849,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.queryUnauthorizedNamespace@3.2.0': ApiOperationContract(
         operation_id='K8sNamespaceController.queryUnauthorizedNamespace',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='k8s-namespace/unauth-namespace',
         parameters=(
@@ -5605,9 +7857,44 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'K8sNamespaceController.verifyNamespace@3.2.0': ApiOperationContract(
+        operation_id='K8sNamespaceController.verifyNamespace',
+        document_group=None,
+        method='POST',
+        path='k8s-namespace/verify',
+        parameters=(
+            PARAMETER_CONTRACTS['request:clusterCode@ClusterController.deleteCluster@3.1.0'],
+            PARAMETER_CONTRACTS['request:namespace@K8sNamespaceController.createNamespace@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'LoggerController.queryLog__get_log_projectCode_detail@3.2.0': ApiOperationContract(
+        operation_id='LoggerController.queryLog__get_log_projectCode_detail',
+        document_group=None,
+        method='GET',
+        path='log/{projectCode}/detail',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:limit@ProcessDefinitionController.viewTree@1.3.9'],
+            PARAMETER_CONTRACTS['request:skipLineNum@ResourcesController.viewResource@1.3.9'],
+            PARAMETER_CONTRACTS['request:taskInstanceId@LoggerController.queryLog@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'LoggerController.downloadTaskLog__get_log_projectCode_download_log@3.2.0': ApiOperationContract(
+        operation_id='LoggerController.downloadTaskLog__get_log_projectCode_download_log',
+        document_group=None,
+        method='GET',
+        path='log/{projectCode}/download-log',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:taskInstanceId@LoggerController.queryLog@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'LoginController.ssoLogin@3.2.0': ApiOperationContract(
         operation_id='LoginController.ssoLogin',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='login/sso',
         parameters=(
@@ -5616,7 +7903,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoginController.oauth2Provider@3.2.0': ApiOperationContract(
         operation_id='LoginController.oauth2Provider',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='oauth2-provider',
         parameters=(
@@ -5625,7 +7912,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.createProject@3.2.0': ApiOperationContract(
         operation_id='ProjectController.createProject',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects',
         parameters=(
@@ -5636,7 +7923,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryAuthorizedProject@3.2.0': ApiOperationContract(
         operation_id='ProjectController.queryAuthorizedProject',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/authed-project',
         parameters=(
@@ -5646,7 +7933,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryAuthorizedUser@3.2.0': ApiOperationContract(
         operation_id='ProjectController.queryAuthorizedUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/authed-user',
         parameters=(
@@ -5654,9 +7941,18 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProjectController.queryAllProjectListForDependent@3.2.0': ApiOperationContract(
+        operation_id='ProjectController.queryAllProjectListForDependent',
+        document_group=None,
+        method='GET',
+        path='projects/list-dependent',
+        parameters=(
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProjectController.queryProjectWithAuthorizedLevel@3.2.0': ApiOperationContract(
         operation_id='ProjectController.queryProjectWithAuthorizedLevel',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/project-with-authorized-level',
         parameters=(
@@ -5666,7 +7962,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryProjectWithAuthorizedLevelListPaging@3.2.0': ApiOperationContract(
         operation_id='ProjectController.queryProjectWithAuthorizedLevelListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/project-with-authorized-level-list-paging',
         parameters=(
@@ -5679,7 +7975,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryUnauthorizedProject@3.2.0': ApiOperationContract(
         operation_id='ProjectController.queryUnauthorizedProject',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/unauth-project',
         parameters=(
@@ -5689,7 +7985,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.deleteProject@3.2.0': ApiOperationContract(
         operation_id='ProjectController.deleteProject',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{code}',
         parameters=(
@@ -5699,7 +7995,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.queryProjectByCode@3.2.0': ApiOperationContract(
         operation_id='ProjectController.queryProjectByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{code}',
         parameters=(
@@ -5709,7 +8005,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.updateProject@3.2.0': ApiOperationContract(
         operation_id='ProjectController.updateProject',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{code}',
         parameters=(
@@ -5722,7 +8018,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.batchExecute@3.2.0': ApiOperationContract(
         operation_id='ExecutorController.batchExecute',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/batch-execute',
         parameters=(
@@ -5734,7 +8030,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.batchStartProcessInstance@3.2.0': ApiOperationContract(
         operation_id='ExecutorController.batchStartProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/batch-start-process-instance',
         parameters=(
@@ -5765,7 +8061,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.execute@3.2.0': ApiOperationContract(
         operation_id='ExecutorController.execute',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/execute',
         parameters=(
@@ -5777,7 +8073,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.executeTask@3.2.0': ApiOperationContract(
         operation_id='ExecutorController.executeTask',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/execute-task',
         parameters=(
@@ -5790,7 +8086,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.queryExecutingWorkflow@3.2.0': ApiOperationContract(
         operation_id='ExecutorController.queryExecutingWorkflow',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/executors/query-executing-workflow',
         parameters=(
@@ -5800,7 +8096,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.startProcessInstance@3.2.0': ApiOperationContract(
         operation_id='ExecutorController.startProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/start-process-instance',
         parameters=(
@@ -5832,7 +8128,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.startStreamTaskInstance@3.2.0': ApiOperationContract(
         operation_id='ExecutorController.startStreamTaskInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/task-instance/{code}/start',
         parameters=(
@@ -5848,9 +8144,36 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'WorkFlowLineageController.verifyTaskCanDelete@3.2.0': ApiOperationContract(
+        operation_id='WorkFlowLineageController.verifyTaskCanDelete',
+        document_group=None,
+        method='POST',
+        path='projects/{projectCode}/lineages/tasks/verify-delete',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:processDefinitionCode@ExecutorController.startCheckProcessDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:taskCode@WorkFlowLineageController.verifyTaskCanDelete@3.0.2'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessDefinitionController.queryProcessDefinitionListPaging@3.2.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.queryProcessDefinitionListPaging',
+        document_group=None,
+        method='GET',
+        path='projects/{projectCode}/process-definition',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:otherParamsJson@ProcessDefinitionController.queryProcessDefinitionListPaging@3.1.0'],
+            PARAMETER_CONTRACTS['request:pageNo@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:pageSize@ProjectController.queryProjectListPaging@1.3.9'],
+            PARAMETER_CONTRACTS['request:searchVal@AccessTokenController.queryAccessTokenList@1.3.9'],
+            PARAMETER_CONTRACTS['request:userId@ProcessDefinitionController.queryProcessDefinitionListPaging@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProcessDefinitionController.createProcessDefinition@3.2.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.createProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition',
         parameters=(
@@ -5869,7 +8192,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.createEmptyProcessDefinition@3.2.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.createEmptyProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/empty',
         parameters=(
@@ -5885,7 +8208,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.getProcessListByProjectCode@3.2.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.getProcessListByProjectCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-definition/query-process-definition-list',
         parameters=(
@@ -5893,9 +8216,20 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProcessDefinitionController.getTaskListByProcessDefinitionCode@3.2.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.getTaskListByProcessDefinitionCode',
+        document_group=None,
+        method='GET',
+        path='projects/{projectCode}/process-definition/query-task-definition-list',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:processDefinitionCode@ExecutorController.startCheckProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProcessDefinitionController.deleteProcessDefinitionByCode@3.2.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.deleteProcessDefinitionByCode',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/process-definition/{code}',
         parameters=(
@@ -5906,7 +8240,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.updateProcessDefinition@3.2.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-definition/{code}',
         parameters=(
@@ -5927,7 +8261,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.updateProcessDefinitionBasicInfo@3.2.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinitionBasicInfo',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-definition/{code}/basic-info',
         parameters=(
@@ -5946,7 +8280,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.releaseProcessDefinition@3.2.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.releaseProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/{code}/release',
         parameters=(
@@ -5958,7 +8292,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.releaseWorkflowAndSchedule@3.2.0': ApiOperationContract(
         operation_id='ProcessDefinitionController.releaseWorkflowAndSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/process-definition/{code}/release-workflow',
         parameters=(
@@ -5968,9 +8302,20 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProcessDefinitionController.viewVariables@3.2.0': ApiOperationContract(
+        operation_id='ProcessDefinitionController.viewVariables',
+        document_group=None,
+        method='GET',
+        path='projects/{projectCode}/process-definition/{code}/view-variables',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProcessInstanceController.queryProcessInstanceList@3.2.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryProcessInstanceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances',
         parameters=(
@@ -5988,9 +8333,20 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProcessInstanceController.batchDeleteProcessInstanceByIds@3.2.0': ApiOperationContract(
+        operation_id='ProcessInstanceController.batchDeleteProcessInstanceByIds',
+        document_group=None,
+        method='POST',
+        path='projects/{projectCode}/process-instances/batch-delete',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:processInstanceIds@ProcessInstanceController.batchDeleteProcessInstanceByIds@1.3.9'],
+        ),
+        ignored_document_parameters=('alertGroup', 'createTime', 'email', 'id', 'phone', 'queue', 'queueName', 'state', 'tenantCode', 'tenantId', 'timeZone', 'updateTime', 'userName', 'userPassword', 'userType'),
+    ),
     'ProcessInstanceController.queryDynamicSubWorkflowInstances@3.2.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryDynamicSubWorkflowInstances',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/query-dynamic-sub-workflows',
         parameters=(
@@ -6000,7 +8356,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.querySubProcessInstanceByTaskId@3.2.0': ApiOperationContract(
         operation_id='ProcessInstanceController.querySubProcessInstanceByTaskId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/query-sub-by-parent',
         parameters=(
@@ -6011,7 +8367,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.queryProcessInstancesByTriggerCode@3.2.0': ApiOperationContract(
         operation_id='ProcessInstanceController.queryProcessInstancesByTriggerCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/process-instances/trigger',
         parameters=(
@@ -6022,7 +8378,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessInstanceController.updateProcessInstance@3.2.0': ApiOperationContract(
         operation_id='ProcessInstanceController.updateProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-instances/{id}',
         parameters=(
@@ -6038,9 +8394,93 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'ProcessTaskRelationController.createProcessTaskRelation@3.2.0': ApiOperationContract(
+        operation_id='ProcessTaskRelationController.createProcessTaskRelation',
+        document_group=None,
+        method='POST',
+        path='projects/{projectCode}/process-task-relation',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:postTaskCode@ProcessTaskRelationController.createProcessTaskRelation@3.1.0'],
+            PARAMETER_CONTRACTS['request:preTaskCode@ProcessTaskRelationController.createProcessTaskRelation@3.1.0'],
+            PARAMETER_CONTRACTS['request:processDefinitionCode@ExecutorController.startCheckProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessTaskRelationController.deleteEdge@3.2.0': ApiOperationContract(
+        operation_id='ProcessTaskRelationController.deleteEdge',
+        document_group=None,
+        method='DELETE',
+        path='projects/{projectCode}/process-task-relation/{processDefinitionCode}/{preTaskCode}/{postTaskCode}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:postTaskCode@ProcessTaskRelationController.deleteEdge@3.1.0'],
+            PARAMETER_CONTRACTS['path:preTaskCode@ProcessTaskRelationController.deleteEdge@3.1.0'],
+            PARAMETER_CONTRACTS['path:processDefinitionCode@ProcessTaskRelationController.deleteEdge@3.1.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessTaskRelationController.deleteTaskProcessRelation@3.2.0': ApiOperationContract(
+        operation_id='ProcessTaskRelationController.deleteTaskProcessRelation',
+        document_group=None,
+        method='DELETE',
+        path='projects/{projectCode}/process-task-relation/{taskCode}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:taskCode@ProcessTaskRelationController.deleteTaskProcessRelation@3.1.0'],
+            PARAMETER_CONTRACTS['request:processDefinitionCode@ExecutorController.startCheckProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessTaskRelationController.deleteDownstreamRelation@3.2.0': ApiOperationContract(
+        operation_id='ProcessTaskRelationController.deleteDownstreamRelation',
+        document_group=None,
+        method='DELETE',
+        path='projects/{projectCode}/process-task-relation/{taskCode}/downstream',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:taskCode@ProcessTaskRelationController.deleteTaskProcessRelation@3.1.0'],
+            PARAMETER_CONTRACTS['request:postTaskCodes@ProcessTaskRelationController.deleteDownstreamRelation@2.0.1'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessTaskRelationController.queryDownstreamRelation@3.2.0': ApiOperationContract(
+        operation_id='ProcessTaskRelationController.queryDownstreamRelation',
+        document_group=None,
+        method='GET',
+        path='projects/{projectCode}/process-task-relation/{taskCode}/downstream',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:taskCode@ProcessTaskRelationController.deleteTaskProcessRelation@3.1.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessTaskRelationController.deleteUpstreamRelation@3.2.0': ApiOperationContract(
+        operation_id='ProcessTaskRelationController.deleteUpstreamRelation',
+        document_group=None,
+        method='DELETE',
+        path='projects/{projectCode}/process-task-relation/{taskCode}/upstream',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:taskCode@ProcessTaskRelationController.deleteTaskProcessRelation@3.1.0'],
+            PARAMETER_CONTRACTS['request:preTaskCodes@ProcessTaskRelationController.deleteUpstreamRelation@2.0.1'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'ProcessTaskRelationController.queryUpstreamRelation@3.2.0': ApiOperationContract(
+        operation_id='ProcessTaskRelationController.queryUpstreamRelation',
+        document_group=None,
+        method='GET',
+        path='projects/{projectCode}/process-task-relation/{taskCode}/upstream',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['path:taskCode@ProcessTaskRelationController.deleteTaskProcessRelation@3.1.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'ProjectParameterController.queryProjectParameterListPaging@3.2.0': ApiOperationContract(
         operation_id='ProjectParameterController.queryProjectParameterListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/project-parameter',
         parameters=(
@@ -6053,7 +8493,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectParameterController.createProjectParameter@3.2.0': ApiOperationContract(
         operation_id='ProjectParameterController.createProjectParameter',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/project-parameter',
         parameters=(
@@ -6065,7 +8505,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectParameterController.batchDeleteProjectParametersByCodes@3.2.0': ApiOperationContract(
         operation_id='ProjectParameterController.batchDeleteProjectParametersByCodes',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/project-parameter/batch-delete',
         parameters=(
@@ -6076,7 +8516,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectParameterController.deleteProjectParametersByCode@3.2.0': ApiOperationContract(
         operation_id='ProjectParameterController.deleteProjectParametersByCode',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/project-parameter/delete',
         parameters=(
@@ -6087,7 +8527,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectParameterController.queryProjectParameterByCode@3.2.0': ApiOperationContract(
         operation_id='ProjectParameterController.queryProjectParameterByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/project-parameter/{code}',
         parameters=(
@@ -6098,7 +8538,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectParameterController.updateProjectParameter@3.2.0': ApiOperationContract(
         operation_id='ProjectParameterController.updateProjectParameter',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/project-parameter/{code}',
         parameters=(
@@ -6111,7 +8551,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectPreferenceController.queryProjectPreferenceByProjectCode@3.2.0': ApiOperationContract(
         operation_id='ProjectPreferenceController.queryProjectPreferenceByProjectCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/project-preference',
         parameters=(
@@ -6121,7 +8561,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectPreferenceController.enableProjectPreference@3.2.0': ApiOperationContract(
         operation_id='ProjectPreferenceController.enableProjectPreference',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/project-preference',
         parameters=(
@@ -6132,7 +8572,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectPreferenceController.updateProjectPreference@3.2.0': ApiOperationContract(
         operation_id='ProjectPreferenceController.updateProjectPreference',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/project-preference',
         parameters=(
@@ -6143,7 +8583,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.queryScheduleListPaging@3.2.0': ApiOperationContract(
         operation_id='SchedulerController.queryScheduleListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/schedules',
         parameters=(
@@ -6157,7 +8597,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.createSchedule@3.2.0': ApiOperationContract(
         operation_id='SchedulerController.createSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/schedules',
         parameters=(
@@ -6176,7 +8616,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.previewSchedule@3.2.0': ApiOperationContract(
         operation_id='SchedulerController.previewSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/schedules/preview',
         parameters=(
@@ -6186,7 +8626,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateScheduleByProcessDefinitionCode@3.2.0': ApiOperationContract(
         operation_id='SchedulerController.updateScheduleByProcessDefinitionCode',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/update/{code}',
         parameters=(
@@ -6205,7 +8645,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateSchedule@3.2.0': ApiOperationContract(
         operation_id='SchedulerController.updateSchedule',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/{id}',
         parameters=(
@@ -6222,9 +8662,31 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'SchedulerController.offlineSchedule@3.2.0': ApiOperationContract(
+        operation_id='SchedulerController.offlineSchedule',
+        document_group=None,
+        method='POST',
+        path='projects/{projectCode}/schedules/{id}/offline',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'SchedulerController.publishScheduleOnline@3.2.0': ApiOperationContract(
+        operation_id='SchedulerController.publishScheduleOnline',
+        document_group=None,
+        method='POST',
+        path='projects/{projectCode}/schedules/{id}/online',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'TaskDefinitionController.queryTaskDefinitionListPaging@3.2.0': ApiOperationContract(
         operation_id='TaskDefinitionController.queryTaskDefinitionListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-definition',
         parameters=(
@@ -6237,9 +8699,45 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'TaskDefinitionController.createTaskDefinition@3.2.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.createTaskDefinition',
+        document_group=None,
+        method='POST',
+        path='projects/{projectCode}/task-definition',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:taskDefinitionJson@ProcessDefinitionController.createProcessDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskDefinitionController.createTaskBindsWorkFlow@3.2.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.createTaskBindsWorkFlow',
+        document_group=None,
+        method='POST',
+        path='projects/{projectCode}/task-definition/save-single',
+        parameters=(
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:processDefinitionCode@ExecutorController.startCheckProcessDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:taskDefinitionJsonObj@TaskDefinitionController.updateTaskDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:upstreamCodes@TaskDefinitionController.createTaskBindsWorkFlow@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskDefinitionController.updateTaskDefinition@3.2.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.updateTaskDefinition',
+        document_group=None,
+        method='PUT',
+        path='projects/{projectCode}/task-definition/{code}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:taskDefinitionJsonObj@TaskDefinitionController.updateTaskDefinition@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'TaskDefinitionController.releaseTaskDefinition@3.2.0': ApiOperationContract(
         operation_id='TaskDefinitionController.releaseTaskDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/task-definition/{code}/release',
         parameters=(
@@ -6249,9 +8747,22 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'TaskDefinitionController.updateTaskWithUpstream@3.2.0': ApiOperationContract(
+        operation_id='TaskDefinitionController.updateTaskWithUpstream',
+        document_group=None,
+        method='PUT',
+        path='projects/{projectCode}/task-definition/{code}/with-upstream',
+        parameters=(
+            PARAMETER_CONTRACTS['path:code@ProcessDefinitionController.queryProcessDefinitionByCode@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+            PARAMETER_CONTRACTS['request:taskDefinitionJsonObj@TaskDefinitionController.updateTaskDefinition@2.0.0'],
+            PARAMETER_CONTRACTS['request:upstreamCodes@TaskDefinitionController.createTaskBindsWorkFlow@3.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'TaskInstanceController.queryTaskListPaging@3.2.0': ApiOperationContract(
         operation_id='TaskInstanceController.queryTaskListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-instances',
         parameters=(
@@ -6275,7 +8786,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceController.removeTaskInstanceCache@3.2.0': ApiOperationContract(
         operation_id='TaskInstanceController.removeTaskInstanceCache',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/task-instances/{id}/remove-cache',
         parameters=(
@@ -6284,9 +8795,31 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'TaskInstanceController.taskSavePoint@3.2.0': ApiOperationContract(
+        operation_id='TaskInstanceController.taskSavePoint',
+        document_group=None,
+        method='POST',
+        path='projects/{projectCode}/task-instances/{id}/savepoint',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'TaskInstanceController.stopTask@3.2.0': ApiOperationContract(
+        operation_id='TaskInstanceController.stopTask',
+        document_group=None,
+        method='POST',
+        path='projects/{projectCode}/task-instances/{id}/stop',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+            PARAMETER_CONTRACTS['path:projectCode@ExecutorController.execute@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'QueueController.deleteQueueById@3.2.0': ApiOperationContract(
         operation_id='QueueController.deleteQueueById',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='queues/{id}',
         parameters=(
@@ -6296,7 +8829,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoginController.loginByAuth2@3.2.0': ApiOperationContract(
         operation_id='LoginController.loginByAuth2',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='redirect/login/oauth2',
         parameters=(
@@ -6307,7 +8840,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.deleteResource@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.deleteResource',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='resources',
         parameters=(
@@ -6318,7 +8851,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceListPaging@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources',
         parameters=(
@@ -6333,7 +8866,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createResource@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.createResource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources',
         parameters=(
@@ -6346,7 +8879,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateResource@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.updateResource',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='resources',
         parameters=(
@@ -6360,7 +8893,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceBaseDir@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceBaseDir',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/base-dir',
         parameters=(
@@ -6370,7 +8903,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.deleteDataTransferData@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.deleteDataTransferData',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='resources/data-transfer',
         parameters=(
@@ -6380,7 +8913,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createDirectory@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.createDirectory',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/directory',
         parameters=(
@@ -6393,7 +8926,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.downloadResource@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.downloadResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/download',
         parameters=(
@@ -6403,7 +8936,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceList@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/list',
         parameters=(
@@ -6414,7 +8947,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.onlineCreateResource@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.onlineCreateResource',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/online-create',
         parameters=(
@@ -6428,7 +8961,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceJarList@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceJarList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/query-by-type',
         parameters=(
@@ -6439,7 +8972,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceByFileName@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceByFileName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/query-file-name',
         parameters=(
@@ -6451,7 +8984,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceByFullName@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.queryResourceByFullName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/query-full-name',
         parameters=(
@@ -6463,7 +8996,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createUdfFunc@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.createUdfFunc',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/udf-func',
         parameters=(
@@ -6479,7 +9012,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateUdfFunc@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.updateUdfFunc',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='resources/udf-func/{id}',
         parameters=(
@@ -6496,7 +9029,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateResourceContent@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.updateResourceContent',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='resources/update-content',
         parameters=(
@@ -6508,7 +9041,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.verifyResourceName@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.verifyResourceName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/verify-name',
         parameters=(
@@ -6519,7 +9052,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.viewResource@3.2.0': ApiOperationContract(
         operation_id='ResourcesController.viewResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/view',
         parameters=(
@@ -6532,7 +9065,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.closeTaskGroup@3.2.0': ApiOperationContract(
         operation_id='TaskGroupController.closeTaskGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/close-task-group',
         parameters=(
@@ -6542,7 +9075,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.createTaskGroup@3.2.0': ApiOperationContract(
         operation_id='TaskGroupController.createTaskGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/create',
         parameters=(
@@ -6555,7 +9088,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.queryTaskGroupByCode@3.2.0': ApiOperationContract(
         operation_id='TaskGroupController.queryTaskGroupByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='task-group/query-list-by-projectCode',
         parameters=(
@@ -6567,7 +9100,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.queryTaskGroupByStatus@3.2.0': ApiOperationContract(
         operation_id='TaskGroupController.queryTaskGroupByStatus',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='task-group/query-list-by-status',
         parameters=(
@@ -6579,7 +9112,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.startTaskGroup@3.2.0': ApiOperationContract(
         operation_id='TaskGroupController.startTaskGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/start-task-group',
         parameters=(
@@ -6589,7 +9122,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.updateTaskGroup@3.2.0': ApiOperationContract(
         operation_id='TaskGroupController.updateTaskGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='task-group/update',
         parameters=(
@@ -6602,7 +9135,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.activateUser@3.2.0': ApiOperationContract(
         operation_id='UsersController.activateUser',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/activate',
         parameters=(
@@ -6612,7 +9145,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.authorizedUser@3.2.0': ApiOperationContract(
         operation_id='UsersController.authorizedUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/authed-user',
         parameters=(
@@ -6620,9 +9153,30 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'UsersController.batchActivateUser@3.2.0': ApiOperationContract(
+        operation_id='UsersController.batchActivateUser',
+        document_group=None,
+        method='POST',
+        path='users/batch/activate',
+        parameters=(
+            PARAMETER_CONTRACTS['body:userNames@UsersController.batchActivateUser@3.1.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'UsersController.grantProjectByCode@3.2.0': ApiOperationContract(
+        operation_id='UsersController.grantProjectByCode',
+        document_group=None,
+        method='POST',
+        path='users/grant-project-by-code',
+        parameters=(
+            PARAMETER_CONTRACTS['request:projectCode@UsersController.grantProjectByCode@3.1.0'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'UsersController.grantProjectWithReadPerm@3.2.0': ApiOperationContract(
         operation_id='UsersController.grantProjectWithReadPerm',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/grant-project-with-read-perm',
         parameters=(
@@ -6631,9 +9185,20 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'UsersController.revokeProject@3.2.0': ApiOperationContract(
+        operation_id='UsersController.revokeProject',
+        document_group=None,
+        method='POST',
+        path='users/revoke-project',
+        parameters=(
+            PARAMETER_CONTRACTS['request:projectCode@UsersController.grantProjectByCode@3.1.0'],
+            PARAMETER_CONTRACTS['request:userId@DataSourceController.authedDatasource@1.3.9'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'UsersController.revokeProjectById@3.2.0': ApiOperationContract(
         operation_id='UsersController.revokeProjectById',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='users/revoke-project-by-id',
         parameters=(
@@ -6644,7 +9209,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UsersController.unauthorizedUser@3.2.0': ApiOperationContract(
         operation_id='UsersController.unauthorizedUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='users/unauth-user',
         parameters=(
@@ -6654,7 +9219,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AccessTokenV2Controller.createToken@3.2.0': ApiOperationContract(
         operation_id='AccessTokenV2Controller.createToken',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/access-tokens',
         parameters=(
@@ -6664,7 +9229,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryProjectListPaging@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryProjectListPaging',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/projects',
         parameters=(
@@ -6674,7 +9239,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.createProject@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.createProject',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/projects',
         parameters=(
@@ -6684,7 +9249,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryAuthorizedProject@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryAuthorizedProject',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/projects/authed-project',
         parameters=(
@@ -6694,7 +9259,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryAuthorizedUser@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryAuthorizedUser',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/projects/authed-user',
         parameters=(
@@ -6704,7 +9269,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryProjectCreatedAndAuthorizedByUser@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryProjectCreatedAndAuthorizedByUser',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/projects/created-and-authed',
         parameters=(
@@ -6713,7 +9278,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryAllProjectList@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryAllProjectList',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/projects/list',
         parameters=(
@@ -6722,7 +9287,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryAllProjectListForDependent@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryAllProjectListForDependent',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/projects/list-dependent',
         parameters=(
@@ -6731,7 +9296,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryUnauthorizedProject@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryUnauthorizedProject',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/projects/unauth-project',
         parameters=(
@@ -6741,7 +9306,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.deleteProject@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.deleteProject',
-        api_group='v2',
+        document_group=None,
         method='DELETE',
         path='v2/projects/{code}',
         parameters=(
@@ -6751,7 +9316,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.queryProjectByCode@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.queryProjectByCode',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/projects/{code}',
         parameters=(
@@ -6761,7 +9326,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectV2Controller.updateProject@3.2.0': ApiOperationContract(
         operation_id='ProjectV2Controller.updateProject',
-        api_group='v2',
+        document_group=None,
         method='PUT',
         path='v2/projects/{code}',
         parameters=(
@@ -6772,7 +9337,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceV2Controller.queryTaskListPaging@3.2.0': ApiOperationContract(
         operation_id='TaskInstanceV2Controller.queryTaskListPaging',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/projects/{projectCode}/task-instances',
         parameters=(
@@ -6783,7 +9348,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceV2Controller.forceTaskSuccess@3.2.0': ApiOperationContract(
         operation_id='TaskInstanceV2Controller.forceTaskSuccess',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/projects/{projectCode}/task-instances/{id}/force-success',
         parameters=(
@@ -6794,7 +9359,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceV2Controller.taskSavePoint@3.2.0': ApiOperationContract(
         operation_id='TaskInstanceV2Controller.taskSavePoint',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/projects/{projectCode}/task-instances/{id}/savepoint',
         parameters=(
@@ -6805,7 +9370,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceV2Controller.stopTask@3.2.0': ApiOperationContract(
         operation_id='TaskInstanceV2Controller.stopTask',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/projects/{projectCode}/task-instances/{id}/stop',
         parameters=(
@@ -6816,7 +9381,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceV2Controller.queryTaskInstanceByCode@3.2.0': ApiOperationContract(
         operation_id='TaskInstanceV2Controller.queryTaskInstanceByCode',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/projects/{projectCode}/task-instances/{taskInstanceId}',
         parameters=(
@@ -6827,7 +9392,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueV2Controller.queryQueueListPaging@3.2.0': ApiOperationContract(
         operation_id='QueueV2Controller.queryQueueListPaging',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/queues',
         parameters=(
@@ -6837,7 +9402,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueV2Controller.createQueue@3.2.0': ApiOperationContract(
         operation_id='QueueV2Controller.createQueue',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/queues',
         parameters=(
@@ -6847,7 +9412,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueV2Controller.queryList@3.2.0': ApiOperationContract(
         operation_id='QueueV2Controller.queryList',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/queues/list',
         parameters=(
@@ -6856,7 +9421,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueV2Controller.verifyQueue@3.2.0': ApiOperationContract(
         operation_id='QueueV2Controller.verifyQueue',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/queues/verify',
         parameters=(
@@ -6866,7 +9431,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'QueueV2Controller.updateQueue@3.2.0': ApiOperationContract(
         operation_id='QueueV2Controller.updateQueue',
-        api_group='v2',
+        document_group=None,
         method='PUT',
         path='v2/queues/{id}',
         parameters=(
@@ -6877,7 +9442,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationV2Controller.createTaskRelation@3.2.0': ApiOperationContract(
         operation_id='ProcessTaskRelationV2Controller.createTaskRelation',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/relations',
         parameters=(
@@ -6887,7 +9452,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationV2Controller.deleteTaskRelation@3.2.0': ApiOperationContract(
         operation_id='ProcessTaskRelationV2Controller.deleteTaskRelation',
-        api_group='v2',
+        document_group=None,
         method='DELETE',
         path='v2/relations/{code-pair}',
         parameters=(
@@ -6897,7 +9462,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessTaskRelationV2Controller.updateUpstreamTaskDefinition@3.2.0': ApiOperationContract(
         operation_id='ProcessTaskRelationV2Controller.updateUpstreamTaskDefinition',
-        api_group='v2',
+        document_group=None,
         method='PUT',
         path='v2/relations/{code}',
         parameters=(
@@ -6908,7 +9473,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ScheduleV2Controller.createSchedule@3.2.0': ApiOperationContract(
         operation_id='ScheduleV2Controller.createSchedule',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/schedules',
         parameters=(
@@ -6918,7 +9483,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ScheduleV2Controller.filterSchedule@3.2.0': ApiOperationContract(
         operation_id='ScheduleV2Controller.filterSchedule',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/schedules/filter',
         parameters=(
@@ -6928,7 +9493,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ScheduleV2Controller.deleteSchedule@3.2.0': ApiOperationContract(
         operation_id='ScheduleV2Controller.deleteSchedule',
-        api_group='v2',
+        document_group=None,
         method='DELETE',
         path='v2/schedules/{id}',
         parameters=(
@@ -6938,7 +9503,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ScheduleV2Controller.getSchedule@3.2.0': ApiOperationContract(
         operation_id='ScheduleV2Controller.getSchedule',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/schedules/{id}',
         parameters=(
@@ -6948,7 +9513,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ScheduleV2Controller.updateSchedule@3.2.0': ApiOperationContract(
         operation_id='ScheduleV2Controller.updateSchedule',
-        api_group='v2',
+        document_group=None,
         method='PUT',
         path='v2/schedules/{id}',
         parameters=(
@@ -6959,7 +9524,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'StatisticsV2Controller.queryTaskStatesCounts@3.2.0': ApiOperationContract(
         operation_id='StatisticsV2Controller.queryTaskStatesCounts',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/statistics/tasks/states/count',
         parameters=(
@@ -6969,7 +9534,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'StatisticsV2Controller.queryOneTaskStatesCounts@3.2.0': ApiOperationContract(
         operation_id='StatisticsV2Controller.queryOneTaskStatesCounts',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/statistics/tasks/{taskCode}/states/count',
         parameters=(
@@ -6979,7 +9544,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'StatisticsV2Controller.queryWorkflowInstanceCounts@3.2.0': ApiOperationContract(
         operation_id='StatisticsV2Controller.queryWorkflowInstanceCounts',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/statistics/workflows/count',
         parameters=(
@@ -6988,7 +9553,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'StatisticsV2Controller.queryWorkflowStatesCounts@3.2.0': ApiOperationContract(
         operation_id='StatisticsV2Controller.queryWorkflowStatesCounts',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/statistics/workflows/states/count',
         parameters=(
@@ -6998,7 +9563,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'StatisticsV2Controller.countDefinitionByUser@3.2.0': ApiOperationContract(
         operation_id='StatisticsV2Controller.countDefinitionByUser',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/statistics/workflows/users/count',
         parameters=(
@@ -7008,7 +9573,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'StatisticsV2Controller.countDefinitionByUserId@3.2.0': ApiOperationContract(
         operation_id='StatisticsV2Controller.countDefinitionByUserId',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/statistics/workflows/users/{userId}/count',
         parameters=(
@@ -7018,7 +9583,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'StatisticsV2Controller.countDefinitionByUserState@3.2.0': ApiOperationContract(
         operation_id='StatisticsV2Controller.countDefinitionByUserState',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/statistics/workflows/users/{userId}/{releaseState}/count',
         parameters=(
@@ -7029,7 +9594,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'StatisticsV2Controller.queryOneWorkflowStates@3.2.0': ApiOperationContract(
         operation_id='StatisticsV2Controller.queryOneWorkflowStates',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/statistics/{workflowCode}/states/count',
         parameters=(
@@ -7039,7 +9604,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionV2Controller.createTaskDefinition@3.2.0': ApiOperationContract(
         operation_id='TaskDefinitionV2Controller.createTaskDefinition',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/tasks',
         parameters=(
@@ -7049,7 +9614,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionV2Controller.filterTaskDefinition@3.2.0': ApiOperationContract(
         operation_id='TaskDefinitionV2Controller.filterTaskDefinition',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/tasks/query',
         parameters=(
@@ -7059,7 +9624,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionV2Controller.deleteTaskDefinition@3.2.0': ApiOperationContract(
         operation_id='TaskDefinitionV2Controller.deleteTaskDefinition',
-        api_group='v2',
+        document_group=None,
         method='DELETE',
         path='v2/tasks/{code}',
         parameters=(
@@ -7069,7 +9634,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionV2Controller.getTaskDefinition@3.2.0': ApiOperationContract(
         operation_id='TaskDefinitionV2Controller.getTaskDefinition',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/tasks/{code}',
         parameters=(
@@ -7079,7 +9644,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskDefinitionV2Controller.updateTaskDefinition@3.2.0': ApiOperationContract(
         operation_id='TaskDefinitionV2Controller.updateTaskDefinition',
-        api_group='v2',
+        document_group=None,
         method='PUT',
         path='v2/tasks/{code}',
         parameters=(
@@ -7090,7 +9655,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceV2Controller.queryWorkflowInstanceListPaging@3.2.0': ApiOperationContract(
         operation_id='WorkflowInstanceV2Controller.queryWorkflowInstanceListPaging',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/workflow-instances',
         parameters=(
@@ -7100,7 +9665,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceV2Controller.deleteWorkflowInstance@3.2.0': ApiOperationContract(
         operation_id='WorkflowInstanceV2Controller.deleteWorkflowInstance',
-        api_group='v2',
+        document_group=None,
         method='DELETE',
         path='v2/workflow-instances/{workflowInstanceId}',
         parameters=(
@@ -7110,7 +9675,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceV2Controller.queryWorkflowInstanceById@3.2.0': ApiOperationContract(
         operation_id='WorkflowInstanceV2Controller.queryWorkflowInstanceById',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/workflow-instances/{workflowInstanceId}',
         parameters=(
@@ -7120,7 +9685,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceV2Controller.execute@3.2.0': ApiOperationContract(
         operation_id='WorkflowInstanceV2Controller.execute',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/workflow-instances/{workflowInstanceId}/execute/{executeType}',
         parameters=(
@@ -7131,7 +9696,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowV2Controller.createWorkflow@3.2.0': ApiOperationContract(
         operation_id='WorkflowV2Controller.createWorkflow',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/workflows',
         parameters=(
@@ -7141,7 +9706,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowV2Controller.filterWorkflows@3.2.0': ApiOperationContract(
         operation_id='WorkflowV2Controller.filterWorkflows',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/workflows/query',
         parameters=(
@@ -7151,7 +9716,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowV2Controller.deleteWorkflow@3.2.0': ApiOperationContract(
         operation_id='WorkflowV2Controller.deleteWorkflow',
-        api_group='v2',
+        document_group=None,
         method='DELETE',
         path='v2/workflows/{code}',
         parameters=(
@@ -7161,7 +9726,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowV2Controller.getWorkflow@3.2.0': ApiOperationContract(
         operation_id='WorkflowV2Controller.getWorkflow',
-        api_group='v2',
+        document_group=None,
         method='GET',
         path='v2/workflows/{code}',
         parameters=(
@@ -7171,7 +9736,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowV2Controller.updateWorkflow@3.2.0': ApiOperationContract(
         operation_id='WorkflowV2Controller.updateWorkflow',
-        api_group='v2',
+        document_group=None,
         method='PUT',
         path='v2/workflows/{code}',
         parameters=(
@@ -7180,9 +9745,33 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
         ),
         ignored_document_parameters=(),
     ),
+    'WorkerGroupController.saveWorkerGroup@3.2.0': ApiOperationContract(
+        operation_id='WorkerGroupController.saveWorkerGroup',
+        document_group=None,
+        method='POST',
+        path='worker-groups',
+        parameters=(
+            PARAMETER_CONTRACTS['request:addrList@WorkerGroupController.saveWorkerGroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:description@WorkerGroupController.saveWorkerGroup@3.1.0'],
+            PARAMETER_CONTRACTS['request:id@WorkerGroupController.saveWorkerGroup@1.3.9'],
+            PARAMETER_CONTRACTS['request:name@DataSourceController.connectDataSource@1.3.9'],
+            PARAMETER_CONTRACTS['request:otherParamsJson@WorkerGroupController.saveWorkerGroup@3.1.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
+    'WorkerGroupController.deleteWorkerGroupById@3.2.0': ApiOperationContract(
+        operation_id='WorkerGroupController.deleteWorkerGroupById',
+        document_group=None,
+        method='DELETE',
+        path='worker-groups/{id}',
+        parameters=(
+            PARAMETER_CONTRACTS['path:id@AlertGroupController.delAlertgroupById@2.0.0'],
+        ),
+        ignored_document_parameters=(),
+    ),
     'AlertGroupController.createAlertGroup@3.2.1': ApiOperationContract(
         operation_id='AlertGroupController.createAlertGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-groups',
         parameters=(
@@ -7194,7 +9783,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.normalAlertGroupList@3.2.1': ApiOperationContract(
         operation_id='AlertGroupController.normalAlertGroupList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='alert-groups/normal-list',
         parameters=(
@@ -7203,7 +9792,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.deleteAlertGroupById@3.2.1': ApiOperationContract(
         operation_id='AlertGroupController.deleteAlertGroupById',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='alert-groups/{id}',
         parameters=(
@@ -7213,7 +9802,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertGroupController.updateAlertGroupById@3.2.1': ApiOperationContract(
         operation_id='AlertGroupController.updateAlertGroupById',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='alert-groups/{id}',
         parameters=(
@@ -7226,7 +9815,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.createAlertPluginInstance@3.2.1': ApiOperationContract(
         operation_id='AlertPluginInstanceController.createAlertPluginInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-plugin-instances',
         parameters=(
@@ -7240,7 +9829,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.testSendAlertPluginInstance@3.2.1': ApiOperationContract(
         operation_id='AlertPluginInstanceController.testSendAlertPluginInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='alert-plugin-instances/test-send',
         parameters=(
@@ -7251,7 +9840,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.updateAlertPluginInstanceById@3.2.1': ApiOperationContract(
         operation_id='AlertPluginInstanceController.updateAlertPluginInstanceById',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='alert-plugin-instances/{id}',
         parameters=(
@@ -7264,7 +9853,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ClusterController.createCluster@3.2.1': ApiOperationContract(
         operation_id='ClusterController.createCluster',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='cluster/create',
         parameters=(
@@ -7276,7 +9865,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSourceList@3.2.1': ApiOperationContract(
         operation_id='DataSourceController.queryDataSourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/list',
         parameters=(
@@ -7286,7 +9875,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'K8sNamespaceController.createNamespace@3.2.1': ApiOperationContract(
         operation_id='K8sNamespaceController.createNamespace',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='k8s-namespace',
         parameters=(
@@ -7297,7 +9886,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.countDefinitionByUser@3.2.1': ApiOperationContract(
         operation_id='DataAnalysisController.countDefinitionByUser',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/define-user-count',
         parameters=(
@@ -7307,7 +9896,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.getWorkflowInstanceStateCount@3.2.1': ApiOperationContract(
         operation_id='DataAnalysisController.getWorkflowInstanceStateCount',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/process-state-count',
         parameters=(
@@ -7319,7 +9908,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.getTaskInstanceStateCount@3.2.1': ApiOperationContract(
         operation_id='DataAnalysisController.getTaskInstanceStateCount',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/task-state-count',
         parameters=(
@@ -7331,7 +9920,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectController.updateProject@3.2.1': ApiOperationContract(
         operation_id='ProjectController.updateProject',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{code}',
         parameters=(
@@ -7343,7 +9932,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.batchStartProcessInstance@3.2.1': ApiOperationContract(
         operation_id='ExecutorController.batchStartProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/batch-start-process-instance',
         parameters=(
@@ -7374,7 +9963,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.startProcessInstance@3.2.1': ApiOperationContract(
         operation_id='ExecutorController.startProcessInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/start-process-instance',
         parameters=(
@@ -7406,7 +9995,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProcessDefinitionController.updateProcessDefinition@3.2.1': ApiOperationContract(
         operation_id='ProcessDefinitionController.updateProcessDefinition',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/process-definition/{code}',
         parameters=(
@@ -7426,7 +10015,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.createSchedule@3.2.1': ApiOperationContract(
         operation_id='SchedulerController.createSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/schedules',
         parameters=(
@@ -7445,7 +10034,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateScheduleByProcessDefinitionCode@3.2.1': ApiOperationContract(
         operation_id='SchedulerController.updateScheduleByProcessDefinitionCode',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/update/{code}',
         parameters=(
@@ -7464,7 +10053,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateSchedule@3.2.1': ApiOperationContract(
         operation_id='SchedulerController.updateSchedule',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/{id}',
         parameters=(
@@ -7483,7 +10072,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.queryTaskGroupQueues@3.2.1': ApiOperationContract(
         operation_id='TaskGroupController.queryTaskGroupQueues',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='task-group/query-list-by-group-id',
         parameters=(
@@ -7498,7 +10087,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.queryTenantListPaging@3.2.1': ApiOperationContract(
         operation_id='TenantController.queryTenantListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='tenants',
         parameters=(
@@ -7510,7 +10099,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TenantController.queryTenantList@3.2.1': ApiOperationContract(
         operation_id='TenantController.queryTenantList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='tenants/list',
         parameters=(
@@ -7519,7 +10108,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.listServer@3.2.2': ApiOperationContract(
         operation_id='MonitorController.listServer',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/{nodeType}',
         parameters=(
@@ -7529,7 +10118,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.listPaging@3.2.2': ApiOperationContract(
         operation_id='DataAnalysisController.listPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/listCommand',
         parameters=(
@@ -7541,7 +10130,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.listErrorCommand@3.2.2': ApiOperationContract(
         operation_id='DataAnalysisController.listErrorCommand',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/listErrorCommand',
         parameters=(
@@ -7553,7 +10142,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AuditLogController.queryAuditLogListPaging@3.2.2': ApiOperationContract(
         operation_id='AuditLogController.queryAuditLogListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/audit/audit-log-list',
         parameters=(
@@ -7570,7 +10159,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AuditLogController.queryAuditModelTypeList@3.2.2': ApiOperationContract(
         operation_id='AuditLogController.queryAuditModelTypeList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/audit/audit-log-model-type',
         parameters=(
@@ -7579,7 +10168,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AuditLogController.queryAuditOperationTypeList@3.2.2': ApiOperationContract(
         operation_id='AuditLogController.queryAuditOperationTypeList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/audit/audit-log-operation-type',
         parameters=(
@@ -7588,7 +10177,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkFlowLineageController.queryDownstreamDependentTaskList@3.2.2': ApiOperationContract(
         operation_id='WorkFlowLineageController.queryDownstreamDependentTaskList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/lineages/query-dependent-tasks',
         parameters=(
@@ -7599,7 +10188,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectWorkerGroupController.queryWorkerGroups@3.2.2': ApiOperationContract(
         operation_id='ProjectWorkerGroupController.queryWorkerGroups',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/worker-group',
         parameters=(
@@ -7609,7 +10198,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectWorkerGroupController.assignWorkerGroups@3.2.2': ApiOperationContract(
         operation_id='ProjectWorkerGroupController.assignWorkerGroups',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/worker-group',
         parameters=(
@@ -7620,7 +10209,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createResourceFile@3.2.2': ApiOperationContract(
         operation_id='ResourcesController.createResourceFile',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/online-create',
         parameters=(
@@ -7634,7 +10223,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'AlertPluginInstanceController.updateAlertPluginInstanceById@3.3.1': ApiOperationContract(
         operation_id='AlertPluginInstanceController.updateAlertPluginInstanceById',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='alert-plugin-instances/{id}',
         parameters=(
@@ -7646,7 +10235,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.queryDataSourceList@3.3.1': ApiOperationContract(
         operation_id='DataSourceController.queryDataSourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/list',
         parameters=(
@@ -7656,7 +10245,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.listServer@3.3.1': ApiOperationContract(
         operation_id='MonitorController.listServer',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/{nodeType}',
         parameters=(
@@ -7666,7 +10255,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataAnalysisController.getWorkflowInstanceStateCount@3.3.1': ApiOperationContract(
         operation_id='DataAnalysisController.getWorkflowInstanceStateCount',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/analysis/workflow-state-count',
         parameters=(
@@ -7678,7 +10267,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.batchControlWorkflowInstance@3.3.1': ApiOperationContract(
         operation_id='ExecutorController.batchControlWorkflowInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/batch-execute',
         parameters=(
@@ -7689,7 +10278,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.batchTriggerWorkflowDefinitions@3.3.1': ApiOperationContract(
         operation_id='ExecutorController.batchTriggerWorkflowDefinitions',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/batch-start-workflow-instance',
         parameters=(
@@ -7717,7 +10306,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.controlWorkflowInstance@3.3.1': ApiOperationContract(
         operation_id='ExecutorController.controlWorkflowInstance',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/execute',
         parameters=(
@@ -7728,7 +10317,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.executeTask@3.3.1': ApiOperationContract(
         operation_id='ExecutorController.executeTask',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/execute-task',
         parameters=(
@@ -7741,7 +10330,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.triggerWorkflowDefinition@3.3.1': ApiOperationContract(
         operation_id='ExecutorController.triggerWorkflowDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/start-workflow-instance',
         parameters=(
@@ -7769,7 +10358,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowLineageController.queryWorkFlowLineage@3.3.1': ApiOperationContract(
         operation_id='WorkflowLineageController.queryWorkFlowLineage',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/lineages/list',
         parameters=(
@@ -7779,7 +10368,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowLineageController.queryWorkFlowLineageByName@3.3.1': ApiOperationContract(
         operation_id='WorkflowLineageController.queryWorkFlowLineageByName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/lineages/query-by-name',
         parameters=(
@@ -7790,7 +10379,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowLineageController.queryDependentTasks@3.3.1': ApiOperationContract(
         operation_id='WorkflowLineageController.queryDependentTasks',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/lineages/query-dependent-tasks',
         parameters=(
@@ -7802,7 +10391,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowLineageController.verifyTaskCanDelete@3.3.1': ApiOperationContract(
         operation_id='WorkflowLineageController.verifyTaskCanDelete',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/lineages/tasks/verify-delete',
         parameters=(
@@ -7814,7 +10403,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowLineageController.queryWorkFlowLineageByCode@3.3.1': ApiOperationContract(
         operation_id='WorkflowLineageController.queryWorkFlowLineageByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/lineages/{workFlowCode}',
         parameters=(
@@ -7825,7 +10414,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectParameterController.queryProjectParameterListPaging@3.3.1': ApiOperationContract(
         operation_id='ProjectParameterController.queryProjectParameterListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/project-parameter',
         parameters=(
@@ -7839,7 +10428,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectParameterController.createProjectParameter@3.3.1': ApiOperationContract(
         operation_id='ProjectParameterController.createProjectParameter',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/project-parameter',
         parameters=(
@@ -7852,7 +10441,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectParameterController.updateProjectParameter@3.3.1': ApiOperationContract(
         operation_id='ProjectParameterController.updateProjectParameter',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/project-parameter/{code}',
         parameters=(
@@ -7866,7 +10455,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.queryScheduleListPaging@3.3.1': ApiOperationContract(
         operation_id='SchedulerController.queryScheduleListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/schedules',
         parameters=(
@@ -7880,7 +10469,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.createSchedule@3.3.1': ApiOperationContract(
         operation_id='SchedulerController.createSchedule',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/schedules',
         parameters=(
@@ -7899,7 +10488,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateScheduleByWorkflowDefinitionCode@3.3.1': ApiOperationContract(
         operation_id='SchedulerController.updateScheduleByWorkflowDefinitionCode',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/update/{code}',
         parameters=(
@@ -7918,7 +10507,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'SchedulerController.updateSchedule@3.3.1': ApiOperationContract(
         operation_id='SchedulerController.updateSchedule',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/schedules/{id}',
         parameters=(
@@ -7937,7 +10526,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskInstanceController.queryTaskListPaging@3.3.1': ApiOperationContract(
         operation_id='TaskInstanceController.queryTaskListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/task-instances',
         parameters=(
@@ -7961,7 +10550,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ProjectWorkerGroupController.queryAssignedWorkerGroups@3.3.1': ApiOperationContract(
         operation_id='ProjectWorkerGroupController.queryAssignedWorkerGroups',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/worker-group',
         parameters=(
@@ -7971,7 +10560,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.queryWorkflowDefinitionListPaging@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.queryWorkflowDefinitionListPaging',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition',
         parameters=(
@@ -7986,7 +10575,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.createWorkflowDefinition@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.createWorkflowDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/workflow-definition',
         parameters=(
@@ -8005,7 +10594,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.queryAllWorkflowDefinitionByProjectCode@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.queryAllWorkflowDefinitionByProjectCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/all',
         parameters=(
@@ -8015,7 +10604,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.copyWorkflowDefinition@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.copyWorkflowDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/workflow-definition/batch-copy',
         parameters=(
@@ -8027,7 +10616,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.batchDeleteWorkflowDefinitionByCodes@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.batchDeleteWorkflowDefinitionByCodes',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/workflow-definition/batch-delete',
         parameters=(
@@ -8038,7 +10627,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.batchExportWorkflowDefinitionByCodes@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.batchExportWorkflowDefinitionByCodes',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/workflow-definition/batch-export',
         parameters=(
@@ -8049,7 +10638,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.moveWorkflowDefinition@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.moveWorkflowDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/workflow-definition/batch-move',
         parameters=(
@@ -8061,7 +10650,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.getNodeListMapByDefinitionCodes@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.getNodeListMapByDefinitionCodes',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/batch-query-tasks',
         parameters=(
@@ -8072,7 +10661,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.importWorkflowDefinition@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.importWorkflowDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/workflow-definition/import',
         parameters=(
@@ -8083,7 +10672,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.queryWorkflowDefinitionList@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.queryWorkflowDefinitionList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/list',
         parameters=(
@@ -8093,7 +10682,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.queryWorkflowDefinitionByName@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.queryWorkflowDefinitionByName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/query-by-name',
         parameters=(
@@ -8104,7 +10693,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.getTaskListByWorkflowDefinitionCode@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.getTaskListByWorkflowDefinitionCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/query-task-definition-list',
         parameters=(
@@ -8115,7 +10704,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.getWorkflowListByProjectCode@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.getWorkflowListByProjectCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/query-workflow-definition-list',
         parameters=(
@@ -8125,7 +10714,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.queryWorkflowDefinitionSimpleList@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.queryWorkflowDefinitionSimpleList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/simple-list',
         parameters=(
@@ -8135,7 +10724,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.verifyWorkflowDefinitionName@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.verifyWorkflowDefinitionName',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/verify-name',
         parameters=(
@@ -8147,7 +10736,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.deleteWorkflowDefinitionByCode@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.deleteWorkflowDefinitionByCode',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/workflow-definition/{code}',
         parameters=(
@@ -8158,7 +10747,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.queryWorkflowDefinitionByCode@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.queryWorkflowDefinitionByCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/{code}',
         parameters=(
@@ -8169,7 +10758,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.updateWorkflowDefinition@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.updateWorkflowDefinition',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/workflow-definition/{code}',
         parameters=(
@@ -8189,7 +10778,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.releaseWorkflowDefinition@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.releaseWorkflowDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/workflow-definition/{code}/release',
         parameters=(
@@ -8201,7 +10790,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.getNodeListByDefinitionCode@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.getNodeListByDefinitionCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/{code}/tasks',
         parameters=(
@@ -8212,7 +10801,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.queryWorkflowDefinitionVersions@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.queryWorkflowDefinitionVersions',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/{code}/versions',
         parameters=(
@@ -8225,7 +10814,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.deleteWorkflowDefinitionVersion@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.deleteWorkflowDefinitionVersion',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/workflow-definition/{code}/versions/{version}',
         parameters=(
@@ -8237,7 +10826,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.switchWorkflowDefinitionVersion@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.switchWorkflowDefinitionVersion',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/{code}/versions/{version}',
         parameters=(
@@ -8249,7 +10838,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.viewTree@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.viewTree',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/{code}/view-tree',
         parameters=(
@@ -8261,7 +10850,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowDefinitionController.viewVariables@3.3.1': ApiOperationContract(
         operation_id='WorkflowDefinitionController.viewVariables',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-definition/{code}/view-variables',
         parameters=(
@@ -8272,7 +10861,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.queryWorkflowInstanceList@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.queryWorkflowInstanceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances',
         parameters=(
@@ -8292,7 +10881,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.batchDeleteWorkflowInstanceByIds@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.batchDeleteWorkflowInstanceByIds',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/workflow-instances/batch-delete',
         parameters=(
@@ -8303,7 +10892,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.queryDynamicSubWorkflowInstances@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.queryDynamicSubWorkflowInstances',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances/query-dynamic-sub-workflows',
         parameters=(
@@ -8313,7 +10902,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.queryParentInstanceBySubId@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.queryParentInstanceBySubId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances/query-parent-by-sub',
         parameters=(
@@ -8324,7 +10913,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.querySubWorkflowInstanceByTaskId@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.querySubWorkflowInstanceByTaskId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances/query-sub-by-parent',
         parameters=(
@@ -8335,7 +10924,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.queryTopNLongestRunningWorkflowInstance@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.queryTopNLongestRunningWorkflowInstance',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances/top-n',
         parameters=(
@@ -8348,7 +10937,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.queryWorkflowInstancesByTriggerCode@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.queryWorkflowInstancesByTriggerCode',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances/trigger',
         parameters=(
@@ -8359,7 +10948,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.deleteWorkflowInstanceById@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.deleteWorkflowInstanceById',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/workflow-instances/{id}',
         parameters=(
@@ -8370,7 +10959,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.queryWorkflowInstanceById@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.queryWorkflowInstanceById',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances/{id}',
         parameters=(
@@ -8381,7 +10970,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.updateWorkflowInstance@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.updateWorkflowInstance',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='projects/{projectCode}/workflow-instances/{id}',
         parameters=(
@@ -8399,7 +10988,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.queryTaskListByWorkflowInstanceId@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.queryTaskListByWorkflowInstanceId',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances/{id}/tasks',
         parameters=(
@@ -8410,7 +10999,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.viewTree@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.viewTree',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances/{id}/view-gantt',
         parameters=(
@@ -8421,7 +11010,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowInstanceController.viewVariables@3.3.1': ApiOperationContract(
         operation_id='WorkflowInstanceController.viewVariables',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-instances/{id}/view-variables',
         parameters=(
@@ -8432,7 +11021,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationController.createWorkflowTaskRelation@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationController.createWorkflowTaskRelation',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/workflow-task-relation',
         parameters=(
@@ -8445,7 +11034,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationController.deleteTaskWorkflowRelation@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationController.deleteTaskWorkflowRelation',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/workflow-task-relation/{taskCode}',
         parameters=(
@@ -8457,7 +11046,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationController.deleteDownstreamRelation@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationController.deleteDownstreamRelation',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/workflow-task-relation/{taskCode}/downstream',
         parameters=(
@@ -8469,7 +11058,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationController.queryDownstreamRelation@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationController.queryDownstreamRelation',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-task-relation/{taskCode}/downstream',
         parameters=(
@@ -8480,7 +11069,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationController.deleteUpstreamRelation@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationController.deleteUpstreamRelation',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/workflow-task-relation/{taskCode}/upstream',
         parameters=(
@@ -8492,7 +11081,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationController.queryUpstreamRelation@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationController.queryUpstreamRelation',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='projects/{projectCode}/workflow-task-relation/{taskCode}/upstream',
         parameters=(
@@ -8503,7 +11092,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationController.deleteEdge@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationController.deleteEdge',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='projects/{projectCode}/workflow-task-relation/{workflowDefinitionCode}/{preTaskCode}/{postTaskCode}',
         parameters=(
@@ -8516,7 +11105,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.deleteResource@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.deleteResource',
-        api_group='v1',
+        document_group=None,
         method='DELETE',
         path='resources',
         parameters=(
@@ -8526,7 +11115,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.pagingResourceItemRequest@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.pagingResourceItemRequest',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources',
         parameters=(
@@ -8540,7 +11129,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createFile@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.createFile',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources',
         parameters=(
@@ -8553,7 +11142,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateResource@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.updateResource',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='resources',
         parameters=(
@@ -8565,7 +11154,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceBaseDir@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.queryResourceBaseDir',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/base-dir',
         parameters=(
@@ -8575,7 +11164,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createDirectory@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.createDirectory',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/directory',
         parameters=(
@@ -8587,7 +11176,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceList@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.queryResourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/list',
         parameters=(
@@ -8597,7 +11186,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.createFileFromContent@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.createFileFromContent',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='resources/online-create',
         parameters=(
@@ -8611,7 +11200,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.queryResourceFileList@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.queryResourceFileList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/query-by-type',
         parameters=(
@@ -8621,7 +11210,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.updateFileContent@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.updateFileContent',
-        api_group='v1',
+        document_group=None,
         method='PUT',
         path='resources/update-content',
         parameters=(
@@ -8632,7 +11221,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ResourcesController.viewResource@3.3.1': ApiOperationContract(
         operation_id='ResourcesController.viewResource',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='resources/view',
         parameters=(
@@ -8644,7 +11233,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'TaskGroupController.queryTaskGroupQueues@3.3.1': ApiOperationContract(
         operation_id='TaskGroupController.queryTaskGroupQueues',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='task-group/query-list-by-group-id',
         parameters=(
@@ -8659,7 +11248,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'UiPluginController.queryProductInfo@3.3.1': ApiOperationContract(
         operation_id='UiPluginController.queryProductInfo',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='ui-plugins/query-product-info',
         parameters=(
@@ -8668,7 +11257,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationV2Controller.createTaskRelation@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationV2Controller.createTaskRelation',
-        api_group='v2',
+        document_group=None,
         method='POST',
         path='v2/relations',
         parameters=(
@@ -8678,7 +11267,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationV2Controller.deleteTaskRelation@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationV2Controller.deleteTaskRelation',
-        api_group='v2',
+        document_group=None,
         method='DELETE',
         path='v2/relations/{code-pair}',
         parameters=(
@@ -8688,7 +11277,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkflowTaskRelationV2Controller.updateUpstreamTaskDefinition@3.3.1': ApiOperationContract(
         operation_id='WorkflowTaskRelationV2Controller.updateUpstreamTaskDefinition',
-        api_group='v2',
+        document_group=None,
         method='PUT',
         path='v2/relations/{code}',
         parameters=(
@@ -8699,7 +11288,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'WorkerGroupController.saveWorkerGroup@3.3.1': ApiOperationContract(
         operation_id='WorkerGroupController.saveWorkerGroup',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='worker-groups',
         parameters=(
@@ -8712,7 +11301,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoginController.handleOidcCallback@3.4.0': ApiOperationContract(
         operation_id='LoginController.handleOidcCallback',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='login/oauth2/code/{providerId}',
         parameters=(
@@ -8725,7 +11314,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoginController.redirectToOidc@3.4.0': ApiOperationContract(
         operation_id='LoginController.redirectToOidc',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='oauth2/authorization/{providerId}',
         parameters=(
@@ -8735,7 +11324,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'LoginController.oidcProviders@3.4.0': ApiOperationContract(
         operation_id='LoginController.oidcProviders',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='oidc-providers',
         parameters=(
@@ -8744,7 +11333,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.getAuthorizedDatasourceList@3.4.2': ApiOperationContract(
         operation_id='DataSourceController.getAuthorizedDatasourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/authed-datasource',
         parameters=(
@@ -8754,7 +11343,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'DataSourceController.getUnauthorizedDatasourceList@3.4.2': ApiOperationContract(
         operation_id='DataSourceController.getUnauthorizedDatasourceList',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='datasources/unauth-datasource',
         parameters=(
@@ -8764,7 +11353,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.queryWorkflowExecutors@3.4.2': ApiOperationContract(
         operation_id='MonitorController.queryWorkflowExecutors',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/masters/workflow-executors',
         parameters=(
@@ -8774,7 +11363,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'MonitorController.queryTaskExecutors@3.4.2': ApiOperationContract(
         operation_id='MonitorController.queryTaskExecutors',
-        api_group='v1',
+        document_group=None,
         method='GET',
         path='monitor/workers/task-executors',
         parameters=(
@@ -8784,7 +11373,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.batchTriggerWorkflowDefinitions@3.4.2': ApiOperationContract(
         operation_id='ExecutorController.batchTriggerWorkflowDefinitions',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/batch-start-workflow-instance',
         parameters=(
@@ -8813,7 +11402,7 @@ OPERATION_CONTRACTS: dict[str, ApiOperationContract] = {
     ),
     'ExecutorController.triggerWorkflowDefinition@3.4.2': ApiOperationContract(
         operation_id='ExecutorController.triggerWorkflowDefinition',
-        api_group='v1',
+        document_group=None,
         method='POST',
         path='projects/{projectCode}/executors/start-workflow-instance',
         parameters=(

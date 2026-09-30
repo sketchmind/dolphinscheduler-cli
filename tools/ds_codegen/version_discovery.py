@@ -167,7 +167,7 @@ def compile_discovery_profile(
         )
     documents = compile_document_sources(source_root)
     public_operations, public_evidence = compile_public_operations(
-        snapshot, source_root
+        snapshot, source_root, documents
     )
     evidence.extend(item for item in public_evidence if item not in evidence)
     return DiscoveryProfile(

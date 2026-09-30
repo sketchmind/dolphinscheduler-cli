@@ -29,7 +29,7 @@ def _reviewed_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
     operations = {
         "list": SimpleNamespace(
             operation_id="list",
-            api_group="v1",
+            document_group="v1",
             method="GET",
             path="projects",
             parameters=(),
@@ -37,7 +37,7 @@ def _reviewed_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
         ),
         "create": SimpleNamespace(
             operation_id="create",
-            api_group="v1",
+            document_group="v1",
             method="POST",
             path="projects",
             parameters=(parameter,),
@@ -64,7 +64,7 @@ def _reviewed_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
                 source="swagger2",
                 path="v2/api-docs",
                 exact_versions=("1.3.9", "2.0.0"),
-                api_group=None,
+                document_group=None,
             ),
         ),
         raising=False,
@@ -270,7 +270,10 @@ def test_grouped_profiles_require_both_complete_groups(
         "DOCUMENT_PROBES",
         tuple(
             SimpleNamespace(
-                source="openapi3", path=path, exact_versions=("3.1.0",), api_group=group
+                source="openapi3",
+                path=path,
+                exact_versions=("3.1.0",),
+                document_group=group,
             )
             for path, group in ((first, "v1"), (second, "v2"))
         ),
@@ -284,7 +287,7 @@ def test_grouped_profiles_require_both_complete_groups(
             )
         },
     )
-    monkeypatch.setattr(facts.OPERATION_CONTRACTS["create"], "api_group", "v2")
+    monkeypatch.setattr(facts.OPERATION_CONTRACTS["create"], "document_group", "v2")
     one: JsonObject = {"openapi": "3.0.1", "paths": {"/projects": {"get": {}}}}
     two = _document()
     paths = two["paths"]
@@ -322,7 +325,7 @@ def test_operation_must_match_every_route_candidate(
     )
     second = SimpleNamespace(
         operation_id="create",
-        api_group="v1",
+        document_group="v1",
         method="POST",
         path="projects",
         parameters=(different_parameter,),
@@ -349,7 +352,7 @@ def test_nested_model_evidence_does_not_authorize_operation(
     body = SimpleNamespace(name="dto", location="body", schema_type=None)
     operation = SimpleNamespace(
         operation_id="create",
-        api_group="v1",
+        document_group="v1",
         method="POST",
         path="projects",
         parameters=(body,),
@@ -443,7 +446,7 @@ def test_unverified_array_items_never_authorize_operation(
     )
     operation = SimpleNamespace(
         operation_id="create",
-        api_group="v1",
+        document_group="v1",
         method="POST",
         path="projects",
         parameters=(body,),

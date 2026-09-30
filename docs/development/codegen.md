@@ -405,6 +405,13 @@ Generated artifact ownership is deliberately split:
   initialization against exact source. It preserves the legacy plugin route
   collision and the stock `3.2.2` → `3.3.0` metadata mismatch; bootstrap probes
   add no public actions or domain operations;
+- API-document membership uses a separate `document_group` coordinate. On
+  `3.1.x`, each reviewed Springfox Docket binds its group to the controller
+  package and its positive or negative `/v2/**` selector. Complete Swagger2
+  and springdoc documents have no group restriction. Source `api_group`
+  continues to identify Java namespaces independently. Route visibility and
+  parameter visibility follow their respective annotation scopes, so a hidden
+  parameter preserves its containing route;
 - `task_definition_cleanup_contract.py` owns the schema-4 private cleanup
   profile: its auxiliary semantic root, exact source-operation membership,
   full-core reconciliation and recovery boundaries, and each

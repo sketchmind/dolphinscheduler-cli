@@ -18,6 +18,7 @@ from dsctl.errors import (
     UnsupportedFeatureError,
     UserInputError,
 )
+from dsctl.generated import version_discovery as discovery_facts
 from dsctl.output import error_payload, require_json_object
 from dsctl.services import meta
 from dsctl.services import version_resolution as resolution
@@ -26,7 +27,7 @@ from dsctl.upstream.version_discovery import DiscoveredTarget, VersionDiscoveryE
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from dsctl.support.json_types import JsonObject
+    from dsctl.support.json_types import JsonObject, JsonValue
 
 
 @pytest.fixture(autouse=True)
@@ -246,6 +247,189 @@ def test_real_cli_discovers_legacy_contract_and_queries_without_version(
     assert payload["warnings"][-1]["code"] == "read_compatibility"
     assert sum(r.url.path.endswith("/projects/list-paging") for r in requests) == 1
     assert sum(r.url.path.endswith("/v2/api-docs") for r in requests) == 1
+
+
+@pytest.fixture
+def grouped_315_documents() -> dict[str, JsonObject]:
+    """Synthetic source-shaped documents, not a captured server response.
+
+    DS 3.1.5 configuration/OpenAPIConfiguration.java selects v2 with
+    PathSelectors.ant("/v2/**") and v1 with its negation. Use those literal
+    route predicates independently of generated namespace/group metadata.
+    Only ProjectController.queryProjectListPaging request parameters are
+    supplied: its pageNo/pageSize/searchVal bindings are independent fixtures.
+    """
+    paths: dict[str, dict[str, JsonObject]] = {"v1": {}, "v2": {}}
+    profile = discovery_facts.CONTRACT_PROFILES["3.1.5"]
+    for key in profile.operations:
+        operation = discovery_facts.OPERATION_CONTRACTS[key]
+        path = "/" + operation.path.strip("/")
+        group = "v2" if path.startswith("/v2/") else "v1"
+        parameters: list[JsonValue] = []
+        if (operation.method, path) == ("GET", "/projects"):
+            parameters = [
+                {
+                    "name": "pageNo",
+                    "in": "query",
+                    "required": True,
+                    "schema": {"type": "integer"},
+                },
+                {
+                    "name": "pageSize",
+                    "in": "query",
+                    "required": True,
+                    "schema": {"type": "integer"},
+                },
+                {
+                    "name": "searchVal",
+                    "in": "query",
+                    "required": False,
+                    "schema": {"type": "string"},
+                },
+            ]
+        paths[group].setdefault(path, {})[operation.method.lower()] = {
+            "parameters": parameters
+        }
+    assert {
+        group: sum(len(methods) for methods in routes.values())
+        for group, routes in paths.items()
+    } == {"v1": 243, "v2": 12}
+    return {
+        group: {
+            "openapi": "3.0.1",
+            "info": {"version": group.upper()},
+            "paths": dict(routes),
+        }
+        for group, routes in paths.items()
+    }
+
+
+def _mock_grouped_315_server(
+    monkeypatch: pytest.MonkeyPatch,
+    documents: dict[str, JsonObject],
+    *,
+    allow_project_read: bool = False,
+) -> list[httpx.Request]:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.headers["token"] == "private-test-token"
+        assert request.method == "GET"
+        path = request.url.path.removeprefix("/dolphinscheduler/")
+        if path == "ui-plugins/query-product-info":
+            return httpx.Response(200, json={"code": 110003, "data": None})
+        if path == "v3/api-docs":
+            group = {"v1(current)": "v1", "v2": "v2"}.get(
+                request.url.params.get("group", "")
+            )
+            if group is not None and group in documents:
+                return httpx.Response(200, json=documents[group])
+            return httpx.Response(404)
+        if path == "v2/api-docs":
+            return httpx.Response(404)
+        if path == "projects" and allow_project_read:
+            return httpx.Response(
+                200,
+                json={"code": 0, "data": {"total": 0, "totalList": []}},
+            )
+        pytest.fail(f"Unexpected business request: {request.method} {path}")
+
+    _mock_http(monkeypatch, handler)
+    return requests
+
+
+def test_real_cli_discovers_grouped_315_contract_without_version(
+    monkeypatch: pytest.MonkeyPatch, grouped_315_documents: dict[str, JsonObject]
+) -> None:
+    requests = _mock_grouped_315_server(
+        monkeypatch, grouped_315_documents, allow_project_read=True
+    )
+    result = CliRunner().invoke(app, ["project", "list"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["data"]["totalList"] == []
+    target = payload["resolved"]["target"]
+    assert target["ds_version"] is None
+    assert "3.1.5" in target["candidate_versions"]
+    assert target["execution"] == "read_only"
+    assert target["identification"] == "contract_candidates"
+    assert payload["warnings"][-1]["code"] == "read_compatibility"
+    assert sum(r.url.path.endswith("/projects") for r in requests) == 1
+    assert {
+        r.url.params.get("group")
+        for r in requests
+        if r.url.path.endswith("/v3/api-docs")
+    } == {None, "v1(current)", "v2"}
+
+
+def test_real_cli_explicit_315_version_bypasses_document_discovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DS_VERSION", "3.1.5")
+    requests = _mock_grouped_315_server(monkeypatch, {}, allow_project_read=True)
+    result = CliRunner().invoke(app, ["project", "list"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["data"]["totalList"] == []
+    assert "target" not in payload["resolved"]
+    assert not payload.get("warnings")
+    assert [(r.method, r.url.path) for r in requests] == [
+        ("GET", "/dolphinscheduler/projects")
+    ]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["project", "create", "--name", "blocked"],
+        ["workflow", "export", "workflow", "--project", "project"],
+    ],
+)
+def test_real_cli_grouped_315_candidates_never_admit_mutation_or_export(
+    monkeypatch: pytest.MonkeyPatch,
+    grouped_315_documents: dict[str, JsonObject],
+    command: list[str],
+) -> None:
+    _mock_grouped_315_server(monkeypatch, grouped_315_documents)
+    result = CliRunner().invoke(app, command)
+    assert result.exit_code == 1, result.output
+    assert result.stdout == ""
+    payload = json.loads(result.stderr)
+    assert payload["error"]["type"] == "unsupported_feature"
+    target = payload["resolved"]["target"]
+    assert target["ds_version"] is None
+    assert "3.1.5" in target["candidate_versions"]
+
+
+@pytest.mark.parametrize("damage", ["missing_v1", "missing_v2", "swapped_routes"])
+def test_real_cli_refuses_incomplete_or_misgrouped_315_documents(
+    monkeypatch: pytest.MonkeyPatch,
+    grouped_315_documents: dict[str, JsonObject],
+    damage: str,
+) -> None:
+    if damage.startswith("missing_"):
+        grouped_315_documents.pop(damage.removeprefix("missing_"))
+    else:
+        # Keep all routes and group counts intact while breaking group ownership.
+        v1 = require_json_object(grouped_315_documents["v1"]["paths"], label="v1")
+        v2 = require_json_object(grouped_315_documents["v2"]["paths"], label="v2")
+        v1["/v2/projects/list"], v2["/projects/list"] = (
+            v2.pop("/v2/projects/list"),
+            v1.pop("/projects/list"),
+        )
+        grouped_315_documents["v1"]["paths"] = v1
+        grouped_315_documents["v2"]["paths"] = v2
+    _mock_grouped_315_server(monkeypatch, grouped_315_documents)
+    result = CliRunner().invoke(app, ["project", "list"])
+    assert result.exit_code == 1, result.output
+    assert result.stdout == ""
+    payload = json.loads(result.stderr)
+    assert payload["error"]["type"] == "config_error"
+    assert payload["error"]["details"]["reason"] == "exact_version_required"
+    target = payload["resolved"]["target"]
+    assert target["ds_version"] is None
+    assert target["candidate_versions"] == []
 
 
 def test_cli_denies_candidate_mutation_before_business_transport(

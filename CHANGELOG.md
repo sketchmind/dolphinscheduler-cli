@@ -12,6 +12,11 @@ versioning policy is needed.
   dependency checks remain enforced; authored graphs receive fresh counters.
 - Return structured errors for invalid legacy task-definition graphs, including
   explicit mutation status when an accepted update cannot be read back.
+- Match DolphinScheduler `3.1.0`–`3.1.9` API documents using their native URL
+  groups, enabling compatible reads when the exact server version is unknown.
+- Preserve documented routes on `3.2.0`–`3.4.3` when an annotation hides a
+  parameter. Automatic discovery still requires an exact version for mutations
+  and workflow exports.
 
 ## 0.4.0 - 2026-09-28
 

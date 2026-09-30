@@ -11,7 +11,7 @@ class DocumentProbe:
     source: str
     path: str
     exact_versions: tuple[str, ...]
-    api_group: str | None
+    document_group: str | None
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class ApiParameterContract:
 @dataclass(frozen=True)
 class ApiOperationContract:
     operation_id: str
-    api_group: str
+    document_group: str | None
     method: str
     path: str
     parameters: tuple[ApiParameterContract, ...]

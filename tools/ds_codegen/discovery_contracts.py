@@ -48,7 +48,7 @@ class ApiParameterContract:
 @dataclass(frozen=True)
 class ApiOperationContract:
     operation_id: str
-    api_group: str
+    document_group: str | None
     method: str
     path: str
     parameters: tuple[ApiParameterContract, ...]
@@ -59,7 +59,7 @@ class ApiOperationContract:
 class DocumentSource:
     source: str
     path: str
-    api_group: str | None
+    document_group: str | None
 
 
 def compile_document_sources(source_root: Path) -> tuple[DocumentSource, ...]:
@@ -75,13 +75,7 @@ def compile_document_sources(source_root: Path) -> tuple[DocumentSource, ...]:
         return (DocumentSource("swagger2", "v2/api-docs", None),)
     if springfox.is_file():
         source = springfox.read_text(encoding="utf-8")
-        for snippet in (
-            "DocumentationType.OAS_30",
-            '.groupName("v1(current)")',
-            '.groupName("v2")',
-            'PathSelectors.ant("/v2/**").negate()',
-        ):
-            _require(source, snippet, springfox)
+        _review_grouped_dockets(source, springfox)
         return (
             DocumentSource("openapi3", "v3/api-docs?group=v1(current)", "v1"),
             DocumentSource("openapi3", "v3/api-docs?group=v2", "v2"),
@@ -99,8 +93,60 @@ def _require(source: str, snippet: str, path: Path) -> None:
         raise ValueError(message)
 
 
+def _java_structure(value: object) -> object:
+    """Compare Java syntax without source positions, comments or whitespace."""
+    if isinstance(value, javalang.ast.Node):
+        return type(value).__name__, tuple(
+            (name, _java_structure(getattr(value, name))) for name in value.attrs
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_java_structure(item) for item in value)
+    return value
+
+
+def _review_grouped_dockets(source: str, path: Path) -> None:
+    """Bind each reviewed group to its own package and native path selector."""
+    tree = parse_java_compilation_unit(source)
+    methods = [
+        method
+        for _, method in tree.filter(javalang.tree.MethodDeclaration)
+        if method.return_type is not None and method.return_type.name == "Docket"
+    ]
+    if len(methods) != 2 or {method.name for method in methods} != {
+        "createV1RestApi",
+        "createV2RestApi",
+    }:
+        message = f"API documentation source seam changed: {path}: Docket methods"
+        raise ValueError(message)
+    for method in methods:
+        v1 = method.name == "createV1RestApi"
+        group = "v1(current)" if v1 else "v2"
+        info = "apiV1Info" if v1 else "apiV2Info"
+        negate = ".negate()" if v1 else ""
+        reviewed = parse_java_compilation_unit(
+            "class Reviewed { Docket source() { return "
+            'new Docket(DocumentationType.OAS_30).groupName("'
+            + group
+            + '").apiInfo('
+            + info
+            + "()).select().apis(RequestHandlerSelectors.basePackage("
+            '"org.apache.dolphinscheduler.api.controller"))'
+            '.paths(PathSelectors.any().and(PathSelectors.ant("/v2/**")'
+            + negate
+            + ")).build(); } }"
+        )
+        expected = reviewed.types[0].methods[0].body
+        if _java_structure(method.body) != _java_structure(expected) or not any(
+            annotation.name == "Bean" for annotation in method.annotations
+        ):
+            message = f"API documentation source seam changed: {path}: {method.name}"
+            raise ValueError(message)
+
+
 def compile_public_operations(
-    snapshot: ContractSnapshot, source_root: Path
+    snapshot: ContractSnapshot,
+    source_root: Path,
+    documents: tuple[DocumentSource, ...],
 ) -> tuple[tuple[ApiOperationContract, ...], tuple[tuple[str, str], ...]]:
     """Keep public source routes and meaningful declared wire parameters."""
     declarations: dict[str, tuple[javalang.tree.ClassDeclaration, str]] = {}
@@ -130,9 +176,18 @@ def compile_public_operations(
             message = f"ambiguous documentation method: {operation.operation_id}"
             raise ValueError(message)
         method = methods[0]
-        if _hidden(declaration.annotations) or _hidden(method.annotations):
+        if _route_hidden(declaration.annotations) or _route_hidden(method.annotations):
             continue
-        operations.append(_public_operation(snapshot, operation, method))
+        # A source namespace identifies Java declarations, not a Docket group.
+        # Reviewed grouped documents split routes using PathSelectors /v2/**.
+        document_group = None
+        if any(document.document_group is not None for document in documents):
+            document_group = (
+                "v2" if operation.path.strip("/").split("/")[0] == "v2" else "v1"
+            )
+        operations.append(
+            _public_operation(snapshot, operation, method, document_group)
+        )
     # Config bytes explain document endpoint and group membership independently.
     for filename in (
         "SwaggerConfig.java",
@@ -152,10 +207,25 @@ def compile_public_operations(
     ), tuple(evidence)
 
 
-def _hidden(annotations: list[javalang.tree.Annotation]) -> bool:
+def _route_hidden(annotations: list[javalang.tree.Annotation]) -> bool:
+    """Operation visibility is independent of parameter annotation placement."""
     return any(
         annotation.name.rsplit(".", 1)[-1] in {"ApiIgnore", "Hidden"}
-        or _annotation_values(annotation).get("hidden") is True
+        or (
+            annotation.name.rsplit(".", 1)[-1] in {"ApiOperation", "Operation"}
+            and _annotation_values(annotation).get("hidden") is True
+        )
+        for annotation in annotations
+    )
+
+
+def _parameter_hidden(annotations: list[javalang.tree.Annotation]) -> bool:
+    return any(
+        annotation.name.rsplit(".", 1)[-1] == "ApiIgnore"
+        or (
+            annotation.name.rsplit(".", 1)[-1] in {"ApiParam", "Parameter"}
+            and _annotation_values(annotation).get("hidden") is True
+        )
         for annotation in annotations
     )
 
@@ -164,6 +234,7 @@ def _public_operation(
     snapshot: ContractSnapshot,
     operation: OperationSpec,
     method: javalang.tree.MethodDeclaration,
+    document_group: str | None,
 ) -> ApiOperationContract:
     implicit = {
         str(values["name"]): values
@@ -179,13 +250,13 @@ def _public_operation(
         if parameter.binding == "request_attribute":
             # Springfox expands a non-hidden login User into bean fields, though
             # Spring MVC supplies it server-side. These are document-only fields.
-            if not _hidden(source_parameter.annotations):
+            if not _parameter_hidden(source_parameter.annotations):
                 models: list[ModelSpec | DtoSpec] = [*snapshot.models, *snapshot.dtos]
                 for model in models:
                     if model.import_path == parameter.java_type:
                         ignored.update(field.wire_name for field in model.fields)
             continue
-        if _hidden(source_parameter.annotations) or parameter.hidden:
+        if _parameter_hidden(source_parameter.annotations) or parameter.hidden:
             continue
         location = {
             "path_variable": "path",
@@ -229,7 +300,7 @@ def _public_operation(
         )
     return ApiOperationContract(
         operation_id=operation.operation_id,
-        api_group=operation.api_group,
+        document_group=document_group,
         method=operation.http_method,
         path=operation.path.strip("/"),
         parameters=tuple(sorted(parameters, key=lambda p: (p.location, p.name))),
@@ -327,7 +398,7 @@ def render_document_contracts(profiles: tuple[DiscoveryProfile, ...]) -> list[st
         "    source: str",
         "    path: str",
         "    exact_versions: tuple[str, ...]",
-        "    api_group: str | None",
+        "    document_group: str | None",
         "",
         "",
         "@dataclass(frozen=True)",
@@ -346,7 +417,7 @@ def render_document_contracts(profiles: tuple[DiscoveryProfile, ...]) -> list[st
         "@dataclass(frozen=True)",
         "class ApiOperationContract:",
         "    operation_id: str",
-        "    api_group: str",
+        "    document_group: str | None",
         "    method: str",
         "    path: str",
         "    parameters: tuple[ApiParameterContract, ...]",
@@ -374,7 +445,7 @@ def render_document_contracts(profiles: tuple[DiscoveryProfile, ...]) -> list[st
                 f"        source={document.source!r},",
                 f"        path={document.path!r},",
                 f"        exact_versions={versions!r},",
-                f"        api_group={document.api_group!r},",
+                f"        document_group={document.document_group!r},",
                 "    ),",
             ]
         )
@@ -425,7 +496,7 @@ def render_document_contracts(profiles: tuple[DiscoveryProfile, ...]) -> list[st
                 [
                     f"    {key!r}: ApiOperationContract(",
                     f"        operation_id={operation.operation_id!r},",
-                    f"        api_group={operation.api_group!r},",
+                    f"        document_group={operation.document_group!r},",
                     f"        method={operation.method!r},",
                     f"        path={operation.path!r},",
                     "        parameters=(",
