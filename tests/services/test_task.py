@@ -1,5 +1,7 @@
 import json
 from contextlib import nullcontext
+from dataclasses import replace
+from functools import partial
 from typing import cast
 
 import pytest
@@ -26,12 +28,13 @@ from tests.workflow_domain_fakes import (
 
 from dsctl.errors import (
     ApiResultError,
+    ApiTransportError,
     InvalidStateError,
     NotFoundError,
     PermissionDeniedError,
     UserInputError,
 )
-from dsctl.output import result_payload
+from dsctl.output import error_payload, result_payload
 from dsctl.output_formats import RenderOptions, render_command
 from dsctl.services import runtime as runtime_service
 from dsctl.services import task as task_service
@@ -40,10 +43,12 @@ from dsctl.services._legacy_workflow_mutation import (
 )
 from dsctl.services.selection import ResourceDefaults
 from dsctl.services.task_authoring_catalog import get_task_authoring_catalog
+from dsctl.upstream.definition_models import WorkflowScope
 from dsctl.upstream.legacy_task_definitions import (
     LegacyTaskDefinitions,
     LegacyWorkflowOperations,
 )
+from dsctl.upstream.workflows import LegacyWorkflowDefinitionSnapshot
 
 
 def _install_task_service_fakes(
@@ -293,9 +298,10 @@ def test_get_task_result_returns_one_task_payload(
     assert data["taskType"] == "SHELL"
 
 
-def test_139_task_list_and_get_use_name_selector_and_id_native_output(
+@pytest.fixture
+def legacy_task_operations(
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+) -> _FakeWorkflowOperations:
     project_adapter = FakeProjectAdapter(
         projects=[FakeProject(code=7, id=7, name="etl-prod")]
     )
@@ -363,6 +369,23 @@ def test_139_task_list_and_get_use_name_selector_and_id_native_output(
     )
     operations.legacy_definitions[101] = (process_definition_json, locations, "[]")
 
+    return operations
+
+
+@pytest.mark.parametrize("stored_count", [0, 4])
+def test_139_task_list_and_get_use_name_selector_and_id_native_output(
+    legacy_task_operations: _FakeWorkflowOperations,
+    stored_count: int,
+) -> None:
+    process, locations, connects = legacy_task_operations.legacy_definitions[101]
+    layout = json.loads(locations)
+    layout["extract-native-id"]["nodenumber"] = stored_count
+    legacy_task_operations.legacy_definitions[101] = (
+        process,
+        json.dumps(layout),
+        connects,
+    )
+
     listed = task_service.list_tasks_result(workflow="daily-sync", search="tract")
     read = task_service.get_task_result("extract", workflow="daily-sync")
 
@@ -393,8 +416,111 @@ def test_139_task_list_and_get_use_name_selector_and_id_native_output(
     assert "version" not in _mapping(read.data)
 
 
+@pytest.mark.parametrize("action", ["task.list", "task.get", "task.update"])
+def test_139_task_service_translates_invalid_native_graph(
+    legacy_task_operations: _FakeWorkflowOperations,
+    action: str,
+) -> None:
+    process, _locations, connects = legacy_task_operations.legacy_definitions[101]
+    legacy_task_operations.legacy_definitions[101] = (process, "{}", connects)
+
+    operations = {
+        "task.list": partial(task_service.list_tasks_result, workflow="daily-sync"),
+        "task.get": partial(
+            task_service.get_task_result, "extract", workflow="daily-sync"
+        ),
+        "task.update": partial(
+            task_service.update_task_result,
+            "extract",
+            workflow="daily-sync",
+            set_values=["command=echo changed"],
+        ),
+    }
+    with pytest.raises(ApiTransportError, match="internally inconsistent") as exc:
+        operations[action]()
+
+    payload = error_payload(action, exc.value)
+    error = _mapping(payload["error"])
+    details = _mapping(error["details"])
+    assert error["type"] == "api_transport_error"
+    assert details["resource"] == "task"
+    assert details["action"] == action
+    assert details["workflow"] == "daily-sync"
+    assert details["reason"] == (
+        "locations task ids conflict with tasks "
+        "(missing=['extract-native-id'], extra=[])"
+    )
+    assert "Repair the selected workflow graph" in str(error["suggestion"])
+    if action == "task.update":
+        assert details["mutation_applied"] is False
+    assert legacy_task_operations.legacy_definitions[101][0] == process
+
+
+@pytest.mark.parametrize("invalid_read", [2, 3])
+def test_139_task_update_graph_failure_preserves_mutation_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+    legacy_task_operations: _FakeWorkflowOperations,
+    invalid_read: int,
+) -> None:
+    read = legacy_task_operations.legacy_definition
+    reads = 0
+
+    def read_with_invalid_graph(
+        scope: WorkflowScope,
+        *,
+        action: str,
+    ) -> LegacyWorkflowDefinitionSnapshot:
+        nonlocal reads
+        reads += 1
+        snapshot = read(scope, action=action)
+        return replace(snapshot, locations="{}") if reads == invalid_read else snapshot
+
+    monkeypatch.setattr(
+        legacy_task_operations, "legacy_definition", read_with_invalid_graph
+    )
+
+    with pytest.raises(ApiTransportError) as exc:
+        task_service.update_task_result(
+            "extract",
+            workflow="daily-sync",
+            set_values=["command=echo changed"],
+        )
+
+    applied = invalid_read == 3
+    assert exc.value.details["mutation_applied"] is applied
+    assert exc.value.details["workflow"] == "daily-sync"
+    assert exc.value.details["task"] == "extract"
+    assert "locations task ids conflict" in str(exc.value.details["reason"])
+    assert reads == invalid_read
+    persisted = json.loads(legacy_task_operations.legacy_definitions[101][0])
+    assert persisted["tasks"][0]["params"]["rawScript"] == (
+        "echo changed" if applied else "echo extract"
+    )
+    if applied:
+        assert exc.value.details["phase"] == "mutation_readback"
+        assert "do not blindly repeat" in str(exc.value.suggestion)
+
+
+def test_139_task_update_keeps_invalid_authoring_as_user_input_error(
+    legacy_task_operations: _FakeWorkflowOperations,
+) -> None:
+    initial = legacy_task_operations.legacy_definitions[101]
+
+    with pytest.raises(UserInputError):
+        task_service.update_task_result(
+            "extract",
+            workflow="daily-sync",
+            set_values=["depends_on=[missing-task]"],
+            dry_run=True,
+        )
+
+    assert legacy_task_operations.legacy_definitions[101] == initial
+
+
+@pytest.mark.parametrize("stored_count", [0, 4])
 def test_139_task_update_dry_run_and_apply_use_whole_workflow_update(
     monkeypatch: pytest.MonkeyPatch,
+    stored_count: int,
 ) -> None:
     project_adapter = FakeProjectAdapter(
         projects=[FakeProject(code=7, id=7, name="etl-prod")]
@@ -455,7 +581,7 @@ def test_139_task_update_dry_run_and_apply_use_whole_workflow_update(
             "extract-native-id": {
                 "name": "extract",
                 "targetarr": "",
-                "nodenumber": 0,
+                "nodenumber": stored_count,
                 "x": 10,
                 "y": 20,
             }

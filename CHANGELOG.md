@@ -7,6 +7,12 @@ versioning policy is needed.
 
 ## Unreleased
 
+- Accept stale DolphinScheduler `1.3.9` UI connection counters when reading,
+  exporting or activating an otherwise consistent workflow. Task identity and
+  dependency checks remain enforced; authored graphs receive fresh counters.
+- Return structured errors for invalid legacy task-definition graphs, including
+  explicit mutation status when an accepted update cannot be read back.
+
 ## 0.4.0 - 2026-09-28
 
 ### Workflow execution and scheduling

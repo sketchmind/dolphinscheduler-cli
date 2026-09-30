@@ -22,8 +22,10 @@ from dsctl.models.workflow_patch import (
 from dsctl.upstream.legacy_workflow_graph import (
     DecodedLegacyTask,
     DecodedLegacyWorkflowGraph,
+    LegacyWorkflowGraphError,
     decode_legacy_workflow_graph,
 )
+from dsctl.upstream.mutation_outcomes import mutation_verification_error
 from dsctl.upstream.task_definitions import MutationOutcome
 
 if TYPE_CHECKING:
@@ -388,11 +390,33 @@ class LegacyTaskDefinitions(Generic[CatalogT]):
                 suggestion="Retry the task update from a fresh read.",
             )
         self.operations.apply_update(prepared._prepared_update)
-        refreshed_scope, refreshed_snapshot, refreshed_graph = self._load(
-            project=prepared._project_selector,
-            workflow=prepared._workflow_selector,
-            action="task.update",
-        )
+        try:
+            refreshed_scope, refreshed_snapshot, refreshed_graph = self._load(
+                project=prepared._project_selector,
+                workflow=prepared._workflow_selector,
+                action="task.update",
+            )
+        except LegacyWorkflowGraphError as exc:
+            error = mutation_verification_error(
+                exc,
+                ds_version=self.profile_version,
+                resource=TASK_RESOURCE,
+                operation="update",
+                phase="mutation_readback",
+            )
+            error.details.update(
+                {
+                    "workflow": prepared._workflow_selector,
+                    "task": prepared.current.scope.task.name,
+                    "reason": str(exc),
+                }
+            )
+            error.suggestion = (
+                "Inspect the selected workflow graph in DolphinScheduler and "
+                "verify the requested task changes before retrying; do not "
+                "blindly repeat the mutation."
+            )
+            raise error from exc
         task_name = prepared.current.scope.task.name
         try:
             refreshed_task = _task_by_exact_name(refreshed_graph, task_name)

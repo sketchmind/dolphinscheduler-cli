@@ -241,6 +241,10 @@ The task-definition contract follows upstream identity and mutation epochs:
   native ids and exact-name selection from the containing definition graph;
   task `update` preserves the whole graph and unknown fields instead of
   fabricating code/version identity.
+  The UI's `locations.nodenumber` counter may retain values from earlier edits.
+  Graph reads, YAML export and activation accept those counters while checking
+  native task identities and dependency edges. Authored graph updates recompute
+  the counters and preserve existing layout coordinates and unknown fields.
 - `2.0.0` through `2.0.2` update tasks through the complete owning workflow,
   preserving task and relation-bound versions; dependency edits use that same
   whole-workflow path.

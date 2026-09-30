@@ -32,6 +32,104 @@ from dsctl.services.task_authoring_catalog import (
 from dsctl.upstream.legacy_workflow_graph import prepare_legacy_workflow_graph
 
 
+@pytest.mark.parametrize("action", ["export", "describe", "digest"])
+def test_139_workflow_reads_accept_stale_ui_counters(
+    action: str,
+    monkeypatch: pytest.MonkeyPatch,
+    workflow_harness: _WorkflowServiceHarness,
+    fake_workflow_adapter: FakeWorkflowAdapter,
+    stale_legacy_workflow_graph: tuple[str, str, str],
+) -> None:
+    operations = workflow_harness.install(profile=make_profile(ds_version="1.3.9"))
+    operations.legacy_definitions[101] = stale_legacy_workflow_graph
+    monkeypatch.setattr(
+        operations,
+        "apply_update",
+        lambda _prepared: pytest.fail("workflow inspection sent an update request"),
+    )
+
+    if action == "export":
+        result = workflow_service.export_workflow_yaml_result(
+            "daily-sync", project="etl-prod"
+        )
+        document = yaml.safe_load(str(_mapping(result.data)["yaml"]))
+        assert document["workflow"]["name"] == "daily-sync"
+        assert [
+            (
+                task["name"],
+                task["type"],
+                task["task_params"],
+                task.get("depends_on", []),
+            )
+            for task in document["tasks"]
+        ] == [
+            ("extract", "SHELL", {"rawScript": "echo extract"}, []),
+            ("transform", "SHELL", {"rawScript": "echo transform"}, ["extract"]),
+            ("load", "SHELL", {"rawScript": "echo load"}, ["extract", "transform"]),
+        ]
+    elif action == "describe":
+        result = workflow_service.describe_workflow_result(
+            "daily-sync", project="etl-prod"
+        )
+        data = _mapping(result.data)
+        assert [
+            (_mapping(task)["id"], _mapping(task)["name"])
+            for task in _sequence(data["tasks"])
+        ] == [
+            ("tasks-extract", "extract"),
+            ("tasks-transform", "transform"),
+            ("tasks-load", "load"),
+        ]
+        assert data["relations"] == [
+            {
+                "preTaskId": "tasks-extract",
+                "preTaskName": "extract",
+                "postTaskId": "tasks-transform",
+                "postTaskName": "transform",
+            },
+            {
+                "preTaskId": "tasks-extract",
+                "preTaskName": "extract",
+                "postTaskId": "tasks-load",
+                "postTaskName": "load",
+            },
+            {
+                "preTaskId": "tasks-transform",
+                "preTaskName": "transform",
+                "postTaskId": "tasks-load",
+                "postTaskName": "load",
+            },
+        ]
+    else:
+        result = workflow_service.digest_workflow_result(
+            "daily-sync", project="etl-prod"
+        )
+        data = _mapping(result.data)
+        assert data["taskCount"] == 3
+        assert data["relationCount"] == 3
+        assert data["rootTasks"] == [{"id": "tasks-extract", "name": "extract"}]
+        assert data["leafTasks"] == [{"id": "tasks-load", "name": "load"}]
+        assert data["isolatedTasks"] == []
+        assert [
+            (_mapping(task)["name"], _mapping(task)["upstreamTasks"])
+            for task in _sequence(data["tasks"])
+        ] == [
+            ("extract", []),
+            ("transform", [{"id": "tasks-extract", "name": "extract"}]),
+            (
+                "load",
+                [
+                    {"id": "tasks-extract", "name": "extract"},
+                    {"id": "tasks-transform", "name": "transform"},
+                ],
+            ),
+        ]
+
+    assert operations.legacy_definitions[101] == stale_legacy_workflow_graph
+    assert fake_workflow_adapter.update_calls == []
+    assert fake_workflow_adapter.release_calls == []
+
+
 def test_139_create_workflow_dry_run_projects_string_native_graph(
     monkeypatch: pytest.MonkeyPatch,
     workflow_harness: _WorkflowServiceHarness,
