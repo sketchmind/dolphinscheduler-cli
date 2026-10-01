@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from dsctl import __version__
 from dsctl.app import app
 from dsctl.models import supported_typed_task_types
 from dsctl.services.datasource_payload import datasource_template_index_data
@@ -25,7 +26,7 @@ def test_schema_command_returns_machine_readable_cli_surface() -> None:
     assert payload["action"] == "schema"
     assert payload["data"]["schema_version"] == 3
     assert payload["data"]["view"] == "full"
-    assert payload["data"]["cli"] == {"name": "dsctl", "version": "0.4.0"}
+    assert payload["data"]["cli"] == {"name": "dsctl", "version": __version__}
     command_names = [item["name"] for item in payload["data"]["commands"]]
     assert command_names[:18] == [
         "version",

@@ -7,6 +7,10 @@ versioning policy is needed.
 
 ## Unreleased
 
+## 0.4.1 - 2026-10-01
+
+### Fixed
+
 - Accept stale DolphinScheduler `1.3.9` UI connection counters when reading,
   exporting or activating an otherwise consistent workflow. Task identity and
   dependency checks remain enforced; authored graphs receive fresh counters.

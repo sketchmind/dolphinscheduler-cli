@@ -1,5 +1,6 @@
 import pytest
 
+from dsctl import __version__
 from dsctl.cli_surface import SURFACE_PLANES
 from dsctl.errors import UserInputError
 from dsctl.models import supported_typed_task_types
@@ -63,7 +64,7 @@ def test_capabilities_full_result_describes_current_stable_surface() -> None:
 
     assert isinstance(data, dict)
     assert result.resolved == {"capabilities": {"view": "full"}}
-    assert data["cli"] == {"name": "dsctl", "version": "0.4.0"}
+    assert data["cli"] == {"name": "dsctl", "version": __version__}
     assert data["ds"] == EXPECTED_DS_CAPABILITIES
     action_catalog = data["action_catalog"]
     assert isinstance(action_catalog, list)
@@ -432,7 +433,7 @@ def test_capabilities_result_can_return_summary() -> None:
 
     assert isinstance(data, dict)
     assert result.resolved == {"capabilities": {"view": "summary"}}
-    assert data["cli"] == {"name": "dsctl", "version": "0.4.0"}
+    assert data["cli"] == {"name": "dsctl", "version": __version__}
     assert data["ds"] == {
         key: value
         for key, value in EXPECTED_DS_CAPABILITIES.items()
@@ -663,7 +664,7 @@ def test_capabilities_result_can_return_one_exact_action(
         "capabilities": {"view": "action", "action": "workflow.get"}
     }
     assert result.data == {
-        "cli": {"name": "dsctl", "version": "0.4.0"},
+        "cli": {"name": "dsctl", "version": __version__},
         "ds": {
             "selected_version": "3.4.2",
             "contract_version": "3.4.2",
