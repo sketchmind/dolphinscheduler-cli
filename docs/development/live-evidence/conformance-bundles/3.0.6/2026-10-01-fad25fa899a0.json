@@ -1,0 +1,1877 @@
+{
+  "cleanup": {
+    "external_fixture": {
+      "mutated_by_gate": false,
+      "scope": "externally-managed-read-only",
+      "state_hmac_matched": true
+    },
+    "gate_owned_projects": {
+      "confirmed": true,
+      "leftovers": 0
+    },
+    "gate_owned_tasks": {
+      "confirmed": true,
+      "leftovers": 0
+    },
+    "gate_owned_workflows": {
+      "confirmed": true,
+      "leftovers": 0
+    }
+  },
+  "conformance_bundle": {
+    "action_recipes": [
+      {
+        "action": "doctor",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "diagnostic_recipe",
+        "fingerprints": {
+          "consumed_projection": "sha256:9c86180c15f0bc0677d9ba4cb8248ccb311bae874621dc40641bb6551e9b48c4",
+          "effective_wire": "sha256:72f4fe94ed734db3cb3531f9b3dc9896427846e50ade7d60feb2f314c7bfb4a6",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:1330fe8a8cdd0539a16d3772fb7fbece7b0cff907adba55a5fc1fdfa04c58e66"
+        },
+        "semantic_operation": "identity.current",
+        "verification": "static"
+      },
+      {
+        "action": "project.create",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+          "effective_wire": "sha256:38752f4ac8263ff8113d922b75d16011673ae5f86ddb9d56b8d470cc3e942477",
+          "preservation": "sha256:8332086c78c9d4bd052a4d0435708bd63b642f7b04f9764466c433b611a886d1",
+          "source": "sha256:1b97ca308ceb46a044647e8a3bccd0d5460e760392aa7a37caa949e537258416"
+        },
+        "semantic_operation": "project.create",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "project.delete",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:8d55607ff1167c8e5f8f38f08cda3bdd51c49ba8d27e114e008a25f933850ca1",
+          "effective_wire": "sha256:e72f1f55d32af8060920e2f7b653fa5fcf7b6bba058dec7fca2d07e6c0fc40dc",
+          "preservation": "sha256:c3a714be828ea9dce8f42f622fb0eff02a13c1c0f6636bce80945241f0386a17",
+          "source": "sha256:53b58ce68a49f67dd97693d3c940146d2edd92a24588d0bdd03f65afbbcb8625"
+        },
+        "semantic_operation": "project.delete",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "project.get",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+          "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+        },
+        "semantic_operation": "project.get",
+        "verification": "live_smoke"
+      },
+      {
+        "action": "project.list",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+          "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+        },
+        "semantic_operation": "project.page",
+        "verification": "live_smoke"
+      },
+      {
+        "action": "project.update",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+          "effective_wire": "sha256:9064bdd97914b7b802429c86b72deeb510b14ac67429ef6135e203e1e6fb6542",
+          "preservation": "sha256:8332086c78c9d4bd052a4d0435708bd63b642f7b04f9764466c433b611a886d1",
+          "source": "sha256:ca7fff10e5609521309e157a1af143815d73190071fb447c9b6fb5e933f2b6d4"
+        },
+        "semantic_operation": "project.update",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "schedule.list",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:5605bc5306ca9eca6e95196eaf5ae9e1dfa4a13afd77ee9dae5c0394774260b4",
+          "effective_wire": "sha256:db4a94ba307e3d4343eea45b8872ca80755eccbcbae7466ce050591b615d0f8a",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:7fd31b8cb7e10d549d4dc7910eecd3ad5cfe12b432e0ea9cc90d41454ef77910"
+        },
+        "semantic_operation": "schedule.page",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "task.get",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:4988b532d23eecb17744758a4e17ae37a15b7b897d264fd1b3c2551577281f51",
+          "effective_wire": "sha256:504888dab92d582d1aa62338d05dac8514eeb76047cc97ffec69227d3423ac27",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:b5315d32fd685ace2693fa611bf825733af9df0c7658a6fadf88a730da5e891c"
+        },
+        "semantic_operation": "task.get",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "task.list",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:636039186bc8211d760d85f02d1cbc921eaf10d6bf7be3237bd8264251e7b4c2",
+          "effective_wire": "sha256:b52cc0c0bf53d994a5b00b4266fa9e7b5574fd54e6a65f7b49d20a65a2aeeeb6",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:abc512d1f06167877251f20a37887fd2cf240b13c88b65c7c86107bf420be4a9"
+        },
+        "semantic_operation": "task.list",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "task.update",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:4988b532d23eecb17744758a4e17ae37a15b7b897d264fd1b3c2551577281f51",
+          "effective_wire": "sha256:013b66fddfa85849bf701c9e4e1c038bed72812354cc84b2379ce805968ece37",
+          "preservation": "sha256:fa75de66e08972c1c35da658587c108de70a6e345302e8e7e6ab272f65757bd7",
+          "source": "sha256:afe0bf74585c4502306db0469d500769c59e0dc947095d442326d19a99c403f1"
+        },
+        "semantic_operation": "task.update",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "workflow.create",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:64ac3079108cc84074bfef527509fb8b082905c13afad36c7b043256809afcde",
+          "effective_wire": "sha256:3ba16d4091021c11a6d5c41812ef319795cab21a0bab8976ba801e4d19b144f4",
+          "preservation": "sha256:0b8013f099cb2d42794c42ebbb84282fb0848e18699ad198b1d4f3de2c0cd324",
+          "source": "sha256:59623397d8fbe8ac2c0e8d25dfff5bcc807124f17842649bc8a3abe311891ddd"
+        },
+        "semantic_operation": "workflow.create",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "workflow.delete",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:1a5b64da0b541cd56c211919a57239a8a52dda4836fc881421268ef6a2b3a8cc",
+          "effective_wire": "sha256:7a739b79371dd4baa3bbb5791e113a5f4517692829823f5fdebeb3e576e5e25d",
+          "preservation": "sha256:07e79f36eaa7250fe5468c2b3dcca83020622b46d43a719e1472f169d099475a",
+          "source": "sha256:f9a196a34b41592f9082ec72074d5eae269d722105507987e65534dac0d49479"
+        },
+        "semantic_operation": "workflow.delete",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "workflow.describe",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:7bd02189628c3c5182654296d75f41d2c1a71d47677d4d5ce00d6a8423add4f8",
+          "effective_wire": "sha256:75b2a9e5d6d3c95bf8aaf9e0ea934ac1d02c20c50bcec0d887d21726be423aaf",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:c750cfec8e42fdc5628190ded4a34bf62ce9f885c093b9d21b3f5ee976a6bc13"
+        },
+        "semantic_operation": "workflow.describe",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "workflow.digest",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:caa19a7f6a04c2c49191340ab7d8dfaf34354e01614a3692d23f05c82afa5421",
+          "effective_wire": "sha256:3462619fbd2ac486588c948f12497e0b4b0e94dd2f7db875c45ad901d73d3a5a",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:a11acba35dc06cfb9c09c6a33fd54bdb43b8c8121f1a10910cf637890619f910"
+        },
+        "semantic_operation": "workflow.digest",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "workflow.edit",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:938a6577d23d78d9a9006fea823cd5b8fed8be4bf17e753efdaca2a9f255efb2",
+          "effective_wire": "sha256:aa78631b2712d1bf31b63f27a033fc6931c57e8c55ad6a437c73e698efd71625",
+          "preservation": "sha256:5744a00c3156f193daac625ebbdbaa01c560f930ba7e95ebb7f5ae257aec8c54",
+          "source": "sha256:d8d1eef8fc9ee1f0cef47eb4460e76139af5b066fd2086f8b33db7b5633c981a"
+        },
+        "semantic_operation": "workflow.edit",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "workflow.export",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:551ad1693ecdb9d1eb5a1fff81c7a3a7ca8cb4517aca42bad55eb67716d203c0",
+          "effective_wire": "sha256:248eaef905a7950d195cd1abc3e9e5066d78ace1102c772efab09679ed027cc1",
+          "preservation": "sha256:748d177bd58f1d0201f04995f0091ae2d7a75be5b4cc9502eaac73c2d876298c",
+          "source": "sha256:432a2cbdbf01c0212145745cfd52d4713e658662e28be1d4fdb81eb1bca6ef26"
+        },
+        "semantic_operation": "workflow.export",
+        "verification": "contract_tested"
+      },
+      {
+        "action": "workflow.get",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+          "effective_wire": "sha256:9f88fda87803cb9e8ba5e69a4a40e893044f0f7db58621509878e808e9289912",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:145fedcc58183a8663dd51240e363f2e224d8967c3a18111a399c48f5f5f61d9"
+        },
+        "semantic_operation": "workflow.get",
+        "verification": "live_smoke"
+      },
+      {
+        "action": "workflow.list",
+        "availability": "supported",
+        "build_status": "accepted",
+        "execution_mode": "generated_adapter",
+        "fingerprints": {
+          "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+          "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+        },
+        "semantic_operation": "workflow.page",
+        "verification": "live_smoke"
+      }
+    ],
+    "assessment_digest": "sha256:2bc22634ab102467a2ae5ec26b18c681d8cca06a21543ca253239574c6898623",
+    "assessment_schema_version": 1,
+    "bundle_digest": "sha256:d7ebf0fa32f923437a02121d88fc9004bd904839d27f00c12c10d3ed2636df7c",
+    "catalog_digest": "sha256:cd55159f63fa63e0e3f5ac09c954a87f15278a0d843e05163a7a0f69e2acc046",
+    "catalog_schema_version": 1,
+    "coordinate_status": "ready",
+    "direct_actions": [
+      "task.get",
+      "task.list",
+      "task.update",
+      "workflow.create",
+      "workflow.delete",
+      "workflow.describe",
+      "workflow.digest",
+      "workflow.edit",
+      "workflow.export"
+    ],
+    "extends": [
+      "legacy_core/v1"
+    ],
+    "inheritance": [
+      {
+        "bundle_digest": "sha256:e51ed47817d8f85ff4d7bc61399bffa2872830d787f2758c2d517ac96478d3f4",
+        "name": "legacy_core/v1",
+        "required_actions": [
+          "doctor",
+          "project.create",
+          "project.delete",
+          "project.get",
+          "project.list",
+          "project.update",
+          "schedule.list",
+          "workflow.get",
+          "workflow.list"
+        ]
+      }
+    ],
+    "name": "full_core/v1",
+    "required_actions": [
+      "doctor",
+      "project.create",
+      "project.delete",
+      "project.get",
+      "project.list",
+      "project.update",
+      "schedule.list",
+      "task.get",
+      "task.list",
+      "task.update",
+      "workflow.create",
+      "workflow.delete",
+      "workflow.describe",
+      "workflow.digest",
+      "workflow.edit",
+      "workflow.export",
+      "workflow.get",
+      "workflow.list"
+    ]
+  },
+  "contract": {
+    "bundle_manifest_schema_version": 2,
+    "ds_version": "3.0.6",
+    "operation_count": 0,
+    "rendered_contract_digest": "sha256:3e8365b446dba95b3d22835ea49e5a462b699fdab77562af585d5afb6589123e",
+    "selection": "runtime-slice",
+    "semantic_operations": [],
+    "source_commit": "109ac5486ece186c67725e9be1065e789f293871",
+    "source_contract_digest": "sha256:dd0af03f88ef8684bc00e9e29431564aa4d29e849016703ffd11e129e3bc7eb9",
+    "source_tag": "3.0.6",
+    "source_tree": "0d7405f73ea34a9f05261cfc0ba373136d3834f8"
+  },
+  "dolphinscheduler": {
+    "api_target_hmac_sha256": "hmac-sha256:aee9ac8b4202b73c41d072676ad6ce809dbb13cf782465fe363b7d2d04f1c276",
+    "image_id": "sha256:0194e19c091dce19b616bd763d4b3b2cbac740bd9a3592c6d097bca41e4703c1",
+    "image_observed_at": "2026-10-01T02:19:40Z",
+    "image_provenance": {
+      "kind": "registry-digest/v1",
+      "repo_digests": [
+        "apache/dolphinscheduler-api@sha256:a1f6e11e8c7e9490b86fe7c7950e9257ee8ebb48dce9df1bbbb92b0f428d2956"
+      ],
+      "selected_repo_digest": "apache/dolphinscheduler-api@sha256:a1f6e11e8c7e9490b86fe7c7950e9257ee8ebb48dce9df1bbbb92b0f428d2956"
+    },
+    "image_ref": "apache/dolphinscheduler-api:3.0.6",
+    "image_source": "node-local-inspection",
+    "persona": "etl-developer",
+    "principal_hmac_sha256": "hmac-sha256:62681c70f65d5678a64a98e77988d9478529c9abefd5481667d3d434daaa2701",
+    "release": "3.0.6"
+  },
+  "effects": {
+    "external_fixture_mutated": false,
+    "gate_owned_only": true,
+    "remote_mutations": 9
+  },
+  "evidence_scope": {
+    "authoring_mode": "opaque",
+    "claim": "named-bundle-live-scenario",
+    "facet_claims": [],
+    "observed_evidence": "live_smoke",
+    "promotion_claimed": false,
+    "support_level_changes": false,
+    "tested_changes": false
+  },
+  "fixture": {
+    "after_state_hmac_sha256": "hmac-sha256:40059cf10e4cdc36f3e9fa02deb59584e5f539f06ecb0c70be74f731952d518b",
+    "before_state_hmac_sha256": "hmac-sha256:40059cf10e4cdc36f3e9fa02deb59584e5f539f06ecb0c70be74f731952d518b",
+    "identity_hmac_sha256": "hmac-sha256:af9505f4f8d04c0b234e04b3b1011f3739f8129e322d10972a7b619a504d6c21",
+    "manifest_sha256": "sha256:d10d6b20f68c22488ad1f6063cad4220db8b819841bad77fb066efe483fd950b",
+    "provisioner": "dsmatrix-conformance-fixture/v1",
+    "scheduled_workflow": true
+  },
+  "gate": "exact-conformance-bundle",
+  "operation_trace": [
+    {
+      "action": "version",
+      "argv_shape": "version",
+      "assertions": [
+        "selected-contract-and-family-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 1
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 2,
+      "subject_action": "doctor"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 3,
+      "subject_action": "project.create"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 4,
+      "subject_action": "project.delete"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 5,
+      "subject_action": "project.get"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 6,
+      "subject_action": "project.list"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 7,
+      "subject_action": "project.update"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 8,
+      "subject_action": "schedule.list"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 9,
+      "subject_action": "task.get"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 10,
+      "subject_action": "task.list"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 11,
+      "subject_action": "task.update"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 12,
+      "subject_action": "workflow.create"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 13,
+      "subject_action": "workflow.delete"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 14,
+      "subject_action": "workflow.describe"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 15,
+      "subject_action": "workflow.digest"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 16,
+      "subject_action": "workflow.edit"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 17,
+      "subject_action": "workflow.export"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 18,
+      "subject_action": "workflow.get"
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 19,
+      "subject_action": "workflow.list"
+    },
+    {
+      "action": "doctor",
+      "argv_shape": "doctor",
+      "assertions": [
+        "api-ready",
+        "current-user-bound",
+        "principal-hmac-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [
+        "bound-current-user",
+        "capability-preflight-complete"
+      ],
+      "sequence": 20
+    },
+    {
+      "action": "project.list",
+      "argv_shape": "project list --search PROJECT_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "bounded-exact-name-search"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 21
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "external-project-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 22
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "external-project-native-identity-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 23
+    },
+    {
+      "action": "workflow.list",
+      "argv_shape": "workflow list --project PROJECT --search WORKFLOW_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "external-workflow-native-identity-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 24
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get WORKFLOW --project PROJECT",
+      "assertions": [
+        "external-workflow-and-schedule-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 25
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get WORKFLOW --project PROJECT",
+      "assertions": [
+        "external-workflow-and-schedule-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 26
+    },
+    {
+      "action": "schedule.list",
+      "argv_shape": "schedule list --project PROJECT --workflow WORKFLOW --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "external-schedule-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [
+        "external-fixture-cross-checked"
+      ],
+      "sequence": 27
+    },
+    {
+      "action": "project.create",
+      "argv_shape": "project create --name PROJECT_NAME --description DESCRIPTION",
+      "assertions": [
+        "gate-owned-project-created",
+        "native-identity-captured"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 28
+    },
+    {
+      "action": "project.create",
+      "argv_shape": "project create --name PROJECT_NAME --description DESCRIPTION",
+      "assertions": [
+        "stable-conflict",
+        "actionable-suggestion"
+      ],
+      "error_type": "conflict",
+      "exit_code": 1,
+      "ok": false,
+      "outcomes": [],
+      "sequence": 29
+    },
+    {
+      "action": "project.list",
+      "argv_shape": "project list --search PROJECT_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "bounded-exact-name-search"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 30
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "gate-owned-project-matched",
+        "native-identity-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 31
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "gate-owned-project-matched",
+        "native-identity-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 32
+    },
+    {
+      "action": "project.update",
+      "argv_shape": "project update PROJECT --description DESCRIPTION",
+      "assertions": [
+        "description-marker-updated"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 33
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "updated-description-read-back"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [
+        "gate-owned-project-round-trip"
+      ],
+      "sequence": 34
+    },
+    {
+      "action": "workflow.list",
+      "argv_shape": "workflow list --project PROJECT --search WORKFLOW_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "pre-create-workflow-absent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 35
+    },
+    {
+      "action": "workflow.create",
+      "argv_shape": "workflow create --file WORKFLOW_FILE --project PROJECT --dry-run",
+      "assertions": [
+        "installed-exact-create-plan",
+        "dry-run-no-request-sent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 36
+    },
+    {
+      "action": "workflow.list",
+      "argv_shape": "workflow list --project PROJECT --search WORKFLOW_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "create-dry-run-left-workflow-absent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 37
+    },
+    {
+      "action": "workflow.create",
+      "argv_shape": "workflow create --file WORKFLOW_FILE --project PROJECT",
+      "assertions": [
+        "gate-owned-workflow-created",
+        "native-workflow-code-captured",
+        "workflow-offline"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 38
+    },
+    {
+      "action": "workflow.list",
+      "argv_shape": "workflow list --project PROJECT --search WORKFLOW_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "gate-owned-workflow-listed",
+        "native-workflow-code-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 39
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get WORKFLOW --project PROJECT",
+      "assertions": [
+        "gate-owned-workflow-matched",
+        "native-workflow-code-matched",
+        "workflow-offline"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 40
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get WORKFLOW --project PROJECT",
+      "assertions": [
+        "gate-owned-workflow-matched",
+        "native-workflow-code-matched",
+        "workflow-offline"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 41
+    },
+    {
+      "action": "workflow.describe",
+      "argv_shape": "workflow describe WORKFLOW --project PROJECT",
+      "assertions": [
+        "two-task-dag-matched",
+        "relation-endpoints-coherent",
+        "workflow-offline"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 42
+    },
+    {
+      "action": "workflow.digest",
+      "argv_shape": "workflow digest WORKFLOW --project PROJECT",
+      "assertions": [
+        "digest-counts-match-describe",
+        "digest-topology-match-describe"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 43
+    },
+    {
+      "action": "workflow.export",
+      "argv_shape": "workflow export WORKFLOW --project PROJECT",
+      "assertions": [
+        "raw-yaml-dag-matches-describe",
+        "raw-body-not-recorded"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 44
+    },
+    {
+      "action": "task.list",
+      "argv_shape": "task list --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "two-task-list-matched-dag",
+        "task-versions-coherent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 45
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 46
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 47
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 48
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 49
+    },
+    {
+      "action": "workflow.create",
+      "argv_shape": "workflow create --file WORKFLOW_FILE --project PROJECT",
+      "assertions": [
+        "stable-conflict"
+      ],
+      "error_type": "conflict",
+      "exit_code": 1,
+      "ok": false,
+      "outcomes": [],
+      "sequence": 50
+    },
+    {
+      "action": "workflow.describe",
+      "argv_shape": "workflow describe WORKFLOW --project PROJECT",
+      "assertions": [
+        "two-task-dag-matched",
+        "relation-endpoints-coherent",
+        "workflow-offline",
+        "duplicate-workflow-state-unchanged"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 51
+    },
+    {
+      "action": "workflow.digest",
+      "argv_shape": "workflow digest WORKFLOW --project PROJECT",
+      "assertions": [
+        "digest-counts-match-describe",
+        "digest-topology-match-describe"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 52
+    },
+    {
+      "action": "workflow.export",
+      "argv_shape": "workflow export WORKFLOW --project PROJECT",
+      "assertions": [
+        "raw-yaml-dag-matches-describe",
+        "raw-body-not-recorded"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 53
+    },
+    {
+      "action": "task.list",
+      "argv_shape": "task list --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "two-task-list-matched-dag",
+        "task-versions-coherent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 54
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 55
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 56
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 57
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 58
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get MISSING_WORKFLOW --project PROJECT",
+      "assertions": [
+        "stable-not-found",
+        "missing-workflow-nonmutating"
+      ],
+      "error_type": "not_found",
+      "exit_code": 1,
+      "ok": false,
+      "outcomes": [],
+      "sequence": 59
+    },
+    {
+      "action": "task.update",
+      "argv_shape": "task update TASK --project PROJECT --workflow WORKFLOW --set DEPENDS_ON --dry-run",
+      "assertions": [
+        "dependency-update-upstream-limited",
+        "pre-io-no-mutation"
+      ],
+      "error_type": "unsupported_feature",
+      "exit_code": 1,
+      "ok": false,
+      "outcomes": [],
+      "sequence": 60
+    },
+    {
+      "action": "workflow.describe",
+      "argv_shape": "workflow describe WORKFLOW --project PROJECT",
+      "assertions": [
+        "two-task-dag-matched",
+        "relation-endpoints-coherent",
+        "workflow-offline"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 61
+    },
+    {
+      "action": "workflow.digest",
+      "argv_shape": "workflow digest WORKFLOW --project PROJECT",
+      "assertions": [
+        "digest-counts-match-describe",
+        "digest-topology-match-describe"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 62
+    },
+    {
+      "action": "workflow.export",
+      "argv_shape": "workflow export WORKFLOW --project PROJECT",
+      "assertions": [
+        "raw-yaml-dag-matches-describe",
+        "raw-body-not-recorded"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 63
+    },
+    {
+      "action": "task.list",
+      "argv_shape": "task list --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "two-task-list-matched-dag",
+        "task-versions-coherent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 64
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 65
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 66
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 67
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 68
+    },
+    {
+      "action": "task.update",
+      "argv_shape": "task update TASK --project PROJECT --workflow WORKFLOW --set COMMAND --dry-run",
+      "assertions": [
+        "installed-exact-task-update-plan",
+        "dry-run-no-request-sent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 69
+    },
+    {
+      "action": "workflow.describe",
+      "argv_shape": "workflow describe WORKFLOW --project PROJECT",
+      "assertions": [
+        "two-task-dag-matched",
+        "relation-endpoints-coherent",
+        "workflow-offline"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 70
+    },
+    {
+      "action": "workflow.digest",
+      "argv_shape": "workflow digest WORKFLOW --project PROJECT",
+      "assertions": [
+        "digest-counts-match-describe",
+        "digest-topology-match-describe"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 71
+    },
+    {
+      "action": "workflow.export",
+      "argv_shape": "workflow export WORKFLOW --project PROJECT",
+      "assertions": [
+        "raw-yaml-dag-matches-describe",
+        "raw-body-not-recorded"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 72
+    },
+    {
+      "action": "task.list",
+      "argv_shape": "task list --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "two-task-list-matched-dag",
+        "task-versions-coherent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 73
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 74
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 75
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 76
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 77
+    },
+    {
+      "action": "task.update",
+      "argv_shape": "task update TASK --project PROJECT --workflow WORKFLOW --set COMMAND",
+      "assertions": [
+        "command-updated-exactly",
+        "task-version-advanced",
+        "non-owned-task-state-preserved"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 78
+    },
+    {
+      "action": "workflow.describe",
+      "argv_shape": "workflow describe WORKFLOW --project PROJECT",
+      "assertions": [
+        "two-task-dag-matched",
+        "relation-endpoints-coherent",
+        "workflow-offline"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 79
+    },
+    {
+      "action": "workflow.digest",
+      "argv_shape": "workflow digest WORKFLOW --project PROJECT",
+      "assertions": [
+        "digest-counts-match-describe",
+        "digest-topology-match-describe"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 80
+    },
+    {
+      "action": "workflow.export",
+      "argv_shape": "workflow export WORKFLOW --project PROJECT",
+      "assertions": [
+        "raw-yaml-dag-matches-describe",
+        "raw-body-not-recorded"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 81
+    },
+    {
+      "action": "task.list",
+      "argv_shape": "task list --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "two-task-list-matched-dag",
+        "task-versions-coherent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 82
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 83
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 84
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 85
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 86
+    },
+    {
+      "action": "workflow.edit",
+      "argv_shape": "workflow edit WORKFLOW --project PROJECT --patch PATCH_FILE --dry-run",
+      "assertions": [
+        "installed-exact-workflow-edit-plan",
+        "description-only-diff",
+        "dry-run-no-request-sent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 87
+    },
+    {
+      "action": "workflow.describe",
+      "argv_shape": "workflow describe WORKFLOW --project PROJECT",
+      "assertions": [
+        "two-task-dag-matched",
+        "relation-endpoints-coherent",
+        "workflow-offline"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 88
+    },
+    {
+      "action": "workflow.digest",
+      "argv_shape": "workflow digest WORKFLOW --project PROJECT",
+      "assertions": [
+        "digest-counts-match-describe",
+        "digest-topology-match-describe"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 89
+    },
+    {
+      "action": "workflow.export",
+      "argv_shape": "workflow export WORKFLOW --project PROJECT",
+      "assertions": [
+        "raw-yaml-dag-matches-describe",
+        "raw-body-not-recorded"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 90
+    },
+    {
+      "action": "task.list",
+      "argv_shape": "task list --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "two-task-list-matched-dag",
+        "task-versions-coherent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 91
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 92
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 93
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 94
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 95
+    },
+    {
+      "action": "workflow.edit",
+      "argv_shape": "workflow edit WORKFLOW --project PROJECT --patch PATCH_FILE",
+      "assertions": [
+        "description-updated-exactly"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 96
+    },
+    {
+      "action": "workflow.describe",
+      "argv_shape": "workflow describe WORKFLOW --project PROJECT",
+      "assertions": [
+        "two-task-dag-matched",
+        "relation-endpoints-coherent",
+        "workflow-offline"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 97
+    },
+    {
+      "action": "workflow.digest",
+      "argv_shape": "workflow digest WORKFLOW --project PROJECT",
+      "assertions": [
+        "digest-counts-match-describe",
+        "digest-topology-match-describe"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 98
+    },
+    {
+      "action": "workflow.export",
+      "argv_shape": "workflow export WORKFLOW --project PROJECT",
+      "assertions": [
+        "raw-yaml-dag-matches-describe",
+        "raw-body-not-recorded"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 99
+    },
+    {
+      "action": "task.list",
+      "argv_shape": "task list --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "two-task-list-matched-dag",
+        "task-versions-coherent"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 100
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 101
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 102
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-name-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 103
+    },
+    {
+      "action": "task.get",
+      "argv_shape": "task get TASK --project PROJECT --workflow WORKFLOW",
+      "assertions": [
+        "task-get-matched-list-and-dag",
+        "selector-native-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 104
+    },
+    {
+      "action": "release-gate.task-definition.prove",
+      "argv_shape": "release-gate task-definition prove",
+      "assertions": [
+        "project-wide-task-inventory-proven",
+        "exact-two-owned-tasks",
+        "zero-remote-mutations"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 105
+    },
+    {
+      "action": "workflow.delete",
+      "argv_shape": "workflow delete WORKFLOW --project PROJECT --force",
+      "assertions": [
+        "gate-owned-workflow-deleted"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 106
+    },
+    {
+      "action": "workflow.list",
+      "argv_shape": "workflow list --project PROJECT --search WORKFLOW_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "workflow-leftovers-zero"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [
+        "gate-owned-workflow-round-trip",
+        "workflow-dag-cross-checked",
+        "task-update-round-trip",
+        "workflow-edit-round-trip"
+      ],
+      "sequence": 107
+    },
+    {
+      "action": "release-gate.task-definition.cleanup",
+      "argv_shape": "release-gate task-definition cleanup",
+      "assertions": [
+        "exact-two-owned-tasks-deleted",
+        "fresh-zero-reconciliation",
+        "remote-mutations-two"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 108
+    },
+    {
+      "action": "project.delete",
+      "argv_shape": "project delete PROJECT --force",
+      "assertions": [
+        "gate-owned-project-deleted-after-workflow"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 109
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "stable-not-found",
+        "deleted-project-absent"
+      ],
+      "error_type": "not_found",
+      "exit_code": 1,
+      "ok": false,
+      "outcomes": [],
+      "sequence": 110
+    },
+    {
+      "action": "project.list",
+      "argv_shape": "project list --search PROJECT_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "bounded-exact-name-search"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [
+        "full-cleanup-zero",
+        "negative-errors-translated"
+      ],
+      "sequence": 111
+    },
+    {
+      "action": "project.list",
+      "argv_shape": "project list --search PROJECT_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "bounded-exact-name-search"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 112
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "external-project-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 113
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "external-project-native-identity-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 114
+    },
+    {
+      "action": "workflow.list",
+      "argv_shape": "workflow list --project PROJECT --search WORKFLOW_NAME --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "external-workflow-native-identity-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 115
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get WORKFLOW --project PROJECT",
+      "assertions": [
+        "external-workflow-and-schedule-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 116
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get WORKFLOW --project PROJECT",
+      "assertions": [
+        "external-workflow-and-schedule-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 117
+    },
+    {
+      "action": "schedule.list",
+      "argv_shape": "schedule list --project PROJECT --workflow WORKFLOW --page-no PAGE_NO --page-size PAGE_SIZE",
+      "assertions": [
+        "external-schedule-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "outcomes": [],
+      "sequence": 118
+    }
+  ],
+  "profile": {
+    "contract_version": "3.0.6",
+    "ds": "3.0.6",
+    "family": "process-definition-3.0",
+    "fingerprints": {
+      "consumed_projection": "sha256:13007369bd7a99dbdc56029fd69549f36a30452ec7e0e828e3c0565c54a0f96e",
+      "effective_wire": "sha256:f29f3d41db4bfc0e838f27527e78dcad6c0ed1bcee829454a31b925fe7273613",
+      "preservation": "sha256:6904757bcf558eb858ba91d126164484bd7bbdbc3ef880697fb4a1b2d6988c35",
+      "source": "sha256:cc9be176b3477118113f2c6a4fe554f1a94a341475d538dd3b8cad898a1e94d7"
+    },
+    "selected_ds_version": "3.0.6",
+    "source": {
+      "commit": "109ac5486ece186c67725e9be1065e789f293871",
+      "tag": "3.0.6",
+      "tree": "0d7405f73ea34a9f05261cfc0ba373136d3834f8"
+    },
+    "support_level": "experimental",
+    "tested": false
+  },
+  "receipt_digest": "sha256:32e7e500472eaa73ea3440e3d624c3b26f823d086c21ee49d74cd8eee3660b4e",
+  "recorded_at": "2026-10-01T02:26:05.280516+00:00",
+  "runner": {
+    "artifact": "installed-wheel-console-script",
+    "cli_version": "0.4.1",
+    "wheel_filename": "dolphinscheduler_cli-0.4.1-py3-none-any.whl",
+    "wheel_sha256": "sha256:fad25fa899a0857a3d41b50a6b3fe283dba75ff37065844c54921ec228203876"
+  },
+  "sanitization_schema_version": 1,
+  "scenario": {
+    "authoring_mode": "opaque",
+    "bundle": "full_core/v1",
+    "digest": "sha256:6fde7e85428cfa06f3f2dad52be5119d3c8628a1c5633c9b5e114d1dab24e4f2",
+    "id": "full-core-installed-wheel/v1",
+    "observed_outcomes": [
+      "bound-current-user",
+      "capability-preflight-complete",
+      "external-fixture-cross-checked",
+      "gate-owned-project-round-trip",
+      "gate-owned-workflow-round-trip",
+      "workflow-dag-cross-checked",
+      "task-update-round-trip",
+      "workflow-edit-round-trip",
+      "full-cleanup-zero",
+      "negative-errors-translated"
+    ],
+    "required_outcomes": [
+      "bound-current-user",
+      "capability-preflight-complete",
+      "external-fixture-cross-checked",
+      "gate-owned-project-round-trip",
+      "gate-owned-workflow-round-trip",
+      "workflow-dag-cross-checked",
+      "task-update-round-trip",
+      "workflow-edit-round-trip",
+      "full-cleanup-zero",
+      "negative-errors-translated"
+    ],
+    "schema_version": 1
+  },
+  "schema_version": 1,
+  "secrets_recorded": false,
+  "status": "passed"
+}

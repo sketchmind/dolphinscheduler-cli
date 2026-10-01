@@ -1,0 +1,260 @@
+{
+  "contract": {
+    "bundle_manifest_schema_version": 2,
+    "ds_version": "3.1.0",
+    "operation_count": 0,
+    "rendered_contract_digest": "sha256:cf64ddc225d85c87658cced1c5f4644bce24fea8e3f697888ad15668bd3dc9c2",
+    "selection": "runtime-slice",
+    "semantic_operations": [],
+    "source_commit": "ae33ba594754425a2ac72100450adffd3b5e3971",
+    "source_contract_digest": "sha256:d0b1f0c250f2f3149534b5d052064850c04b4aec2010463d7c5530f6e25b66df",
+    "source_tag": "3.1.0",
+    "source_tree": "5d5eab7db53dc6f3fea088d91764227e1433cc77"
+  },
+  "dolphinscheduler": {
+    "api_target_hmac_sha256": "hmac-sha256:c651b1ca0e75bff2da27fed704aeb6f9cdd15abe96533b7fba942bee4efaf707",
+    "image_id": "sha256:ea881e67fc1b573e7fbcf985376ba84b494e77ee0b71780981d5bd8f8aecbf07",
+    "image_observed_at": "2026-10-01T02:19:57Z",
+    "image_ref": "apache/dolphinscheduler-api:3.1.0",
+    "image_source": "swarm task plus node-local Docker inspection",
+    "persona": "etl-developer",
+    "principal_hmac_sha256": "hmac-sha256:bce413f6fb010c1c2cea533a6f33d74802ecd7c4b1d84d9d4d0453ff43e31b0e",
+    "release": "3.1.0"
+  },
+  "effects": {
+    "fixture_mutated": false,
+    "remote_mutations": 0
+  },
+  "fixture": {
+    "manifest_sha256": "sha256:cbce5043fd1e6dfbbe06f8302d59de523ad3e83734296ce3489a13edc3474c7a",
+    "project_identity_kind": "code",
+    "provisioner": "dsmatrix-exact-read/v1",
+    "scheduled_workflow": true,
+    "workflow_identity_kind": "code",
+    "workflow_release_state": "OFFLINE"
+  },
+  "gate": "exact-profile-read",
+  "operation_trace": [
+    {
+      "action": "version",
+      "argv_shape": "version",
+      "assertions": [
+        "selected-contract-and-family-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 1
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "project.list-supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 2
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "project.get-supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 3
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "workflow.list-supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 4
+    },
+    {
+      "action": "capabilities",
+      "argv_shape": "capabilities --action ACTION",
+      "assertions": [
+        "workflow.get-supported"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 5
+    },
+    {
+      "action": "doctor",
+      "argv_shape": "doctor",
+      "assertions": [
+        "api-health-ok",
+        "current-user-ok",
+        "general-user-confirmed",
+        "principal-hmac-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "sequence": 6
+    },
+    {
+      "action": "project.list",
+      "argv_shape": "project list --search PROJECT_NAME --page-no 1 --page-size 20",
+      "assertions": [
+        "native-project-identity-matched",
+        "pagination-search-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "search",
+      "sequence": 7
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "native-project-identity-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "project-name",
+      "sequence": 8
+    },
+    {
+      "action": "project.get",
+      "argv_shape": "project get PROJECT",
+      "assertions": [
+        "native-project-identity-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "project-code",
+      "sequence": 9
+    },
+    {
+      "action": "workflow.list",
+      "argv_shape": "workflow list --project PROJECT --search WORKFLOW_NAME --page-no 1 --page-size 20",
+      "assertions": [
+        "native-workflow-identity-matched",
+        "pagination-search-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "project-name+workflow-search",
+      "sequence": 10
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get WORKFLOW --project PROJECT",
+      "assertions": [
+        "native-workflow-identity-matched",
+        "schedule-hydrated",
+        "release-state-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "workflow-name",
+      "sequence": 11
+    },
+    {
+      "action": "workflow.get",
+      "argv_shape": "workflow get WORKFLOW --project PROJECT",
+      "assertions": [
+        "native-workflow-identity-matched",
+        "schedule-hydrated",
+        "release-state-matched"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "selector_kind": "workflow-code",
+      "sequence": 12
+    }
+  ],
+  "profile": {
+    "contract_version": "3.1.0",
+    "ds": "3.1.0",
+    "family": "process-definition-3.1",
+    "fingerprints": {
+      "consumed_projection": "sha256:13007369bd7a99dbdc56029fd69549f36a30452ec7e0e828e3c0565c54a0f96e",
+      "effective_wire": "sha256:d13f8be7bc8653be18f55b00e8d9b7aca9e3e8c51d6e9ef9cf106951c7ff7aee",
+      "preservation": "sha256:6904757bcf558eb858ba91d126164484bd7bbdbc3ef880697fb4a1b2d6988c35",
+      "source": "sha256:c60a1da9290dcdfc06a1b91915e929cd565cbe2869fa5d4e8301a056478e3995"
+    },
+    "selected_ds_version": "3.1.0",
+    "support_level": "experimental",
+    "tested": false
+  },
+  "read_bundle": {
+    "action_verifications": {
+      "project.get": "live_smoke",
+      "project.list": "live_smoke",
+      "workflow.get": "live_smoke",
+      "workflow.list": "live_smoke"
+    },
+    "actions": [
+      "project.get",
+      "project.list",
+      "workflow.get",
+      "workflow.list"
+    ],
+    "digest": "sha256:91df4793b2e1f9b2ecdd85d8bd535e5faba356fa0d3f99ecfffa6abe95eebe2d",
+    "recipes": [
+      {
+        "action": "project.get",
+        "build_status": "accepted",
+        "fingerprints": {
+          "consumed_projection": "sha256:e3c169d3417d0b5bf80769e02b76aead10c19e1331836fe9510ed1456fb313e6",
+          "effective_wire": "sha256:2d5fb4e95a6926afcf5aaaddd86e3fa9bd1cb26268ba6f0c617e56eca1b4c685",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:2932df88282652ddaacc74c15f2ad7b2f14d8848763e5c9d657ee59b1e6d3588"
+        },
+        "semantic_operation": "project.get"
+      },
+      {
+        "action": "project.list",
+        "build_status": "accepted",
+        "fingerprints": {
+          "consumed_projection": "sha256:efe1248d53b642f3917fd16b6543f358240455e6d1b2cb1d8953ba2343e32698",
+          "effective_wire": "sha256:0f8f7fbb856ecf3184ec6ea2dd0ff572b8ff59404eab546685b698f27e4eb35f",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:01bfa532f44f5eebea8fd062a07ef265df63942ab4ab42cf3fc4c5e4cd0f733c"
+        },
+        "semantic_operation": "project.page"
+      },
+      {
+        "action": "workflow.get",
+        "build_status": "accepted",
+        "fingerprints": {
+          "consumed_projection": "sha256:623e319e3ca2843577ae5d9399d25ee7f4d561174512c732ee77d5e7ecbd626f",
+          "effective_wire": "sha256:b33fb8d41402fe8e5976953fd66c518e38313c585f0f9fa756c19c2ea4c632e4",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:92ae2f2e8765b2a75e3002e0cf18cb8b8aeae89cb6602e639c6ab5407bbbc343"
+        },
+        "semantic_operation": "workflow.get"
+      },
+      {
+        "action": "workflow.list",
+        "build_status": "accepted",
+        "fingerprints": {
+          "consumed_projection": "sha256:8fb0c4c13bef7fddc4879c9983cdcc831e5ad82bdd73162a396c4ce670326911",
+          "effective_wire": "sha256:95e7b768102b88c6f9fb355e710c70c878324cc0d998b23048b78d6d992a2765",
+          "preservation": "sha256:4ca33b33f788fe9a60768a45ae1d016c7a547a3887fa4c9ffe3df4c0f91687b6",
+          "source": "sha256:e97e12ee53a732e37089053c2e42ae4c8c56f2c36e1b091ff15e00511bd3928c"
+        },
+        "semantic_operation": "workflow.page"
+      }
+    ]
+  },
+  "recorded_at": "2026-10-01T02:20:41.949930Z",
+  "runner": {
+    "artifact": "installed-wheel-console-script",
+    "cli_version": "0.4.1",
+    "wheel_filename": "dolphinscheduler_cli-0.4.1-py3-none-any.whl",
+    "wheel_sha256": "sha256:fad25fa899a0857a3d41b50a6b3fe283dba75ff37065844c54921ec228203876"
+  },
+  "sanitization_schema_version": 1,
+  "schema_version": 2,
+  "secrets_recorded": false,
+  "status": "passed"
+}

@@ -174,17 +174,17 @@ is separate from these artifact-bound verification scopes.
 
 A live gate exercises a named set of actions. Its receipt binds those actions
 to an immutable artifact and manifest.
-The `0.4.0` release candidate corpus binds all 37 profiles to one wheel:
+The `0.4.1` release candidate corpus binds all 37 profiles to one wheel:
 37 four-action [exact-read receipts](live-evidence/exact-read/), 37
 18-action [conformance receipts](live-evidence/conformance-bundles/) using
 `full_core/v1`, and the separate 15-action `external-shell/v1` schema-7 receipt
 on exact `3.4.2`. Its wheel SHA-256 is
-`5829e708757e29756de66d3912995d5ff7635a315940f2d9226e738700477299`.
-This candidate includes the Typer and DataX runtime fixes and the exact
-`2.0.0` / `2.0.1` independent-task cleanup repair. Each receipt records its
-exact contract identities and successful scenario cleanup. The
-[earlier candidate corpus](live-evidence/history/candidates/dd34c34733a5/)
-retains its original wheel binding and receipt bytes.
+`fad25fa899a0857a3d41b50a6b3fe283dba75ff37065844c54921ec228203876`.
+This candidate includes the legacy workflow layout and automatic API discovery
+fixes. Each receipt records its exact contract identities and successful
+scenario cleanup. The [0.4.0 corpus](live-evidence/history/candidates/5829e708757e/)
+and [earlier candidate corpus](live-evidence/history/candidates/dd34c34733a5/)
+retain their original wheel bindings and receipt bytes.
 
 The generic read gate covers four remote stable actions: `project.list`,
 `project.get`, `workflow.list`, and `workflow.get`. A promotion-grade generic
@@ -1290,13 +1290,14 @@ The rule is not “skip forever”. The rule is:
 
 ## Current Coverage Snapshot
 
-The `0.4.0` release candidate has 75 receipts on the wheel identified
+The `0.4.1` release candidate has 75 receipts on the wheel identified
 [above](#exact-version-profile-gates): four-action exact-read schema-2 and
 18-action `full_core/v1` receipts for all 37 profiles, plus the separate
 15-action `external-shell/v1` schema-7 receipt on exact `3.4.2`. All scenario
 and external fixture cleanup was independently verified. The corrected exact
 `2.0.0` and `2.0.1` full-core scenarios verify native task inventory before
-project deletion.
+project deletion. The [0.4.0 release corpus](live-evidence/history/candidates/5829e708757e/)
+retains its complete cleanup proofs and original artifact binding.
 
 The earlier `dd34c34733a5…` candidate corpus remains in
 [history](live-evidence/history/candidates/dd34c34733a5/) with its original
