@@ -34,6 +34,7 @@ from tests.live.conformance_bundle_gate import (
 from tests.live.support import DsctlCommandResult
 from tests.tools.conformance_bundle_testkit import ScenarioCase
 
+from dsctl import __version__
 from dsctl.generated import task_definition_cleanup_profiles as cleanup_profiles
 from dsctl.generated import task_definition_profiles as task_profiles
 from dsctl.generated.conformance_bundles import CONFORMANCE_BUNDLE_DATA
@@ -3290,7 +3291,7 @@ def _config(
             required_actions=tuple(assessed["required_actions"]),
         ),
         installation=InstalledBundleAttestation(
-            distribution_version="0.4.0",
+            distribution_version=__version__,
             profile={
                 key: profile[key]
                 for key in (

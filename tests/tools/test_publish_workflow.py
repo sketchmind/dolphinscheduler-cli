@@ -178,15 +178,35 @@ def test_release_docs_require_two_approved_dispatches_before_publication() -> No
     assert "Every release must run" in normalized
     assert "Protect `main` with a ruleset" in normalized
     assert "Protect `v*` tags with a tag ruleset" in normalized
-    assert "required reviewers" in normalized
-    assert "prevent self-review" in normalized
-    assert "explicit authorization for the TestPyPI publication" in normalized
-    assert "explicit authorization for PyPI" in normalized
-    assert '--ref main -f release_tag="$tag" -f target=testpypi' in normalized
-    assert '--ref main -f release_tag="$tag" -f target=pypi' in normalized
+    assert "protected branches and disable administrator bypass" in normalized
+    assert "**Single maintainer:** keep required-reviewer rules unset" in normalized
+    assert (
+        "explicit authorization and separate manual dispatch for each index"
+        in normalized
+    )
+    assert (
+        "**Team:** configure required reviewers and prevent self-review" in normalized
+    )
+    assert "Both modes require explicit authorization for each index" in normalized
+
+    testpypi_section = release.split("## TestPyPI\n", 1)[1].split("## PyPI\n", 1)[0]
+    pypi_section = release.split("## PyPI\n", 1)[1]
+    assert "TestPyPI authorization to dispatch" in " ".join(testpypi_section.split())
+    assert "With explicit PyPI authorization, dispatch" in " ".join(
+        pypi_section.split()
+    )
+    testpypi_dispatch = (
+        'gh workflow run publish.yml --ref main -f release_tag="$tag" '
+        "-f target=testpypi"
+    )
+    pypi_dispatch = (
+        'gh workflow run publish.yml --ref main -f release_tag="$tag" -f target=pypi'
+    )
+    assert testpypi_dispatch in testpypi_section
+    assert pypi_dispatch in pypi_section
     assert '--ref "$tag"' not in release
     assert 'test "$actual_assets" = "$expected_assets"' in normalized
     assert "cmp dist/dolphinscheduler_cli-" in normalized
-    pypi_dispatch = release.index("target=pypi")
+    pypi_dispatch_position = release.index(pypi_dispatch)
     github_release = release.index('gh release edit "$tag" --draft=false')
-    assert pypi_dispatch < github_release
+    assert release.index(testpypi_dispatch) < pypi_dispatch_position < github_release
