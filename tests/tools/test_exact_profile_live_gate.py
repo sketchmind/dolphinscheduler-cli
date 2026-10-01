@@ -33,6 +33,7 @@ from tests.live.test_exact_profile import (
     _wait_for_doctor,
 )
 
+from dsctl import __version__
 from dsctl.generated.version_profiles import VERSION_PROFILES
 from dsctl.generated.versions.ds_3_4_2 import _manifest
 from dsctl.upstream import Availability, Verification, get_version_support
@@ -585,7 +586,8 @@ def test_schema_7_rejects_legacy_implementation_identity_fields(
 
 def test_schema_3_receipt_cannot_attest_the_expanded_task_contract() -> None:
     evidence = json.loads(_HISTORICAL_SCHEMA_3_RECEIPT.read_text(encoding="utf-8"))
-    validate_exact_profile_evidence_payload(evidence, ds_version="3.4.2")
+    historical_cli_version = evidence["runner"]["cli_version"]
+    validate_schema(evidence, expected_cli_version=historical_cli_version)
 
     expanded_operations = sorted(
         {*evidence["contract"]["semantic_operations"], "task.get", "task.update"}
@@ -594,7 +596,7 @@ def test_schema_3_receipt_cannot_attest_the_expanded_task_contract() -> None:
     evidence["contract"]["operation_count"] = len(expanded_operations)
 
     with pytest.raises(ValueError, match="Schema-v3 evidence"):
-        validate_exact_profile_evidence_payload(evidence, ds_version="3.4.2")
+        validate_schema(evidence, expected_cli_version=historical_cli_version)
 
 
 def test_schema_7_gate_bundle_is_digest_bound_and_required_for_current(
@@ -1165,7 +1167,9 @@ def test_historical_exact_342_receipts_remain_auditable(
     for path in evidence_dir.glob("*.json"):
         payload = json.loads(path.read_text(encoding="utf-8"))
         if payload.get("schema_version") in {3, 4, 5, 6}:
-            validate_exact_profile_evidence_payload(payload, ds_version="3.4.2")
+            validate_schema(
+                payload, expected_cli_version=payload["runner"]["cli_version"]
+            )
             historical.append(payload["schema_version"])
 
     assert set(historical) == expected_schemas, (
@@ -1267,7 +1271,7 @@ def _gate_environment(tmp_path: Path) -> tuple[dict[str, str], dict[str, Path]]:
     python = bin_dir / "python"
     executable.touch()
     python.touch()
-    wheel = tmp_path / "dolphinscheduler_cli-0.4.0-py3-none-any.whl"
+    wheel = tmp_path / f"dolphinscheduler_cli-{__version__}-py3-none-any.whl"
     _write_manifest_wheel(wheel)
     cluster_manifest = tmp_path / "cluster.json"
     cluster_manifest.write_text(
@@ -1368,7 +1372,7 @@ def _error_result(
 
 def _version_data() -> dict[str, object]:
     return {
-        "cli": "0.4.0",
+        "cli": __version__,
         "ds": "3.4.2",
         "selected_ds_version": "3.4.2",
         "contract_version": "3.4.2",
@@ -1379,7 +1383,7 @@ def _version_data() -> dict[str, object]:
 
 def _installation() -> InstalledExactProfileAttestation:
     return InstalledExactProfileAttestation(
-        distribution_version="0.4.0",
+        distribution_version=__version__,
         server_version="3.4.2",
         family="workflow-3.3-plus",
         support_level="experimental",
@@ -1399,7 +1403,7 @@ def _installed_probe_payload(module_file: Path) -> dict[str, object]:
         action: "live_smoke" for action, _operation in EXACT_342_GATE_RECIPES
     }
     return {
-        "distribution_version": "0.4.0",
+        "distribution_version": __version__,
         "module_file": str(module_file),
         "server_version": "3.4.2",
         "family": "workflow-3.3-plus",

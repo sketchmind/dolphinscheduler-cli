@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dolphinscheduler-cli"
-version = "0.4.0"
+version = "0.4.1"
 description = "Generated-first REST-only CLI for Apache DolphinScheduler"
 readme = "README.md"
 requires-python = ">=3.11"

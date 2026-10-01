@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from dsctl import __version__
 from dsctl.generated.version_profiles import TARGET_DS_VERSIONS
 
 if TYPE_CHECKING:
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
 _LEGACY_BUNDLE = "legacy_core/v1"
 _FULL_BUNDLE = "full_core/v1"
-_WHEEL_FILENAME = "dolphinscheduler_cli-0.4.0-py3-none-any.whl"
+_WHEEL_FILENAME = f"dolphinscheduler_cli-{__version__}-py3-none-any.whl"
 _WHEEL_SHA256 = "sha256:" + "a" * 64
 _RECEIPT_DATE = "2026-08-10"
 

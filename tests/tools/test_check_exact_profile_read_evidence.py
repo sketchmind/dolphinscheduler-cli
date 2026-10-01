@@ -18,6 +18,7 @@ from tests.live.exact_read_gate import (
 from tests.tools.exact_profile_read_support import semantic_evidence_payload
 from tests.tools.generated_profile_support import set_generated_operation_action
 
+from dsctl import __version__
 from dsctl.generated.version_profiles import TARGET_DS_VERSIONS, VERSION_PROFILES
 
 if TYPE_CHECKING:
@@ -25,8 +26,8 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 
-_CLI_VERSION = "0.4.0"
-_WHEEL_FILENAME = "dolphinscheduler_cli-0.4.0-py3-none-any.whl"
+_CLI_VERSION = __version__
+_WHEEL_FILENAME = f"dolphinscheduler_cli-{_CLI_VERSION}-py3-none-any.whl"
 _WHEEL_DIGEST = "sha256:" + "a" * 64
 _RECEIPT_DATE = "2026-08-06"
 
@@ -634,7 +635,7 @@ def test_checker_binds_runner_cli_version_to_tracked_package_version(
 
     with pytest.raises(
         ValueError,
-        match=r"runner cli_version must be '0\.4\.0'",
+        match=rf"runner cli_version must be '{re.escape(_CLI_VERSION)}'",
     ):
         checker.check_exact_profile_read_evidence_corpus(
             evidence_root,
@@ -939,6 +940,10 @@ def _refresh_read_bundle_digest(read_bundle: dict[str, object]) -> None:
 
 def _current_receipt(version: str) -> dict[str, object]:
     receipt = semantic_evidence_payload(version)
+    runner = receipt["runner"]
+    assert isinstance(runner, dict)
+    runner["cli_version"] = _CLI_VERSION
+    runner["wheel_filename"] = _WHEEL_FILENAME
     profile = deepcopy(VERSION_PROFILES[version])
     receipt_profile = receipt["profile"]
     assert isinstance(receipt_profile, dict)

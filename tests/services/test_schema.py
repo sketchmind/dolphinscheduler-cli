@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from dsctl import __version__
 from dsctl.data_shapes import data_shape_schema_for_action
 from dsctl.errors import ConfigError, UserInputError
 from dsctl.models import supported_typed_task_types
@@ -81,7 +82,7 @@ def test_schema_result_describes_current_stable_surface() -> None:
     assert isinstance(data, dict)
     assert data["schema_version"] == 3
     assert data["view"] == "full"
-    assert data["cli"] == {"name": "dsctl", "version": "0.4.0"}
+    assert data["cli"] == {"name": "dsctl", "version": __version__}
     assert data["supported_ds_versions"] == list(SUPPORTED_VERSIONS)
     assert data["ds_versions"] == EXPECTED_VERSION_METADATA
     assert data["selection"] == {

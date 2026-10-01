@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 import pytest
 from tests.tools.generated_profile_support import set_generated_operation_action
 
+from dsctl import __version__
+
 if TYPE_CHECKING:
     from types import ModuleType
 
@@ -158,7 +160,9 @@ def test_checker_accepts_one_current_schema_seven_receipt(
 
     assert summary.state == "promoted"
     assert summary.receipt == receipt_path
-    assert summary.wheel_filename == "dolphinscheduler_cli-0.4.0-py3-none-any.whl"
+    assert (
+        summary.wheel_filename == f"dolphinscheduler_cli-{__version__}-py3-none-any.whl"
+    )
     assert summary.wheel_sha256 == "sha256:" + "a" * 64
 
     result = checker.run_exact_profile_promotion_evidence_cli(
@@ -517,7 +521,7 @@ def _write_schema_seven_receipt(
     payload["runner"] = {
         "artifact": "installed-wheel-console-script",
         "cli_version": artifacts.cli_version,
-        "wheel_filename": "dolphinscheduler_cli-0.4.0-py3-none-any.whl",
+        "wheel_filename": f"dolphinscheduler_cli-{__version__}-py3-none-any.whl",
         "wheel_sha256": "sha256:" + "a" * 64,
     }
     payload["profile"] = {

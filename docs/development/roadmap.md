@@ -60,8 +60,8 @@ is not a reason to repeat completed work.
 
 ## Release Acceptance and Support Policy
 
-The `0.4.0` release candidate includes the Typer and DataX runtime fixes and
-exact `2.0.0` / `2.0.1` independent-task cleanup repair. Its
+The `0.4.1` release candidate includes the legacy workflow layout and
+automatic API discovery fixes. Its
 [artifact-bound corpus](live-testing.md#exact-version-profile-gates) contains
 37 four-action exact-read receipts, 37 18-action `full_core/v1` receipts and
 one 15-action `external-shell/v1` schema-7 receipt on exact `3.4.2`, with

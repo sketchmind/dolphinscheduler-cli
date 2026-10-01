@@ -66,8 +66,8 @@ changes follow an explicit policy review with matching evidence.
 
 ### Recorded Live Coverage
 
-The `0.4.0` release candidate has these receipts on one immutable wheel
-(`5829e708757e…`), including the Typer, DataX and exact task-cleanup fixes:
+The `0.4.1` release candidate has these receipts on one immutable wheel
+(`fad25fa899a0…`), including the legacy workflow layout and API discovery fixes:
 
 | Scenario | Exact releases | Verified scope |
 | --- | --- | --- |

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
+from dsctl import __version__
 from dsctl.app import app
 from dsctl.errors import UserInputError
 from dsctl.output import result_payload
@@ -27,7 +28,7 @@ def test_default_schema_is_a_bounded_progressive_index() -> None:
 
     assert data["schema_version"] == 3
     assert data["view"] == "index"
-    assert data["cli"] == {"name": "dsctl", "version": "0.4.0"}
+    assert data["cli"] == {"name": "dsctl", "version": __version__}
     assert isinstance(data["ds"], dict)
     global_options = [
         _require_dict(item) for item in _require_list(data["global_options"])

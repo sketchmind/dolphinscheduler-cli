@@ -5,6 +5,7 @@ import copy
 import hashlib
 import importlib
 import json
+import re
 import shutil
 import sys
 from functools import cache
@@ -15,6 +16,7 @@ import pytest
 from tests.tools.conformance_bundle_testkit import EvidenceCase
 
 from ds_codegen.compiled_literals import read_compiled_literals
+from dsctl import __version__
 from dsctl.generated import task_definition_cleanup_profiles as cleanup_profiles
 from dsctl.generated import task_definition_profiles as task_profiles
 
@@ -195,7 +197,7 @@ def test_schema_one_accepts_a_digest_bound_legacy_bundle_receipt() -> None:
         receipt,
         expected_ds_version="3.2.2",
         expected_bundle="legacy_core/v1",
-        expected_wheel_filename="dolphinscheduler_cli-0.4.0-py3-none-any.whl",
+        expected_wheel_filename=f"dolphinscheduler_cli-{__version__}-py3-none-any.whl",
         expected_wheel_sha256="sha256:" + "a" * 64,
     )
 
@@ -203,7 +205,7 @@ def test_schema_one_accepts_a_digest_bound_legacy_bundle_receipt() -> None:
         schema_version=1,
         ds_version="3.2.2",
         bundle="legacy_core/v1",
-        wheel_filename="dolphinscheduler_cli-0.4.0-py3-none-any.whl",
+        wheel_filename=f"dolphinscheduler_cli-{__version__}-py3-none-any.whl",
         wheel_sha256="sha256:" + "a" * 64,
         receipt_digest=receipt["receipt_digest"],
         required_actions=_LEGACY_ACTIONS,
@@ -671,15 +673,20 @@ def test_prepared_validator_pins_truth_while_one_shot_reloads_it(
     before = validator.validate(receipt)
     pyproject_path = source_root / "pyproject.toml"
     pyproject = pyproject_path.read_text(encoding="utf-8")
-    assert 'version = "0.4.0"' in pyproject
+    next_version = "9.9.9"
+    assert next_version != __version__
+    version_assignment = f'version = "{__version__}"'
+    assert pyproject.count(version_assignment) == 1
     pyproject_path.write_text(
-        pyproject.replace('version = "0.4.0"', 'version = "0.4.1"', 1),
+        pyproject.replace(version_assignment, f'version = "{next_version}"', 1),
         encoding="utf-8",
     )
 
     after = validator.validate(receipt)
     assert after == before
-    with pytest.raises(ValueError, match=r"runner cli_version must equal '0\.4\.1'"):
+    with pytest.raises(
+        ValueError, match=rf"runner cli_version must equal '{re.escape(next_version)}'"
+    ):
         evidence.validate_conformance_bundle_evidence(
             receipt,
             source_root=source_root,
@@ -739,7 +746,9 @@ def test_schema_one_rejects_nonpassing_or_different_contract_constants(
 
 def test_receipt_digest_binds_every_other_schema_field() -> None:
     case = _case()
-    case.mapping("runner")["cli_version"] = "0.4.1"
+    changed_version = "9.9.9"
+    assert changed_version != case.mapping("runner")["cli_version"]
+    case.mapping("runner")["cli_version"] = changed_version
     case.assert_rejected("receipt_digest")
 
 
@@ -3156,7 +3165,7 @@ def _receipt(
         "runner": {
             "artifact": "installed-wheel-console-script",
             "cli_version": dsctl_module.__version__,
-            "wheel_filename": "dolphinscheduler_cli-0.4.0-py3-none-any.whl",
+            "wheel_filename": f"dolphinscheduler_cli-{__version__}-py3-none-any.whl",
             "wheel_sha256": "sha256:" + "a" * 64,
         },
         "dolphinscheduler": {

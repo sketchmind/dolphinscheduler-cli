@@ -22,7 +22,7 @@ Prepare a normal release with this flow:
 8. Tag that SHA and attach the canonical pair to a draft GitHub Release.
 9. From protected `main`, explicitly dispatch `target=testpypi` to publish and
    verify those bytes on TestPyPI.
-10. After a separate explicit authorization and environment approval, dispatch
+10. With explicit PyPI authorization and any configured team review, dispatch
     `target=pypi` from protected `main` to promote and verify the same bytes.
 11. Publish the draft GitHub Release only after the PyPI workflow succeeds.
 
@@ -527,18 +527,26 @@ Configure the release controls before the first publication:
 - Protect `v*` tags with a tag ruleset that restricts creation and blocks tag
   update or deletion. A release tag identifies immutable source; moving it must
   not be a recovery mechanism.
-- Configure both the `testpypi` and `pypi` GitHub environments with required
-  reviewers, enable prevent self-review, and limit deployments to protected
-  `main`. The person who requests a publication cannot approve their own
-  environment deployment.
+- Configure both the `testpypi` and `pypi` GitHub environments to accept
+  protected branches and disable administrator bypass. The publishing workflow
+  also requires its dispatch ref to be `main`.
+
+Choose the review mode that matches the project's maintainers:
+
+- **Single maintainer:** keep required-reviewer rules unset. The maintainer's
+  explicit authorization and separate manual dispatch for each index provide
+  the publication decision. All CI, tag, artifact and index checks still apply.
+- **Team:** configure required reviewers and prevent self-review. A reviewer
+  other than the person requesting publication approves each environment
+  deployment.
 
 Both package-index publications are manual workflow dispatches from protected
 `main`. The `release_tag` input is data that identifies the source and draft
 Release assets; it does not select the workflow definition. For a maintenance
 release, the workflow still runs from `main` and validates that the supplied tag
-belongs to an allowed `release/<major>.<minor>` ancestry. Environment approval
-is an independent control in addition to the explicit authorization required
-before each dispatch.
+belongs to an allowed `release/<major>.<minor>` ancestry. Both modes require
+explicit authorization for each index; one instruction may authorize both
+stages in advance. Team mode adds independent environment approval.
 
 ## TestPyPI
 
@@ -586,10 +594,11 @@ gh release create "$tag" \
 ```
 
 These tag, push, Release, and upload operations require explicit release
-authorization. Once the draft and its two assets have been reviewed, obtain
-explicit authorization for the TestPyPI publication and dispatch the workflow
-from protected `main`. The environment's required reviewer must then approve
-that deployment:
+authorization. Once the draft and its two assets have been reviewed, use the
+TestPyPI authorization to dispatch the workflow from protected `main`. In team
+mode, the configured reviewer approves the environment deployment; single
+maintainer mode uses the authorized manual dispatch described in
+[Repository and Environment Protection](#repository-and-environment-protection):
 
 ```bash
 gh workflow run publish.yml --ref main -f release_tag="$tag" -f target=testpypi
@@ -653,9 +662,10 @@ Promote the validated candidate with a second, separately authorized dispatch:
    TestPyPI workflow, including its clean install and exact-byte checks.
 2. Verify that the GitHub Release is still a draft on the recorded tag and has
    exactly the canonical wheel and sdist assets.
-3. Obtain explicit authorization for PyPI, then dispatch from protected `main`
-   with the same tag. The `pypi` environment's required reviewer must approve
-   this deployment independently:
+3. With explicit PyPI authorization, dispatch from protected `main` with the
+   same tag. In team mode, the configured `pypi` reviewer approves the deployment
+   independently. Single maintainer mode uses the authorized manual dispatch
+   described in [Repository and Environment Protection](#repository-and-environment-protection):
 
    ```bash
    gh workflow run publish.yml --ref main -f release_tag="$tag" -f target=pypi
