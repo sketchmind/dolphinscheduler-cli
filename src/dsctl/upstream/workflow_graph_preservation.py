@@ -8,7 +8,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, TypedDict, cast
 
 from dsctl.cli_surface import TASK_RESOURCE
-from dsctl.errors import ApiTransportError
+from dsctl.errors import ApiTransportError, ConflictError
 from dsctl.output import require_json_object
 from dsctl.upstream.serialization import enum_value, serialize_task
 from dsctl.upstream.task_settings import task_node_native_name
@@ -127,6 +127,7 @@ def preserved_task_update_arguments(
     *,
     dag: WorkflowDagRecord,
     dag_raw: JsonObject,
+    expected_tenant_id: int | None,
     task_name: str,
     requested_fields: Sequence[str],
     workflow_field: str = "processDefinition",
@@ -139,6 +140,18 @@ def preserved_task_update_arguments(
         workflow_field=workflow_field,
         relation_field=relation_field,
     )
+    graph_tenant_id = raw_workflow.get("tenantId")
+    if (
+        expected_tenant_id is not None
+        and graph_tenant_id is not None
+        and (type(graph_tenant_id) is not int or graph_tenant_id != expected_tenant_id)
+    ):
+        message = "The workflow tenant changed between detail and graph reads."
+        raise ConflictError(
+            message,
+            details={"resource": TASK_RESOURCE, "mutation_applied": False},
+            suggestion="Inspect the current workflow and retry the task update.",
+        )
     compiled_tasks = _json_object_list(
         compiled["taskDefinitionJson"],
         label="compiled task definitions",

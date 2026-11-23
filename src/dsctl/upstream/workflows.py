@@ -5,8 +5,11 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from dsctl.cli_surface import TASK_RESOURCE, WORKFLOW_RESOURCE
 from dsctl.errors import (
+    ApiResultError,
     ApiTransportError,
+    ConflictError,
     NotFoundError,
+    PermissionDeniedError,
     ResolutionError,
     UnsupportedFeatureError,
     UserInputError,
@@ -41,6 +44,7 @@ from dsctl.upstream.mutation_outcomes import mutation_call, verify_mutation
 from dsctl.upstream.project_preferences import (
     ProjectPreferenceAdapter,
 )
+from dsctl.upstream.resolver import tenant as resolve_tenant
 from dsctl.upstream.resources import bind_task_resource_resolver
 from dsctl.upstream.response_projection import (
     projection_error,
@@ -56,6 +60,7 @@ from dsctl.upstream.task_definition_wire import (
     bind_task_definition_wire,
     project_exact_workflow_dag,
 )
+from dsctl.upstream.tenants import TenantAdapter
 from dsctl.upstream.wire import (
     PreparedCompiledWireCall,
     WireContractError,
@@ -85,6 +90,7 @@ if TYPE_CHECKING:
         ProjectPreferenceOperations,
         TaskPayloadRecord,
         TaskResourceResolver,
+        TenantOperations,
         WorkflowDagRecord,
         WorkflowLineageDetailRecord,
         WorkflowLineageRecord,
@@ -102,6 +108,7 @@ if TYPE_CHECKING:
 
 _DefinitionFamily = Literal["legacy-json", "process", "workflow"]
 _ExecutionResult = Literal["none", "trigger-code", "id-list"]
+_USER_NO_OPERATION_PERM = 30001
 ExecutionScheduleTimeShape = Literal["comma-range", "json"]
 _LineageProjection = Literal["absent", "legacy-direct", "canonical"]
 _DependentProjection = Literal[
@@ -862,6 +869,9 @@ class WorkflowAdapter:
                 ),
                 definitions=definitions,
                 current_user=current_user,
+                tenants=TenantAdapter.for_version(self.ds_version)
+                .bind(profile, http_client=http_client)
+                .tenants,
                 schedules=schedules,
                 project_preferences=preferences,
             ),
@@ -906,6 +916,7 @@ class WorkflowOperations:
     execution_wire: WorkflowExecutionWire
     definitions: DefinitionReads
     current_user: CurrentUserOperations
+    tenants: TenantOperations
     schedules: ScheduleOperations
     project_preferences: ProjectPreferenceOperations | None
 
@@ -1457,10 +1468,49 @@ class WorkflowOperations:
             execution_type=execution_type,
             release_state=release_state,
             tenant_code=(
-                tenant_code or self._current_tenant_code()
+                self._existing_tenant_code(scope, dag_tenant_code=tenant_code)
                 if self.bindings.recipe.definition_tenant_code
                 else None
             ),
+        )
+
+    def _existing_tenant_code(
+        self, scope: WorkflowScope, *, dag_tenant_code: str | None
+    ) -> str:
+        """Keep the stored tenant identity on tenant-bearing definition updates."""
+        tenant_id = scope.view.tenant_id
+        stored = scope.view.tenant_code
+        if tenant_id == -1:
+            # ProcessDefinitionService writes -1 for the literal "default".
+            stored = "default"
+        elif stored is None and tenant_id is not None and tenant_id > 0:
+            stored = self._tenant_code_by_id(tenant_id)
+        for observed in (scope.view.tenant_code, dag_tenant_code):
+            if observed is None or not observed.strip():
+                continue
+            if stored is not None and observed != stored:
+                message = "The workflow definition and graph disagree about its tenant."
+                raise ConflictError(
+                    message,
+                    details={
+                        "resource": WORKFLOW_RESOURCE,
+                        "workflow_code": scope.workflow.native.value,
+                        "mutation_applied": False,
+                    },
+                    suggestion="Inspect the current workflow and retry the edit.",
+                )
+            stored = observed
+        if stored is None:
+            reason = "the workflow detail omitted the tenant identity required for edit"
+        elif stored == "default" and tenant_id is not None and tenant_id > 0:
+            reason = 'tenantCode "default" would replace the positive tenantId with -1'
+        else:
+            return stored
+        raise projection_error(
+            ds_version=self.ds_version,
+            resource=WORKFLOW_RESOURCE,
+            field="tenantCode",
+            reason=reason,
         )
 
     def prepare_legacy_update(
@@ -1928,19 +1978,36 @@ class WorkflowOperations:
         )
 
     def _current_tenant_code(self) -> str:
-        tenant = self.current_user.current().tenantCode
+        user = self.current_user.current()
+        tenant = user.tenantCode
         if isinstance(tenant, str) and tenant.strip():
             return tenant.strip()
+        if user.tenantId is not None and user.tenantId > 0:
+            return self._tenant_code_by_id(user.tenantId)
         message = (
-            "The current DolphinScheduler user has no tenant for workflow authoring."
+            "DolphinScheduler returned no usable tenant code or tenant ID "
+            "for the current user."
         )
         raise UserInputError(
             message,
             details={"ds_version": self.ds_version, "resource": WORKFLOW_RESOURCE},
             suggestion=(
-                "Assign a tenant to the current user in DolphinScheduler, then retry."
+                "Check the current user's tenant assignment in DolphinScheduler."
             ),
         )
+
+    def _tenant_code_by_id(self, tenant_id: int) -> str:
+        try:
+            return resolve_tenant(str(tenant_id), adapter=self.tenants).tenant_code
+        except ApiResultError as error:
+            if error.result_code != _USER_NO_OPERATION_PERM:
+                raise
+            message = f"Permission denied while looking up tenant ID {tenant_id}."
+            raise PermissionDeniedError(
+                message,
+                details={"resource": "tenant", "id": tenant_id},
+                suggestion="Run `dsctl tenant list` using the same context.",
+            ) from error
 
     def _unsupported(
         self,

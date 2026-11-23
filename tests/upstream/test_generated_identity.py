@@ -32,6 +32,7 @@ def test_identity_adapter_projects_exact_current_user(
                     "id": 1,
                     "userName": "admin",
                     "userType": "GENERAL_USER",
+                    "tenantId": 11,
                     "tenantCode": "tenant-a",
                     "queueName": "queue-a",
                     "queue": "root.default",
@@ -55,6 +56,7 @@ def test_identity_adapter_projects_exact_current_user(
     assert current.userName == "admin"
     assert current.userType is not None
     assert current.userType.value == "GENERAL_USER"
+    assert current.tenantId == 11
     assert current.tenantCode == "tenant-a"
     assert current.queueName == "queue-a"
     assert current.queue == "root.default"
@@ -147,7 +149,19 @@ def test_identity_adapter_rejects_identity_mismatches_before_transport(
 
 
 @pytest.mark.parametrize("ds_version", ["1.3.9", "3.4.2"])
-def test_identity_does_not_require_user_record_identity_fields(ds_version: str) -> None:
+@pytest.mark.parametrize(
+    ("tenant_fields", "expected_tenant_id"),
+    [
+        ({}, None),
+        ({"tenantId": 0}, 0),
+        ({"tenantId": -1}, -1),
+        ({"tenantId": True}, None),
+        ({"tenantId": "-1"}, None),
+    ],
+)
+def test_identity_does_not_require_user_record_identity_fields(
+    ds_version: str, tenant_fields: dict[str, int | str], expected_tenant_id: int | None
+) -> None:
     profile = make_profile(ds_version=ds_version)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -162,6 +176,7 @@ def test_identity_does_not_require_user_record_identity_fields(ds_version: str) 
                     "userName": "admin",
                     "queue": "",
                     "queueName": "root.tenant",
+                    **tenant_fields,
                 },
             },
         )
@@ -179,5 +194,6 @@ def test_identity_does_not_require_user_record_identity_fields(ds_version: str) 
     assert current.queue == ""
     assert current.queueName == "root.tenant"
     assert current.userType is None
+    assert current.tenantId == expected_tenant_id
     assert current.tenantCode is None
     assert current.timeZone is None
