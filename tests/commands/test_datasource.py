@@ -13,7 +13,7 @@ from tests.fakes import (
     FakeDataSourceAdapter,
     FakeEnumValue,
 )
-from tests.support import make_profile
+from tests.support import make_profile, normalize_cli_help
 
 runner = CliRunner()
 
@@ -94,13 +94,20 @@ def test_datasource_payload_file_help_points_to_template_flow() -> None:
     update_result = runner.invoke(app, ["datasource", "update", "--help"])
 
     assert create_result.exit_code == 0
-    assert "Start with `dsctl template datasource`" in create_result.stdout
-    assert "pass the saved" in create_result.stdout
-    assert "write data.json to this file" not in create_result.stdout
+    create_help = normalize_cli_help(create_result.stdout)
+    assert "Start with `dsctl template datasource`" in create_help
+    assert (
+        "`dsctl template datasource --type TYPE` and pass the saved data.json path here"
+        in create_help
+    )
+    assert "write data.json to this file" not in create_help
     assert update_result.exit_code == 0
-    assert "Start from `dsctl datasource get DATASOURCE`" in update_result.stdout
-    assert "pass" in update_result.stdout
-    assert "the saved JSON path here" in update_result.stdout
+    update_help = normalize_cli_help(update_result.stdout)
+    assert "Start from `dsctl datasource get DATASOURCE`" in update_help
+    assert (
+        "`dsctl template datasource --type TYPE`, then pass the saved JSON path here"
+        in update_help
+    )
 
 
 def test_datasource_create_command_returns_created_payload(tmp_path: Path) -> None:

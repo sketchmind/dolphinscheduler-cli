@@ -13,7 +13,7 @@ from dsctl.services.schema import get_schema_result
 from tests.support import normalize_cli_help
 
 _SEMANTIC_METAVAR = re.compile(r"^[A-Z][A-Z0-9_]*(?::\{[^}]+\})?$")
-_GENERIC_RENDERED_TYPE = re.compile(r"\b(?:TEXT|INTEGER)\b")
+_GENERIC_RENDERED_TYPE = re.compile(r"\b(?:TEXT|INTEGER)\b|<(?:str|int|bool)>")
 
 
 def test_every_cli_value_uses_a_semantic_metavar() -> None:
@@ -25,7 +25,7 @@ def test_every_cli_value_uses_a_semantic_metavar() -> None:
     for path, command in _iter_commands(root):
         for parameter in command.params:
             if isinstance(parameter, TyperOption) and (
-                parameter.is_flag or parameter.count or parameter.type.name == "choice"
+                parameter.is_flag or parameter.count
             ):
                 continue
             metavar = parameter.metavar
@@ -68,20 +68,19 @@ def test_semantic_metavars_preserve_range_and_service_choice_metadata() -> None:
     contract = COMMAND_CATALOG.command("workflow.run-task").input("scope")
     assert contract.choices == ("self", "pre", "post")
     assert contract.parser_choices == ()
-    assert tuple(getattr(scope.type, "choices", ())) == ()
     for value in ("self", "pre", "post", "invalid"):
-        assert scope.type.convert(value, scope, None) == value
+        args = ["123", "--project", "1", "--task", "t", "--scope", value]
+        with run_task.make_context("run-task", args) as ctx:
+            assert ctx.params["scope"] == value
 
 
-def test_rendered_help_never_reintroduces_generic_argument_types() -> None:
+def test_rendered_help_omits_redundant_argument_and_flag_types() -> None:
     runner = CliRunner()
     root = get_command(app)
     assert isinstance(root, TyperGroup)
     violations: list[str] = []
 
-    for path, command in _iter_commands(root):
-        if command is root:
-            continue
+    for path, _ in _iter_commands(root):
         result = runner.invoke(app, [*path[1:], "--help"])
         assert result.exit_code == 0, " ".join(path)
         generic_types = sorted(set(_GENERIC_RENDERED_TYPE.findall(result.stdout)))
@@ -156,14 +155,21 @@ def test_rendering_inherited_options_never_changes_parser_parameters(
 ) -> None:
     root = get_command(app)
     assert isinstance(root, TyperGroup)
-    command = root.commands["version"]
+    group = root.commands["project"]
+    assert isinstance(group, TyperGroup)
+    command = group.commands["get"]
     original_parameters = tuple(command.params)
     with (
         root.make_context("dsctl", [], resilient_parsing=True) as root_context,
-        command.make_context("version", [], parent=root_context) as context,
+        group.make_context(
+            "project", [], parent=root_context, resilient_parsing=True
+        ) as group_context,
+        command.make_context("get", ["007"], parent=group_context) as context,
     ):
         command.get_help(context)
         command.get_help(context)
+        with command.make_context("get", ["007"], parent=group_context) as parsed:
+            assert parsed.params["project"] == "007"
     assert "Global options" in capsys.readouterr().out
     assert tuple(command.params) == original_parameters
     assert all(parameter.name != "columns" for parameter in command.params)

@@ -4,10 +4,9 @@ import shlex
 from pathlib import Path
 
 import pytest
-from typer import BadParameter
+from typer._click.exceptions import UsageError
 from typer.core import TyperArgument, TyperCommand, TyperGroup, TyperOption
 from typer.main import get_command
-from typer.models import TyperPath
 from typer.testing import CliRunner
 
 from dsctl.app import app
@@ -212,18 +211,26 @@ def test_workflow_create_click_parser_matches_the_canonical_inputs() -> None:
         assert click_option.opts == [input_contract.flag]
         assert click_option.required is input_contract.required
         assert click_option.multiple is input_contract.multiple
-        _assert_canonical_input_conversion(click_option, input_contract)
         assert click_option.help == input_contract.description
         if input_contract.parse_default is not MISSING_DEFAULT:
             assert click_option.default == input_contract.parse_default
-        if input_contract.path_rules is not None:
-            rules = input_contract.path_rules
-            assert isinstance(click_option.type, TyperPath)
-            assert click_option.type.exists is rules.exists
-            assert click_option.type.file_okay is rules.file_okay
-            assert click_option.type.dir_okay is rules.dir_okay
-            assert click_option.type.readable is rules.readable
-            assert click_option.type.resolve_path is rules.resolve_path
+
+    file = Path(__file__).resolve()
+    argv = ["--file", str(file), "--project", "007 literal", "--confirm-risk", "risk"]
+    with click_command.make_context("create", argv.copy()) as ctx:
+        assert Path(ctx.params["file"]) == file
+        assert ctx.params["project"] == "007 literal"
+        assert ctx.params["confirm_risk"] == "risk"
+        assert ctx.params["dry_run"] is False
+    with click_command.make_context("create", [*argv, "--dry-run"]) as ctx:
+        assert ctx.params["dry_run"] is True
+    for bad_path in (file.parent, file / "missing"):
+        with pytest.raises(UsageError):
+            click_command.make_context("create", ["--file", str(bad_path)])
+    invalid_flag = runner.invoke(app, ["workflow", "create", "--dry-run=false", *argv])
+    assert invalid_flag.exit_code == 2
+    assert invalid_flag.stdout == ""
+    assert '"ok": false' in invalid_flag.stderr
 
 
 @pytest.mark.parametrize(
@@ -365,14 +372,11 @@ def test_root_click_parser_matches_all_canonical_global_options() -> None:
     for option in completion_options:
         assert isinstance(option, TyperOption)
         assert option.nargs == 1
-        assert hasattr(option.type, "choices")
-        assert tuple(option.type.choices) == (
-            "bash",
-            "zsh",
-            "fish",
-            "powershell",
-            "pwsh",
-        )
+        result = runner.invoke(app, [option.opts[0], "unrecognized-shell"])
+        assert result.exit_code == 2
+        assert result.stdout == ""
+        for shell in ("bash", "zsh", "fish", "powershell", "pwsh"):
+            assert shell in result.stderr
     catalog_options = [item for item in root.params if item.name not in framework_names]
     assert [item.name for item in catalog_options] == [
         (contract.input.parameter_name or contract.name.replace("-", "_"))
@@ -384,7 +388,6 @@ def test_root_click_parser_matches_all_canonical_global_options() -> None:
         input_contract = global_contract.input
         assert isinstance(click_parameter, TyperOption)
         assert click_parameter.opts == [global_contract.flag]
-        _assert_canonical_input_conversion(click_parameter, input_contract)
         assert click_parameter.required is input_contract.required
         assert click_parameter.default == input_contract.parse_default
         assert click_parameter.multiple is input_contract.multiple
@@ -393,40 +396,26 @@ def test_root_click_parser_matches_all_canonical_global_options() -> None:
         assert click_parameter.is_flag is (input_contract.value_type == "boolean")
         click_arity = 0 if click_parameter.is_flag else click_parameter.nargs
         assert global_contract.arity == click_arity
-        if input_contract.path_rules is not None:
-            rules = input_contract.path_rules
-            assert isinstance(click_parameter.type, TyperPath)
-            assert click_parameter.type.exists is rules.exists
-            assert click_parameter.type.file_okay is rules.file_okay
-            assert click_parameter.type.dir_okay is rules.dir_okay
-            assert click_parameter.type.readable is rules.readable
-            assert click_parameter.type.resolve_path is rules.resolve_path
 
-
-def _assert_canonical_input_conversion(
-    parameter: TyperOption,
-    contract: InputContract,
-) -> None:
-    """Exercise parameter conversion without invoking command or option callbacks."""
-    if contract.value_type == "string":
-        literal = "007 literal value $(token)"
-        converted = parameter.type.convert(literal, parameter, None)
-        assert type(converted) is str
-        assert converted == literal
-    elif contract.value_type == "boolean":
-        assert parameter.type.convert("true", parameter, None) is True
-        assert parameter.type.convert("false", parameter, None) is False
-        with pytest.raises(BadParameter):
-            parameter.type.convert("not-a-boolean", parameter, None)
-    elif contract.value_type == "path":
-        path = Path(__file__).resolve()
-        converted = parameter.type.convert(str(path), parameter, None)
-        assert type(converted) is str
-        assert converted == str(path)
-        with pytest.raises(BadParameter):
-            parameter.type.convert(str(path.parent), parameter, None)
-    else:
-        pytest.fail(f"Add a conversion example for {contract.value_type}")
+    file = Path(__file__).resolve()
+    argv = [
+        "--env-file",
+        str(file),
+        "--format",
+        "tsv",
+        "--columns",
+        "id,name",
+        "version",
+    ]
+    with root.make_context("dsctl", argv) as ctx:
+        assert Path(ctx.params["env_file"]) == file
+        assert ctx.params["output_format"] == "tsv"
+        assert ctx.params["columns"] == "id,name"
+    with root.make_context("dsctl", ["--context", "007 literal", "version"]) as ctx:
+        assert ctx.params["context_name"] == "007 literal"
+    for bad_path in (file.parent, file / "missing"):
+        with pytest.raises(UsageError):
+            root.make_context("dsctl", ["--env-file", str(bad_path), "version"])
 
 
 def test_command_catalog_rejects_removed_compact_option() -> None:

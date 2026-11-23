@@ -20,7 +20,6 @@ src/dsctl/commands/_contract_adapter.py|SemanticMetavarCommand.format_help(ctx)|
 src/dsctl/commands/_contract_adapter.py|SemanticMetavarCommand.format_help(formatter)|object
 src/dsctl/commands/_contract_adapter.py|SemanticMetavarGroup.format_help(ctx)|object
 src/dsctl/commands/_contract_adapter.py|SemanticMetavarGroup.format_help(formatter)|object
-src/dsctl/commands/_contract_adapter.py|_semantic_argument_help_types(parameters)|Sequence[object]
 src/dsctl/commands/_contract_adapter.py|_validate_callback_type(annotation)|object
 src/dsctl/context.py|_RegistryLoader.construct_mapping.key|object
 src/dsctl/context.py|_RegistryLoader.construct_mapping:return|dict[object, object]

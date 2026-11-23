@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import inspect
-from contextlib import ExitStack, contextmanager
 from copy import copy
 from pathlib import Path
 from types import UnionType
@@ -32,32 +31,40 @@ from dsctl.command_contract import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
+    from collections.abc import Callable
 
     from typer.models import ArgumentInfo, OptionInfo
 
 
-@contextmanager
-def _semantic_argument_help_types(
-    parameters: Sequence[object],
-) -> Iterator[None]:
-    """Hide Typer's redundant generic type column while Rich renders help."""
-    with ExitStack() as restore:
-        for parameter in parameters:
-            if (
-                not isinstance(parameter, TyperArgument)
-                or parameter.metavar is None
-                or parameter.type.name == "choice"
-            ):
-                continue
-            restore.callback(setattr, parameter, "type", parameter.type)
-            display_type = copy(parameter.type)
-            # Typer's Rich table suppresses BOOLEAN in its separate type column.
-            # The copy exists only during help rendering, so parsing and errors keep
-            # the original Click type name and conversion behavior.
-            display_type.name = "boolean"
-            parameter.type = display_type
-        yield
+def _help_argument(parameter: TyperArgument) -> TyperArgument:
+    """Suppress the redundant Rich type column on a display-only argument copy."""
+    display = copy(parameter)
+    if hasattr(display, "type"):
+        # Older Rich renderers suppress the generic type column for booleans.
+        display.type = copy(display.type)
+        display.type.name = "boolean"
+    else:
+        # Typer 0.29 asks the help-only copy for its Rich type label.
+        vars(display)["display_type_rich"] = lambda **_: None
+    return display
+
+
+def _hide_flag_values(display: TyperCommand | TyperGroup, ctx: typer.Context) -> None:
+    """Keep zero-arity flags, including framework help, free of value labels."""
+    if not hasattr(TyperOption, "display_type_rich"):
+        return
+    # Materialize Typer's implicit help option on the display copy, too.
+    display.params = list(display.params)
+    parameters = display.get_params(ctx)
+    display.add_help_option = False
+    display.params = []
+    for parameter in parameters:
+        if isinstance(parameter, TyperOption) and parameter.is_flag:
+            flag = copy(parameter)
+            flag.metavar = ""
+            display.params.append(flag)
+        else:
+            display.params.append(parameter)
 
 
 class SemanticMetavarCommand(TyperCommand):
@@ -72,13 +79,39 @@ class SemanticMetavarCommand(TyperCommand):
         display = copy(self)
         context = cast("typer.Context", ctx)
         contract = _help_contract(context)
-        display.params = [*self.params, *_inherited_options(context, contract)]
-        with _semantic_argument_help_types(display.params):
-            render = cast(
-                "Callable[[object, object], None]",
-                super(SemanticMetavarCommand, display).format_help,
-            )
-            render(ctx, formatter)
+        semantic_arguments = {
+            item.parameter_name or item.name.replace("-", "_")
+            for item in (contract.arguments if contract else ())
+            if not item.parser_choices
+        }
+        display.params = [
+            _help_argument(parameter)
+            if isinstance(parameter, TyperArgument)
+            and parameter.name in semantic_arguments
+            else parameter
+            for parameter in self.params
+        ]
+        display.params.extend(_inherited_options(context, contract))
+        _hide_flag_values(display, context)
+        render = cast(
+            "Callable[[object, object], None]",
+            super(SemanticMetavarCommand, display).format_help,
+        )
+        render(ctx, formatter)
+
+
+class SemanticMetavarGroup(TyperGroup):
+    """Keep the help presentation of group flags consistent with commands."""
+
+    def format_help(self, ctx: object, formatter: object) -> None:
+        """Render the group while preserving the original options for parsing."""
+        display = copy(self)
+        _hide_flag_values(display, cast("typer.Context", ctx))
+        render = cast(
+            "Callable[[object, object], None]",
+            super(SemanticMetavarGroup, display).format_help,
+        )
+        render(ctx, formatter)
 
 
 def _help_contract(ctx: typer.Context) -> CommandContract | None:
@@ -109,23 +142,6 @@ def _inherited_options(
             display.rich_help_panel = "Global options"
             inherited.append(display)
     return inherited
-
-
-class SemanticMetavarGroup(TyperGroup):
-    """Typer group whose Rich help follows the semantic metavar policy."""
-
-    def format_help(
-        self,
-        ctx: object,
-        formatter: object,
-    ) -> None:
-        """Render semantic argument names without a generic type duplicate."""
-        with _semantic_argument_help_types(self.params):
-            render = cast(
-                "Callable[[object, object], None]",
-                super().format_help,
-            )
-            render(ctx, formatter)
 
 
 P = ParamSpec("P")
@@ -279,6 +295,16 @@ def _validate_callback_type(
         raise CommandContractError(msg)
 
 
+def _metavar(contract: InputContract) -> str | None:
+    """Declare semantic value names through Typer's public parameter API."""
+    if contract.value_name is not None:
+        return contract.value_name
+    if contract.value_type == "boolean" or contract.parser_choices:
+        return None
+    name = contract.parameter_name if contract.kind == "argument" else None
+    return semantic_value_name(name or contract.name)
+
+
 def typer_argument(contract: InputContract) -> ArgumentInfo:
     """Project positional metadata without changing the Python value type."""
     if contract.kind != "argument":
@@ -289,7 +315,7 @@ def typer_argument(contract: InputContract) -> ArgumentInfo:
         "ArgumentInfo",
         typer.Argument(
             help=contract.description,
-            metavar=contract.value_name,
+            metavar=_metavar(contract),
             show_choices=contract.show_choices,
             hidden=contract.hidden,
             min=(
@@ -319,7 +345,7 @@ def typer_option(contract: InputContract) -> OptionInfo:
         typer.Option(
             *(contract.flags or (flag,)),
             help=contract.description,
-            metavar=contract.value_name,
+            metavar=_metavar(contract),
             show_choices=contract.show_choices,
             hidden=contract.hidden,
             min=(
@@ -382,33 +408,8 @@ def _command_help_epilog(contract: CommandContract) -> str:
     return "\n\n".join(hints)
 
 
-def apply_semantic_metavars(command: TyperCommand | TyperGroup) -> None:
-    """Give every free-form CLI value a semantic metavar in one tree walk."""
-    for parameter in command.params:
-        if parameter.metavar is not None or parameter.type.name == "choice":
-            continue
-        if isinstance(parameter, TyperOption):
-            if parameter.is_flag or parameter.count:
-                continue
-            source_name = next(
-                (option[2:] for option in parameter.opts if option.startswith("--")),
-                parameter.name,
-            )
-        elif isinstance(parameter, TyperArgument):
-            source_name = parameter.name
-        else:
-            continue
-        if source_name is not None:
-            parameter.metavar = semantic_value_name(source_name)
-
-    if isinstance(command, TyperGroup):
-        for child in command.commands.values():
-            apply_semantic_metavars(cast("TyperCommand | TyperGroup", child))
-
-
 __all__ = [
     "SemanticMetavarGroup",
-    "apply_semantic_metavars",
     "configure_semantic_help",
     "typer_option",
 ]
