@@ -44,6 +44,8 @@ if TYPE_CHECKING:
     from importlib.resources.abc import Traversable
     from types import ModuleType
 
+    from typing_extensions import TypeForm
+
     from dsctl.client import (
         BinaryResponse,
         DolphinSchedulerClient,
@@ -1132,7 +1134,8 @@ def _compiled_response_adapter(
         message = f"Compiled {name} codec {codec_name} response adapter is invalid"
         raise WireContractError(message)
     try:
-        return TypeAdapter(candidate.annotation)
+        # Generated response roots include model classes, collections and unions.
+        return TypeAdapter(cast("TypeForm[OpaqueGeneratedValue]", candidate.annotation))
     except (TypeError, ValueError) as exc:
         message = f"Compiled {name} codec {codec_name} response adapter is invalid"
         raise WireContractError(message) from exc

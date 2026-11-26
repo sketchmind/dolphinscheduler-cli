@@ -1502,6 +1502,10 @@ class CurrentUserRecord(Protocol):
         """DS-native authenticated-user type."""
 
     @property
+    def tenantId(self) -> int | None:  # noqa: N802
+        """Explicit DS-native tenant id when returned by the identity endpoint."""
+
+    @property
     def tenantCode(self) -> str | None:  # noqa: N802
         """Bound tenant code when available."""
 

@@ -109,6 +109,7 @@ class _Ds200TaskWire:
     get_calls: list[tuple[int, int]] = field(default_factory=list)
     describe_calls: list[tuple[int, int]] = field(default_factory=list)
     raw_revision: int = 0
+    raw_tenant_id: int = 17
 
     @property
     def top_level_field_policy(self) -> TaskTopLevelFieldPolicy:
@@ -159,7 +160,9 @@ class _Ds200TaskWire:
         )
         return WireExecution(
             payload=cast("WorkflowDagRecord", dag),
-            raw_payload=_dag_raw(dag, revision=self.raw_revision),
+            raw_payload=_dag_raw(
+                dag, revision=self.raw_revision, tenant_id=self.raw_tenant_id
+            ),
             request=WireRequest(
                 method="GET",
                 path=f"/projects/{project_code}/process-definition/{workflow_code}",
@@ -519,6 +522,21 @@ def test_ds200_apply_rejects_any_stale_whole_graph_before_mutation() -> None:
     assert workflow_adapter.update_calls == []
 
 
+def test_ds200_rejects_a_graph_tenant_change_before_preparing_the_task_update(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    definitions, wire, operations, workflow_adapter = _module()
+    monkeypatch.setattr(FakeWorkflow, "tenantId", 17, raising=False)
+    wire.raw_tenant_id = -1
+    with pytest.raises(ConflictError, match="tenant changed") as error:
+        definitions.prepare_update(
+            _intent({"description": "updated description"}, "description")
+        )
+    assert error.value.details["mutation_applied"] is False
+    assert operations.prepared == []
+    assert workflow_adapter.update_calls == []
+
+
 def test_ds200_no_op_prepares_preview_but_sends_no_mutation() -> None:
     definitions, _wire, operations, workflow_adapter = _module()
     prepared = definitions.prepare_update(
@@ -603,7 +621,7 @@ def _task_raw(task: FakeTaskDefinition) -> JsonObject:
     }
 
 
-def _dag_raw(dag: FakeDag, *, revision: int) -> JsonObject:
+def _dag_raw(dag: FakeDag, *, revision: int, tenant_id: int) -> JsonObject:
     workflow = dag.workflowDefinition
     assert workflow is not None
     tasks = list(dag.taskDefinitionList or ())
@@ -624,7 +642,8 @@ def _dag_raw(dag: FakeDag, *, revision: int) -> JsonObject:
                 '"7001":{"x":377,"y":34,"future":"report"}}'
             ),
             "timeout": workflow.timeout,
-            "tenantCode": "analytics",
+            "tenantId": tenant_id,
+            "tenantCode": None if tenant_id == -1 else "analytics",
             "futureWorkflowField": {"preserve": True, "revision": revision},
         },
         "taskDefinitionList": [

@@ -7,6 +7,17 @@ versioning policy is needed.
 
 ## Unreleased
 
+## 0.4.2 - 2026-11-23
+
+### Fixed
+
+- On DolphinScheduler `2.0.0` through `3.1.9`, workflow creation now resolves
+  the current user's assigned tenant ID when the API omits the tenant code.
+  Workflow edits preserve the definition's existing tenant, including the
+  inherited default. Dry runs use the same tenant resolution as applied writes.
+- Fresh installations now select Typer 0.26 through 0.28 so that `dsctl`
+  can build its command tree and start successfully.
+
 ## 0.4.1 - 2026-10-01
 
 ### Fixed

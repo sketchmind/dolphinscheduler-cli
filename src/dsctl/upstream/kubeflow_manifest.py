@@ -145,14 +145,16 @@ def _compose_yaml(value: str) -> Node:
         ):
             message = "KUBEFLOW YAML anchors and aliases are unsupported"
             raise ValueError(message)
-        documents = list(yaml.compose_all(value, Loader=yaml.SafeLoader))
+        documents: list[Node | None] = list(
+            yaml.compose_all(value, Loader=yaml.SafeLoader)
+        )
     except (RecursionError, yaml.YAMLError) as exc:
         message = "yamlContent must be valid, safely bounded YAML"
         raise ValueError(message) from exc
     if len(documents) != 1 or documents[0] is None:
         message = "yamlContent must contain exactly one nonempty YAML document"
         raise ValueError(message)
-    root = cast("Node", documents[0])
+    root = documents[0]
     _validate_nodes(root)
     return root
 

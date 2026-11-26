@@ -5475,6 +5475,10 @@ Rules:
 - the exact definition recipe sends the DS-native `tenantCode` form field only
   from `2.0.0` through `3.1.9`; `1.3.9` and `3.2.0` or newer omit it. This is an
   internal wire difference, not a workflow YAML field
+- on profiles that require this field, create uses the current user's tenant
+  code. If the current-user response contains only a positive tenant ID, dsctl
+  looks up that exact ID in the tenants visible to the caller. Both dry-run and
+  apply stop before creating the workflow if the code cannot be resolved
 
 Workflow YAML is a stable `dsctl` semantic contract. Templates may improve
 their prose, comments, examples, ordering, and formatting, but accepted fields,
@@ -5698,6 +5702,9 @@ patch:
   - `memory_max`
   - `depends_on`
 - task matching is name-based
+- on `2.0.0` through `3.1.9`, definition edits preserve the workflow's stored
+  tenant, including the inherited default. An edit stops before updating the
+  definition if its tenant cannot be identified
 - workflow edit preserves the live DS task `code + version` identity for
   existing tasks and allocates new task codes from DolphinScheduler only for
   newly created tasks; the CLI completes local compile validation before that

@@ -9,13 +9,17 @@ comparison.
 
 ## Typer and Click boundary
 
-`dolphinscheduler-cli` requires `typer>=0.26,<1` and does not directly depend on
+`dolphinscheduler-cli` requires `typer>=0.26,<0.29` and does not directly depend on
 Click. Typer 0.26.0 is the first release that vendors Click; its
 [release notes](https://github.com/fastapi/typer/releases/tag/0.26.0) state that
 external Click is no longer a dependency and that the earlier temporary Click
 upper bound was superseded by vendoring. The tagged
 [0.26.0 package metadata](https://github.com/fastapi/typer/blob/0.26.0/pyproject.toml)
 also contains no Click requirement.
+
+The CLI reads parameter types when it builds command help. Typer 0.29 removed
+the `.type` attribute from parameter objects, which caused the installed CLI
+to fail at startup. See the [Typer 0.29 compatibility changes](https://github.com/fastapi/typer/releases/tag/0.29.0).
 
 The lower bound excludes Typer 0.24.1 and 0.25.0. Both import
 `get_binary_stream` from `click.utils`; the
@@ -28,7 +32,7 @@ treats warnings as errors, and the affected Typer/Click combination fails before
 the CLI command tree can be built.
 
 The dependency CI lane installs external Click 8.5.0 beside Typer 0.26.0 and
-0.27.2 deliberately. Passing both rows proves that the CLI uses Typer's vendored
+0.28.0 deliberately. Passing both rows proves that the CLI uses Typer's vendored
 implementation and that an unrelated package may install modern external Click
 without changing the 181-command parser/help contract. The project does not use
 external Click classes, plug-ins or custom parameter types; adding one requires
