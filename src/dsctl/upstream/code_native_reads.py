@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal, cast
 
 from dsctl.errors import ApiTransportError, UnsupportedFeatureError
@@ -295,11 +295,14 @@ class _CodeNativeWorkflowReads:
 
     def get(self, *, project_code: int, code: int) -> CanonicalWorkflow:
         recipe = self.bindings.recipe
-        dag = self.programs.call(
-            "definition_get", {"projectCode": project_code, "code": code}
+        execution = self.programs.execute(
+            "definition_get",
+            self.programs.prepare(
+                "definition_get", {"projectCode": project_code, "code": code}
+            ),
         )
         definition = _response_field(
-            dag,
+            execution.payload,
             recipe.detail_field,
             ds_version=self.bindings.ds_version,
             resource="workflow",
@@ -311,12 +314,22 @@ class _CodeNativeWorkflowReads:
                 field=recipe.detail_field,
                 reason="generated detail field is null",
             )
-        return _workflow_record(
+        workflow = _workflow_record(
             definition,
             bindings=self.bindings,
             expected_project_code=project_code,
             expected_code=code,
         )
+        if self.bindings.projection.workflow_tenant_identity:
+            # A generated int may coerce strings or booleans. Only a native ID
+            # can identify the tenant to preserve in a subsequent update.
+            raw = execution.raw_payload
+            detail = raw.get(recipe.detail_field) if isinstance(raw, dict) else None
+            tenant_id = detail.get("tenantId") if isinstance(detail, dict) else None
+            return replace(
+                workflow, tenantId=tenant_id if type(tenant_id) is int else None
+            )
+        return workflow
 
 
 @dataclass(frozen=True)

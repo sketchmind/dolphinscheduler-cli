@@ -293,7 +293,7 @@ wheels = [
 
 [[package]]
 name = "dolphinscheduler-cli"
-version = "0.4.0"
+version = "0.4.2"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -314,6 +314,7 @@ dev = [
     { name = "ruff" },
     { name = "twine" },
     { name = "types-pyyaml" },
+    { name = "typing-extensions" },
 ]
 
 [package.metadata]
@@ -323,15 +324,16 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2.1,<3" },
     { name = "javalang", marker = "extra == 'dev'", specifier = ">=0.13,<1" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11,<2" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19,<2" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4,<5" },
     { name = "pydantic", specifier = ">=2.8,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<9" },
     { name = "pyyaml", specifier = ">=6,<7" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8,<1" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=6,<7" },
-    { name = "typer", specifier = ">=0.26,<1" },
+    { name = "typer", specifier = ">=0.26,<0.29" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12,<7" },
+    { name = "typing-extensions", marker = "extra == 'dev'", specifier = ">=4.13" },
 ]
 provides-extras = ["dev"]
 

@@ -60,8 +60,8 @@ is not a reason to repeat completed work.
 
 ## Release Acceptance and Support Policy
 
-The `0.4.1` release candidate includes the legacy workflow layout and
-automatic API discovery fixes. Its
+The `0.4.2` release candidate includes the workflow tenant-resolution fix
+and the Typer dependency update. Its
 [artifact-bound corpus](live-testing.md#exact-version-profile-gates) contains
 37 four-action exact-read receipts, 37 18-action `full_core/v1` receipts and
 one 15-action `external-shell/v1` schema-7 receipt on exact `3.4.2`, with

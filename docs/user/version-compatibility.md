@@ -66,8 +66,8 @@ changes follow an explicit policy review with matching evidence.
 
 ### Recorded Live Coverage
 
-The `0.4.1` release candidate has these receipts on one immutable wheel
-(`fad25fa899a0…`), including the legacy workflow layout and API discovery fixes:
+The `0.4.2` release candidate has these receipts on one immutable wheel
+(`3189cdb52ed3…`), including the workflow tenant-resolution fix and the Typer dependency update:
 
 | Scenario | Exact releases | Verified scope |
 | --- | --- | --- |

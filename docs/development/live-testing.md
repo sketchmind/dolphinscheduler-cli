@@ -174,15 +174,15 @@ is separate from these artifact-bound verification scopes.
 
 A live gate exercises a named set of actions. Its receipt binds those actions
 to an immutable artifact and manifest.
-The `0.4.1` release candidate corpus binds all 37 profiles to one wheel:
+The `0.4.2` release candidate corpus binds all 37 profiles to one wheel:
 37 four-action [exact-read receipts](live-evidence/exact-read/), 37
 18-action [conformance receipts](live-evidence/conformance-bundles/) using
 `full_core/v1`, and the separate 15-action `external-shell/v1` schema-7 receipt
 on exact `3.4.2`. Its wheel SHA-256 is
-`fad25fa899a0857a3d41b50a6b3fe283dba75ff37065844c54921ec228203876`.
-This candidate includes the legacy workflow layout and automatic API discovery
-fixes. Each receipt records its exact contract identities and successful
-scenario cleanup. The [0.4.0 corpus](live-evidence/history/candidates/5829e708757e/)
+`3189cdb52ed33e3f5e9f24e13672e762f46bd5f5b3b5cf51cb337c822835e63b`.
+This candidate includes the workflow tenant-resolution fix and the Typer
+dependency update. Each receipt records its exact contract identities and successful
+scenario cleanup. The [0.4.1 corpus](live-evidence/history/candidates/fad25fa899a0/), [0.4.0 corpus](live-evidence/history/candidates/5829e708757e/)
 and [earlier candidate corpus](live-evidence/history/candidates/dd34c34733a5/)
 retain their original wheel bindings and receipt bytes.
 
@@ -1290,7 +1290,7 @@ The rule is not “skip forever”. The rule is:
 
 ## Current Coverage Snapshot
 
-The `0.4.1` release candidate has 75 receipts on the wheel identified
+The `0.4.2` release candidate has 75 receipts on the wheel identified
 [above](#exact-version-profile-gates): four-action exact-read schema-2 and
 18-action `full_core/v1` receipts for all 37 profiles, plus the separate
 15-action `external-shell/v1` schema-7 receipt on exact `3.4.2`. All scenario

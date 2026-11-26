@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dolphinscheduler-cli"
-version = "0.4.1"
+version = "0.4.2"
 description = "Generated-first REST-only CLI for Apache DolphinScheduler"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,7 +37,7 @@ dependencies = [
   "httpx>=0.27,<1",
   "pydantic>=2.8,<3",
   "PyYAML>=6,<7",
-  "typer>=0.26,<1",
+  "typer>=0.26,<0.29",
 ]
 
 [project.urls]
@@ -58,9 +58,10 @@ dev = [
   "pre-commit>=4,<5",
   "pytest>=8,<9",
   "ruff>=0.8,<1",
-  "mypy>=1.11,<2",
+  "mypy>=1.19,<2",
   "twine>=6,<7",
   "types-PyYAML>=6.0.12,<7",
+  "typing-extensions>=4.13",
 ]
 
 [tool.setuptools]
@@ -257,6 +258,7 @@ max-complexity = 10
 [tool.mypy]
 python_version = "3.11"
 plugins = ["pydantic.mypy"]
+enable_incomplete_feature = ["TypeForm"]
 strict = true                       # enables ALL strict flags at once
 extra_checks = true                 # additional strictness beyond --strict
 warn_unreachable = true             # dead code after NoReturn / assert False

@@ -203,6 +203,7 @@ class CodeNativeWholeWorkflowTaskUpdate:
             compiled,
             dag=dag,
             dag_raw=dag_raw,
+            expected_tenant_id=scope.view.tenant_id,
             task_name=task_name,
             requested_fields=requested_fields,
             workflow_field=features.dag_workflow_field,

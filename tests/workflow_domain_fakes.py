@@ -378,7 +378,7 @@ class _FakeWorkflowOperations:
         return _workflow_scope(
             project,
             workflow,
-            legacy=self.ds_version == "1.3.9",
+            ds_version=self.ds_version,
         )
 
     def resolve_workflow_by_name(
@@ -407,7 +407,7 @@ class _FakeWorkflowOperations:
         return _workflow_scope(
             project,
             workflow,
-            legacy=self.ds_version == "1.3.9",
+            ds_version=self.ds_version,
         )
 
     def find_workflow_ref_by_name(
@@ -429,7 +429,7 @@ class _FakeWorkflowOperations:
         return _workflow_scope(
             project,
             selected,
-            legacy=self.ds_version == "1.3.9",
+            ds_version=self.ds_version,
         ).workflow
 
     def visible_workflow_refs(
@@ -440,7 +440,7 @@ class _FakeWorkflowOperations:
             _workflow_scope(
                 project,
                 workflow,
-                legacy=self.ds_version == "1.3.9",
+                ds_version=self.ds_version,
             ).workflow
             for workflow in self.workflow_adapter.workflows
             if workflow.projectCode == project.native.value
@@ -458,7 +458,7 @@ class _FakeWorkflowOperations:
         return _workflow_scope(
             project,
             workflow,
-            legacy=self.ds_version == "1.3.9",
+            ds_version=self.ds_version,
         )
 
     def resolve_workflow_by_code(
@@ -470,7 +470,7 @@ class _FakeWorkflowOperations:
             project_code=project.native.value,
             code=workflow_code,
         )
-        return _workflow_scope(project, workflow, legacy=False)
+        return _workflow_scope(project, workflow, ds_version=self.ds_version)
 
     def detail(
         self,
@@ -1217,8 +1217,9 @@ def _workflow_scope(
     project: ProjectRef,
     workflow: FakeWorkflow,
     *,
-    legacy: bool = False,
+    ds_version: str,
 ) -> WorkflowScope:
+    legacy = ds_version == "1.3.9"
     ref = WorkflowRef(
         native=NativeId(workflow.code) if legacy else NativeCode(workflow.code),
         name=workflow.name,
@@ -1243,6 +1244,9 @@ def _workflow_scope(
             release_state=_enum(workflow.releaseState),
             execution_type=_enum(workflow.executionType),
             include_execution_type=workflow.executionType is not None,
+            tenant_id=-1
+            if WORKFLOW_PROFILE_FACTS[ds_version]["definition_tenant_code"]
+            else None,
         ),
     )
 

@@ -65,6 +65,8 @@ def _scope() -> WorkflowScope:
             release_state="ONLINE",
             execution_type="PARALLEL",
             include_execution_type=True,
+            tenant_id=12,
+            tenant_code="workflow-tenant",
         ),
     )
 
@@ -892,7 +894,7 @@ def test_definition_plans_capture_without_http_for_every_code_native_profile(
             task_definition_json="[]",
             execution_type="PARALLEL",
             release_state="OFFLINE",
-            tenant_code="analytics",
+            tenant_code="workflow-tenant",
         )
         release = operations.prepare_release(
             _scope().project,
@@ -1101,13 +1103,13 @@ def test_create_plan_is_the_exact_request_applied_for_each_wire_epoch(
         pytest.param(
             "2.0.9",
             "process",
-            {"tenantCode": "analytics"},
+            {"tenantCode": "workflow-tenant"},
             id="process-with-tenant-without-execution-type",
         ),
         pytest.param(
             "3.1.0",
             "process",
-            {"tenantCode": "analytics", "executionType": "PARALLEL"},
+            {"tenantCode": "workflow-tenant", "executionType": "PARALLEL"},
             id="process-with-tenant-and-execution-type",
         ),
         pytest.param(
@@ -1620,6 +1622,7 @@ def test_workflow_operations_expose_exact_name_project_reads() -> None:
         execution_wire=cast("Any", object()),
         definitions=cast("Any", definitions),
         current_user=cast("Any", object()),
+        tenants=cast("Any", object()),
         schedules=cast("Any", object()),
         project_preferences=None,
     )
@@ -1652,6 +1655,7 @@ def _operations(
         ),
         definitions=cast("Any", object()),
         current_user=cast("Any", _CurrentUserOperations()),
+        tenants=cast("Any", object()),
         schedules=cast("Any", object()),
         project_preferences=None,
     )

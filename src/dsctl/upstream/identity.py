@@ -17,6 +17,7 @@ if TYPE_CHECKING:
         StringEnumValue,
     )
     from dsctl.upstream.users import _UserPrimitive
+    from dsctl.upstream.wire import WireExecution
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class CurrentUserSnapshot:
     queueName: str | None  # noqa: N815
     queue: str | None
     timeZone: str | None  # noqa: N815
+    tenantId: int | None = None  # noqa: N815
 
 
 class IdentityAdapter:
@@ -68,23 +70,28 @@ class _CompiledIdentityOperations:
 
     def current(self) -> CurrentUserRecord:
         return _project_current_user(
-            self.programs.call("current", {}),
+            self.programs.execute("current", self.programs.prepare("current", {})),
             ds_version=self.programs.ds_version,
             has_time_zone=self.has_time_zone,
         )
 
 
 def _project_current_user(
-    payload: OpaqueGeneratedValue,
+    execution: WireExecution[OpaqueGeneratedValue],
     *,
     ds_version: str,
     has_time_zone: bool,
 ) -> CurrentUserSnapshot:
     """Project one generated User while making legacy absence explicit."""
+    payload = execution.payload
+    raw = execution.raw_payload
+    # The generated Java int defaults to zero and may coerce non-integer inputs.
+    tenant_id = raw.get("tenantId") if isinstance(raw, dict) else None
     return CurrentUserSnapshot(
         userName=_optional_text(payload, "userName", ds_version=ds_version),
         userType=_optional_enum(payload, "userType", ds_version=ds_version),
         tenantCode=_optional_text(payload, "tenantCode", ds_version=ds_version),
+        tenantId=tenant_id if type(tenant_id) is int else None,
         queueName=_optional_text(payload, "queueName", ds_version=ds_version),
         queue=_optional_text(payload, "queue", ds_version=ds_version),
         timeZone=(

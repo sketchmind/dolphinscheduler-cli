@@ -262,7 +262,7 @@ def _workflow_view(workflow: WorkflowPayloadRecord) -> WorkflowView:
 
 def _workflow_tenant_id(workflow: WorkflowPayloadRecord) -> int | None:
     value = getattr(workflow, "tenantId", None)
-    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+    if type(value) is int and (value > 0 or value == -1):
         return value
     return None
 
