@@ -4,16 +4,22 @@ import hashlib
 import inspect
 import json
 from pathlib import Path
-from types import FunctionType
+from types import FunctionType, NoneType, UnionType
+from typing import Literal, get_args, get_origin, get_type_hints
 
 import pytest
 from typer.core import TyperCommand, TyperGroup, TyperOption
 from typer.main import get_command
+from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
 from dsctl.app import app
 from dsctl.cli_surface import stable_leaf_actions
-from dsctl.command_contract import COMMAND_CATALOG, CommandContractError
+from dsctl.command_contract import (
+    COMMAND_CATALOG,
+    CommandContract,
+    CommandContractError,
+)
 from dsctl.commands._contract_adapter import bind_command
 from dsctl.services.schema import get_schema_result
 from tests.support import normalize_cli_help
@@ -24,8 +30,6 @@ _BASELINE = json.loads(
         / "fixtures/command_contract/pre_catalog_fingerprints.json"
     ).read_text()
 )
-# Typer 0.27 renamed these display labels without changing their parser types.
-_TYPE_LABEL_ALIASES = {"str": "text", "int": "integer", "int range": "integer range"}
 
 
 def _digest(value: object) -> str:
@@ -36,6 +40,8 @@ def _digest(value: object) -> str:
 
 def _parameters(command: TyperCommand | TyperGroup) -> list[dict[str, object]]:
     params: list[dict[str, object]] = []
+    assert command.callback is not None
+    annotations = get_type_hints(inspect.unwrap(command.callback), include_extras=True)
     for parameter in command.params:
         record: dict[str, object] = {
             key: getattr(parameter, key, None)
@@ -57,29 +63,85 @@ def _parameters(command: TyperCommand | TyperGroup) -> list[dict[str, object]]:
                 "count",
             )
         }
-        record["type"] = _TYPE_LABEL_ALIASES.get(
-            parameter.type.name, parameter.type.name
-        )
-        record["choices"] = list(getattr(parameter.type, "choices", []))
-        record["type_attrs"] = {
-            key: getattr(parameter.type, key)
-            for key in (
-                "min",
-                "max",
-                "clamp",
-                "exists",
-                "file_okay",
-                "dir_okay",
-                "readable",
-                "writable",
-                "resolve_path",
-                "allow_dash",
+        assert parameter.name is not None
+        value_type, info = get_args(annotations[parameter.name])
+        assert isinstance(info, ParameterInfo)
+        if get_origin(value_type) is UnionType:
+            (value_type,) = (
+                member for member in get_args(value_type) if member is not NoneType
             )
-            if hasattr(parameter.type, key)
-        }
+        if get_origin(value_type) is list:
+            (value_type,) = get_args(value_type)
+        attrs: dict[str, object] = {}
+        choices = ()
+        if get_origin(value_type) is Literal:
+            label = "choice"
+            choices = get_args(value_type)
+        elif value_type is Path:
+            label = "path" if info.dir_okay else "file"
+            attrs = {
+                key: getattr(info, key)
+                for key in (
+                    "exists",
+                    "file_okay",
+                    "dir_okay",
+                    "readable",
+                    "writable",
+                    "resolve_path",
+                    "allow_dash",
+                )
+            }
+        else:
+            label = {str: "text", int: "integer", float: "float", bool: "boolean"}[
+                value_type
+            ]
+            if info.min is not None or info.max is not None:
+                label += " range"
+                attrs = {"min": info.min, "max": info.max, "clamp": info.clamp}
+        record.update(type=label, choices=list(choices), type_attrs=attrs)
         record["kind"] = "option" if isinstance(parameter, TyperOption) else "argument"
         params.append(record)
     return params
+
+
+def _check_parsed_values(
+    command: TyperCommand | TyperGroup, contract: CommandContract
+) -> None:
+    """Parse representative values for every input without invoking a service."""
+    path = str(Path(__file__).resolve())
+    samples = {
+        "string": "007 literal",
+        "integer": 1,
+        "number": 0.5,
+        "path": path,
+        "boolean": True,
+    }
+    argv: list[str] = []
+    inputs = (*contract.arguments, *contract.options)
+    for item in inputs:
+        value = (
+            item.parser_choices[0] if item.parser_choices else samples[item.value_type]
+        )
+        for _ in range(2 if item.multiple else 1):
+            if item.flag:
+                argv.append(item.flag)
+            if item.value_type != "boolean":
+                argv.append(str(value))
+    with command.make_context(contract.route[-1], argv) as ctx:
+        for item in inputs:
+            expected = (
+                item.parser_choices[0]
+                if item.parser_choices
+                else samples[item.value_type]
+            )
+            value = ctx.params[item.parameter_name or item.name.replace("-", "_")]
+            if item.multiple:
+                assert list(value) == [expected, expected]
+            elif item.value_type == "path":
+                assert Path(value) == Path(path)
+            else:
+                assert type(value) is type(expected)
+                assert value == expected
 
 
 @pytest.fixture(scope="module")
@@ -96,6 +158,8 @@ def test_complete_catalog_preserves_independent_parser_and_help_baseline(
     # Parser fingerprints were captured from 4044131 before catalog migration,
     # not from the catalog. Explicit behavior changes update only affected
     # entries; named context management adds its new parser contracts.
+    # Type metadata comes from the typed Typer declaration; concrete command
+    # parameters supply spelling, arity and defaults across parser implementations.
     # Inspect semantic help facts: supported Typer versions render the same
     # argument metadata with different decorative labels in their Rich tables.
     contract = COMMAND_CATALOG.command(action)
@@ -106,6 +170,7 @@ def test_complete_catalog_preserves_independent_parser_and_help_baseline(
         assert isinstance(child, (TyperCommand, TyperGroup))
         command = child
     assert _digest(_parameters(command)) == _BASELINE[action]["parser"]
+    _check_parsed_values(command, contract)
     assert command.help is not None
     assert command.help == _BASELINE[action]["summary"]
     help_result = CliRunner().invoke(

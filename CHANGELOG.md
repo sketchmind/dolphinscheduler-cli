@@ -7,6 +7,10 @@ versioning policy is needed.
 
 ## Unreleased
 
+### Changed
+
+- Support Typer 0.29 for CLI installation, command parsing and semantic help.
+
 ## 0.4.2 - 2026-11-23
 
 ### Fixed

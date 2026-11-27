@@ -331,7 +331,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6,<7" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8,<1" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=6,<7" },
-    { name = "typer", specifier = ">=0.26,<0.29" },
+    { name = "typer", specifier = ">=0.26,<0.30" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12,<7" },
     { name = "typing-extensions", marker = "extra == 'dev'", specifier = ">=4.13" },
 ]

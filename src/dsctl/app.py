@@ -24,7 +24,6 @@ from dsctl.cli_runtime import AppState, set_app_state
 from dsctl.command_contract import COMMAND_CATALOG, CommandBindingError
 from dsctl.commands._contract_adapter import (
     SemanticMetavarGroup,
-    apply_semantic_metavars,
     bind_global_options,
     configure_semantic_help,
 )
@@ -77,11 +76,6 @@ def _version_callback(value: bool) -> bool:  # noqa: FBT001
 
 class _GlobalOptionGroup(SemanticMetavarGroup):
     """Let root rendering/config options appear anywhere before `--`."""
-
-    def __init__(self, **attrs: Any) -> None:  # noqa: ANN401
-        """Apply one metavar policy after Typer materializes the full tree."""
-        super().__init__(**attrs)
-        apply_semantic_metavars(self)
 
     def parse_args(self, ctx: Any, args: list[str]) -> list[str]:  # noqa: ANN401
         """Move catalogued root options ahead of the command before Click parses."""
